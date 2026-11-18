@@ -592,10 +592,10 @@
       "group": "CRAN parity",
       "order": 717,
       "title": "flexmix: finite mixture regression",
-      "score": 0.34,
+      "score": 0.42,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D7197, D7198 (the random start under set.seed), D7199 (the Poisson family), D7200 (stepFlexmix for the Gaussian family), D7201 (AIC, BIC, ICL): e.algo.stat.flexmixpkg runs flexmix's EM for a Gaussian regression mixture from a given start clustering and equals flexmix on Windows on simulated Gaussian and Poisson mixtures; oracle_flexmix_gauss; Linux pending). Open: FLXMRglm for binomial and Gamma, FLXMRglmfix, concomitant variable models, the CEM and SEM variants. Acceptance, equal to flexmix under set.seed: flexmix and stepFlexmix with FLXMRglm (Gaussian, binomial, Poisson, Gamma), FLXMRglmfix and concomitant variable models, the EM and CEM variants, BIC and ICL, posterior and cluster assignments."
+      "evidence": "Partial (D7197, D7198 (the random start under set.seed), D7199 (the Poisson family), D7200 (stepFlexmix for the Gaussian family), D7201 (AIC, BIC, ICL), D7202 (the binomial family): e.algo.stat.flexmixpkg runs flexmix's EM for a Gaussian regression mixture from a given start clustering and equals flexmix on Windows on simulated Gaussian and Poisson mixtures; oracle_flexmix_gauss; Linux pending). Open: FLXMRglm for Gamma, FLXMRglmfix, concomitant variable models, the CEM and SEM variants. Acceptance, equal to flexmix under set.seed: flexmix and stepFlexmix with FLXMRglm (Gaussian, binomial, Poisson, Gamma), FLXMRglmfix and concomitant variable models, the EM and CEM variants, BIC and ICL, posterior and cluster assignments."
     },
     {
       "id": "L415",

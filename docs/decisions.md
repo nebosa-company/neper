@@ -49232,3 +49232,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.flexmixpkg` gains `aic`, `bic` and `icl` with flexmix's definitions: the parameter count df (k - 1 prior parameters and p coefficients per component, plus a sigma for the Gaussian family), -2 logLik + 2 df, -2 logLik + df log n, and the integrated classification likelihood -2 clogLik + df log n, where clogLik is the sum over the data of the log unscaled posterior of the assigned component (the fit now keeps it).
 
 **Result.** `oracle_flexmix_gauss` has 1488 values (18 added: AIC, BIC and ICL for three Gaussian and three Poisson fits) and equals flexmix on Windows. Linux pending. L413 stays partial: the binomial and Gamma families, FLXMRglmfix, concomitant variables, CEM and SEM, and the Poisson step.
+
+## D7202 — flexmix: the binomial family
+
+`e.algo.stat.flexmixpkg` gains `binomial`: FLXMRglm's binomial family with the logit link and a (successes, failures) response, whose M step is R's `glm.fit` for the proportion with prior weights w times size (`binom_glm`: mustart (weights y + 0.5) / (weights + 1) at the first pass, the previous coefficients afterwards, the deviance test at 1e-8) and whose E step uses the binomial log density with the group sizes. The EM driver now takes the trial counts as an argument that the other families ignore.
+
+**Result.** `oracle_flexmix_gauss` has 1872 values (384 added: two binomial mixtures with log-likelihood, iterations, priors, coefficients, AIC, BIC, ICL and clusters) and equals flexmix on Windows. Linux pending. L413 stays partial: the Gamma family, FLXMRglmfix, concomitant variables, CEM and SEM, and the steps for the non-Gaussian families.

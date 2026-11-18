@@ -3987,4 +3987,5 @@ D7197	1210	flexmix: the Gaussian regression mixture by EM from a given start
 D7198	697	flexmix: the random start under set.seed
 D7199	954	flexmix: the Poisson family
 D7200	769	flexmix: stepFlexmix
-D7201	762	flexmix: AIC, BIC and ICL
+D7201	763	flexmix: AIC, BIC and ICL
+D7202	896	flexmix: the binomial family

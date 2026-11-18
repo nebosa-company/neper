@@ -7,6 +7,7 @@ use e.algo.stat.olsfit as ols
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
+use e.math.nmath_beta as nb
 use e.mem
 
 error Malformed
@@ -32,7 +33,7 @@ fn lse(v: []const f64, off: usize, k: usize) -> f64 {
 }
 
 // x is n by p column-major (the intercept a column of ones), y the response, cluster the start (1-based codes with k = the largest)
-fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, cluster: []const f64, minprior: f64, tol: f64, iter_max: usize, fam: usize) -> (Fm, err) {
+fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, cluster: []const f64, minprior: f64, tol: f64, iter_max: usize, fam: usize, sz: []const f64) -> (Fm, err) {
     var out: Fm = zero
     var k = 0usize
     var i = 0usize
@@ -160,7 +161,7 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
                 }
                 i += 1usize
             }
-            if fam == 1usize {
+            if fam >= 1usize {
                 let (wj, e9) = mem.alloc[f64](a, n)
                 let (bj, e10) = mem.alloc[f64](a, p)
                 if e9 != ok || e10 != ok { ret (out, Malformed) }
@@ -174,7 +175,8 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
                     bj[c0] = coef[j * p + c0]
                     c0 += 1usize
                 }
-                let ge = pois_glm(a, x, n, p, y, wj, bj, iter > 1usize)
+                var ge = ok
+                if fam == 1usize { ge = pois_glm(a, x, n, p, y, wj, bj, iter > 1usize) } else { ge = binom_glm(a, x, n, p, y, sz, wj, bj, iter > 1usize) }
                 if ge != ok { ret (out, ge) }
                 c0 = 0usize
                 while c0 < p {
@@ -206,7 +208,13 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
                     c += 1usize
                 }
                 var ld = 0.0f64
-                if fam == 1usize { ld = nm.dpois(y[i], math.exp[f64](mu), true) } else { ld = dist.dnorm(y[i], mu, sigma[j], true) }
+                if fam == 1usize {
+                    ld = nm.dpois(y[i], math.exp[f64](mu), true)
+                } else if fam == 2usize {
+                    ld = nb.dbinom(y[i], sz[i], 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - mu)), true)
+                } else {
+                    ld = dist.dnorm(y[i], mu, sigma[j], true)
+                }
                 lp[i * k0 + j] = ld + math.log[f64](prior[j])
                 j += 1usize
             }
@@ -296,7 +304,7 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, k
         cl[i] = init[i] + 1.0f64
         i += 1usize
     }
-    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 0usize)
+    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 0usize, y)
     if fe != ok { ret (f, fe) }
     var g = f
     i = 0usize
@@ -418,7 +426,7 @@ fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, k:
         cl[i] = init[i] + 1.0f64
         i += 1usize
     }
-    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 1usize)
+    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 1usize, y)
     if fe != ok { ret (f, fe) }
     var g = f
     i = 0usize
@@ -461,3 +469,115 @@ fn bic(f: *const Fm, n: usize) -> f64 { ret 0.0f64 - 2.0f64 * f.llh + f.df * mat
 fn aic(f: *const Fm) -> f64 { ret 0.0f64 - 2.0f64 * f.llh + 2.0f64 * f.df }
 
 fn icl(f: *const Fm, n: usize) -> f64 { ret 0.0f64 - 2.0f64 * f.clog + f.df * math.log[f64](f64(n)) }
+
+
+// R glm.fit for the binomial family with the logit link and a (successes, size) response: the proportion y / size with prior weights w * size, started from
+// mustart = (weights y + 0.5) / (weights + 1) or from the previous coefficients, the same deviance convergence as the Poisson fit
+fn binom_dev(yp: []const f64, mu: []const f64, wt: []const f64, n: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        var t1 = 0.0f64
+        if yp[i] > 0.0f64 { t1 = yp[i] * math.log[f64](yp[i] / mu[i]) }
+        var t2 = 0.0f64
+        if yp[i] < 1.0f64 { t2 = (1.0f64 - yp[i]) * math.log[f64]((1.0f64 - yp[i]) / (1.0f64 - mu[i])) }
+        s += 2.0f64 * wt[i] * (t1 + t2)
+        i += 1usize
+    }
+    ret s
+}
+
+fn binom_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64, size: []const f64, w: []const f64, beta: []f64, has_start: bool) -> err {
+    let (eta, e1) = mem.alloc[f64](a, n)
+    let (mu, e2) = mem.alloc[f64](a, n)
+    let (z, e3) = mem.alloc[f64](a, n)
+    let (xw, e4) = mem.alloc[f64](a, n * p)
+    let (yp, e5) = mem.alloc[f64](a, n)
+    let (wt, e6) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret Malformed }
+    var i = 0usize
+    while i < n {
+        yp[i] = succ[i] / size[i]
+        wt[i] = w[i] * size[i]
+        if has_start {
+            var t = 0.0f64
+            var c = 0usize
+            while c < p {
+                t += x[c * n + i] * beta[c]
+                c += 1usize
+            }
+            eta[i] = t
+            mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
+        } else {
+            mu[i] = (wt[i] * yp[i] + 0.5f64) / (wt[i] + 1.0f64)
+            eta[i] = math.log[f64](mu[i] / (1.0f64 - mu[i]))
+        }
+        i += 1usize
+    }
+    var devold = binom_dev(yp, mu, wt, n)
+    var iter = 0usize
+    while iter < 25usize {
+        iter += 1usize
+        i = 0usize
+        while i < n {
+            let me = mu[i] * (1.0f64 - mu[i])
+            let sq = math.sqrt[f64](wt[i] * me)
+            z[i] = (eta[i] + (yp[i] - mu[i]) / me) * sq
+            var c = 0usize
+            while c < p {
+                xw[c * n + i] = x[c * n + i] * sq
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (f, fe) = ols.fit_tol(a, xw, n, p, z, 0.00000000001f64)
+        if fe != ok { ret fe }
+        var c = 0usize
+        while c < p {
+            beta[c] = f.coef[c]
+            c += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var t = 0.0f64
+            c = 0usize
+            while c < p {
+                t += x[c * n + i] * beta[c]
+                c += 1usize
+            }
+            eta[i] = t
+            mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
+            i += 1usize
+        }
+        let dev = binom_dev(yp, mu, wt, n)
+        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 0.00000001f64 { break }
+        devold = dev
+    }
+    ret ok
+}
+
+// flexmix(cbind(succ, fail) ~ x, k, model = FLXMRglm(family = "binomial"), cluster = init): x n by p row-major, init 0-based
+fn binomial(a: *mem.Arena, x: []const f64, succ: []const f64, size: []const f64, n: usize, p: usize, k: usize, init: []const f64, iter_max: usize, minprior: f64, tol: f64) -> (Fm, err) {
+    let (xc, e1) = mem.alloc[f64](a, n * p)
+    let (cl, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret (zero, Malformed) }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xc[c * n + i] = x[i * p + c]
+            c += 1usize
+        }
+        cl[i] = init[i] + 1.0f64
+        i += 1usize
+    }
+    let (f, fe) = gauss_em(a, xc, n, p, succ, cl, minprior, tol, iter_max, 2usize, size)
+    if fe != ok { ret (f, fe) }
+    var g = f
+    i = 0usize
+    while i < n {
+        g.cluster[i] = f.cluster[i] - 1usize
+        i += 1usize
+    }
+    ret (g, ok)
+}
