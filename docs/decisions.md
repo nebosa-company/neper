@@ -49928,3 +49928,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.wrs2` gains `mcp2atm`: the lincon1 tests of the A, B and AB effects of a J by K design (every pairwise contrast of the levels of A, of B, and the products of an A pair with a B pair, the B pair varying fastest, as `con2way` orders them): the trimmed-mean contrast, its standard error from the Winsorised variances, the Welch degrees of freedom and the two-sided p value. The studentised-maximum-modulus confidence limits (smmcrit) need its critical-value table and are not ported.
 
 **Result.** `oracle_wrs2_mcp2atm` equals WRS2 on 64 values (contrast estimate and p value for 2 by 3, 3 by 2, 3 by 3 and 2 by 2 designs) on Windows. Linux pending. L503 stays partial: ancova and the mcp2atm confidence limits remain.
+
+## D7314 — WRS2: ancova
+
+`e.algo.stat.wrs2` gains `ancova`: the robust running-interval ANCOVA for two groups. R swaps the groups so the larger one is first; each group is ordered by its covariate (a stable order); the five default design points are positions in the sorted covariate of the first group, the first and last where both groups have at least 12 values within fr mad (R's `near`, falling back to sqrt(winvar / 0.4129) when the mad is zero) and three midpoints by integer halving; at each point Yuen's test of the outcomes of the covariate values near it; points repeated by the halving keep their first row. Given points replace the default ones. The studentised-maximum-modulus confidence limits are not ported.
+
+**Result.** `oracle_wrs2_ancova` equals WRS2 on 147 values (default and given design points over five two-group draws: points, counts, difference, standard error, test, p value) on Windows. Linux pending. L503 stays partial: the smmcrit confidence limits of ancova and mcp2atm remain.

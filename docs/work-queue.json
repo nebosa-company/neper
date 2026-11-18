@@ -207,10 +207,10 @@
       "group": "CRAN parity",
       "order": 660,
       "title": "WRS2: robust tests and ANOVA",
-      "score": 0.75,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6137). The deterministic functions of WRS2 (winvar, winmean, winse, trimse, pbos, yuen, yuend, t1way, wincor, pbcor, akp.effect, lincon pairwise with Hochberg, med1way statistic) equal R on Windows (oracle_wrs2; Linux pending). D7123: t2way equal to WRS2 (oracle_wrs2_t2way, 48 values). yuenbt and pb2gen equal WRS2 under set.seed (oracle_wrs2_boot, 126 values). mcp2atm contrast estimates and p values equal WRS2 (oracle_wrs2_mcp2atm, 64 values; the smmcrit confidence limits are not ported). Open: ancova, the mcp2atm confidence limits. Was: Open (CRAN rank 985). Small to mid. Acceptance, equal to WRS2 under set.seed: yuen and yuenbt, t1way and lincon, t2way, med1way, pb2gen, mcp2atm, robust ANCOVA ancova, and the robust effect sizes."
+      "evidence": "Partial (D6137). The deterministic functions of WRS2 (winvar, winmean, winse, trimse, pbos, yuen, yuend, t1way, wincor, pbcor, akp.effect, lincon pairwise with Hochberg, med1way statistic) equal R on Windows (oracle_wrs2; Linux pending). D7123: t2way equal to WRS2 (oracle_wrs2_t2way, 48 values). yuenbt and pb2gen equal WRS2 under set.seed (oracle_wrs2_boot, 126 values). mcp2atm contrast estimates and p values equal WRS2 (oracle_wrs2_mcp2atm, 64 values; the smmcrit confidence limits are not ported). ancova design points, counts, differences, standard errors, tests and p values equal WRS2 (oracle_wrs2_ancova, 147 values). Open: the smmcrit confidence limits of ancova and mcp2atm. Was: Open (CRAN rank 985). Small to mid. Acceptance, equal to WRS2 under set.seed: yuen and yuenbt, t1way and lincon, t2way, med1way, pb2gen, mcp2atm, robust ANCOVA ancova, and the robust effect sizes."
     },
     {
       "id": "L505",

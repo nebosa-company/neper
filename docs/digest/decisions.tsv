@@ -4103,4 +4103,5 @@ D7309	556	betareg: loglog and cauchit mean links
 D7310	509	betareg: lrtest
 D7311	1118	ismev: covariates for rlarg.fit and pp.fit; L425 closed
 D7312	835	WRS2: yuenbt and pb2gen
-D7313	771	WRS2: mcp2atm contrast tests
+D7313	772	WRS2: mcp2atm contrast tests
+D7314	1013	WRS2: ancova

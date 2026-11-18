@@ -1090,3 +1090,165 @@ fn mcp2atm(a: *mem.Arena, data: []const f64, sizes: []const usize, jn: usize, kn
     }
     ret (out, ok)
 }
+
+// ---- ancova: the robust running-interval ANCOVA of WRS2 for two groups, at the five default design points (or at given ones): at each point the covariate
+// values within fr mad of it in each group, and Yuen's test of the outcomes there. The studentised-maximum-modulus limits (smmcrit) are not ported.
+
+type AncRow = struct { x: f64, n1: usize, n2: usize, dif: f64, se: f64, test: f64, p: f64 }
+
+// R's near(x, pt, fr): flags the x within fr m of pt, m the mad (when it is zero, sqrt(winvar / 0.4129))
+fn near_flags(a: *mem.Arena, x: []const f64, pt: f64, fr: f64, flag: []bool) {
+    var m = mad_of(a, x)
+    if m == 0.0f64 { m = math.sqrt[f64](winvar(a, x, 0.2f64) / 0.4129f64) }
+    var i = 0usize
+    while i < x.len {
+        flag[i] = math.abs[f64](x[i] - pt) <= fr * m
+        i += 1usize
+    }
+}
+
+// the y values of the group flagged by near at pt
+fn near_y(a: *mem.Arena, x: []const f64, y: []const f64, pt: f64, fr: f64, out: []f64) -> usize {
+    let (flag, e) = mem.alloc[bool](a, x.len)
+    if e != ok { ret 0usize }
+    near_flags(a, x, pt, fr, flag)
+    var c = 0usize
+    var i = 0usize
+    while i < x.len {
+        if flag[i] {
+            out[c] = y[i]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    ret c
+}
+
+// a stable ordering of x
+fn order_of(a: *mem.Arena, x: []const f64) -> []usize {
+    let (idx, e) = mem.alloc[usize](a, x.len)
+    if e != ok { ret idx }
+    var i = 0usize
+    while i < x.len {
+        var rank = 0usize
+        var k = 0usize
+        while k < x.len {
+            if x[k] < x[i] || (x[k] == x[i] && k < i) { rank += 1usize }
+            k += 1usize
+        }
+        idx[rank] = i
+        i += 1usize
+    }
+    ret idx
+}
+
+// ancova(y ~ group + covariate) for two groups: out has room for up to max(5, npts) rows; the default points when npts is zero. The bigger group (by covariate
+// count) is the first, as R swaps them. Returns the rows kept (a repeated design point keeps its first row).
+fn ancova(a: *mem.Arena, xa: []const f64, ya: []const f64, xb: []const f64, yb: []const f64, tr: f64, fr1: f64, fr2: f64, pts: []const f64, out: []AncRow) -> (usize, err) {
+    var x1 = xa
+    var y1 = ya
+    var x2 = xb
+    var y2 = yb
+    if xa.len < xb.len {
+        x1 = xb
+        y1 = yb
+        x2 = xa
+        y2 = ya
+    }
+    // sort each group by its covariate
+    let o1 = order_of(a, x1)
+    let o2 = order_of(a, x2)
+    let (sx1, e1) = mem.alloc[f64](a, x1.len)
+    let (sy1, e2) = mem.alloc[f64](a, x1.len)
+    let (sx2, e3) = mem.alloc[f64](a, x2.len)
+    let (sy2, e4) = mem.alloc[f64](a, x2.len)
+    let (g1, e5) = mem.alloc[f64](a, x1.len)
+    let (g2, e6) = mem.alloc[f64](a, x2.len)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (0usize, Malformed) }
+    var i = 0usize
+    while i < x1.len {
+        sx1[i] = x1[o1[i]]
+        sy1[i] = y1[o1[i]]
+        i += 1usize
+    }
+    i = 0usize
+    while i < x2.len {
+        sx2[i] = x2[o2[i]]
+        sy2[i] = y2[o2[i]]
+        i += 1usize
+    }
+    var np = pts.len
+    let (pp, e7) = mem.alloc[f64](a, 5usize + np)
+    if e7 != ok { ret (0usize, Malformed) }
+    if np == 0usize {
+        // the 5 default points: positions in sorted x1 where both groups have at least 12 neighbours
+        let (flag1, f1) = mem.alloc[bool](a, x1.len)
+        let (flag2, f2) = mem.alloc[bool](a, x2.len)
+        if f1 != ok || f2 != ok { ret (0usize, Malformed) }
+        var first = 0usize
+        var last = 0usize
+        var seen = false
+        i = 0usize
+        while i < sx1.len {
+            near_flags(a, sx1, sx1[i], fr1, flag1)
+            near_flags(a, sx2, sx1[i], fr2, flag2)
+            var c1 = 0usize
+            var c2 = 0usize
+            var k = 0usize
+            while k < sx1.len {
+                if flag1[k] { c1 += 1usize }
+                k += 1usize
+            }
+            k = 0usize
+            while k < sx2.len {
+                if flag2[k] { c2 += 1usize }
+                k += 1usize
+            }
+            var v = c1
+            if c2 < v { v = c2 }
+            if v >= 12usize {
+                if !seen {
+                    first = i
+                    seen = true
+                }
+                last = i
+            }
+            i += 1usize
+        }
+        if !seen { ret (0usize, Malformed) }
+        let i3 = (first + last) / 2usize
+        let i2 = (first + i3) / 2usize
+        let i4 = (i3 + last) / 2usize
+        pp[0usize] = sx1[first]
+        pp[1usize] = sx1[i2]
+        pp[2usize] = sx1[i3]
+        pp[3usize] = sx1[i4]
+        pp[4usize] = sx1[last]
+        np = 5usize
+    } else {
+        i = 0usize
+        while i < np {
+            pp[i] = pts[i]
+            i += 1usize
+        }
+    }
+    var kept = 0usize
+    i = 0usize
+    while i < np {
+        var dup = false
+        var q = 0usize
+        while q < i {
+            if pp[q] == pp[i] { dup = true }
+            q += 1usize
+        }
+        if !dup {
+            let c1 = near_y(a, sx1, sy1, pp[i], fr1, g1)
+            let c2 = near_y(a, sx2, sy2, pp[i], fr2, g2)
+            let y = yuen(a, g1[0usize..c1], g2[0usize..c2], tr)
+            out[kept] = AncRow { x: pp[i], n1: c1, n2: c2, dif: y.diff, se: y.se, test: y.test, p: y.p }
+            kept += 1usize
+        }
+        i += 1usize
+    }
+    ret (kept, ok)
+}
