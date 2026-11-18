@@ -250,7 +250,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 205usize { ret gd.dsichel(x, mu, sigma, nu) }
     if which == 206usize { ret gd.dgig(x, mu, sigma, nu) }
     if which == 207usize { ret gd.pgig(a, x, mu, sigma, nu) }
-    ret gd.qgig(a, x, mu, sigma, nu)
+    if which == 208usize { ret gd.qgig(a, x, mu, sigma, nu) }
+    if which == 220usize { ret gd.dbeoi(x, mu, sigma, nu) }
+    if which == 221usize { ret gd.pbeoi(x, mu, sigma, nu) }
+    if which == 222usize { ret gd.qbeoi(x, mu, sigma, nu) }
+    if which == 223usize { ret gd.dbezi(x, mu, sigma, nu) }
+    if which == 224usize { ret gd.pbezi(x, mu, sigma, nu) }
+    if which == 225usize { ret gd.qbezi(x, mu, sigma, nu) }
+    if which == 226usize { ret gd.dbeinf0(x, mu, sigma, nu) }
+    if which == 227usize { ret gd.pbeinf0(x, mu, sigma, nu) }
+    if which == 228usize { ret gd.qbeinf0(x, mu, sigma, nu) }
+    if which == 229usize { ret gd.dbeinf1(x, mu, sigma, nu) }
+    if which == 230usize { ret gd.pbeinf1(x, mu, sigma, nu) }
+    if which == 231usize { ret gd.qbeinf1(x, mu, sigma, nu) }
+    if which == 232usize { ret gd.dbeinf(x, mu, sigma, nu, tau) }
+    if which == 233usize { ret gd.pbeinf(x, mu, sigma, nu, tau) }
+    if which == 234usize { ret gd.qbeinf(x, mu, sigma, nu, tau) }
+    ret 0.0f64 - 1.0f64
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

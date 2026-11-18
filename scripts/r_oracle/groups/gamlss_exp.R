@@ -272,6 +272,24 @@ for (rep in 1:30) {
   add("ex", c(206, gm, gs, gx, sin_), dGIG(gx, mu = gm, sigma = gs, nu = sin_), rel = 1e-8, abs = 1e-13)
   add("ex", c(207, gm, gs, gx, sin_), pGIG(gx, mu = gm, sigma = gs, nu = sin_), rel = 1e-6, abs = 1e-9)
   add("ex", c(208, gm, gs, p, sin_), qGIG(p, mu = gm, sigma = gs, nu = sin_), rel = 1e-5, abs = 1e-8)
+  # beta with point masses: BEOI 220-222, BEZI 223-225 (shapes mu sigma, (1 - mu) sigma, mass nu), BEINF0 226-228, BEINF1 229-231 (mu, sigma in (0, 1), nu), BEINF 232-234 (nu, tau); d, p at x and q at p
+  bi_m <- runif(1, 0.2, 0.8); bi_s <- runif(1, 0.5, 6); bi_n <- runif(1, 0.05, 0.6); bi_t <- runif(1, 0.05, 0.6); bi_sg <- runif(1, 0.2, 0.8)
+  bi_x <- sample(c(runif(1), 0, 1), 1); bi_p <- runif(1, 0.02, 0.98)
+  add("ex", c(220, bi_m, bi_s, bi_x, bi_n), dBEOI(bi_x, mu = bi_m, sigma = bi_s, nu = bi_n))
+  add("ex", c(221, bi_m, bi_s, bi_x, bi_n), pBEOI(bi_x, mu = bi_m, sigma = bi_s, nu = bi_n))
+  add("ex", c(222, bi_m, bi_s, bi_p, bi_n), qBEOI(bi_p, mu = bi_m, sigma = bi_s, nu = bi_n))
+  add("ex", c(223, bi_m, bi_s, bi_x, bi_n), dBEZI(bi_x, mu = bi_m, sigma = bi_s, nu = bi_n))
+  add("ex", c(224, bi_m, bi_s, bi_x, bi_n), pBEZI(bi_x, mu = bi_m, sigma = bi_s, nu = bi_n))
+  add("ex", c(225, bi_m, bi_s, bi_p, bi_n), qBEZI(bi_p, mu = bi_m, sigma = bi_s, nu = bi_n))
+  add("ex", c(226, bi_m, bi_sg, bi_x, bi_n), dBEINF0(bi_x, mu = bi_m, sigma = bi_sg, nu = bi_n))
+  add("ex", c(227, bi_m, bi_sg, bi_x, bi_n), pBEINF0(bi_x, mu = bi_m, sigma = bi_sg, nu = bi_n))
+  add("ex", c(228, bi_m, bi_sg, bi_p, bi_n), qBEINF0(bi_p, mu = bi_m, sigma = bi_sg, nu = bi_n))
+  add("ex", c(229, bi_m, bi_sg, bi_x, bi_n), dBEINF1(bi_x, mu = bi_m, sigma = bi_sg, nu = bi_n))
+  add("ex", c(230, bi_m, bi_sg, bi_x, bi_n), pBEINF1(bi_x, mu = bi_m, sigma = bi_sg, nu = bi_n))
+  add("ex", c(231, bi_m, bi_sg, bi_p, bi_n), qBEINF1(bi_p, mu = bi_m, sigma = bi_sg, nu = bi_n))
+  add("ex", c(232, bi_m, bi_sg, bi_x, bi_n, bi_t), dBEINF(bi_x, mu = bi_m, sigma = bi_sg, nu = bi_n, tau = bi_t))
+  add("ex", c(233, bi_m, bi_sg, bi_x, bi_n, bi_t), pBEINF(bi_x, mu = bi_m, sigma = bi_sg, nu = bi_n, tau = bi_t))
+  add("ex", c(234, bi_m, bi_sg, bi_p, bi_n, bi_t), qBEINF(bi_p, mu = bi_m, sigma = bi_sg, nu = bi_n, tau = bi_t))
 }
 # random numbers by the quantile function on runif: args (seed, i, which, mu, sigma, nu) under "rq": which 0 rGA, 1 rNBI, 2 rGU, 3 rBE, 4 rPARETO2, 5 rTF, 6 rBCCG; draw i (0-based) of 8
 for (rep in 1:6) {

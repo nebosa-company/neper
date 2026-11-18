@@ -4018,4 +4018,5 @@ D7228	732	gsl: the conical functions of order plus and minus 1/2 and the element
 D7229	790	gsl: the complex log-gamma function
 D7230	620	gsl: the complex dilogarithm
 D7231	465	arm: rescale
-D7232	563	GeneralizedHyperbolic: ddghyp and ghypChangePars
+D7232	564	GeneralizedHyperbolic: ddghyp and ghypChangePars
+D7233	777	gamlss.dist: the beta families with point masses

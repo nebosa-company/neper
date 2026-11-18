@@ -49418,3 +49418,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.ghyp` gains `ddghyp` (the density's derivative, from the two Bessel K orders lambda -+ 1/2) and `ghyp_change_pars` (any of the five parametrizations to any other, routed through (alpha, beta)).
 
 **Result.** `oracle_ghyp` has 1939 values (30 derivative points and 100 conversions over all 25 from-to pairs added) and equals the package on Windows (1e-9). Linux pending. VG functions belong to the VarianceGamma package, which is not installed, and stay open with qgig and the other fits.
+
+## D7233 — gamlss.dist: the beta families with point masses
+
+`e.algo.stat.gamlssdist` gains d, p and q of BEOI and BEZI (shapes mu sigma and (1 - mu) sigma, a mass nu at 1 or at 0) and of BEINF0, BEINF1 and BEINF (the BE parametrization with masses nu and tau relative to the beta part), with the package's edge answers (q of p = 0 is -Inf for the one-inflated families, +Inf for p = 1 of the zero-inflated ones).
+
+**Result.** `oracle_gamlss_exp` gains 15 cases at interior points and at the masses (x = 0 and 1) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: the other families (BCPE, GB1, SIMPLEX, SST, ST1, ST3C, PE2, DEL, DBI, DBURR12, ZAIG, ZASICHEL, LOGSHASH, NOF, MN3 to MN5 and the beta-binomial inflated families), moments and random numbers.

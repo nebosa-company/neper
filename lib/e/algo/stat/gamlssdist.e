@@ -1688,3 +1688,124 @@ fn qgig(a: *mem.Arena, p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     }
     ret pw.zeroin[GigRoot](&c, gig_h1, lo, hi, pw.uniroot_tol(), 1000i64)
 }
+
+// BEOI, BEZI (beta with the point mass nu at 1 or at 0, shapes mu sigma and (1 - mu) sigma) and BEINF0, BEINF1, BEINF (masses relative to the beta part, shapes as BE)
+fn dbeoi(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x <= 0.0f64 || x > 1.0f64 { ret 0.0f64 }
+    if x == 1.0f64 { ret nu }
+    ret (1.0f64 - nu) * nb.dbeta(x, mu * sigma, (1.0f64 - mu) * sigma, false)
+}
+
+fn pbeoi(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q <= 0.0f64 { ret 0.0f64 }
+    if q >= 1.0f64 { ret 1.0f64 }
+    ret (1.0f64 - nu) * nb.pbeta(q, mu * sigma, (1.0f64 - mu) * sigma, true, false)
+}
+
+fn qbeoi(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if p == 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 }
+    if p <= 1.0f64 - nu { ret nb.qbeta(p / (1.0f64 - nu), mu * sigma, (1.0f64 - mu) * sigma, true, false) }
+    ret 1.0f64
+}
+
+fn dbezi(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 || x >= 1.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    ret (1.0f64 - nu) * nb.dbeta(x, mu * sigma, (1.0f64 - mu) * sigma, false)
+}
+
+fn pbezi(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q == 0.0f64 { ret nu }
+    if q >= 1.0f64 { ret 1.0f64 }
+    ret nu + (1.0f64 - nu) * nb.pbeta(q, mu * sigma, (1.0f64 - mu) * sigma, true, false)
+}
+
+fn qbezi(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    if nu >= p { ret 0.0f64 }
+    ret nb.qbeta((p - nu) / (1.0f64 - nu), mu * sigma, (1.0f64 - mu) * sigma, true, false)
+}
+
+fn binf_a(mu: f64, sigma: f64) -> f64 { ret mu * (1.0f64 - sigma * sigma) / (sigma * sigma) }
+
+fn dbeinf0(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 || x >= 1.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu / (1.0f64 + nu) }
+    let a = binf_a(mu, sigma)
+    ret nb.dbeta(x, a, a * (1.0f64 - mu) / mu, false) / (1.0f64 + nu)
+}
+
+fn pbeinf0(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q >= 1.0f64 { ret 1.0f64 }
+    if q == 0.0f64 { ret nu / (1.0f64 + nu) }
+    let a = binf_a(mu, sigma)
+    ret (nu + nb.pbeta(q, a, a * (1.0f64 - mu) / mu, true, false)) / (1.0f64 + nu)
+}
+
+fn qbeinf0(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    if p <= nu / (1.0f64 + nu) { ret 0.0f64 }
+    let a = binf_a(mu, sigma)
+    ret nb.qbeta((p - nu / (1.0f64 + nu)) * (1.0f64 + nu), a, a * (1.0f64 - mu) / mu, true, false)
+}
+
+fn dbeinf1(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x <= 0.0f64 || x > 1.0f64 { ret 0.0f64 }
+    if x == 1.0f64 { ret nu / (1.0f64 + nu) }
+    let a = binf_a(mu, sigma)
+    ret nb.dbeta(x, a, a * (1.0f64 - mu) / mu, false) / (1.0f64 + nu)
+}
+
+fn pbeinf1(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q <= 0.0f64 { ret 0.0f64 }
+    if q >= 1.0f64 { ret 1.0f64 }
+    let a = binf_a(mu, sigma)
+    ret nb.pbeta(q, a, a * (1.0f64 - mu) / mu, true, false) / (1.0f64 + nu)
+}
+
+fn qbeinf1(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if p == 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 }
+    if p >= 1.0f64 / (1.0f64 + nu) { ret 1.0f64 }
+    let a = binf_a(mu, sigma)
+    ret nb.qbeta(p * (1.0f64 + nu), a, a * (1.0f64 - mu) / mu, true, false)
+}
+
+fn dbeinf(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x < 0.0f64 || x > 1.0f64 { ret 0.0f64 }
+    let t = 1.0f64 + nu + tau
+    if x == 0.0f64 { ret nu / t }
+    if x == 1.0f64 { ret tau / t }
+    let a = binf_a(mu, sigma)
+    ret nb.dbeta(x, a, a * (1.0f64 - mu) / mu, false) / t
+}
+
+fn pbeinf(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q > 1.0f64 { ret 1.0f64 }
+    let t = 1.0f64 + nu + tau
+    if q == 0.0f64 { ret nu / t }
+    if q == 1.0f64 { ret 1.0f64 }
+    let a = binf_a(mu, sigma)
+    ret (nu + nb.pbeta(q, a, a * (1.0f64 - mu) / mu, true, false)) / t
+}
+
+fn qbeinf(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 }
+    let t = 1.0f64 + nu + tau
+    if p >= (1.0f64 + nu) / t { ret 1.0f64 }
+    if p <= nu / t { ret 0.0f64 }
+    let a = binf_a(mu, sigma)
+    ret nb.qbeta((p - nu / t) * t, a, a * (1.0f64 - mu) / mu, true, false)
+}
