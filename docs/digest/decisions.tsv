@@ -4080,4 +4080,5 @@ D7290	1081	vcd: goodfit by minimum chi-square and the negative binomial
 D7291	1084	betareg: probit and cloglog links and the standard errors
 D7292	736	ismev: rlarg.fit
 D7293	822	ismev: pp.fit
-D7294	976	ismev: the profile likelihoods of gev.prof and gpd.prof
+D7294	977	ismev: the profile likelihoods of gev.prof and gpd.prof
+D7295	923	ismev: gev.fit with covariates on the location, scale and shape, and links

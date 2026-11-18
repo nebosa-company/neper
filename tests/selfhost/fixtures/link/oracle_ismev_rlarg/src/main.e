@@ -10,6 +10,19 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "cv") {
+        let n = usize(x[0usize])
+        let qm = usize(x[1usize])
+        let qs = usize(x[2usize])
+        let qx = usize(x[3usize])
+        let nd = n * (qm + qs + qx)
+        let (g, ge) = im.fit_cov(a, x[8usize + nd..8usize + nd + n], x[8usize..8usize + nd], qm, qs, qx, usize(x[4usize]), usize(x[5usize]), usize(x[6usize]))
+        if ge != ok { os.exit(9) }
+        let w = usize(x[7usize])
+        if w == 999usize { ret g.nllh }
+        if w >= 100usize { ret g.se[w - 100usize] }
+        ret g.par[w]
+    }
     if str.eq(c.name, "pr") {
         let kind = usize(x[0usize])
         let n = usize(x[1usize])

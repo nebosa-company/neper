@@ -49790,3 +49790,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.ismev` gains `gev_profile` and `gpd_profile`. ismev only plots these, so the port returns what it plots: the minimum of the profile negative log-likelihood at each return level of a grid, each search warm-started from the previous solution (the two-parameter GEV search over scale and shape with the location solved from the return level, the one-parameter GPD search over the shape with the scale solved from the return level and the exceedance rate). The oracle replays ismev's loops in R. Where R's own optimiser returned its 1e6 penalty at a grid point the point is left out of the oracle.
 
 **Result.** `oracle_ismev_rlarg` has 98 cases (rlarg.fit, pp.fit, a GEV profile and a GPD profile) and equals ismev within optimiser tolerance (profile values 2e-4) on Windows. Linux pending. L425 stays partial: scale and shape covariates and links, and covariates for pp.fit and rlarg.fit remain.
+
+## D7295 — ismev: gev.fit with covariates on the location, scale and shape, and links
+
+`e.algo.stat.ismev` gains `fit_cov`: gev.fit with a design (intercept plus covariate columns) on each of the location, the scale and the shape and an identity or exp link on each, ismev's gev.lik (1e6 for a non-positive scale or a non-positive 1 + xi (x - mu) / sigma), its start (the moment fit for the three intercepts, not passed through the links; 0.1 for the shape intercept; zero slopes), Nelder-Mead and the numerical Hessian standard errors. The three designs travel in one array and the widths and links are packed into the data struct's `q`.
+
+**Result.** `oracle_ismev_rlarg` has 138 cases (adding scale-only, location and scale, shape-only and a location, scale and exp-linked-scale fit) and equals ismev within optimiser tolerance on Windows. Linux pending. L425 stays partial: covariates for pp.fit and rlarg.fit remain.

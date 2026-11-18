@@ -16,6 +16,49 @@ fn nll(d: *Data, a: []const f64) -> f64 {
     let n = d.x.len
     var s = 0.0f64
     var i = 0usize
+    if d.kind == 6usize {
+        // gev.fit with covariates on the location, the scale and the shape: dm holds the three designs one after another (n by qm, n by qs, n by qx, row-major);
+        // q packs qm + 64 qs + 4096 qx + 262144 (mulink + 2 siglink + 4 shlink), a link being 0 identity or 1 exp
+        let qm = d.q % 64usize
+        let qs = (d.q / 64usize) % 64usize
+        let qx = (d.q / 4096usize) % 64usize
+        let lk = d.q / 262144usize
+        let rows = n
+        var t1 = 0.0f64
+        var t2 = 0.0f64
+        var t3 = 0.0f64
+        while i < rows {
+            var mu = 0.0f64
+            var sc = 0.0f64
+            var xi = 0.0f64
+            var j = 0usize
+            while j < qm {
+                mu += d.dm[i * qm + j] * a[j]
+                j += 1usize
+            }
+            j = 0usize
+            while j < qs {
+                sc += d.dm[rows * qm + i * qs + j] * a[qm + j]
+                j += 1usize
+            }
+            j = 0usize
+            while j < qx {
+                xi += d.dm[rows * (qm + qs) + i * qx + j] * a[qm + qs + j]
+                j += 1usize
+            }
+            if lk % 2usize == 1usize { mu = math.exp[f64](mu) }
+            if (lk / 2usize) % 2usize == 1usize { sc = math.exp[f64](sc) }
+            if (lk / 4usize) % 2usize == 1usize { xi = math.exp[f64](xi) }
+            if sc <= 0.0f64 { ret 1.0e6f64 }
+            let y = 1.0f64 + xi * ((d.x[i] - mu) / sc)
+            if y <= 0.0f64 { ret 1.0e6f64 }
+            t1 += math.log[f64](sc)
+            t2 += math.pow[f64](y, 0.0f64 - 1.0f64 / xi)
+            t3 += math.log[f64](y) * (1.0f64 / xi + 1.0f64)
+            i += 1usize
+        }
+        ret t1 + t2 + t3
+    }
     if d.kind == 5usize {
         // pp.fit with a constant threshold u and npy observations per year (in q): mu, sigma, xi
         let mu = a[0usize]
@@ -618,4 +661,31 @@ fn gpd_profile(a: *mem.Arena, x: []const f64, u: f64, m: f64, npy: f64, xlow: f6
         i += 1usize
     }
     ret ok
+}
+
+// gev.fit(x, ydat, mul, sigl, shl, mulink, siglink, shlink): dm holds the designs of the location, scale and shape (intercept first) one after another
+// (n by qm, n by qs, n by qx, row-major); links 0 identity, 1 exp. ismev's start: the moment fit for the three intercepts (not passed through the links),
+// 0.1 for the shape intercept, zero for every slope.
+fn fit_cov(a: *mem.Arena, x: []const f64, dm: []const f64, qm: usize, qs: usize, qx: usize, mulink: usize, siglink: usize, shlink: usize) -> (Fit, err) {
+    let p = qm + qs + qx
+    var d = Data { x: x, kind: 6usize, u: 0.0f64, dm: dm, q: qm + 64usize * qs + 4096usize * qx + 262144usize * (mulink + 2usize * siglink + 4usize * shlink) }
+    let (m, v) = mean_var(x)
+    let in2 = math.sqrt[f64](6.0f64 * v) / 3.141592653589793f64
+    let (par, e1) = mem.alloc[f64](a, p)
+    if e1 != ok { ret (zero, e1) }
+    var j = 0usize
+    while j < p {
+        par[j] = 0.0f64
+        j += 1usize
+    }
+    par[0usize] = m - 0.57722f64 * in2
+    par[qm] = in2
+    par[qm + qs] = 0.1f64
+    let (nllh, e3) = minimise(a, &d, par)
+    if e3 != ok { ret (zero, e3) }
+    let (h, e4) = hessian(a, &d, par)
+    if e4 != ok { ret (zero, e4) }
+    let (se, e5) = std_errors(a, h, p)
+    if e5 != ok { ret (zero, e5) }
+    ret (Fit { par: par, se: se, nllh: nllh }, ok)
 }

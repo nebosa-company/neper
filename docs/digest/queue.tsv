@@ -6,7 +6,7 @@ L389	library	0.4	1278	vcd and effectsize: categorical association and effect siz
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
 L407	library	0.93	1406	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
 L409	library	0.3	459	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
-L425	library	0.6	1034	ismev: extreme-value model fits	Partial (D6155).
+L425	library	0.7	1140	ismev: extreme-value model fits	Partial (D6155).
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
 L448	library	0.25	570	mcmc: Metropolis and tempering samplers	Partial (D6610, D7285 initseq and olbm for a scalar chain).
 L450	library	0	289	mediation: causal mediation analysis	Open (CRAN rank 755).

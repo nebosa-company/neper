@@ -58,4 +58,25 @@ xg <- 10 + 2 * ((-log(runif(80)))^(-0.1) - 1) / 0.1
 oneprof(0, xg, 50, 12)
 xe <- rexp(300) * 2 + 5
 oneprof(1, xe, 20, 10, th = as.numeric(quantile(xe, 0.85)), npy = 50)
+# gev.fit with covariates on any parameter: "cv" args (n, qm, qs, qx, mulink, siglink, shlink, which, designs..., x): the designs of mu, sigma, xi (each n by q, row-major,
+# intercept first) one after another then the data; which 0.. a parameter, 100.. its standard error, 999 the negative log-likelihood
+onecov <- function(n, mul, sigl, shl, mulink = 0, siglink = 0, shlink = 0) {
+  t <- seq(-1, 1, length = n); yd <- cbind(t, sin(3 * t))
+  z <- rnorm(n)
+  x <- 12 + 2 * t + (1.5 + 0.3 * (if (siglink == 1) 0 else t)) * ((-log(runif(n)))^(-0.1) - 1) / 0.1 + 0 * z
+  lk <- c(identity, exp)
+  f <- tryCatch(gev.fit(x, yd, mul = mul, sigl = sigl, shl = shl, mulink = lk[[mulink + 1]], siglink = lk[[siglink + 1]], shlink = lk[[shlink + 1]], show = FALSE), error = function(e) NULL)
+  if (is.null(f) || f$conv != 0) return(invisible(NULL))
+  des <- function(ix) cbind(1, yd[, ix, drop = FALSE])
+  dd <- c(as.vector(t(des(mul))), as.vector(t(des(sigl))), as.vector(t(des(shl))))
+  qm <- length(mul) + 1; qs <- length(sigl) + 1; qx <- length(shl) + 1
+  addc <- function(which, want, rel) cases[[length(cases) + 1]] <<- case("cv", c(n, qm, qs, qx, mulink, siglink, shlink, which, dd, x), want, rel = rel, abs = 1e-3)
+  for (k in seq_along(f$mle)) { addc(k - 1, f$mle[k], 5e-2); addc(100 + k - 1, f$se[k], 1.5e-1) }
+  addc(999, f$nllh, 1e-6)
+}
+set.seed(20261704)
+onecov(80, NULL, 1, NULL)
+onecov(80, 1, 1, NULL)
+onecov(100, NULL, NULL, 1)
+onecov(90, 1, 2, NULL, 0, 1, 0)
 emit("ismev_rlarg", "ismev", list(cases))
