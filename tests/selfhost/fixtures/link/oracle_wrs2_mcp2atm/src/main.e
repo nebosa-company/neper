@@ -27,7 +27,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (r, e) = w.mcp2atm(a, z[5usize + p..5usize + p + total], sizes, jn, kn, 0.2f64, which)
     if e != ok { os.exit(5) }
     if what == 0usize { ret r[ci].psihat }
-    ret r[ci].p
+    if what == 1usize { ret r[ci].p }
+    let cr = w.smmcrit(r[ci].df, r.len)
+    if what == 2usize { ret r[ci].psihat - cr * r[ci].se }
+    ret r[ci].psihat + cr * r[ci].se
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

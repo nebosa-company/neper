@@ -202,17 +202,6 @@
       "evidence": "Partial (D6160). randtoolbox halton, unscrambled sobol (eight dimensions, Bratley-Fox numbers) and torus equal R on Windows (oracle_randtoolbox; Linux pending). D6611: congruRand (any modulus, multiplier and increment, any dimension) equals randtoolbox on 17 runs. Open: scrambled sobol, WELL, SFMT, Knuth-TAOCP, qrng. Was: Open (CRAN ranks 926, 963). Small to mid. Verify e.algo.rand.quasi first. Acceptance, equal to R value for value: randtoolbox sobol (with scrambling), halton, torus, WELL, SFMT, congruRand and the Knuth-TAOCP generators; qrng sobol, halton, ghalton and korobov."
     },
     {
-      "id": "L503",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 660,
-      "title": "WRS2: robust tests and ANOVA",
-      "score": 0.85,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6137). The deterministic functions of WRS2 (winvar, winmean, winse, trimse, pbos, yuen, yuend, t1way, wincor, pbcor, akp.effect, lincon pairwise with Hochberg, med1way statistic) equal R on Windows (oracle_wrs2; Linux pending). D7123: t2way equal to WRS2 (oracle_wrs2_t2way, 48 values). yuenbt and pb2gen equal WRS2 under set.seed (oracle_wrs2_boot, 126 values). mcp2atm contrast estimates and p values equal WRS2 (oracle_wrs2_mcp2atm, 64 values; the smmcrit confidence limits are not ported). ancova design points, counts, differences, standard errors, tests and p values equal WRS2 (oracle_wrs2_ancova, 147 values). Open: the smmcrit confidence limits of ancova and mcp2atm. Was: Open (CRAN rank 985). Small to mid. Acceptance, equal to WRS2 under set.seed: yuen and yuenbt, t1way and lincon, t2way, med1way, pb2gen, mcp2atm, robust ANCOVA ancova, and the robust effect sizes."
-    },
-    {
       "id": "L505",
       "category": "library",
       "group": "CRAN parity",

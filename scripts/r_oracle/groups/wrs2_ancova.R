@@ -1,5 +1,5 @@
 # WRS2::ancova (two groups, trimmed means 0.2, fr1 = fr2 = 1): the evaluated covariate points, the counts, the trimmed-mean difference, its standard error, the test and the p value.
-# Args: (nx1, nx2, npts, row, what, pts[npts], x1[nx1], y1[nx1], x2[nx2], y2[nx2]); what 0 evalpt, 1 n1, 2 n2, 3 diff, 4 se, 5 test, 6 p value; row 0-based.
+# Args: (nx1, nx2, npts, row, what, pts[npts], x1[nx1], y1[nx1], x2[nx2], y2[nx2]); what 0 evalpt, 1 n1, 2 n2, 3 diff, 4 se, 5 test, 6 p value, 7 lower limit, 8 upper limit, 9 critical value; row 0-based.
 suppressMessages(library(WRS2))
 cases <- list()
 set.seed(20261803)
@@ -13,7 +13,7 @@ for (rep in 1:5) {
   r <- if (is.null(pts)) ancova(y ~ g + x, data = d) else ancova(y ~ g + x, data = d, pts = pts)
   for (i in seq_along(r$evalpts)) {
     hdr <- function(w) c(n1, n2, length(pts), i - 1, w, pts, x1, y1, x2, y2)
-    add(hdr(0), r$evalpts[i]); add(hdr(1), r$n1[i]); add(hdr(2), r$n2[i]); add(hdr(3), r$trDiff[i]); add(hdr(4), r$se[i]); add(hdr(5), r$test[i]); add(hdr(6), r$p.vals[i])
+    add(hdr(0), r$evalpts[i]); add(hdr(1), r$n1[i]); add(hdr(2), r$n2[i]); add(hdr(3), r$trDiff[i]); add(hdr(4), r$se[i]); add(hdr(5), r$test[i]); add(hdr(6), r$p.vals[i]); add(hdr(7), r$ci.low[i]); add(hdr(8), r$ci.hi[i]); add(hdr(9), r$crit.vals[i])
   }
 }
 emit("wrs2_ancova", "WRS2", list(cases))

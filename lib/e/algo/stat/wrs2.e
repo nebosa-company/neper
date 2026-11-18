@@ -8,6 +8,7 @@
 // studentised-maximum critical values of lincon, t2way and the rest of the package.
 
 use e.algo.rand.r as rr
+use e.algo.stat.smmcrit_table as smt
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
@@ -1094,7 +1095,7 @@ fn mcp2atm(a: *mem.Arena, data: []const f64, sizes: []const usize, jn: usize, kn
 // ---- ancova: the robust running-interval ANCOVA of WRS2 for two groups, at the five default design points (or at given ones): at each point the covariate
 // values within fr mad of it in each group, and Yuen's test of the outcomes there. The studentised-maximum-modulus limits (smmcrit) are not ported.
 
-type AncRow = struct { x: f64, n1: usize, n2: usize, dif: f64, se: f64, test: f64, p: f64 }
+type AncRow = struct { x: f64, n1: usize, n2: usize, dif: f64, se: f64, test: f64, p: f64, df: f64, crit: f64 }
 
 // R's near(x, pt, fr): flags the x within fr m of pt, m the mad (when it is zero, sqrt(winvar / 0.4129))
 fn near_flags(a: *mem.Arena, x: []const f64, pt: f64, fr: f64, flag: []bool) {
@@ -1245,10 +1246,62 @@ fn ancova(a: *mem.Arena, xa: []const f64, ya: []const f64, xb: []const f64, yb: 
             let c1 = near_y(a, sx1, sy1, pp[i], fr1, g1)
             let c2 = near_y(a, sx2, sy2, pp[i], fr2, g2)
             let y = yuen(a, g1[0usize..c1], g2[0usize..c2], tr)
-            out[kept] = AncRow { x: pp[i], n1: c1, n2: c2, dif: y.diff, se: y.se, test: y.test, p: y.p }
+            var cr = 0.0f64
+            if pts.len == 0usize { cr = smmcrit(y.df, 5usize) } else if np >= 2usize { cr = smmcrit(y.df, np) } else { cr = nb.qt(0.975f64, y.df, true, false) }
+            out[kept] = AncRow { x: pp[i], n1: c1, n2: c2, dif: y.diff, se: y.se, test: y.test, p: y.p, df: y.df, crit: cr }
             kept += 1usize
         }
         i += 1usize
     }
     ret (kept, ok)
+}
+
+// ---- smmcrit: the 0.975 critical value of the studentised maximum modulus for c contrasts (c at most 28) and nuhat degrees of freedom, WRS2's table with
+// interpolation in 1 / nu; one contrast is the t quantile
+fn smmcrit(nuhat: f64, c: usize) -> f64 {
+    if c <= 1usize { ret nb.qt(0.975f64, nuhat, true, false) }
+    let t = smt.smmcrit_table()
+    let col = c - 2usize
+    if nuhat >= 200.0f64 { ret t[19usize * 27usize + col] }
+    var nu: [20]f64 = zero
+    nu[0usize] = 2.0f64
+    nu[1usize] = 3.0f64
+    nu[2usize] = 4.0f64
+    nu[3usize] = 5.0f64
+    nu[4usize] = 6.0f64
+    nu[5usize] = 7.0f64
+    nu[6usize] = 8.0f64
+    nu[7usize] = 9.0f64
+    nu[8usize] = 10.0f64
+    nu[9usize] = 11.0f64
+    nu[10usize] = 12.0f64
+    nu[11usize] = 14.0f64
+    nu[12usize] = 16.0f64
+    nu[13usize] = 18.0f64
+    nu[14usize] = 20.0f64
+    nu[15usize] = 24.0f64
+    nu[16usize] = 30.0f64
+    nu[17usize] = 40.0f64
+    nu[18usize] = 60.0f64
+    nu[19usize] = 200.0f64
+    var f = 0usize
+    var best = math.abs[f64](nu[0usize] - nuhat)
+    var i = 1usize
+    while i < 20usize {
+        let d = math.abs[f64](nu[i] - nuhat)
+        if d < best {
+            best = d
+            f = i
+        }
+        i += 1usize
+    }
+    if best == 0.0f64 { ret t[f * 27usize + col] }
+    if nuhat > nu[f] {
+        let m0 = t[f * 27usize + col]
+        let m1 = t[(f + 1usize) * 27usize + col]
+        ret m0 - (1.0f64 / nu[f] - 1.0f64 / nuhat) * (m0 - m1) / (1.0f64 / nu[f] - 1.0f64 / nu[f + 1usize])
+    }
+    let m0 = t[(f - 1usize) * 27usize + col]
+    let m1 = t[f * 27usize + col]
+    ret m0 - (1.0f64 / nu[f - 1usize] - 1.0f64 / nuhat) * (m0 - m1) / (1.0f64 / nu[f - 1usize] - 1.0f64 / nu[f])
 }

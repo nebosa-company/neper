@@ -31,7 +31,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if what == 3usize { ret out[row].dif }
     if what == 4usize { ret out[row].se }
     if what == 5usize { ret out[row].test }
-    ret out[row].p
+    if what == 6usize { ret out[row].p }
+    if what == 7usize { ret out[row].dif - out[row].crit * out[row].se }
+    if what == 8usize { ret out[row].dif + out[row].crit * out[row].se }
+    ret out[row].crit
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

@@ -1,6 +1,5 @@
 # WRS2::mcp2atm (trimmed means 0.2): the contrasts' psihat, standard error-based test and p value for the A, B and AB effects. Args: (J, K, which, c, what, sizes[J K], data[n]):
-# cells in R's order (cell (j, k) is group (j - 1) K + k); which 0 A, 1 B, 2 AB; c the 0-based contrast; what 0 psihat, 1 p value.
-# The confidence limits need smmcrit and are not compared.
+# cells in R's order (cell (j, k) is group (j - 1) K + k); which 0 A, 1 B, 2 AB; c the 0-based contrast; what 0 psihat, 1 p value, 2 lower limit, 3 upper limit.
 suppressMessages(library(WRS2))
 cases <- list()
 set.seed(20261802)
@@ -18,6 +17,8 @@ for (rep in 1:4) {
     for (c in seq_along(e$psihat)) {
       add(c(J, K, w, c - 1, 0, sizes, flat), unname(e$psihat[c]))
       add(c(J, K, w, c - 1, 1, sizes, flat), unname(e$p.value[c]))
+      add(c(J, K, w, c - 1, 2, sizes, flat), unname(matrix(e$conf.int, ncol = 2)[c, 1]))
+      add(c(J, K, w, c - 1, 3, sizes, flat), unname(matrix(e$conf.int, ncol = 2)[c, 2]))
     }
   }
 }
