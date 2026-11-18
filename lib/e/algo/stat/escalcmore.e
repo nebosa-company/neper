@@ -5,48 +5,32 @@
 //   20 MD 21 SMD 22 SMDH 23 SMD1 24 SMD1H 25 ROM 26 RPB 27 ZPB 28 D2OR 29 VR 30 CVR 31 D2ORN (columns m1i m2i sd1i sd2i n1i n2i)
 //   40 IRR 41 IRD 42 IRSD (x1i x2i t1i t2i)   50 COR 51 ZCOR (ri ni)   60 PR 61 PLN 62 PLO 63 PRZ 64 PAS 65 PFT (xi mi)   70 IR 71 IRLN 72 IRS 73 IRFT (xi ti)
 //   80 MN 81 SMN 82 MNLN 83 SDLN 84 CVLN (mi sdi ni)
-// vtype: 0 the measure's default (LS), 1 UB, 2 AV, 3 H0, 4 HO, 5 LS2, 6 LS3, 7 CS, 9 AVHO
+// vtype: 0 the measure's default (LS), 1 UB, 2 AV, 3 H0, 4 HO, 5 LS2, 6 LS3, 7 CS, 8 ST, 9 AVHO, 10 H0a, 11 H0b, 12 AV2, 13 MAX
 //
-// Not here: the correlation corrections that need the hypergeometric function (UCOR), RTET and ZTET, the partial correlations, the paired-sample measures, ICC, R2 and the alpha measures.
+// The measures not listed here (13 RTET 14 ZTET 15 MPORM, 32 RBIS 33 ZBIS 34 D2ORL 35 POMPMD, 52 UCOR 53 PCOR 54 ZPCOR 55 SPCOR 56 ZSPCOR 57 ICC 58 ZICC, 85 POMPMN, 90 R2 91 ZR2 92 R2F 93 ZR2F,
+// 94 CLES (AUC) 95 CLESN (AUCN), 102 SMCR, 110 POMPMC) are in e.algo.stat.escalcgap, with the extra vtype codes 10 H0a, 11 H0b, 12 AV2, 13 MAX, 8 ST.
 
+use e.algo.stat.escalcgap as g
 use e.math
 use e.math.dist as dist
-use e.math.special as sp
 
-fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
+fn nan() -> f64 { ret g.nan() }
 
-fn pi_c() -> f64 { ret 3.141592653589793f64 }
+fn pi_c() -> f64 { ret g.pi_c() }
 
-// the small-sample correction factor of Hedges (exact gamma form), or 1 when correct is false
-fn cmi_of(mi: f64, correct: bool) -> f64 {
-    if !correct { ret 1.0f64 }
-    if mi <= 1.0f64 { ret nan() }
-    ret math.exp[f64](sp.lgamma(mi / 2.0f64) - math.log[f64](math.sqrt[f64](mi / 2.0f64)) - sp.lgamma((mi - 1.0f64) / 2.0f64))
-}
+fn cmi_of(mi: f64, correct: bool) -> f64 { ret g.cmi_of(mi, correct) }
 
-// the weighted mean of x with weights w over the rows where neither is NaN
-fn wmean(x: []const f64, w: []const f64, k: usize) -> f64 {
-    var sx = 0.0f64
-    var sw = 0.0f64
-    var i = 0usize
-    while i < k {
-        if x[i] == x[i] && w[i] == w[i] {
-            sx += x[i] * w[i]
-            sw += w[i]
-        }
-        i += 1usize
-    }
-    ret sx / sw
-}
+fn wmean(x: []const f64, w: []const f64, k: usize) -> f64 { ret g.wmean(x, w, k) }
 
-fn at(d: []const f64, ncol: usize, i: usize, j: usize) -> f64 { ret d[i * ncol + j] }
+fn at(d: []const f64, ncol: usize, i: usize, j: usize) -> f64 { ret g.at(d, ncol, i, j) }
 
 // escalc: the effects, with infinite and NaN values (either of yi and vi) recoded to NaN in both and a negative variance to NaN
 fn escalc(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, correct: bool, k: usize, ncol: usize, d: []const f64, yi: []f64, vi: []f64, scratch: []f64) {
     escalc_raw(measure, vtype, add, to, drop00, correct, k, ncol, d, yi, vi, scratch)
     var i = 0usize
     while i < k {
-        var bad = yi[i] - yi[i] != 0.0f64 || vi[i] - vi[i] != 0.0f64
+        // an infinity or a NaN in either value is recoded to NA in both; an NA already (R's NA_real_, g.na_val) leaves the other value alone
+        var bad = g.recode(yi[i]) || g.recode(vi[i])
         // a dropped 0/0 row has an NA effect but keeps its variance when that depends on the person-times only
         if measure == 42usize && drop00 && at(d, ncol, i, 0usize) == 0.0f64 && at(d, ncol, i, 1usize) == 0.0f64 {
             bad = false
@@ -64,20 +48,15 @@ fn escalc(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, corre
 // escalc: d is k rows of ncol columns; yi and vi receive the k effects and variances. scratch needs 6 k values
 fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, correct: bool, k: usize, ncol: usize, d: []const f64, yi: []f64, vi: []f64, scratch: []f64) {
     var i = 0usize
+    if g.handles(measure) {
+        g.compute(measure, vtype, add, to, drop00, correct, k, ncol, d, yi, vi, scratch)
+        ret
+    }
     // working copies of up to four count columns (the unadjusted values are the d itself)
     if measure <= 12usize || (measure >= 120usize && measure <= 124usize) {
         let p1u = scratch[0usize..k]
         let p2u = scratch[k..2usize * k]
-        var any0 = false
-        i = 0usize
-        while i < k {
-            let a0 = at(d, ncol, i, 0usize)
-            let b0 = at(d, ncol, i, 1usize)
-            let c0 = at(d, ncol, i, 2usize)
-            let d0 = at(d, ncol, i, 3usize)
-            if a0 == 0.0f64 || b0 == 0.0f64 || c0 == 0.0f64 || d0 == 0.0f64 { any0 = true }
-            i += 1usize
-        }
+        let any0 = g.any0_2x2(d, ncol, k, drop00)
         var s1 = 0.0f64
         var s1n = 0.0f64
         var s2 = 0.0f64
@@ -158,6 +137,11 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
                 let q1d = (a + c) / ni
                 let q2d = (b + dd) / ni
                 v = 1.0f64 / ni * (1.0f64 - y * y + y * (1.0f64 + 0.5f64 * y * y) * (p1d - p2d) * (q1d - q2d) / math.sqrt[f64](p1d * p2d * q1d * q2d) - 0.75f64 * y * y * ((p1d - p2d) * (p1d - p2d) / (p1d * p2d) + (q1d - q2d) * (q1d - q2d) / (q1d * q2d)))
+                if vtype == 8usize {
+                    let q1 = 1.0f64 - p1
+                    let q2 = 1.0f64 - p2
+                    v = (n1 + n2) * (n1 + n2) * (4.0f64 * n1 * n1 * n1 * p1 * p1 * p2 * q1 * q1 * q2 + 4.0f64 * n2 * n2 * n2 * p1 * p2 * p2 * q1 * q2 * q2 + n1 * n2 * n2 * p2 * q2 * (p2 * q1 + p1 * q2) * (p2 * q1 + p1 * (4.0f64 * q1 + q2)) + n1 * n1 * n2 * p1 * q1 * (p2 * q1 + p1 * q2) * (p1 * q2 + p2 * (q1 + 4.0f64 * q2))) / (4.0f64 * (a + c) * (a + c) * (a + c) * (b + dd) * (b + dd) * (b + dd))
+                }
                 if measure == 6usize {
                     var y2 = y * y
                     if y2 > 1.0f64 { y2 = 1.0f64 }
@@ -254,8 +238,12 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
                 if measure == 0usize {
                     if vtype == 2usize { vi[i] = (1.0f64 - m1) / (m1 * n1) + (1.0f64 - m2) / (m2 * n2) } else { vi[i] = (1.0f64 - pp) / pp * (1.0f64 / n1 + 1.0f64 / n2) }
                 }
-                if measure == 1usize {
-                    if vtype == 2usize { vi[i] = 1.0f64 / (m1 * (1.0f64 - m1) * n1) + 1.0f64 / (m2 * (1.0f64 - m2) * n2) } else { vi[i] = 1.0f64 / (pp * (1.0f64 - pp)) * (1.0f64 / n1 + 1.0f64 / n2) }
+                if measure == 1usize || (measure >= 10usize && measure <= 12usize) {
+                    var vor = 1.0f64 / (pp * (1.0f64 - pp)) * (1.0f64 / n1 + 1.0f64 / n2)
+                    if vtype == 2usize { vor = 1.0f64 / (m1 * (1.0f64 - m1) * n1) + 1.0f64 / (m2 * (1.0f64 - m2) * n2) }
+                    if measure == 10usize || measure == 12usize { vor = 3.0f64 / (pi_c() * pi_c()) * vor }
+                    if measure == 11usize { vor = vor / (1.65f64 * 1.65f64) }
+                    vi[i] = vor
                 }
                 if measure == 2usize {
                     if vtype == 2usize { vi[i] = m1 * (1.0f64 - m1) / n1 + m2 * (1.0f64 - m2) / n2 } else { vi[i] = (1.0f64 / n1 + 1.0f64 / n2) * pp * (1.0f64 - pp) }
@@ -292,6 +280,7 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
                 if vtype == 5usize { v = cm * cm * (1.0f64 / n + dv * dv / (2.0f64 * n)) }
                 if vtype == 1usize { v = 1.0f64 / n + (1.0f64 - (mi - 2.0f64) / (mi * cm * cm)) * y * y }
                 if vtype == 3usize {
+                    v = g.na_val()
                     if mi > 2.0f64 { v = cm * cm / n * mi / (mi - 2.0f64) }
                 }
             }
@@ -451,6 +440,7 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
                 if vtype == 1usize { v = 1.0f64 / n1 + 1.0f64 / n2 + (1.0f64 - (mi - 2.0f64) / (mi * cm * cm)) * y * y }
                 if vtype == 2usize { v = 1.0f64 / n1 + 1.0f64 / n2 + mnwy * mnwy / (2.0f64 * npi) }
                 if vtype == 3usize {
+                    v = g.na_val()
                     if mi > 2.0f64 { v = cm * cm * (1.0f64 / n1 + 1.0f64 / n2) * mi / (mi - 2.0f64) }
                 }
             }
@@ -515,12 +505,7 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
         ret
     }
     if measure >= 40usize && measure <= 42usize {
-        var any0 = false
-        i = 0usize
-        while i < k {
-            if at(d, ncol, i, 0usize) == 0.0f64 || at(d, ncol, i, 1usize) == 0.0f64 { any0 = true }
-            i += 1usize
-        }
+        let any0 = g.any0_pair(d, ncol, k, drop00)
         i = 0usize
         while i < k {
             var x1 = at(d, ncol, i, 0usize)
@@ -579,13 +564,13 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
                 yi[i] = r
                 if vtype == 0usize { vi[i] = (1.0f64 - r * r) * (1.0f64 - r * r) / (n - 1.0f64) }
                 if vtype == 2usize { vi[i] = (1.0f64 - mnw * mnw) * (1.0f64 - mnw * mnw) / (n - 1.0f64) }
-                if vtype == 3usize { vi[i] = (1.0f64 - r * r) / (n - 2.0f64) }
-                if vtype == 8usize { vi[i] = 1.0f64 / n }
+                if vtype == 3usize || vtype == 10usize { vi[i] = (1.0f64 - r * r) / (n - 2.0f64) }
+                if vtype == 11usize { vi[i] = 1.0f64 / n }
             } else {
                 yi[i] = 0.5f64 * math.log[f64]((1.0f64 + r) / (1.0f64 - r))
                 vi[i] = 1.0f64 / (n - 3.0f64)
             }
-            if n <= 3.0f64 { vi[i] = nan() }
+            if n <= 3.0f64 { vi[i] = g.na_val() }
             i += 1usize
         }
         ret
