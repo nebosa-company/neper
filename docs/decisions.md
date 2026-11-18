@@ -48750,3 +48750,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.vcdeffect` has `woolf`: the Woolf test of equal odds ratios over the strata of a 2 by 2 by k table (column-major cells). Any zero cell adds one half to every cell, as vcd does; the log odds ratios are weighted by the inverse of the sum of reciprocal cells, and the statistic is the weighted squared deviation from the weighted mean, on k - 1 degrees of freedom, with its upper tail p value.
 
 **Result.** `oracle_vcd_woolf` equals vcd::woolf_test on 40 statistics and p values (2 by 2 by 2 to 5 tables with and without zero cells) on Windows; Linux pending. L389 stays partial: goodfit, oddsratio, CMHtest, the Mantel-Haenszel helpers and the intervals are open.
+
+## D7122 — vcd: oddsratio with the default contrasts
+
+`e.algo.stat.vcdeffect` has `loddsratio`: for an r by c by s table (column-major), each stratum's log odds ratios over adjacent row and column pairs, log x(i,j) - log x(i+1,j) - log x(i,j+1) + log x(i+1,j+1), with their variances (the sum of 1 / x over the four cells), ordered stratum-major and then column by column as vcd's contrast matrix orders them. Any zero cell adds one half to every cell.
+
+**Result.** `oracle_vcd_oddsratio` equals vcd::oddsratio on 80 values (coefficients and variances, sums over index, for 2 by 2 to 3 by 3 tables with two or three strata, some with a zero cell) on Windows; Linux pending. Not here: reference categories, the log = FALSE form and the other contrast layouts of loddsratio. L389 stays partial.

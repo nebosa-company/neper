@@ -294,3 +294,38 @@ fn woolf(a: *mem.Arena, x: []const f64, k: usize) -> (f64, f64, err) {
     }
     ret (stat, nm.pchisq(stat, f64(k - 1usize), false, false), ok)
 }
+
+// vcd::oddsratio (loddsratio with no reference categories) on an r by c by s table x (column-major): for each stratum, and each adjacent pair of rows
+// and of columns, the log odds ratio log x(i,j) - log x(i+1,j) - log x(i,j+1) + log x(i+1,j+1), with its variance sum 1 / x over the four cells.
+// Stratum-major, then column by column, as the contrasts of loddsratio are ordered. Any zero cell adds one half to every cell.
+// Returns the (r - 1)(c - 1)s coefficients and their variances.
+fn loddsratio(a: *mem.Arena, x: []const f64, r: usize, c: usize, s: usize, coef: []f64, vdiag: []f64) -> err {
+    var zero_cell = false
+    var i = 0usize
+    while i < r * c * s {
+        if x[i] == 0.0f64 { zero_cell = true }
+        i += 1usize
+    }
+    var add = 0.0f64
+    if zero_cell { add = 0.5f64 }
+    var k = 0usize
+    while k < s {
+        var j = 0usize
+        while j + 1usize < c {
+            i = 0usize
+            while i + 1usize < r {
+                let idx = k * (r - 1usize) * (c - 1usize) + j * (r - 1usize) + i
+                let p00 = x[k * r * c + j * r + i] + add
+                let p10 = x[k * r * c + j * r + i + 1usize] + add
+                let p01 = x[k * r * c + (j + 1usize) * r + i] + add
+                let p11 = x[k * r * c + (j + 1usize) * r + i + 1usize] + add
+                coef[idx] = math.log[f64](p00) - math.log[f64](p10) - math.log[f64](p01) + math.log[f64](p11)
+                vdiag[idx] = 1.0f64 / p00 + 1.0f64 / p10 + 1.0f64 / p01 + 1.0f64 / p11
+                i += 1usize
+            }
+            j += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}
