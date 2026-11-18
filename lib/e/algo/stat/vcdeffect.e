@@ -8,6 +8,10 @@
 // CMHtest, woolf_test and the Mantel-Haenszel helpers, the other designs of the ANOVA effect sizes.
 
 use e.math
+use e.algo.stat.fdrtool as fdr
+use e.algo.stat.rnm as rnmv
+use e.math.nmath as nmm
+use e.math.nmath_beta as nmb
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
@@ -376,4 +380,135 @@ fn goodfit_binomial(freq: []const f64, size: f64, fit: []f64) -> (f64, f64, err)
         c += 1usize
     }
     ret (prob, nonzero - 2.0f64, ok)
+}
+
+// goodfit(method = "MinChisq") for the Poisson (kind 0) and the binomial with a given size (kind 1) on the counts freq[c], c = 0 .. K - 1: the parameter minimising sum (obs - exp)^2 / exp with
+// exp = N times the differences of the cumulative distribution (the last cell taking the remainder), by R's optimize over range(count) (Poisson) or (0, 1); df = K - 2
+type McCtx = struct { freq: []const f64, k: usize, kind: usize, size: f64 }
+
+fn mc_chi2(c: *McCtx, x: f64) -> f64 {
+    var tot = 0.0f64
+    var nn = 0.0f64
+    var i = 0usize
+    while i < c.k {
+        nn += c.freq[i]
+        i += 1usize
+    }
+    var prev = 0.0f64
+    var chi = 0.0f64
+    i = 0usize
+    while i < c.k {
+        var cum = 1.0f64
+        if i + 1usize < c.k {
+            if c.kind == 0usize { cum = nmm.ppois(f64(i), x, true, false) } else { cum = nmb.pbinom(f64(i), c.size, x, true, false) }
+        }
+        let ex = nn * (cum - prev)
+        chi += (c.freq[i] - ex) * (c.freq[i] - ex) / ex
+        prev = cum
+        i += 1usize
+    }
+    tot = chi
+    ret tot
+}
+
+fn goodfit_minchisq(freq: []const f64, kind: usize, size: f64, fit: []f64) -> (f64, f64) {
+    var c = McCtx{ freq: freq, k: freq.len, kind: kind, size: size }
+    var lo = 0.0f64
+    var hi = 1.0f64
+    if kind == 0usize { hi = f64(freq.len - 1usize) }
+    let par = fdr.brent_min[McCtx](&c, mc_chi2, lo, hi)
+    var nn = 0.0f64
+    var i = 0usize
+    while i < freq.len {
+        nn += freq[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < freq.len {
+        if kind == 0usize { fit[i] = nn * nmm.dpois(f64(i), par, false) } else { fit[i] = nn * nmb.dbinom(f64(i), size, par, false) }
+        i += 1usize
+    }
+    ret (par, f64(freq.len) - 2.0f64)
+}
+
+// goodfit(type = "nbinomial") on counts freq[c], c = 0 .. K - 1: ML (MASS::fitdistr: mu = the sample mean and the size maximising the likelihood, found on log(size) by Brent to 1e-12; prob = size / (size + mu))
+// out receives (size, prob); MinChisq (no size given): Nelder-Mead on (size, prob) from the moment estimates under R's optim defaults, chi-square as for the other families
+type NbCtx2 = struct { freq: []const f64, k: usize, mu: f64 }
+
+fn nbg_negll(c: *NbCtx2, lsz: f64) -> f64 {
+    let size = math.exp[f64](lsz)
+    var ll = 0.0f64
+    var i = 0usize
+    while i < c.k {
+        ll += c.freq[i] * nmb.dnbinom_mu(f64(i), size, c.mu, true)
+        i += 1usize
+    }
+    ret 0.0f64 - ll
+}
+
+fn goodfit_nb_ml(freq: []const f64, out: []f64) {
+    var nn = 0.0f64
+    var sm = 0.0f64
+    var i = 0usize
+    while i < freq.len {
+        nn += freq[i]
+        sm += freq[i] * f64(i)
+        i += 1usize
+    }
+    let mu = sm / nn
+    var c = NbCtx2{ freq: freq, k: freq.len, mu: mu }
+    let l = fdr.brent_min_tol[NbCtx2](&c, nbg_negll, math.log[f64](0.001f64), math.log[f64](1.0e6f64), 1.0e-12f64)
+    let size = math.exp[f64](l)
+    out[0usize] = size
+    out[1usize] = size / (size + mu)
+}
+
+type NbMcCtx = struct { freq: []const f64, k: usize }
+
+fn nbmc_chi2(c: *NbMcCtx, x: []const f64) -> f64 {
+    var nn = 0.0f64
+    var i = 0usize
+    while i < c.k {
+        nn += c.freq[i]
+        i += 1usize
+    }
+    var prev = 0.0f64
+    var chi = 0.0f64
+    i = 0usize
+    while i < c.k {
+        var cum = 1.0f64
+        if i + 1usize < c.k { cum = nmb.pnbinom(f64(i), x[0usize], x[1usize], true, false) }
+        let ex = nn * (cum - prev)
+        chi += (c.freq[i] - ex) * (c.freq[i] - ex) / ex
+        prev = cum
+        i += 1usize
+    }
+    ret chi
+}
+
+fn goodfit_nb_minchisq(a: *mem.Arena, freq: []const f64, out: []f64) {
+    var nn = 0.0f64
+    var sm = 0.0f64
+    var i = 0usize
+    while i < freq.len {
+        nn += freq[i]
+        sm += freq[i] * f64(i)
+        i += 1usize
+    }
+    let xbar = sm / nn
+    var ss = 0.0f64
+    i = 0usize
+    while i < freq.len {
+        ss += freq[i] * (f64(i) - xbar) * (f64(i) - xbar)
+        i += 1usize
+    }
+    let s2 = ss / (nn - 1.0f64)
+    var start: [2]f64 = zero
+    start[0usize] = xbar * xbar / (s2 - xbar)
+    start[1usize] = xbar / s2
+    var best: [2]f64 = zero
+    var c = NbMcCtx{ freq: freq, k: freq.len }
+    let (fmin, cnt, fail) = rnmv.nmmin[NbMcCtx](a, &c, nbmc_chi2, start[0usize..2usize], 0.0f64 - 1.0f64 / 0.0f64, 0.0000000149011611938f64, 1.0f64, 0.5f64, 2.0f64, 500usize, 1.0f64, best[0usize..2usize])
+    out[0usize] = best[0usize]
+    out[1usize] = best[1usize]
 }

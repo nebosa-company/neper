@@ -49760,3 +49760,9 @@ The gmp fixture formats big integers in bases 2 to 36 through `bn.int_format` an
 Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inverses, the Aitchison distance and norm, perturbation and powering, mean, variance and balances, the normality tests in the simplex) against the committed oracles: each item has a fixture that equals compositions on Windows (D6140, D7100, D7116 and the missing-parts work). The exports outside that list (robust MCD estimates, PBangprox and PBmaxvar, balanceBase from a formula) are recorded as not ported rather than as part of the acceptance.
 
 **Result.** No new code; the item is closed on Windows (Linux pending).
+
+## D7290 — vcd: goodfit by minimum chi-square and the negative binomial
+
+`e.algo.stat.vcdeffect` gains `goodfit_minchisq` (the Poisson and the binomial with a given size: the parameter minimising the chi-square of the observed counts against N times the differences of the cdf, by R's `optimize` through `e.algo.stat.fdrtool.brent_min`; df = K - 2), `goodfit_nb_ml` (`fitdistr`'s negative binomial maximum likelihood: mu is the sample mean and the size comes from a Brent search of the profile likelihood on log(size); prob = size / (size + mu)) and `goodfit_nb_minchisq` (Nelder-Mead on (size, prob) from the moment estimates under R's optim defaults).
+
+**Result.** `oracle_vcd_goodfit` gains 12 Poisson and binomial MinChisq data sets (96 values, 1e-6 to 1e-7) and up to 14 negative binomial samples (56 values; MinChisq at 1e-6, ML at 3e-3 because `fitdistr`'s BFGS stops that far from the optimum) and equals vcd on Windows. Linux pending. L389 stays partial: oddsratio intervals and interpret rules, the mantelhaen helpers (CMHtest is in vcdExtra, which is not installed).

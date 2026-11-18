@@ -11,6 +11,40 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let which = usize(z[z.len - 1usize])
+    if str.eq(c.name, "gnb") {
+        let nk = usize(z[1usize])
+        let (no, ne) = mem.alloc[f64](a, 2usize)
+        if ne != ok { os.exit(13) }
+        if z[0usize] == 0.0f64 { ve.goodfit_nb_ml(z[2usize..2usize + nk], no) } else { ve.goodfit_nb_minchisq(a, z[2usize..2usize + nk], no) }
+        ret no[which]
+    }
+    if str.eq(c.name, "gm") || str.eq(c.name, "gbm") {
+        var kk = usize(z[0usize])
+        var bs = 1usize
+        var kind = 0usize
+        var size = 0.0f64
+        if str.eq(c.name, "gbm") {
+            kk = usize(z[1usize])
+            bs = 2usize
+            kind = 1usize
+            size = z[0usize]
+        }
+        let (ft, fe) = mem.alloc[f64](a, kk)
+        if fe != ok { os.exit(12) }
+        let (par, dfm) = ve.goodfit_minchisq(z[bs..bs + kk], kind, size, ft)
+        if which == 0usize { ret par }
+        if which == 2usize { ret dfm }
+        var sf = 0.0f64
+        var chi = 0.0f64
+        var ii = 0usize
+        while ii < kk {
+            sf += ft[ii]
+            chi += (z[bs + ii] - ft[ii]) * (z[bs + ii] - ft[ii]) / ft[ii]
+            ii += 1usize
+        }
+        if which == 1usize { ret sf }
+        ret chi
+    }
     var k = usize(z[0usize])
     var base = 1usize
     if str.eq(c.name, "gb") {
