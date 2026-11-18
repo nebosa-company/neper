@@ -15,6 +15,7 @@ use e.math.nmath_beta as nmb
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
+use e.math.dist as dist
 
 type Assoc = struct { lr: f64, pearson: f64, df: f64, p_lr: f64, p_pearson: f64, phi: f64, contingency: f64, cramer: f64 }
 
@@ -333,6 +334,24 @@ fn loddsratio(a: *mem.Arena, x: []const f64, r: usize, c: usize, s: usize, coef:
         k += 1usize
     }
     ret ok
+}
+
+// confint(oddsratio(x, log = log), level) from the coefficients and variances of `loddsratio`: the Wald interval coef +- z sd on the log scale, exponentiated when log is false.
+// lo and hi receive the bounds; vexp receives the variances vcov(oddsratio(x, log = FALSE)) = v exp(coef)^2 on the odds ratio scale (the log scale ones are `vdiag`).
+fn loddsratio_ci(coef: []const f64, vdiag: []const f64, level: f64, logscale: bool, lo: []f64, hi: []f64, vexp: []f64) {
+    let z = dist.qnorm((1.0f64 - level) / 2.0f64, 0.0f64, 1.0f64, true, false)
+    var i = 0usize
+    while i < coef.len {
+        let sd = math.sqrt[f64](vdiag[i])
+        lo[i] = coef[i] + z * sd
+        hi[i] = coef[i] - z * sd
+        vexp[i] = vdiag[i] * math.exp[f64](coef[i]) * math.exp[f64](coef[i])
+        if !logscale {
+            lo[i] = math.exp[f64](lo[i])
+            hi[i] = math.exp[f64](hi[i])
+        }
+        i += 1usize
+    }
 }
 
 // vcd::goodfit(x, type = "poisson") by maximum likelihood on a one-way table of counts freq[c] for c = 0 .. K - 1: lambda = the weighted mean of the

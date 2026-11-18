@@ -4092,4 +4092,5 @@ D7298	520	arules: eclat
 D7299	735	arules: apriori rules for many items
 D7300	485	arules: basic interest measures for many items
 D7301	523	arules: hyper and improvement measures for many items
-D7302	642	arules: the nine D7293 measures, redundant rules and subsetting on the many-item path; L462 closed
+D7302	643	arules: the nine D7293 measures, redundant rules and subsetting on the many-item path; L462 closed
+D7303	571	vcd: oddsratio confidence intervals and exp-scale variances

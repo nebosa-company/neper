@@ -49862,3 +49862,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `apriori_big_measures` carries leverage, coverage, cosine, jaccard, kulczynski, phi, addedValue, conviction and oddsRatio to the many-item path; `apriori_big_hyper` also counts redundant rules (improvement <= 0, as `is.redundant`) and the rules with item 0 in the antecedent or as the consequent (`subset`).
 
 **Result.** `oracle_arules` (2860 cases) equals arules on Windows. Linux pending. L462 is closed: FP-growth yields the itemsets of apriori and eclat, and sequences are the separate arulesSequences package.
+
+## D7303 — vcd: oddsratio confidence intervals and exp-scale variances
+
+**Decision.** `vcdeffect.loddsratio_ci` gives the Wald intervals of `confint(oddsratio(x, log = ...), level)` (log scale, or exponentiated) and the variances of `vcov(oddsratio(x, log = FALSE))`, v times exp(coef) squared.
+
+**Result.** `oracle_vcd_oddsratio` (180 cases, 100 new) equals vcd on Windows. Linux pending. R's `confint` on an unnamed `loddsratio` returns no rows, so the oracle names the coefficients first. L389 stays partial: reference categories, interpret, the mantelhaen helpers.

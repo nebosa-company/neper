@@ -27,11 +27,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let s = usize(z[2usize])
     let cells = z[3usize..3usize + r * cc * s]
     let which = usize(z[z.len - 1usize])
+    var level = 0.95f64
+    if which >= 4usize { level = z[z.len - 2usize] }
     let m = (r - 1usize) * (cc - 1usize) * s
     let (coef, e1) = mem.alloc[f64](a, m)
     let (vd, e2) = mem.alloc[f64](a, m)
     if e1 != ok || e2 != ok { os.exit(10) }
     if ve.loddsratio(a, cells, r, cc, s, coef, vd) != ok { os.exit(11) }
+    if which >= 4usize {
+        let (lo, e3) = mem.alloc[f64](a, m)
+        let (hi, e4) = mem.alloc[f64](a, m)
+        let (vx, e5) = mem.alloc[f64](a, m)
+        if e3 != ok || e4 != ok || e5 != ok { os.exit(12) }
+        ve.loddsratio_ci(coef[0usize..m], vd[0usize..m], level, which < 6usize, lo, hi, vx)
+        if which == 4usize || which == 6usize { ret pick(lo[0usize..m], 0usize) }
+        if which == 5usize || which == 7usize { ret pick(hi[0usize..m], 0usize) }
+        ret pick(vx[0usize..m], 0usize)
+    }
     if which < 2usize { ret pick(coef[0usize..m], which) }
     ret pick(vd[0usize..m], which - 2usize)
 }
