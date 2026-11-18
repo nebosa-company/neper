@@ -86,10 +86,10 @@
       "group": "CRAN parity",
       "order": 623,
       "title": "ismev: extreme-value model fits",
-      "score": 0.45,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6155). Stationary gev.fit, gpd.fit and gum.fit (parameters, standard errors, negative log-likelihood) agree with ismev on Windows at optimiser tolerance, not bit for bit (oracle_ismev; Linux pending). D6859: gevq, gevf, gev.dens, gpdq, gpdf, gpd.dens, gpdq2 and the return-level gradients equal ismev. D7120: gev.fit with a location covariate (mul = 1) equal to ismev within optimiser tolerance (oracle_ismev_cov, 81 cases; about seven minutes). Open: scale and shape covariates and links, pp.fit, rlarg.fit, profile likelihoods. Was: Open (CRAN rank 647). Small to mid. Acceptance, equal to ismev: gev.fit, gpd.fit, pp.fit, rlarg.fit and gum.fit with covariates and link functions, standard errors, return levels, profile likelihoods gev.prof and gpd.prof."
+      "evidence": "Partial (D6155). Stationary gev.fit, gpd.fit and gum.fit (parameters, standard errors, negative log-likelihood) agree with ismev on Windows at optimiser tolerance, not bit for bit (oracle_ismev; Linux pending). D6859: gevq, gevf, gev.dens, gpdq, gpdf, gpd.dens, gpdq2 and the return-level gradients equal ismev. D7120: gev.fit with a location covariate (mul = 1) equal to ismev within optimiser tolerance (oracle_ismev_cov, 81 cases; about seven minutes). Stationary rlarg.fit equal to ismev within optimiser tolerance (oracle_ismev_rlarg, 42 cases). Open: scale and shape covariates and links, pp.fit, rlarg covariates, profile likelihoods. Was: Open (CRAN rank 647). Small to mid. Acceptance, equal to ismev: gev.fit, gpd.fit, pp.fit, rlarg.fit and gum.fit with covariates and link functions, standard errors, return levels, profile likelihoods gev.prof and gpd.prof."
     },
     {
       "id": "L427",

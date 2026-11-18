@@ -490,3 +490,4 @@ oracle_desctools_agree
 oracle_survdiff
 oracle_survfit
 oracle_survreg
+oracle_ismev_rlarg

@@ -16,6 +16,32 @@ fn nll(d: *Data, a: []const f64) -> f64 {
     let n = d.x.len
     var s = 0.0f64
     var i = 0usize
+    if d.kind == 4usize {
+        // rlarg.fit: the r largest order statistics of each of n rows (row-major in x, r in q)
+        let r = d.q
+        let rows = n / r
+        let mu = a[0usize]
+        let sc = a[1usize]
+        let xi = a[2usize]
+        if sc <= 0.0f64 { ret 1.0e6f64 }
+        var tot = 0.0f64
+        while i < rows {
+            var mn = d.x[i * r]
+            var rowsum = 0.0f64
+            var j = 0usize
+            while j < r {
+                let v = d.x[i * r + j]
+                let y = 1.0f64 + xi * (v - mu) / sc
+                if y <= 0.0f64 { ret 1.0e6f64 }
+                rowsum += (1.0f64 / xi + 1.0f64) * math.log[f64](y) + math.log[f64](sc)
+                if v < mn { mn = v }
+                j += 1usize
+            }
+            tot += math.pow[f64](1.0f64 + xi * (mn - mu) / sc, 0.0f64 - 1.0f64 / xi) + rowsum
+            i += 1usize
+        }
+        ret tot
+    }
     if d.kind == 3usize {
         let q = d.q
         let sc = a[q]
@@ -366,4 +392,31 @@ fn gpd_rl_gradient(la: f64, sg: f64, xi: f64, m: f64, k: usize) -> f64 {
     if k == 0usize { ret sg * math.pow[f64](m, xi) * math.pow[f64](la, xi - 1.0f64) }
     if k == 1usize { ret (t - 1.0f64) / xi }
     ret 0.0f64 - sg / (xi * xi) * (t - 1.0f64) + sg / xi * t * math.log[f64](m * la)
+}
+
+// rlarg.fit(x, r) with no covariates: x is rows by r row-major (the r largest values of each block, descending); the start is the stationary moment fit of the
+// first column, then Nelder-Mead and the numerical Hessian as in fit
+fn fit_rlarg(a: *mem.Arena, x: []const f64, rows: usize, r: usize) -> (Fit, err) {
+    let (c1, e0) = mem.alloc[f64](a, rows)
+    if e0 != ok { ret (zero, e0) }
+    var i = 0usize
+    while i < rows {
+        c1[i] = x[i * r]
+        i += 1usize
+    }
+    let (m, v) = mean_var(c1)
+    let in2 = math.sqrt[f64](6.0f64 * v) / 3.141592653589793f64
+    let (par, e1) = mem.alloc[f64](a, 3usize)
+    if e1 != ok { ret (zero, e1) }
+    par[0usize] = m - 0.57722f64 * in2
+    par[1usize] = in2
+    par[2usize] = 0.1f64
+    var d = Data { x: x, kind: 4usize, u: 0.0f64, dm: x[0usize..0usize], q: r }
+    let (nllh, e3) = minimise(a, &d, par)
+    if e3 != ok { ret (zero, e3) }
+    let (h, e4) = hessian(a, &d, par)
+    if e4 != ok { ret (zero, e4) }
+    let (se, e5) = std_errors(a, h, 3usize)
+    if e5 != ok { ret (zero, e5) }
+    ret (Fit { par: par, se: se, nllh: nllh }, ok)
 }

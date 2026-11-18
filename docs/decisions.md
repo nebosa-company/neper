@@ -49772,3 +49772,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.betareg` takes a mean-link code (logit, probit, cloglog; the cloglog inverse is computed without cancellation for a small exp(t)) and `fit_se` gives the standard errors of the coefficients and of phi from the inverse of the Fisher information of Ferrari and Cribari-Neto, which `vcov.betareg` uses by default: K_bb = phi^2 X' W X with w = (psi'(mu phi) + psi'((1 - mu) phi)) (d mu / d eta)^2, K_bp = X' (c / g'(mu)) with c = phi (psi'(mu phi) mu - psi'((1 - mu) phi) (1 - mu)), K_pp = sum psi'(mu phi) mu^2 + psi'((1 - mu) phi) (1 - mu)^2 - psi'(phi). An observed-information Hessian differed by up to 8% for cloglog; the first Fisher version missed one factor of phi.
 
 **Result.** `oracle_betareg` gains 12 data sets over the three links (98 values: coefficients and precision at 2e-3, the log-likelihood at 1e-6, the standard errors at 5e-3) and equals betareg on Windows. Linux pending. L451 stays partial: variable dispersion, bias correction and reduction, predict and residual types, lrtest.
+
+## D7292 — ismev: rlarg.fit
+
+`e.algo.stat.ismev` gains `fit_rlarg`: the stationary r-largest order statistics model (the rows by r matrix of the r largest values per block), its negative log-likelihood as ismev's rlarg.lik (a penalty of 1e6 for a non-positive scale or a non-positive 1 + xi (x - mu) / sigma), the moment start from the first column, Nelder-Mead and the numerical Hessian standard errors.
+
+**Result.** `oracle_ismev_rlarg` equals ismev's rlarg.fit within optimiser tolerance (parameters 2e-2, standard errors 5e-2, negative log-likelihood 1e-6; 42 cases, r = 2, 3 and 4) on Windows. Linux pending. L425 stays partial: scale and shape covariates and links, pp.fit, rlarg covariates and the profile likelihoods remain.
