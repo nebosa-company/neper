@@ -49334,3 +49334,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.desctools` gains `cohen_d1` (mean over standard deviation) and `cohen_d2` (the standardised mean difference with the pooled or the total-sample standard deviation and the optional small-sample correction). The confidence interval, which the package finds with a non-central t search, is not ported.
 
 **Result.** `oracle_desctools_agree` has 555 values (75 added: 15 sample pairs, one-sample and the four two-sample variants, 1e-10) and equals DescTools on Windows. Linux pending. L363 stays partial.
+
+## D7219 — DescTools: the CohenD confidence interval
+
+`e.algo.stat.desctools` gains `cohen_d_ci`: the interval of `CohenD`, found as the package does by solving pt(t, df = nmax - 2, ncp) = alpha / 2 and 1 - alpha / 2 for the non-central parameter with uniroot on (min(-5, -10 |t|), max(5, 10 |t|)) (`e.math.nchisq.pnt` and the shared Brent zeroin) and converting back to d. Two quirks of the package are kept: the one-sample call takes nmax as n / 2 + 1 and t as d sqrt(n) / 2, and the two-sample call passes the sample sizes swapped (n2 = nx, n1 = ny).
+
+**Result.** `oracle_desctools_agree` has 615 values (60 added over ten one- and two-sample data sets, 1e-5) and equals DescTools on Windows. Linux pending. L363 stays partial.

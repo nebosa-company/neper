@@ -36,4 +36,10 @@ for (rep in 1:15) {
   cases[[length(cases) + 1]] <- case("b", c(8, nx, x, 0, 0, 0), as.numeric(CohenD(x)), rel = 1e-10, abs = 1e-12)
   for (fl in 0:3) cases[[length(cases) + 1]] <- case("b", c(9, nx, ny, fl, x, y), as.numeric(CohenD(x, y, pooled = (fl %% 2) == 1, correct = fl >= 2)), rel = 1e-10, abs = 1e-12)
 }
+# CohenD intervals: one sample (10, n, x, conf, j), two samples (11, nx, ny, conf, x, y, j); j 0 d, 1 lwr, 2 upr at 1e-5 (uniroot tolerance)
+for (rep in 1:10) {
+  nx <- sample(12:40, 1); ny <- sample(12:40, 1); x <- rnorm(nx, 1); y <- rnorm(ny, 0.5, 1.4)
+  r1 <- CohenD(x, conf.level = 0.95); for (j in 0:2) cases[[length(cases) + 1]] <- case("b", c(10, nx, x, 0.95, j), as.numeric(r1[j + 1]), rel = 1e-5, abs = 1e-6)
+  r2 <- CohenD(x, y, conf.level = 0.95); for (j in 0:2) cases[[length(cases) + 1]] <- case("b", c(11, nx, ny, 0.95, x, y, j), as.numeric(r2[j + 1]), rel = 1e-5, abs = 1e-6)
+}
 emit("desctools_agree", "DescTools", list(cases))

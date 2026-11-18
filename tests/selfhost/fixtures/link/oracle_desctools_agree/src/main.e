@@ -15,6 +15,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let n = usize(z[1usize])
         ret dt.cohen_d1(z[2usize..2usize + n])
     }
+    if z[0usize] == 10.0f64 {
+        let n = usize(z[1usize])
+        let xs = z[2usize..2usize + n]
+        dt.cohen_d_ci(dt.cohen_d1(xs), 0usize, f64(n), 0.0f64, 0.0f64, 1.0f64 - z[2usize + n], o)
+        ret o[usize(z[3usize + n])]
+    }
+    if z[0usize] == 11.0f64 {
+        let nx = usize(z[1usize])
+        let ny = usize(z[2usize])
+        let xs = z[4usize..4usize + nx]
+        let ys = z[4usize + nx..4usize + nx + ny]
+        dt.cohen_d_ci(dt.cohen_d2(a, xs, ys, true, false), 1usize, 0.0f64, f64(nx), f64(ny), 1.0f64 - z[3usize], o)
+        ret o[usize(z[4usize + nx + ny])]
+    }
     if z[0usize] == 9.0f64 {
         let nx = usize(z[1usize])
         let ny = usize(z[2usize])

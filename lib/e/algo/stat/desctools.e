@@ -7,6 +7,8 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.nchisq as nct
+use e.algo.stat.pwr as pw
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
@@ -1312,4 +1314,40 @@ fn cohen_d2(a: *mem.Arena, x: []const f64, y: []const f64, pooled: bool, correct
     }
     if correct { d = d * (1.0f64 - 3.0f64 / (4.0f64 * (nx + ny) - 9.0f64)) }
     ret d
+}
+
+// the interval of CohenD (.cohen_d_ci): the non-central t parameters at which the observed t has probability alpha / 2 and 1 - alpha / 2, found by uniroot on
+// (min(-5, -10 |t|), max(5, 10 |t|)) with df = nmax - 2, and converted back to d. mode 0: one sample of size n (t = d sqrt(n) / 2, nmax = n / 2 + 1, as the package
+// calls it); mode 1: two samples (the package passes n2 = nx and n1 = ny; t = d / sqrt(1 / n1 + 1 / n2), nmax = nx + ny)
+type Cdc = struct { t: f64, df: f64, target: f64 }
+
+fn cdc_fn(c: *Cdc, x: f64) -> f64 { ret nct.pnt(c.t, c.df, x, true, false) - c.target }
+
+fn cohen_d_ci(d: f64, mode: usize, n: f64, nx: f64, ny: f64, alpha: f64, out: []f64) {
+    var t = 0.0f64
+    var nmax = 0.0f64
+    if mode == 0usize {
+        t = d * math.sqrt[f64](n) / 2.0f64
+        nmax = n / 2.0f64 + 1.0f64
+    } else {
+        t = d / math.sqrt[f64](1.0f64 / ny + 1.0f64 / nx)
+        nmax = nx + ny
+    }
+    var lo = 0.0f64 - 5.0f64
+    if 0.0f64 - math.abs[f64](t) * 10.0f64 < lo { lo = 0.0f64 - math.abs[f64](t) * 10.0f64 }
+    var hi = 5.0f64
+    if math.abs[f64](t) * 10.0f64 > hi { hi = math.abs[f64](t) * 10.0f64 }
+    var c: Cdc = zero
+    c.t = t
+    c.df = nmax - 2.0f64
+    let tol = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    c.target = alpha / 2.0f64
+    let up = pw.zeroin[Cdc](&c, cdc_fn, lo, hi, tol, 1000i64)
+    c.target = 1.0f64 - alpha / 2.0f64
+    let dn = pw.zeroin[Cdc](&c, cdc_fn, lo, hi, tol, 1000i64)
+    var cv = math.sqrt[f64](1.0f64 / ny + 1.0f64 / nx)
+    if mode == 0usize { cv = 2.0f64 / math.sqrt[f64](n) }
+    out[0usize] = d
+    out[1usize] = dn * cv
+    out[2usize] = up * cv
 }
