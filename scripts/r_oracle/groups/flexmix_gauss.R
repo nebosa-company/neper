@@ -48,4 +48,25 @@ oneseed <- function(n, k, beta, sg, pr, seed) {
 oneseed(100, 2, rbind(c(0, 2), c(3, -1.5)), c(0.5, 0.7), c(0.5, 0.5), 11)
 oneseed(120, 2, rbind(c(1, 1), c(-1, 2)), c(0.4, 0.4), c(0.5, 0.5), 22)
 oneseed(150, 3, rbind(c(0, 2), c(3, -1.5), c(-2, 0.5)), c(0.4, 0.6, 0.5), c(0.4, 0.3, 0.3), 33)
+# Poisson mixtures from a given start: args (n, 2, k, what, idx, x row-major, y, init) under "fp"
+onepois <- function(n, k, beta, pr, flipfrac = 0.15) {
+  z <- sample(seq_len(k), n, TRUE, pr)
+  x1 <- runif(n, -1, 1)
+  y <- vapply(seq_len(n), function(i) rpois(1, exp(beta[z[i], 1] + beta[z[i], 2] * x1[i])), 0)
+  init <- z; fl <- sample(n, round(flipfrac * n)); init[fl] <- sample(seq_len(k), length(fl), TRUE)
+  fit <- tryCatch(flexmix(y ~ x1, k = k, cluster = init, model = FLXMRglm(family = "poisson")), error = function(e) NULL)
+  if (is.null(fit)) return(invisible(NULL))
+  kk <- fit@k; prm <- parameters(fit)
+  flat <- c(as.vector(rbind(1, x1)), y, init)
+  hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
+  addf <- function(what, idx, v, rel = 1e-5, abs = 1e-8) cases[[length(cases) + 1]] <<- case("fp", hdr(what, idx), v, rel = rel, abs = abs)
+  addf(0, 0, as.numeric(logLik(fit))); addf(1, 0, fit@iter, 0, 0); addf(2, 0, kk, 0, 0)
+  for (j in seq_len(kk)) addf(3, j - 1, fit@prior[j])
+  for (j in seq_len(kk)) { addf(4, (j - 1) * 2, prm[1, j]); addf(4, (j - 1) * 2 + 1, prm[2, j]) }
+  cl <- fit@cluster
+  for (i in seq_len(n)) addf(6, i - 1, cl[i], 0, 0)
+}
+onepois(150, 2, rbind(c(1, 1.5), c(2.5, -1.2)), c(0.5, 0.5))
+onepois(200, 2, rbind(c(0.5, 1), c(2, 0.8)), c(0.4, 0.6))
+onepois(240, 3, rbind(c(0.3, 1.2), c(1.8, -1), c(3, 0.3)), c(0.3, 0.3, 0.4))
 emit("flexmix_gauss", "flexmix", list(cases))

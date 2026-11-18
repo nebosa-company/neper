@@ -6,6 +6,7 @@ use e.algo.rand.r as rg
 use e.algo.stat.olsfit as ols
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nm
 use e.mem
 
 error Malformed
@@ -31,7 +32,7 @@ fn lse(v: []const f64, off: usize, k: usize) -> f64 {
 }
 
 // x is n by p column-major (the intercept a column of ones), y the response, cluster the start (1-based codes with k = the largest)
-fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, cluster: []const f64, minprior: f64, tol: f64, iter_max: usize) -> (Fm, err) {
+fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, cluster: []const f64, minprior: f64, tol: f64, iter_max: usize, fam: usize) -> (Fm, err) {
     var out: Fm = zero
     var k = 0usize
     var i = 0usize
@@ -94,6 +95,11 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
             while j < k {
                 if prior[j] >= minprior {
                     prior[w] = prior[j]
+                    var cc2 = 0usize
+                    while cc2 < p {
+                        coef[w * p + cc2] = coef[j * p + cc2]
+                        cc2 += 1usize
+                    }
                     i = 0usize
                     while i < n {
                         post[i * k0 + w] = post[i * k0 + j]
@@ -154,14 +160,38 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
                 }
                 i += 1usize
             }
-            let (f, fe) = ols.fit_tol(a, xw, n, p, yw, 0.0000001f64)
-            if fe != ok { ret (out, fe) }
-            var c = 0usize
-            while c < p {
-                coef[j * p + c] = f.coef[c]
-                c += 1usize
+            if fam == 1usize {
+                let (wj, e9) = mem.alloc[f64](a, n)
+                let (bj, e10) = mem.alloc[f64](a, p)
+                if e9 != ok || e10 != ok { ret (out, Malformed) }
+                i = 0usize
+                while i < n {
+                    wj[i] = post[i * k0 + j]
+                    i += 1usize
+                }
+                var c0 = 0usize
+                while c0 < p {
+                    bj[c0] = coef[j * p + c0]
+                    c0 += 1usize
+                }
+                let ge = pois_glm(a, x, n, p, y, wj, bj, iter > 1usize)
+                if ge != ok { ret (out, ge) }
+                c0 = 0usize
+                while c0 < p {
+                    coef[j * p + c0] = bj[c0]
+                    c0 += 1usize
+                }
+                sigma[j] = 1.0f64
+            } else {
+                let (f, fe) = ols.fit_tol(a, xw, n, p, yw, 0.0000001f64)
+                if fe != ok { ret (out, fe) }
+                var c = 0usize
+                while c < p {
+                    coef[j * p + c] = f.coef[c]
+                    c += 1usize
+                }
+                sigma[j] = math.sqrt[f64](f.rss / (sw / f64(n)) / f64(n - f.rank))
             }
-            sigma[j] = math.sqrt[f64](f.rss / (sw / f64(n)) / f64(n - f.rank))
             j += 1usize
         }
         // E step
@@ -175,7 +205,9 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
                     mu += x[c * n + i] * coef[j * p + c]
                     c += 1usize
                 }
-                lp[i * k0 + j] = dist.dnorm(y[i], mu, sigma[j], true) + math.log[f64](prior[j])
+                var ld = 0.0f64
+                if fam == 1usize { ld = nm.dpois(y[i], math.exp[f64](mu), true) } else { ld = dist.dnorm(y[i], mu, sigma[j], true) }
+                lp[i * k0 + j] = ld + math.log[f64](prior[j])
                 j += 1usize
             }
             i += 1usize
@@ -253,7 +285,7 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, k
         cl[i] = init[i] + 1.0f64
         i += 1usize
     }
-    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max)
+    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 0usize)
     if fe != ok { ret (f, fe) }
     var g = f
     i = 0usize
@@ -278,4 +310,110 @@ fn gaussian_random(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n:
     }
     let (f, fe) = gaussian(a, x, y, n, p, k, init, iter_max, minprior, tol)
     ret (f, fe)
+}
+
+
+// R glm.fit for the Poisson family with the log link (IRLS from the mean y + 0.1, or from a start vector as flexmix passes the previous coefficients),
+// weights w, deviance convergence |dev - devold| / (|dev| + 0.1) < 1e-8, at most 25 iterations; x is n by p column-major; beta is the start on entry (when
+// has_start) and the estimate on exit
+fn pois_dev(y: []const f64, mu: []const f64, w: []const f64, n: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        var r = mu[i] * w[i]
+        if y[i] > 0.0f64 { r = w[i] * (y[i] * math.log[f64](y[i] / mu[i]) - (y[i] - mu[i])) }
+        s += 2.0f64 * r
+        i += 1usize
+    }
+    ret s
+}
+
+fn pois_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w: []const f64, beta: []f64, has_start: bool) -> err {
+    let (eta, e1) = mem.alloc[f64](a, n)
+    let (mu, e2) = mem.alloc[f64](a, n)
+    let (z, e3) = mem.alloc[f64](a, n)
+    let (xw, e4) = mem.alloc[f64](a, n * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret Malformed }
+    var i = 0usize
+    while i < n {
+        if has_start {
+            var t = 0.0f64
+            var c = 0usize
+            while c < p {
+                t += x[c * n + i] * beta[c]
+                c += 1usize
+            }
+            eta[i] = t
+            mu[i] = math.exp[f64](t)
+        } else {
+            mu[i] = y[i] + 0.1f64
+            eta[i] = math.log[f64](mu[i])
+        }
+        i += 1usize
+    }
+    var devold = pois_dev(y, mu, w, n)
+    var iter = 0usize
+    while iter < 25usize {
+        iter += 1usize
+        i = 0usize
+        while i < n {
+            let sq = math.sqrt[f64](w[i] * mu[i])
+            z[i] = (eta[i] + (y[i] - mu[i]) / mu[i]) * sq
+            var c = 0usize
+            while c < p {
+                xw[c * n + i] = x[c * n + i] * sq
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (f, fe) = ols.fit_tol(a, xw, n, p, z, 0.00000000001f64)
+        if fe != ok { ret fe }
+        var c = 0usize
+        while c < p {
+            beta[c] = f.coef[c]
+            c += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var t = 0.0f64
+            c = 0usize
+            while c < p {
+                t += x[c * n + i] * beta[c]
+                c += 1usize
+            }
+            eta[i] = t
+            mu[i] = math.exp[f64](t)
+            i += 1usize
+        }
+        let dev = pois_dev(y, mu, w, n)
+        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 0.00000001f64 { break }
+        devold = dev
+    }
+    ret ok
+}
+
+// flexmix(y ~ x, k, model = FLXMRglm(family = "poisson"), cluster = init): x n by p row-major, counts y, init 0-based
+fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, k: usize, init: []const f64, iter_max: usize, minprior: f64, tol: f64) -> (Fm, err) {
+    let (xc, e1) = mem.alloc[f64](a, n * p)
+    let (cl, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret (zero, Malformed) }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xc[c * n + i] = x[i * p + c]
+            c += 1usize
+        }
+        cl[i] = init[i] + 1.0f64
+        i += 1usize
+    }
+    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 1usize)
+    if fe != ok { ret (f, fe) }
+    var g = f
+    i = 0usize
+    while i < n {
+        g.cluster[i] = f.cluster[i] - 1usize
+        i += 1usize
+    }
+    ret (g, ok)
 }

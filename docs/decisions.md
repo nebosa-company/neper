@@ -49214,3 +49214,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.flexmixpkg` gains `gaussian_random`: without a cluster argument flexmix draws the start with `sample(seq_len(k), n, replace = TRUE)`, which the stream module's `sample_int` reproduces, and the same EM follows. Three seeded fits (two and three components) agree with R, including the iteration counts, so the stream, the 0.9/0.1 initial posteriors and the EM path all match.
 
 **Result.** `oracle_flexmix_gauss` has 804 values and equals flexmix on Windows. Linux pending. L413 stays partial: stepFlexmix (the repeated starts and their selection), the other families, FLXMRglmfix, concomitant variables, CEM and SEM, BIC and ICL.
+
+## D7199 — flexmix: the Poisson family
+
+`e.algo.stat.flexmixpkg` gains `poisson`: the same EM with FLXMRglm's Poisson family, whose M step is R's `glm.fit` ported as `pois_glm` (IRLS on the log link, the first pass from the mean y + 0.1 and later passes from the component's previous coefficients, as flexmix passes `start = component$coef`; the deviance convergence test at 1e-8, 25 iterations at most) and whose E step uses the Poisson log density. The removal of components below minprior now carries the coefficient rows along, which the Gaussian fit did not need because it recomputes them.
+
+**Result.** `oracle_flexmix_gauss` has 1424 values (620 added: three Poisson mixtures with two and three components, log-likelihood, iterations, priors, coefficients and clusters) and equals flexmix on Windows. Linux pending. L413 stays partial: stepFlexmix, the binomial and Gamma families, FLXMRglmfix, concomitant variables, CEM and SEM, BIC and ICL.
