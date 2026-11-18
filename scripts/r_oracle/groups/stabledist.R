@@ -38,4 +38,15 @@ for (rep in 1:12) {
   set.seed(sd0); v <- rstable(n, al, be, ga, de)
   for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("r", c(al, be, ga, de, sd0, n, i - 1), v[i], rel = 1e-9, abs = 1e-12)
 }
+# alpha = 1 with beta != 0
+for (rep in 1:20) {
+  be <- c(runif(1, 0.05, 1), -runif(1, 0.05, 1))[sample(1:2, 1)]
+  ga <- runif(1, 0.4, 2.5); de <- rnorm(1)
+  for (x in de + ga * c(rnorm(2, 0, 1.5), runif(1, 0.05, 6) * c(-1, 1)[sample(1:2, 1)])) {
+    d <- dstable(x, 1, be, ga, de)
+    if (is.finite(d) && d > 1e-12) cases[[length(cases) + 1]] <- case("d", c(1, be, ga, de, x), d, rel = 1e-8, abs = 1e-14)
+    pv <- suppressWarnings(pstable(x, 1, be, ga, de, silent = TRUE))
+    if (is.finite(pv)) cases[[length(cases) + 1]] <- case("p", c(1, be, ga, de, x), pv, rel = 1e-8, abs = 1e-12)
+  }
+}
 emit("stabledist", "stabledist", list(cases))

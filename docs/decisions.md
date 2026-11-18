@@ -49154,3 +49154,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (the exponent and log m terms vanish) and `uniroot` at its default tolerance for the lower root where `rgig` uses min(eps^0.25, eps + g(0) / 10). The port is the same generator with that one tolerance switched, since the two routines otherwise draw identical uniform pairs.
 
 **Result.** `oracle_ghyp` has 969 values (84 seeded draws, 24 of them at lambda = 1) and equals GeneralizedHyperbolic on Windows at 1e-9 relative. Linux pending. L407 stays partial: higher moments, fits and the stable branches remain.
+
+## D7189 — stabledist: alpha = 1 with beta != 0
+
+`e.algo.stat.stabledistpkg` gains the alpha = 1 skewed branches: `fct2_d` (stabledist's `.fct2`: the density as an integral over u in (-1, 1), split at the root of g - 1, with the package's `tanpi2` and `cospi2` that return exact infinities and zeros at integers) and `fct2_p` (`.FCT2`: the distribution as half the integral of exp(-g), or the negated integral of expm1(-g) for the beta < 0 reflection, with the extra uniroot that trims the upper end where g is infinite). `dstable` and `pstable` route to them.
+
+**Result.** `oracle_stabledist` has 602 values (120 added for alpha = 1, beta in both signs, densities and distribution values) and equals stabledist on Windows at 1e-8 relative. Linux pending. L407 stays partial: the small-alpha branch, the other parametrisations, the upper tail, qstable at alpha = 1 and the GeneralizedHyperbolic higher moments and fits remain.

@@ -3974,4 +3974,5 @@ D7184	607	GeneralizedHyperbolic: the mean and variance
 D7185	817	GeneralizedHyperbolic: qghyp (the default spline method)
 D7186	730	e.algo.stat.gslfns: the Bessel K trapezoid step from 0.02 to 0.1
 D7187	764	GeneralizedHyperbolic: rghyp and rgig
-D7188	644	GeneralizedHyperbolic: rgig1 (lambda = 1)
+D7188	645	GeneralizedHyperbolic: rgig1 (lambda = 1)
+D7189	929	stabledist: alpha = 1 with beta != 0

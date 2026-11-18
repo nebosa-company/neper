@@ -2,7 +2,7 @@
 // beta = 0 the Cauchy): Nolan's integral representation split at the mode of the integrand and at the points where it falls below 1e-4, each piece integrated with
 // integrate() (e.math.quadpack.qags) at tolerance 64 eps and 1000 subdivisions, as stabledist:::.fct1 does.
 //
-// Not here: alpha below 0.02 (dstable.smallA), alpha = 1 with beta != 0, the Pareto-tail fallback when the integral underflows to zero, the other parametrisations,
+// Not here: alpha below 0.02 (dstable.smallA), the Pareto-tail fallback when the integral underflows to zero, the other parametrisations,
 // log densities, pstable, qstable and rstable.
 
 use e.math
@@ -182,6 +182,10 @@ fn dstable(a: *mem.Arena, x0: f64, alpha: f64, beta: f64, gamma: f64, delta: f64
     let x = (x0 - delta) / gamma
     if alpha == 2.0f64 { ret dist.dnorm(x, 0.0f64, math.sqrt[f64](2.0f64), false) / gamma }
     if alpha == 1.0f64 && beta == 0.0f64 { ret 1.0f64 / (pi() * (1.0f64 + x * x)) / gamma }
+    if alpha == 1.0f64 {
+        if x >= 0.0f64 { ret fct2_d(a, x, beta, 64.0f64 * eps()) / gamma }
+        ret fct2_d(a, 0.0f64 - x, 0.0f64 - beta, 64.0f64 * eps()) / gamma
+    }
     let tanpa2 = math.tan[f64](pi2() * alpha)
     let betan = beta * tanpa2
     let zeta = 0.0f64 - betan
@@ -252,6 +256,10 @@ fn pstable_tol(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: 
     let x = (q - delta) / gamma
     if alpha == 2.0f64 { ret dist.pnorm(x, 0.0f64, math.sqrt[f64](2.0f64), true, false) }
     if alpha == 1.0f64 && beta == 0.0f64 { ret 0.5f64 + math.atan[f64](x) / pi() }
+    if alpha == 1.0f64 {
+        if beta >= 0.0f64 { ret fct2_p(a, x, beta, tol, false) }
+        ret fct2_p(a, 0.0f64 - x, 0.0f64 - beta, tol, true)
+    }
     let tanpa2 = math.tan[f64](pi2() * alpha)
     let zeta = 0.0f64 - beta * tanpa2
     var th0 = math.atan[f64](0.0f64 - zeta) / alpha
@@ -377,4 +385,89 @@ fn rstable(r: *rg.Rng, n: usize, alpha: f64, beta: f64, gamma: f64, delta: f64, 
         out[i] = (rr - btp) * gamma + delta
         i += 1usize
     }
+}
+
+// ---- alpha = 1, beta != 0: stabledist:::.fct2 (the density) and .FCT2 (the distribution), the integral over u in (-1, 1) of a transformed integrand
+fn tanpi2(u: f64) -> f64 {
+    if u != 0.0f64 && u == math.floor[f64](u + 0.5f64) {
+        var m = u - 4.0f64 * math.floor[f64](u / 4.0f64)
+        if m < 0.0f64 { m = m + 4.0f64 }
+        ret (2.0f64 - m) * (1.0f64 / 0.0f64)
+    }
+    ret math.tan[f64](pi2() * u)
+}
+
+fn cospi2(u: f64) -> f64 {
+    if u == math.floor[f64](u + 0.5f64) {
+        if u == 0.0f64 { ret 1.0f64 }
+        ret 0.0f64
+    }
+    ret math.cos[f64](pi2() * u)
+}
+
+type F2ctx = struct { p2b: f64, ea: f64, u0: f64, mode: usize }
+
+// g(u), zero within 1e-10 of u0
+fn g2f(c: *F2ctx, u: f64) -> f64 {
+    if math.abs[f64](u - c.u0) < 1.0e-10f64 { ret 0.0f64 }
+    let h = c.p2b + u * pi2()
+    ret (h / c.p2b) * math.exp[f64](c.ea + h * tanpi2(u)) / cospi2(u)
+}
+
+fn g2x(c: *F2ctx, u: f64) -> f64 { ret xexpmx(g2f(c, u)) }
+
+fn g2m1(c: *F2ctx, u: f64) -> f64 { ret g2f(c, u) - 1.0f64 }
+
+fn g2exp(c: *F2ctx, u: f64) -> f64 { ret math.exp[f64](0.0f64 - g2f(c, u)) }
+
+fn g2expm1(c: *F2ctx, u: f64) -> f64 { ret math.exp[f64](0.0f64 - g2f(c, u)) - 1.0f64 }
+
+fn g2step(c: *F2ctx, u: f64) -> f64 {
+    if g2f(c, u) == 1.0f64 / 0.0f64 { ret 0.0f64 - 1.0f64 }
+    ret 1.0f64
+}
+
+fn fct2_d(a: *mem.Arena, x: f64, beta: f64, tol: f64) -> f64 {
+    let i2b = 1.0f64 / (2.0f64 * beta)
+    var c: F2ctx = zero
+    c.p2b = pi() * i2b
+    c.ea = 0.0f64 - c.p2b * x
+    if c.ea == 1.0f64 / 0.0f64 || c.ea == 0.0f64 - 1.0f64 / 0.0f64 { ret 0.0f64 }
+    c.u0 = 0.0f64 - sgn(beta)
+    if g2m1(&c, 0.0f64 - 1.0f64) * g2m1(&c, 1.0f64) > 0.0f64 { ret 0.0f64 / 0.0f64 }
+    let u2 = pw.zeroin[F2ctx](&c, g2m1, 0.0f64 - 1.0f64, 1.0f64, tol, 1000i64)
+    let (r1, e1) = qp.qags[F2ctx](a, &c, g2x, 0.0f64 - 1.0f64, u2, tol, tol, 1000usize)
+    let (r2, e2) = qp.qags[F2ctx](a, &c, g2x, u2, 1.0f64, tol, tol, 1000usize)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    ret pi2() * math.abs[f64](i2b) * (r1.result + r2.result)
+}
+
+// .FCT2: with give_i the value of the integral of expm1(-g) negated, else the integral of exp(-g), halved
+fn fct2_p(a: *mem.Arena, x: f64, beta: f64, tol: f64, give_i: bool) -> f64 {
+    let i2b = 1.0f64 / (2.0f64 * beta)
+    var c: F2ctx = zero
+    c.p2b = pi() * i2b
+    c.ea = 0.0f64 - c.p2b * x
+    if c.ea == 1.0f64 / 0.0f64 || c.ea == 0.0f64 - 1.0f64 / 0.0f64 {
+        var l = 0.0f64
+        if c.ea < 0.0f64 { l = 1.0f64 }
+        if give_i { ret 1.0f64 - l }
+        ret l
+    }
+    c.u0 = 0.0f64 - 1.0f64
+    var up = 1.0f64
+    let uu = 1.0f64 - 0.000001f64 * 1.0f64
+    if g2f(&c, uu) == 1.0f64 / 0.0f64 {
+        up = pw.zeroin[F2ctx](&c, g2step, 0.0f64 - 1.0f64, uu, 0.00000001f64, 1000i64)
+    }
+    var r = 0.0f64
+    if give_i {
+        let (q, e) = qp.qags[F2ctx](a, &c, g2expm1, 0.0f64 - 1.0f64, up, tol, tol, 1000usize)
+        if e != ok { ret 0.0f64 / 0.0f64 }
+        r = q.result / 2.0f64
+        ret 0.0f64 - r
+    }
+    let (q2, e2) = qp.qags[F2ctx](a, &c, g2exp, 0.0f64 - 1.0f64, up, tol, tol, 1000usize)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    ret q2.result / 2.0f64
 }
