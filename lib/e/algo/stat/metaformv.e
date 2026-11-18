@@ -2,11 +2,11 @@
 // (one variance per random intercept, each over its own grouping variable) + (Z1 G Z1') * (Z2 Z2') for a ~ inner | outer term with the structures CS, HCS, DIAG, ID, AR and HAR.
 //
 // The likelihood is R's .ll.rma.mv on the log (variances) and atanh (correlations) scale, ML or REML with REMLf; the starting values are rma.mv's; the optimisation is R's optim with
-// Nelder-Mead (nmmin, reltol 1.49e-8, 500 evaluations) or BFGS (vmmin with the central-difference gradient of optim, ndeps 1e-3, 100 iterations), step for step as R runs them, or a tight
-// BFGS (small steps, reltol 1e-14) that stands in for the default optimizer, nlminb (PORT), which is not ported: its answer is the same optimum to the optimiser's own tolerance, not to the last digits.
+// Nelder-Mead (nmmin, reltol 1.49e-8, 500 evaluations) or BFGS (vmmin with the central-difference gradient of optim, ndeps 1e-3, 100 iterations), step for step as R runs them, or the
+// default optimizer, nlminb (e.algo.stat.nlminb, PORT with finite-difference gradients and no bounds), which makes R's evaluations one for one.
 //
-// Not here: the Hessian based standard errors of the variance components, the UN, UNR, CAR, spatial and phylogenetic structures, the second random term (H), user weights (A), sparse matrices,
-// nlminb's iterates, and the other rma.mv tests (the t-test is here, the Knapp-Hartung adjustment is not).
+// Not here: see metaformv2 for the Hessian based vvc, UN, CAR, GEN, spatial structures, the second random term (H), user weights (A), knha/adhoc, dfs and fixed components;
+// phylogenetic structures, R matrices and sparse matrices are in neither.
 
 use e.math
 use e.mem
@@ -16,6 +16,7 @@ use e.math.nmath_beta as nb
 use e.math.scale as sc
 use e.algo.stat.rnm as nmd
 use e.algo.stat.rbfgs as bf
+use e.algo.stat.nlminb as nlmb
 
 const MVOUT: usize = 160usize
 
@@ -462,7 +463,7 @@ fn start_total(c: *Mv) -> f64 {
     ret tot
 }
 
-// fit rma.mv: optimizer 0 Nelder-Mead, 1 BFGS, 2 tight BFGS; out per the layout at the top of metaformvrun
+// fit rma.mv: optimizer 0 Nelder-Mead, 1 BFGS, 2 nlminb; out per the layout at the top of metaformvrun
 fn fit_mv(c: *Mv, optimizer: usize, test: usize, out: []f64) {
     let a = c.a
     let k = c.k
@@ -502,15 +503,11 @@ fn fit_mv(c: *Mv, optimizer: usize, test: usize, out: []f64) {
             par[i] = best[i]
             i += 1usize
         }
+    } else if optimizer == 2usize {
+        let nlm = nlmb.nlminb[Mv](a, c, mv_f, mv_g, false, par, par[0usize..0usize])
+        let _ = nlm
     } else {
-        if optimizer == 2usize { c.step = 1.0e-7f64 }
-        var rt = 1.490116119384766e-08f64
-        var mx = 100usize
-        if optimizer == 2usize {
-            rt = 1.0e-15f64
-            mx = 2000usize
-        }
-        let _ = bf.vmmin[Mv](a, c, mv_f, mv_g, par, rt, mx)
+        let _ = bf.vmmin[Mv](a, c, mv_f, mv_g, par, 1.490116119384766e-08f64, 100usize)
     }
     let nfn = c.count
     let _ = mv_nll(c, par)

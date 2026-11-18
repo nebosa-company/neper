@@ -10,9 +10,11 @@ use e.algo.stat.metaforrma as mr
 use e.algo.stat.metaforfit as mf
 use e.algo.stat.metaformore as mm
 use e.algo.stat.metaformore2 as m2
+use e.algo.stat.metaformore3 as m3
 use e.algo.stat.metaforbias as mb
 use e.algo.stat.escalcmore as em
 use e.algo.stat.metaformv as mv
+use e.algo.stat.metaformv2 as mv2
 
 // the number of option values before the model
 fn nopts(name: str, args: []const f64) -> usize {
@@ -22,12 +24,14 @@ fn nopts(name: str, args: []const f64) -> usize {
     if str.eq(name, "regtest") { ret 2usize }
     if str.eq(name, "trimfill") { ret 2usize }
     if str.eq(name, "fsn") { ret 3usize }
+    if str.eq(name, "fsn2") { ret 8usize }
     if str.eq(name, "profile") { ret 1usize + usize(args[0usize]) }
     ret 0usize
 }
 
 fn run(a: *mem.Arena, ws: *mr.Ws, name: str, args: []const f64, out: []f64, tmp: []f64) -> bool {
     if str.eq(name, "rmamv") { ret mv.mv_run(a, args, out) }
+    if str.eq(name, "rmamv2") { ret mv2.mv2_run(a, args, out) }
     if str.eq(name, "escalc") {
         // args = [measure, vtype, add, to, drop00, correct, k, ncol, data (k * ncol, row-major)]; out[2 i] = yi, out[2 i + 1] = vi
         let ek = usize(args[6usize])
@@ -93,6 +97,7 @@ fn run(a: *mem.Arena, ws: *mr.Ws, name: str, args: []const f64, out: []f64, tmp:
     if str.eq(name, "regtest") { m2.regtest(&m, usize(args[0usize]), usize(args[1usize]), args[extra..extra + k]) }
     if str.eq(name, "trimfill") { m2.trimfill(&m, usize(args[0usize]), i64(args[1usize])) }
     if str.eq(name, "fsn") { m2.fsn(y, v, k, usize(args[0usize]), args[1usize], args[2usize], out) }
+    if str.eq(name, "fsn2") { m3.fsn2(&m, usize(args[0usize]), args[1usize], args[2usize], usize(args[3usize]), args[4usize] != 0.0f64, args[5usize], args[6usize], args[7usize]) }
     if str.eq(name, "profile") { m2.profile(&m, args[1usize..1usize + usize(args[0usize])]) }
     if str.eq(name, "ranktest") {
         let mm2 = k * (k - 1usize) / 2usize + 1usize
