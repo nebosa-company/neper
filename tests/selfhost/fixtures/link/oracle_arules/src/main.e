@@ -27,6 +27,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         tr[t] = m
         t += 1usize
     }
+    if str.starts_with(c.name, "m") && !str.eq(c.name, "nrule") {
+        let (mo, me) = mem.alloc[f64](a, 10usize)
+        if me != ok { ret nan }
+        if ar.apriori_measures(a, tr, ni, z[2usize], z[3usize], usize(z[4usize]), mo) != ok { ret nan }
+        ret mo[usize(c.name[1usize]) - 48usize]
+    }
     if ar.apriori(a, tr, ni, z[2usize], z[3usize], usize(z[4usize]), out) != ok { ret nan }
     if str.eq(c.name, "nfreq") { ret out[0usize] }
     if str.eq(c.name, "sfreq") { ret out[1usize] }

@@ -49802,3 +49802,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.betareg.fit_value` answers `residuals(f, type)` for response, pearson (the response residual over sqrt(mu (1 - mu) / (1 + phi))), deviance (the sign of the response residual times sqrt(2 |ll(y) - ll(mu)|)), weighted, sweighted (the standardised logit residual with the digamma mean and trigamma variance) and quantile (qnorm of the beta cdf), and `predict(f, type)` for response, link, precision and variance, at the fitted coefficients and precision.
 
 **Result.** `oracle_betareg` gains 10 data sets over the three links (4 observations by 10 quantities: 400 values at 5e-3, the fit's own tolerance) and equals betareg on Windows. Linux pending. L451 stays partial: variable dispersion, bias correction and reduction, sweighted2 residuals (they need the hat values), lrtest.
+
+## D7293 — arules: interest measures
+
+`e.algo.stat.arulespkg.apriori_measures` runs the same rule search as `apriori` and sums, over the rules and over the finite values, nine of `interestMeasure`'s measures from the antecedent, consequent and joint supports: leverage (sXY - sX sY), coverage (sX), cosine, jaccard, kulczynski, phi, addedValue (confidence - sY), conviction ((1 - sY) / (1 - confidence), infinite for a certain rule and so skipped) and oddsRatio from the four cell proportions.
+
+**Result.** `oracle_arules` gains 24 transaction sets by nine measures (216 values) and equals arules on Windows at 1e-9. Linux pending. L462 stays partial: the candidate-pruning search for many items, eclat, closed and maximal itemsets, the remaining interest measures, rule subsetting, sequences.

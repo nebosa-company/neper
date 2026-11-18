@@ -71,3 +71,75 @@ fn apriori(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f6
     out[5usize] = slift
     ret ok
 }
+
+// the same rules as `apriori`, with the sums over the rules (finite values only) of the interest measures: out[0] leverage, 1 coverage, 2 cosine, 3 jaccard, 4 kulczynski, 5 phi, 6 addedValue,
+// 7 conviction, 8 oddsRatio; out[9] the number of rules
+fn apriori_measures(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f64, maxlen: usize, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let total = 1usize << nitems
+    let (cnt, e1) = mem.alloc[u32](a, total)
+    if e1 != ok { ret e1 }
+    var m = 1usize
+    while m < total {
+        var c = 0u32
+        var t = 0usize
+        while t < trans.len {
+            if (trans[t] & u64(m)) == u64(m) { c += 1u32 }
+            t += 1usize
+        }
+        cnt[m] = c
+        m += 1usize
+    }
+    cnt[0usize] = u32(trans.len)
+    let need = math.ceil[f64](supp * nt - 1.0e-9f64)
+    var k = 0usize
+    while k < 10usize {
+        out[k] = 0.0f64
+        k += 1usize
+    }
+    m = 1usize
+    while m < total {
+        var sz = 0usize
+        var q = m
+        while q > 0usize {
+            sz += q & 1usize
+            q = q >> 1usize
+        }
+        if sz <= maxlen && sz >= 2usize && f64(cnt[m]) >= need {
+            var l = (m - 1usize) & m
+            while l > 0usize {
+                let r = m ^ l
+                if (r & (r - 1usize)) != 0usize {
+                    l = (l - 1usize) & m
+                    continue
+                }
+                let cf = f64(cnt[m]) / f64(cnt[l])
+                if cf >= conf - 1.0e-12f64 {
+                    let sx = f64(cnt[l]) / nt
+                    let sy = f64(cnt[r]) / nt
+                    let sxy = f64(cnt[m]) / nt
+                    out[0usize] += sxy - sx * sy
+                    out[1usize] += sx
+                    out[2usize] += sxy / math.sqrt[f64](sx * sy)
+                    out[3usize] += sxy / (sx + sy - sxy)
+                    out[4usize] += 0.5f64 * (sxy / sx + sxy / sy)
+                    let ph = (sxy - sx * sy) / math.sqrt[f64](sx * sy * (1.0f64 - sx) * (1.0f64 - sy))
+                    if ph == ph && ph - ph == 0.0f64 { out[5usize] += ph }
+                    out[6usize] += cf - sy
+                    let cv = (1.0f64 - sy) / (1.0f64 - cf)
+                    if cv - cv == 0.0f64 { out[7usize] += cv }
+                    let n11 = sxy
+                    let n10 = sx - sxy
+                    let n01 = sy - sxy
+                    let n00 = 1.0f64 - sx - sy + sxy
+                    let orr = (n11 * n00) / (n10 * n01)
+                    if orr - orr == 0.0f64 { out[8usize] += orr }
+                    out[9usize] += 1.0f64
+                }
+                l = (l - 1usize) & m
+            }
+        }
+        m += 1usize
+    }
+    ret ok
+}

@@ -17,5 +17,12 @@ for (rep in 1:24) {
   add("nrule", a, length(ru))
   q <- if (length(ru)) quality(ru) else data.frame(support = 0, confidence = 0, lift = 0)
   add("srule", a, sum(q$support)); add("sconf", a, sum(q$confidence)); add("slift", a, sum(q$lift))
+  if (length(ru)) {
+    ms <- c("leverage", "coverage", "cosine", "jaccard", "kulczynski", "phi", "addedValue", "conviction", "oddsRatio")
+    for (k in seq_along(ms)) {
+      v <- as.numeric(interestMeasure(ru, ms[k], transactions = tr)); v <- v[is.finite(v)]
+      add(paste0("m", k - 1), a, sum(v))
+    }
+  }
 }
 emit("arules", "arules", list(cases))
