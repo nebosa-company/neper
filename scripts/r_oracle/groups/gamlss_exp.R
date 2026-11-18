@@ -1,5 +1,5 @@
-# gamlss.dist EXP (dEXP, pEXP, qEXP with mu) and RG (dRG, pRG, qRG with mu and sigma). Args: (fn, mu, sigma, x, which): fn 0 density, 1
-# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 and GA for fn 18..20 and WEI for fn 21..23 and LOGNO for fn 24..26 and IG for fn 27 (distribution) and ZIP for fn 28 (distribution) and 29 (quantile) and NBI for fn 30 (density), 31 (distribution) and 32 (quantile) (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP.
+# gamlss.dist EXP (dEXP, pEXP, qEXP with mu) and RG (dRG, pRG, qRG with mu and sigma). Args: (fn, mu, sigma, x, nu): fn 0 density, 1
+# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 and GA for fn 18..20 and WEI for fn 21..23 and LOGNO for fn 24..26 and IG for fn 27 (distribution) and ZIP for fn 28 (distribution) and 29 (quantile) and NBI for fn 30 (density), 31 (distribution) and 32 (quantile) (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP; nu (the fifth argument) is the degrees of freedom of TF for fn 33 (density), 34 (distribution) and 35 (quantile).
 suppressMessages(library(gamlss.dist))
 cases <- list()
 add <- function(fn, args, want, rel = 1e-10, abs = 1e-14) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
@@ -49,5 +49,9 @@ for (rep in 1:30) {
   add("ex", c(30, pl, gs, nk, 0), dNBI(nk, mu = pl, sigma = gs))
   add("ex", c(31, pl, gs, nk, 0), pNBI(nk, mu = pl, sigma = gs))
   add("ex", c(32, pl, gs, p, 0), qNBI(p, mu = pl, sigma = gs))
+  tn <- runif(1, 1.5, 30); tx <- nm + ns * rt(1, tn)
+  add("ex", c(33, nm, ns, tx, tn), dTF(tx, mu = nm, sigma = ns, nu = tn))
+  add("ex", c(34, nm, ns, tx, tn), pTF(tx, mu = nm, sigma = ns, nu = tn))
+  add("ex", c(35, nm, ns, p, tn), qTF(p, mu = nm, sigma = ns, nu = tn))
 }
 emit("gamlss_exp", "gamlss.dist", list(cases))

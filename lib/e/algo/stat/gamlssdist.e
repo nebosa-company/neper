@@ -266,3 +266,19 @@ fn pnbi(x: f64, mu: f64, sigma: f64) -> f64 {
 }
 
 fn qnbi(p: f64, mu: f64, sigma: f64) -> f64 { ret nb.qnbinom_mu(p, 1.0f64 / sigma, mu, true, false) }
+
+// TF: Student t with location mu, scale sigma and nu degrees of freedom (the normal above 1e6)
+fn dtf(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if nu > 1000000.0f64 { ret dno(x, mu, sigma) }
+    ret nb.dt((x - mu) / sigma, nu, false) / sigma
+}
+
+fn ptf(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if nu > 1000000.0f64 { ret pno(x, mu, sigma) }
+    ret nb.pt((x - mu) / sigma, nu, true, false)
+}
+
+fn qtf(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if nu > 1000000.0f64 { ret qno(p, mu, sigma) }
+    ret mu + sigma * nb.qt(p, nu, true, false)
+}

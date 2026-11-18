@@ -48884,3 +48884,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` gains pnbi and qnbi: the negative binomial with mean mu and size 1 / sigma, over `nmath_beta.pnbinom_mu` and `qnbinom_mu`.
 
 **Result.** `oracle_gamlss_exp` has 990 values across 11 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7144 — gamlss.dist: the TF (Student t) family
+
+`e.algo.stat.gamlssdist` gains dtf, ptf and qtf (location mu, scale sigma, nu degrees of freedom; the normal above nu = 1e6, as the package does) over `nmath_beta.dt`, `pt` and `qt`. The oracle's fifth argument now carries nu.
+
+**Result.** `oracle_gamlss_exp` has 1080 values across 12 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
