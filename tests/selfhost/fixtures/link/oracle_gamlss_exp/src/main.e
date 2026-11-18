@@ -80,7 +80,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 61usize { ret gd.qrge(x, mu, sigma, nu) }
     if which == 62usize { ret gd.dno2(x, mu, sigma) }
     if which == 63usize { ret gd.pno2(x, mu, sigma) }
-    ret gd.qno2(x, mu, sigma)
+    if which == 64usize { ret gd.qno2(x, mu, sigma) }
+    if which == 65usize { ret gd.dgeom_mu(x, mu) }
+    if which == 66usize { ret gd.pgeom_mu(x, mu) }
+    if which == 67usize { ret gd.qgeom_mu(x, mu) }
+    if which == 68usize { ret gd.dgeomo(x, mu) }
+    if which == 69usize { ret gd.pgeomo(x, mu) }
+    if which == 70usize { ret gd.qgeomo(x, mu) }
+    if which == 71usize { ret gd.dwei2(x, mu, sigma) }
+    if which == 72usize { ret gd.pwei2(x, mu, sigma) }
+    if which == 73usize { ret gd.qwei2(x, mu, sigma) }
+    if which == 74usize { ret gd.dwei3(x, mu, sigma) }
+    if which == 75usize { ret gd.pwei3(x, mu, sigma) }
+    if which == 76usize { ret gd.qwei3(x, mu, sigma) }
+    if which == 77usize { ret gd.dlogno2(x, mu, sigma) }
+    if which == 78usize { ret gd.plogno2(x, mu, sigma) }
+    if which == 79usize { ret gd.qlogno2(x, mu, sigma) }
+    if which == 80usize { ret gd.dbeo(x, mu, sigma) }
+    if which == 81usize { ret gd.pbeo(x, mu, sigma) }
+    if which == 82usize { ret gd.qbeo(x, mu, sigma) }
+    if which == 83usize { ret gd.dtf2(x, mu, sigma, nu) }
+    if which == 84usize { ret gd.ptf2(x, mu, sigma, nu) }
+    ret gd.qtf2(x, mu, sigma, nu)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

@@ -481,3 +481,94 @@ fn qbi(p: f64, mu: f64, bd: f64) -> f64 {
     if p == 1.0f64 { ret bd }
     ret nb.qbinom(p, bd, mu, true, false)
 }
+
+// GEOM (mean mu, probability 1 / (mu + 1)) and GEOMo (probability mu)
+fn dgeom_mu(x: f64, mu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret nb.dgeom(x, 1.0f64 / (mu + 1.0f64), false)
+}
+
+fn pgeom_mu(x: f64, mu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret nb.pgeom(x, 1.0f64 / (mu + 1.0f64), true, false)
+}
+
+fn qgeom_mu(p: f64, mu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    ret nb.qgeom(p, 1.0f64 / (mu + 1.0f64), true, false)
+}
+
+fn dgeomo(x: f64, mu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret nb.dgeom(x, mu, false)
+}
+
+fn pgeomo(x: f64, mu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret nb.pgeom(x, mu, true, false)
+}
+
+fn qgeomo(p: f64, mu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    ret nb.qgeom(p, mu, true, false)
+}
+
+// WEI2 (scale mu^(-1 / sigma)) and WEI3 (scale mu / Gamma(1 / sigma + 1)), shape sigma
+fn dwei2(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret dist.dweibull(x, sigma, math.pow[f64](mu, 0.0f64 - 1.0f64 / sigma), false)
+}
+
+fn pwei2(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.pweibull(x, sigma, math.pow[f64](mu, 0.0f64 - 1.0f64 / sigma), true, false) }
+
+fn qwei2(p: f64, mu: f64, sigma: f64) -> f64 { ret dist.qweibull(p, sigma, math.pow[f64](mu, 0.0f64 - 1.0f64 / sigma), true, false) }
+
+fn wei3_scale(mu: f64, sigma: f64) -> f64 { ret mu / math.exp[f64](sp.lgamma(1.0f64 / sigma + 1.0f64)) }
+
+fn dwei3(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret dist.dweibull(x, sigma, wei3_scale(mu, sigma), false)
+}
+
+fn pwei3(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.pweibull(x, sigma, wei3_scale(mu, sigma), true, false) }
+
+fn qwei3(p: f64, mu: f64, sigma: f64) -> f64 { ret dist.qweibull(p, sigma, wei3_scale(mu, sigma), true, false) }
+
+// LOGNO2: log-normal with median mu and log-sd sigma
+fn dlogno2(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let z = math.log[f64](x)
+    ret math.exp[f64](dist.dnorm(z, math.log[f64](mu), sigma, true) - z)
+}
+
+fn plogno2(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret dist.pnorm(math.log[f64](x), math.log[f64](mu), sigma, true, false)
+}
+
+fn qlogno2(p: f64, mu: f64, sigma: f64) -> f64 { ret math.exp[f64](dist.qnorm(p, math.log[f64](mu), sigma, true, false)) }
+
+// BEo: beta with the two shapes mu and sigma
+fn dbeo(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 || x >= 1.0f64 { ret 0.0f64 }
+    ret nb.dbeta(x, mu, sigma, false)
+}
+
+fn pbeo(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x >= 1.0f64 { ret 1.0f64 }
+    ret nb.pbeta(x, mu, sigma, true, false)
+}
+
+fn qbeo(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p < 0.0000000001f64 { ret 0.0f64 }
+    if 1.0f64 - p < 0.0000000001f64 { ret 1.0f64 }
+    ret nb.qbeta(p, mu, sigma, true, false)
+}
+
+// TF2: Student t with standard deviation sigma (scale sigma sqrt((nu - 2) / nu))
+fn dtf2(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret dtf(x, mu, math.sqrt[f64]((nu - 2.0f64) / nu) * sigma, nu) }
+
+fn ptf2(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret ptf(x, mu, math.sqrt[f64]((nu - 2.0f64) / nu) * sigma, nu) }
+
+fn qtf2(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret qtf(p, mu, math.sqrt[f64]((nu - 2.0f64) / nu) * sigma, nu) }

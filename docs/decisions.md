@@ -48944,3 +48944,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains GB2 (generalised beta of the second kind, through the F distribution; the distribution and quantile flip for a negative sigma), BI (binomial with bd trials), IGAMMA (inverse gamma; its quantile is the package's reflected gamma quantile), RGE (reverse generalised extreme value with the Gumbel limit below |nu| 0.001) and NO2 (normal with variance sigma), each with density, distribution and quantile. gamlss.dist's qNO2 assigns its quantile twice and the second assignment, which uses sigma as the standard deviation, wins; the port reproduces that. The oracle now carries a sixth argument tau (the second GB2 shape, the BI trials).
 
 **Result.** `oracle_gamlss_exp` has 1938 values across 22 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7154 — gamlss.dist: GEOM, GEOMo, WEI2, WEI3, LOGNO2, BEo and TF2
+
+`e.algo.stat.gamlssdist` gains the geometric by mean (GEOM) and by probability (GEOMo), the Weibull parametrised by mu^(-1 / sigma) (WEI2) and by the mean (WEI3), the log-normal by median (LOGNO2), the beta by its two shapes (BEo) and the t by standard deviation (TF2), each with density, distribution and quantile, over `e.math.dist` and `e.math.nmath_beta`.
+
+**Result.** `oracle_gamlss_exp` has 2569 values across 29 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
