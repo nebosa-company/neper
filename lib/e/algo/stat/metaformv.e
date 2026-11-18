@@ -5,8 +5,8 @@
 // Nelder-Mead (nmmin, reltol 1.49e-8, 500 evaluations) or BFGS (vmmin with the central-difference gradient of optim, ndeps 1e-3, 100 iterations), step for step as R runs them, or the
 // default optimizer, nlminb (e.algo.stat.nlminb, PORT with finite-difference gradients and no bounds), which makes R's evaluations one for one.
 //
-// Not here: the Hessian based standard errors of the variance components, the UN, UNR, CAR, spatial and phylogenetic structures, the second random term (H), user weights (A), sparse matrices,
-// nlminb's iterates, and the other rma.mv tests (the t-test is here, the Knapp-Hartung adjustment is not).
+// Not here: see metaformv2 for the Hessian based vvc, UN, CAR, GEN, spatial structures, the second random term (H), user weights (A), knha/adhoc, dfs and fixed components;
+// phylogenetic structures, R matrices and sparse matrices are in neither.
 
 use e.math
 use e.mem

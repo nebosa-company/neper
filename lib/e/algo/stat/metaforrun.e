@@ -14,6 +14,7 @@ use e.algo.stat.metaformore3 as m3
 use e.algo.stat.metaforbias as mb
 use e.algo.stat.escalcmore as em
 use e.algo.stat.metaformv as mv
+use e.algo.stat.metaformv2 as mv2
 
 // the number of option values before the model
 fn nopts(name: str, args: []const f64) -> usize {
@@ -30,6 +31,7 @@ fn nopts(name: str, args: []const f64) -> usize {
 
 fn run(a: *mem.Arena, ws: *mr.Ws, name: str, args: []const f64, out: []f64, tmp: []f64) -> bool {
     if str.eq(name, "rmamv") { ret mv.mv_run(a, args, out) }
+    if str.eq(name, "rmamv2") { ret mv2.mv2_run(a, args, out) }
     if str.eq(name, "escalc") {
         // args = [measure, vtype, add, to, drop00, correct, k, ncol, data (k * ncol, row-major)]; out[2 i] = yi, out[2 i + 1] = vi
         let ek = usize(args[6usize])
