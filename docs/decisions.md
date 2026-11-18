@@ -49700,3 +49700,9 @@ New `e.algo.stat.survregpkg.survreg`: accelerated failure time models for right-
 `e.algo.stat.coxext.cox_resid` gives the martingale residual delta_i - e_i H0(t_i) of a Breslow fit (H0 the cumulative Breslow baseline hazard of the row's stratum at its time, the offset inside e_i) and the deviance residual sign(m) sqrt(-2 (m + delta log(delta - m))).
 
 **Result.** `oracle_coxph` gains 14 data sets with two strata and an offset (6 rows each, both types: 168 values) and equals `residuals.coxph` on Windows at 1e-6. Linux pending. L311 stays partial: exact ties, counting-process coxph, the Efron and cluster robust variance, frailty, tmerge, pyears, the Schoenfeld and score residuals, survdiff with strata, interval and left censoring in survreg.
+
+## D7280 — emmeans: emtrends
+
+The emmeans fixture refits `lm(y ~ A * x)` through `e.algo.stat.emmeans.fit` (design: intercept, A dummies, x, the dummies times x) and gives the slope within a level as the x coefficient plus that level's interaction (the reference level carries none), the pairwise differences as first minus second level, with the standard errors from `variance` of the coefficient vector.
+
+**Result.** 10 models with three or four levels (slopes, pairwise differences, estimates and standard errors: 152 values) equal `emtrends` and `pairs(adjust = "none")` on Windows at 1e-8. Linux pending. L313 stays partial: the model-frame grid, glm and mixed models, scheffe and mvt, joint_tests, eff_size, regrid.

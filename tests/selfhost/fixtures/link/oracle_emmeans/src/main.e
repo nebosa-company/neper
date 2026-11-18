@@ -88,8 +88,64 @@ fn contrast_coef(ty: usize, idx: usize, a: usize, w: []f64) {
     }
 }
 
+// emtrends of lm(y ~ A * x): the design (intercept, A dummies, x, A dummies times x), the slope of level lv as a coefficient vector
+fn trend_answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let z = c.args
+    let n = usize(z[0usize])
+    let na = usize(z[1usize])
+    let y = z[2usize..2usize + n]
+    let fa = z[2usize + n..2usize + 2usize * n]
+    let xv = z[2usize + 2usize * n..2usize + 3usize * n]
+    let li = usize(z[2usize + 3usize * n])
+    let lj = usize(z[3usize + 3usize * n])
+    let p = 2usize * na
+    let (d, de) = mem.alloc[f64](ar, n * p)
+    let (rd, e1) = mem.alloc[f64](ar, p)
+    if de != ok || e1 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        d[i] = 1.0f64
+        var k = 1usize
+        while k < na {
+            if usize(fa[i]) == k { d[k * n + i] = 1.0f64 } else { d[k * n + i] = 0.0f64 }
+            k += 1usize
+        }
+        d[na * n + i] = xv[i]
+        k = 1usize
+        while k < na {
+            d[(na + k) * n + i] = d[k * n + i] * xv[i]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let (m, fe) = em.fit(ar, d, y, n, p)
+    if fe != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    while k < p {
+        rd[k] = 0.0f64
+        k += 1usize
+    }
+    // the slope of level l: the x coefficient plus the interaction of l (none for the reference level)
+    rd[na] = 1.0f64
+    if li > 0usize { rd[na + li] = 1.0f64 }
+    if str.eq(c.name, "trend_est") { ret em.estimate(&m, rd) }
+    if str.eq(c.name, "trend_se") { ret math.sqrt[f64](em.variance(&m, rd)) }
+    
+    rd[na] = 0.0f64
+    k = 0usize
+    while k < p {
+        rd[k] = 0.0f64
+        k += 1usize
+    }
+    if li > 0usize { rd[na + li] = 1.0f64 }
+    if lj > 0usize { rd[na + lj] = 0.0f64 - 1.0f64 }
+    if str.eq(c.name, "trend_pair_est") { ret em.estimate(&m, rd) }
+    ret math.sqrt[f64](em.variance(&m, rd))
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if str.starts_with(c.name, "trend_") { ret trend_answer(a, c) }
     let n = usize(z[0usize])
     let na = usize(z[1usize])
     let nb = usize(z[2usize])

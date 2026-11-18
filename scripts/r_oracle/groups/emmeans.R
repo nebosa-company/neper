@@ -35,4 +35,16 @@ for (rep in 1:8) {
   sm <- summary(contrast(e, "eff", adjust = "none")); for (r in 1:nrow(sm)) { cases[[length(cases) + 1]] <- case("ctr_est", c(base, 3, r - 1), sm$estimate[r], rel = 1e-6, abs = 1e-9); cases[[length(cases) + 1]] <- case("ctr_se", c(base, 3, r - 1), sm$SE[r], rel = 1e-6, abs = 1e-9) }
   sm <- summary(contrast(e, "poly", adjust = "none")); for (r in 1:nrow(sm)) { cases[[length(cases) + 1]] <- case("ctr_est", c(base, 4, r), sm$estimate[r], rel = 1e-6, abs = 1e-9); cases[[length(cases) + 1]] <- case("ctr_se", c(base, 4, r), sm$SE[r], rel = 1e-6, abs = 1e-9) }
 }
+# emtrends of lm(y ~ A * x): the slope of x within each level of A and its SE, and the pairwise slope differences: "trend_est", "trend_se" args (n, a, y, A 0-based, x, level), "trend_pair_est", "trend_pair_se" (level i, level j)
+for (rep in 1:10) {
+  a <- sample(3:4, 1); n <- sample(40:80, 1)
+  A <- c(0:(a - 1), sample(0:(a - 1), n - a, TRUE)); x <- round(rnorm(n), 3); y <- round(1 + 0.5 * A + (0.4 + 0.3 * A) * x + rnorm(n), 3)
+  d <- data.frame(y = y, A = factor(A), x = x); m <- lm(y ~ A * x, d)
+  tr <- emtrends(m, "A", var = "x"); s <- summary(tr); base <- c(n, a, y, A, x)
+  for (i in 1:a) { cases[[length(cases) + 1]] <- case("trend_est", c(base, i - 1, 0), s$x.trend[i], rel = 1e-8, abs = 1e-10); cases[[length(cases) + 1]] <- case("trend_se", c(base, i - 1, 0), s$SE[i], rel = 1e-8, abs = 1e-10) }
+  pr <- summary(pairs(tr, adjust = "none")); r <- 0
+  for (i in 1:(a - 1)) for (j in (i + 1):a) { r <- r + 1
+    cases[[length(cases) + 1]] <- case("trend_pair_est", c(base, i - 1, j - 1), pr$estimate[r], rel = 1e-8, abs = 1e-10)
+    cases[[length(cases) + 1]] <- case("trend_pair_se", c(base, i - 1, j - 1), pr$SE[r], rel = 1e-8, abs = 1e-10) }
+}
 emit("emmeans", "emmeans", list(cases))

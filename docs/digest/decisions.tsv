@@ -4065,4 +4065,5 @@ D7275	1010	survival: coxph with strata, an offset and the robust variance
 D7276	1070	survival: survreg
 D7277	686	survival: survSplit
 D7278	1057	survival: cox.zph
-D7279	726	survival: martingale and deviance residuals
+D7279	727	survival: martingale and deviance residuals
+D7280	724	emmeans: emtrends
