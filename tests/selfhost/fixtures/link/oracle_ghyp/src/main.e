@@ -13,6 +13,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
     if str.eq(k, "ghypMom") { ret gh.ghyp_mom(a, usize(x[0usize]), x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], usize(x[1usize])) }
+    if str.eq(k, "hyperbFit") {
+        let nn = usize(x[0usize])
+        let wh = usize(x[1usize])
+        let (o, g1) = mem.alloc[f64](a, 4usize)
+        if g1 != ok { os.exit(7) }
+        let (ml, cnt, fl) = gh.hyperb_fit(a, x[7usize..7usize + nn], x[2usize..6usize], o)
+        if wh < 4usize { ret o[wh] }
+        if wh == 4usize { ret ml }
+        ret f64(cnt)
+    }
     if str.eq(k, "nigFit") {
         let nn = usize(x[0usize])
         let wh = usize(x[1usize])

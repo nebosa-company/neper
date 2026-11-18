@@ -49268,3 +49268,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.ghyp` gains `nig_fit`: the package's `nigFit(x, paramStart, startValues = "US", method = "Nelder-Mead")` on R's Nelder-Mead port (`e.algo.stat.rnm.nmmin`, reltol 1.49e-8, 1000 evaluations): the (alpha, beta) start is mapped to (mu, delta, pi, zeta) by hyperbChangePars, the negative log-likelihood is minimised over (mu, log delta, pi, log zeta), and the optimum is mapped back. The function-evaluation count equals R's, so the simplex path is the same.
 
 **Result.** `oracle_ghyp` has 1679 values (30 added: five fits to simulated NIG samples, the four parameters at 1e-5, the maximised log-likelihood at 1e-7 and the counts exactly) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: nigFit's other start values and methods, hyperbFit, gigFit, hyperblm, the standard errors and qgig remain.
+
+## D7208 — GeneralizedHyperbolic: hyperbFit with a given start (Nelder-Mead)
+
+The Nelder-Mead fit of D7207 is the same for the hyperbolic distribution (lambda = 1) in the package, so `hyperb_fit` and `nig_fit` share `ghyp_fit_us` with the lambda in the objective: the (mu, log delta, pi, log zeta) parametrisation, R's `nmmin` at reltol 1.49e-8 and 1000 evaluations, and the map back to (alpha, beta).
+
+**Result.** `oracle_ghyp` has 1709 values (30 added: five fits to simulated hyperbolic samples, parameters at 1e-5, the maximised log-likelihood at 1e-7, the function counts exactly) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: the other start values and methods, gigFit, hyperblm, the standard errors and qgig remain.

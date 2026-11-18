@@ -471,7 +471,7 @@ fn pgig(a: *mem.Arena, q: f64, chi: f64, psi: f64, lambda: f64) -> f64 {
 
 // ---- nigFit with a user-specified start (startValues = "US") and method "Nelder-Mead": R's optim (e.algo.stat.rnm.nmmin, abstol -Inf, reltol 1.49e-8, maxit 1000)
 // on (mu, log delta, pi, log zeta) of the negative log-likelihood, with hyperbChangePars between (alpha, beta) and (pi, zeta)
-type NigObj = struct { x: []const f64 }
+type NigObj = struct { x: []const f64, lambda: f64 }
 
 fn nig_nll(c: *NigObj, par: []const f64) -> f64 {
     let mu = par[0usize]
@@ -483,7 +483,7 @@ fn nig_nll(c: *NigObj, par: []const f64) -> f64 {
     var s = 0.0f64
     var i = 0usize
     while i < c.x.len {
-        s += math.log[f64](dghyp(c.x[i], mu, delta, alpha, beta, 0.0f64 - 0.5f64))
+        s += math.log[f64](dghyp(c.x[i], mu, delta, alpha, beta, c.lambda))
         i += 1usize
     }
     ret 0.0f64 - s
@@ -491,6 +491,17 @@ fn nig_nll(c: *NigObj, par: []const f64) -> f64 {
 
 // start and the answer as (mu, delta, alpha, beta); the result is (the maximised log-likelihood, the function count, the optim convergence code)
 fn nig_fit(a: *mem.Arena, x: []const f64, start: []const f64, out: []f64) -> (f64, usize, usize) {
+    let (m, cnt, fl) = ghyp_fit_us(a, x, start, 0.0f64 - 0.5f64, out)
+    ret (m, cnt, fl)
+}
+
+// hyperbFit with a user start and Nelder-Mead: the same fit with lambda = 1
+fn hyperb_fit(a: *mem.Arena, x: []const f64, start: []const f64, out: []f64) -> (f64, usize, usize) {
+    let (m, cnt, fl) = ghyp_fit_us(a, x, start, 1.0f64, out)
+    ret (m, cnt, fl)
+}
+
+fn ghyp_fit_us(a: *mem.Arena, x: []const f64, start: []const f64, lambda: f64, out: []f64) -> (f64, usize, usize) {
     let mu = start[0usize]
     let delta = start[1usize]
     let alpha = start[2usize]
@@ -507,6 +518,7 @@ fn nig_fit(a: *mem.Arena, x: []const f64, start: []const f64, out: []f64) -> (f6
     par0[3usize] = math.log[f64](zeta)
     var c: NigObj = zero
     c.x = x
+    c.lambda = lambda
     let (fmin, cnt, fail) = rn.nmmin[NigObj](a, &c, nig_nll, par0, 0.0f64 - 1.0f64 / 0.0f64, 0.0000000149011611938f64, 1.0f64, 0.5f64, 2.0f64, 1000usize, 1.0f64, best)
     let d2 = math.exp[f64](best[1usize])
     let z2 = math.exp[f64](best[3usize])
