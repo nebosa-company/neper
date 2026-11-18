@@ -52,6 +52,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (st, pv, te) = en.eqdist_etest(a, &rng2, z[5usize..5usize + (n1 + n2) * d], n1, n2, d, usize(z[1usize]))
             if te != ok { os.exit(8) }
             if str.eq(c.name, "eqtest_stat") { got = st } else { got = pv }
+        } else if str.eq(c.name, "keqtest_stat") || str.eq(c.name, "keqtest_p") {
+            let kk = usize(z[2usize])
+            let (szs, se) = mem.alloc[usize](a, kk)
+            if se != ok { os.exit(8) }
+            var tot = 0usize
+            var q = 0usize
+            while q < kk {
+                szs[q] = usize(z[3usize + q])
+                tot += szs[q]
+                q += 1usize
+            }
+            let d = usize(z[3usize + kk])
+            var rng3: rg.Rng = zero
+            rg.seed(&rng3, i64(z[0usize]))
+            let (st, pv, te) = en.eqdist_ketest(a, &rng3, z[4usize + kk..4usize + kk + tot * d], szs, d, usize(z[1usize]))
+            if te != ok { os.exit(8) }
+            if str.eq(c.name, "keqtest_stat") { got = st } else { got = pv }
         } else if str.eq(c.name, "pdcor") {
             let dx = usize(z[1usize])
             let dy = usize(z[2usize])

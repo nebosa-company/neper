@@ -36,4 +36,13 @@ for (rep in 1:8) {
   cases[[length(cases) + 1]] <- case("eqtest_stat", a, as.numeric(tt$statistic), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("eqtest_p", a, as.numeric(tt$p.value), rel = 1e-12, abs = 1e-12)
 }
+# eqdist.etest with three or four samples: args (seed, reps, k, sizes..., d, x row-major) under "keqtest_stat" and "keqtest_p"
+for (rep in 1:8) {
+  k <- sample(3:4, 1); sz <- sample(5:14, k, TRUE); d <- sample(1:3, 1); sd0 <- sample(1:100000, 1); R <- sample(c(99, 199), 1)
+  x <- do.call(rbind, lapply(sz, function(m) matrix(rnorm(m * d, runif(1, 0, 0.8)), m, d)))
+  set.seed(sd0); tt <- eqdist.etest(x, sizes = sz, R = R)
+  a <- c(sd0, R, k, sz, d, as.vector(t(x)))
+  cases[[length(cases) + 1]] <- case("keqtest_stat", a, as.numeric(tt$statistic), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("keqtest_p", a, as.numeric(tt$p.value), rel = 1e-12, abs = 1e-12)
+}
 emit("energy_normal", "energy", list(cases))

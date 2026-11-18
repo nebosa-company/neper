@@ -496,3 +496,67 @@ fn eqdist_etest(a: *mem.Arena, r: *rg.Rng, x: []const f64, n1: usize, n2: usize,
     }
     ret (stat, f64(1usize + k) / f64(1usize + reps), ok)
 }
+
+// the K-sample E-statistic: the sum over sample pairs of the two-sample statistic, the samples being consecutive blocks of x (n rows of d) of the given sizes
+fn ksample_stat(x: []const f64, sizes: []const usize, d: usize, index: f64) -> f64 {
+    var total = 0.0f64
+    var i = 0usize
+    var offi = 0usize
+    while i < sizes.len {
+        var j = i + 1usize
+        var offj = offi + sizes[i]
+        while j < sizes.len {
+            total += edist_stat(x[offi * d..(offi + sizes[i]) * d], sizes[i], x[offj * d..(offj + sizes[j]) * d], sizes[j], d, index)
+            offj += sizes[j]
+            j += 1usize
+        }
+        offi += sizes[i]
+        i += 1usize
+    }
+    ret total
+}
+
+// eqdist.etest(x, sizes, R) for any number of samples (the original method): the statistic and the permutation p value, the permutation being R's cumulative shuffle of the index vector
+fn eqdist_ketest(a: *mem.Arena, r: *rg.Rng, x: []const f64, sizes: []const usize, d: usize, reps: usize) -> (f64, f64, err) {
+    var n = 0usize
+    var i = 0usize
+    while i < sizes.len {
+        n += sizes[i]
+        i += 1usize
+    }
+    let stat = ksample_stat(x, sizes, d, 1.0f64)
+    let (jj, e1) = mem.alloc[usize](a, n)
+    let (px, e2) = mem.alloc[f64](a, n * d)
+    if e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    i = 0usize
+    while i < n {
+        jj[i] = i
+        i += 1usize
+    }
+    var k = 0usize
+    var rep = 0usize
+    while rep < reps {
+        var m = n
+        i = 0usize
+        while i + 1usize < n {
+            let j = usize(math.floor[f64](f64(m) * rg.unif(r)))
+            m -= 1usize
+            let t = jj[j]
+            jj[j] = jj[m]
+            jj[m] = t
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var c = 0usize
+            while c < d {
+                px[i * d + c] = x[jj[i] * d + c]
+                c += 1usize
+            }
+            i += 1usize
+        }
+        if ksample_stat(px, sizes, d, 1.0f64) >= stat { k += 1usize }
+        rep += 1usize
+    }
+    ret (stat, f64(1usize + k) / f64(1usize + reps), ok)
+}
