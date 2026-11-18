@@ -49736,3 +49736,9 @@ The emmeans fixture refits `lm(y ~ A * x)` through `e.algo.stat.emmeans.fit` (de
 `e.algo.stat.mcmcpkg.initseq` is Geyer's initial sequence estimators for a scalar chain: the pair sums Gamma_k = gamma_2k + gamma_2k+1 of the centred chain up to the first negative one (which is kept as zero, as the package returns it), the running minimum (dec), the greatest convex minorant (con, the lower convex hull of the points interpolated at the integers) and the variances -gamma0 + 2 sum Gamma for each; `olbm` is the overlapping batch means estimate of the variance of the sample mean (the batch-mean deviations squared, times the batch length over the number of batches and the chain length).
 
 **Result.** `oracle_mcmc` gains 25 AR(1) chains of 60 to 300 draws (gamma0, the three variances, the sequence length and the three sequence sums, and two batch lengths of olbm each: 250 values) and equals mcmc on Windows at 1e-9. Chains whose pair sums never turn negative and the matrix-valued forms are not ported. Linux pending. L448 stays partial: user densities, outfun, morph, temper.
+
+## D7286 — gamlss.dist: more random numbers
+
+The generators of NO, LO, EXP and LOGNO are R's own (`rnorm`, `rlogis`, `rexp` with rate 1/mu, `rlnorm`), PO is `rpois`, and PE, JSU, SHASH, PARETO, GEOM and BI draw `runif(n)` and apply their quantile function; the fixture reproduces the i-th draw under the seed from `e.algo.rand.r`, `e.algo.rand.rdist` and the existing quantile functions.
+
+**Result.** `oracle_gamlss_exp` gains 6 seeds by 11 families by 8 draws (528 values) and equals gamlss.dist on Windows at 1e-8. No library change was needed. Linux pending. L464 stays partial: ST3C (compiled in the package), DEL, DBI, ZASICHEL, MN3 to MN5, the discrete quantiles, moments, random numbers of the remaining families.

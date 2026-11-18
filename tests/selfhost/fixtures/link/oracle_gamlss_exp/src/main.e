@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gamlss_exp`; the layout of every case is at the top of scripts/r_oracle/groups/gamlss_exp.R.
 
 use e.algo.rand.r as rg
+use e.algo.rand.rdist as rds
 use e.algo.stat.gamlssdist as gd
 use e.math
 use e.io
@@ -33,7 +34,39 @@ fn answer_rq(c: *const oracle.Case) -> f64 {
     ret gd.qbccg(u, m, sg, nu)
 }
 
+fn answer_rq2(c: *const oracle.Case) -> f64 {
+    let z = c.args
+    var rng: rg.Rng = zero
+    rg.seed(&rng, i64(z[0usize]))
+    let w = usize(z[2usize])
+    let m = z[3usize]
+    let sg = z[4usize]
+    let nu = z[5usize]
+    let tau = z[6usize]
+    var v = 0.0f64
+    var i = 0usize
+    while i <= usize(z[1usize]) {
+        if w == 0usize { v = rg.rnorm(&rng, m, sg) }
+        if w == 1usize { v = rds.rlogis(&rng, m, sg) }
+        if w == 2usize { v = rg.rexp(&rng, m) }
+        if w == 3usize { v = rds.rlnorm(&rng, m, sg) }
+        if w == 10usize { v = rds.rpois(&rng, m) }
+        if w >= 4usize && w <= 9usize {
+            let u = rg.unif(&rng)
+            if w == 4usize { v = gd.qpe(u, m, sg, nu) }
+            if w == 5usize { v = gd.qjsu(u, m, sg, nu, tau) }
+            if w == 6usize { v = gd.qshash(u, m, sg, nu, tau) }
+            if w == 7usize { v = gd.qpareto(u, m) }
+            if w == 8usize { v = gd.qgeom_mu(u, m) }
+            if w == 9usize { v = gd.qbi(u, m, nu) }
+        }
+        i += 1usize
+    }
+    ret v
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "rq2") { ret answer_rq2(c) }
     if str.eq(c.name, "rq") { ret answer_rq(c) }
     let z = c.args
     let which = usize(z[0usize])

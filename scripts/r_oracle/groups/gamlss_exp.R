@@ -362,4 +362,17 @@ for (rep in 1:6) {
     for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("rq", c(sd0, i - 1, w, args[[w + 1]]), as.numeric(v[i]), rel = 1e-9, abs = 1e-12)
   }
 }
+# more random numbers: "rq2" args (seed, i, which, mu, sigma, nu, tau) the i-th (0-based) value of r<FAM>(n, ...) under the seed; which 0 rNO, 1 rLO, 2 rEXP, 3 rLOGNO, 4 rPE, 5 rJSU, 6 rSHASH, 7 rPARETO, 8 rGEOM, 9 rBI (bd = nu), 10 rPO
+for (rep in 1:6) {
+  sd0 <- sample(1:100000, 1); n <- 8
+  m <- runif(1, 0.5, 3); sg <- runif(1, 0.5, 1.5); nu <- runif(1, 0.6, 2); tau <- runif(1, 0.6, 2); bdn <- sample(8:20, 1); gm <- runif(1, 0.2, 0.8)
+  draws <- list(function() rNO(n, mu = m, sigma = sg), function() rLO(n, mu = m, sigma = sg), function() rEXP(n, mu = m), function() rLOGNO(n, mu = m - 2, sigma = sg),
+                function() rPE(n, mu = m, sigma = sg, nu = nu), function() rJSU(n, mu = m, sigma = sg, nu = nu - 1, tau = tau), function() rSHASH(n, mu = m, sigma = sg, nu = nu, tau = tau),
+                function() rPARETO(n, mu = m), function() rGEOM(n, mu = m), function() rBI(n, mu = gm, bd = bdn), function() rPO(n, mu = m))
+  args <- list(c(m, sg, 0, 0), c(m, sg, 0, 0), c(m, 0, 0, 0), c(m - 2, sg, 0, 0), c(m, sg, nu, 0), c(m, sg, nu - 1, tau), c(m, sg, nu, tau), c(m, 0, 0, 0), c(m, 0, 0, 0), c(gm, 0, bdn, 0), c(m, 0, 0, 0))
+  for (w in 0:10) {
+    set.seed(sd0); v <- draws[[w + 1]]()
+    for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("rq2", c(sd0, i - 1, w, args[[w + 1]]), as.numeric(v[i]), rel = 1e-8, abs = 1e-10)
+  }
+}
 emit("gamlss_exp", "gamlss.dist", list(cases))
