@@ -3988,4 +3988,5 @@ D7198	697	flexmix: the random start under set.seed
 D7199	954	flexmix: the Poisson family
 D7200	769	flexmix: stepFlexmix
 D7201	763	flexmix: AIC, BIC and ICL
-D7202	896	flexmix: the binomial family
+D7202	897	flexmix: the binomial family
+D7203	939	flexmix: the Gamma family

@@ -49238,3 +49238,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.flexmixpkg` gains `binomial`: FLXMRglm's binomial family with the logit link and a (successes, failures) response, whose M step is R's `glm.fit` for the proportion with prior weights w times size (`binom_glm`: mustart (weights y + 0.5) / (weights + 1) at the first pass, the previous coefficients afterwards, the deviance test at 1e-8) and whose E step uses the binomial log density with the group sizes. The EM driver now takes the trial counts as an argument that the other families ignore.
 
 **Result.** `oracle_flexmix_gauss` has 1872 values (384 added: two binomial mixtures with log-likelihood, iterations, priors, coefficients, AIC, BIC, ICL and clusters) and equals flexmix on Windows. Linux pending. L413 stays partial: the Gamma family, FLXMRglmfix, concomitant variables, CEM and SEM, and the steps for the non-Gaussian families.
+
+## D7203 — flexmix: the Gamma family
+
+`e.algo.stat.flexmixpkg` gains `gamma_mix`: FLXMRglm's Gamma family with the inverse link. The M step is R's `glm.fit` (`gamma_glm`: mustart = y at the first pass, the previous coefficients afterwards, working weights sqrt(w) mu, the Gamma deviance, the 1e-8 deviance test), the component's shape is sum(w) / deviance as flexmix computes it, and the E step uses the Gamma log density with scale mu / shape. The parameter count includes the shape.
+
+**Result.** `oracle_flexmix_gauss` has 2260 values (388 added: two Gamma mixtures, log-likelihood, iterations, priors, coefficients, shapes, AIC, BIC, ICL and clusters, at 1e-4 relative because the IRLS path differs by rounding) and equals flexmix on Windows. Linux pending. L413 stays partial: FLXMRglmfix, concomitant variables, CEM and SEM, and the steps for the non-Gaussian families. R's step-halving for a non-positive Gamma mean is not ported.

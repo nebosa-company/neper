@@ -176,7 +176,15 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
                     c0 += 1usize
                 }
                 var ge = ok
-                if fam == 1usize { ge = pois_glm(a, x, n, p, y, wj, bj, iter > 1usize) } else { ge = binom_glm(a, x, n, p, y, sz, wj, bj, iter > 1usize) }
+                let (dv, e11) = mem.alloc[f64](a, 1usize)
+                if e11 != ok { ret (out, Malformed) }
+                if fam == 1usize {
+                    ge = pois_glm(a, x, n, p, y, wj, bj, iter > 1usize)
+                } else if fam == 2usize {
+                    ge = binom_glm(a, x, n, p, y, sz, wj, bj, iter > 1usize)
+                } else {
+                    ge = gamma_glm(a, x, n, p, y, wj, bj, iter > 1usize, dv)
+                }
                 if ge != ok { ret (out, ge) }
                 c0 = 0usize
                 while c0 < p {
@@ -184,6 +192,7 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
                     c0 += 1usize
                 }
                 sigma[j] = 1.0f64
+                if fam == 3usize { sigma[j] = sw / dv[0usize] }
             } else {
                 let (f, fe) = ols.fit_tol(a, xw, n, p, yw, 0.0000001f64)
                 if fe != ok { ret (out, fe) }
@@ -210,6 +219,8 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
                 var ld = 0.0f64
                 if fam == 1usize {
                     ld = nm.dpois(y[i], math.exp[f64](mu), true)
+                } else if fam == 3usize {
+                    ld = nm.dgamma(y[i], sigma[j], (1.0f64 / mu) / sigma[j], true)
                 } else if fam == 2usize {
                     ld = nb.dbinom(y[i], sz[i], 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - mu)), true)
                 } else {
@@ -282,7 +293,7 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
     }
     out.clog = clg
     var dfc = f64(p)
-    if fam == 0usize { dfc = f64(p + 1usize) }
+    if fam == 0usize || fam == 3usize { dfc = f64(p + 1usize) }
     out.df = f64(k - 1usize) + f64(k) * dfc
     out.cluster = cl
     ret (out, ok)
@@ -572,6 +583,114 @@ fn binomial(a: *mem.Arena, x: []const f64, succ: []const f64, size: []const f64,
         i += 1usize
     }
     let (f, fe) = gauss_em(a, xc, n, p, succ, cl, minprior, tol, iter_max, 2usize, size)
+    if fe != ok { ret (f, fe) }
+    var g = f
+    i = 0usize
+    while i < n {
+        g.cluster[i] = f.cluster[i] - 1usize
+        i += 1usize
+    }
+    ret (g, ok)
+}
+
+
+// R glm.fit for the Gamma family with the inverse link: mustart = y (or the previous coefficients), working weights sqrt(w) mu, the Gamma deviance
+// -2 w (log(y / mu) - (y - mu) / mu) and the same convergence test; dev[0] receives the final deviance, from which flexmix takes the shape sum(w) / deviance
+fn gamma_dev(y: []const f64, mu: []const f64, w: []const f64, n: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        var lg = 0.0f64
+        if y[i] != 0.0f64 { lg = math.log[f64](y[i] / mu[i]) }
+        s += 0.0f64 - 2.0f64 * w[i] * (lg - (y[i] - mu[i]) / mu[i])
+        i += 1usize
+    }
+    ret s
+}
+
+fn gamma_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w: []const f64, beta: []f64, has_start: bool, dev_out: []f64) -> err {
+    let (eta, e1) = mem.alloc[f64](a, n)
+    let (mu, e2) = mem.alloc[f64](a, n)
+    let (z, e3) = mem.alloc[f64](a, n)
+    let (xw, e4) = mem.alloc[f64](a, n * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret Malformed }
+    var i = 0usize
+    while i < n {
+        if has_start {
+            var t = 0.0f64
+            var c = 0usize
+            while c < p {
+                t += x[c * n + i] * beta[c]
+                c += 1usize
+            }
+            eta[i] = t
+            mu[i] = 1.0f64 / t
+        } else {
+            mu[i] = y[i]
+            eta[i] = 1.0f64 / mu[i]
+        }
+        i += 1usize
+    }
+    var devold = gamma_dev(y, mu, w, n)
+    var dev = devold
+    var iter = 0usize
+    while iter < 25usize {
+        iter += 1usize
+        i = 0usize
+        while i < n {
+            // mu.eta = -mu^2 and variance mu^2: z = eta - (y - mu) / mu^2, weight sqrt(w) mu
+            let sq = math.sqrt[f64](w[i]) * mu[i]
+            z[i] = (eta[i] - (y[i] - mu[i]) / (mu[i] * mu[i])) * sq
+            var c = 0usize
+            while c < p {
+                xw[c * n + i] = x[c * n + i] * sq
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (f, fe) = ols.fit_tol(a, xw, n, p, z, 0.00000000001f64)
+        if fe != ok { ret fe }
+        var c = 0usize
+        while c < p {
+            beta[c] = f.coef[c]
+            c += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var t = 0.0f64
+            c = 0usize
+            while c < p {
+                t += x[c * n + i] * beta[c]
+                c += 1usize
+            }
+            eta[i] = t
+            mu[i] = 1.0f64 / t
+            i += 1usize
+        }
+        dev = gamma_dev(y, mu, w, n)
+        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 0.00000001f64 { break }
+        devold = dev
+    }
+    dev_out[0usize] = dev
+    ret ok
+}
+
+// flexmix(y ~ x, k, model = FLXMRglm(family = "Gamma"), cluster = init): x n by p row-major, positive y, init 0-based
+fn gamma_mix(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, k: usize, init: []const f64, iter_max: usize, minprior: f64, tol: f64) -> (Fm, err) {
+    let (xc, e1) = mem.alloc[f64](a, n * p)
+    let (cl, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret (zero, Malformed) }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xc[c * n + i] = x[i * p + c]
+            c += 1usize
+        }
+        cl[i] = init[i] + 1.0f64
+        i += 1usize
+    }
+    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 3usize, y)
     if fe != ok { ret (f, fe) }
     var g = f
     i = 0usize

@@ -33,6 +33,35 @@ fn answer_seeded(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "fs") { ret answer_seeded(a, c) }
+    if str.eq(c.name, "fg") {
+        let zz = c.args
+        let nn = usize(zz[0usize])
+        let pp = usize(zz[1usize])
+        let kk = usize(zz[2usize])
+        let wh = usize(zz[3usize])
+        let ix = usize(zz[4usize])
+        let xs = zz[5usize..5usize + nn * pp]
+        let ys = zz[5usize + nn * pp..5usize + nn * pp + nn]
+        let (i0, g0) = mem.alloc[f64](a, nn)
+        if g0 != ok { os.exit(4) }
+        var q = 0usize
+        while q < nn {
+            i0[q] = zz[5usize + nn * pp + nn + q] - 1.0f64
+            q += 1usize
+        }
+        let (fg, eg) = fx.gamma_mix(a, xs, ys, nn, pp, kk, i0, 200usize, 0.05f64, 0.000001f64)
+        if eg != ok { os.exit(5) }
+        if wh == 0usize { ret fg.llh }
+        if wh == 1usize { ret f64(fg.iter) }
+        if wh == 2usize { ret f64(fg.k) }
+        if wh == 3usize { ret fg.prior[ix] }
+        if wh == 4usize { ret fg.coef[ix] }
+        if wh == 5usize { ret fg.sigma[ix] }
+        if wh == 7usize { ret fx.aic(&fg) }
+        if wh == 8usize { ret fx.bic(&fg, nn) }
+        if wh == 9usize { ret fx.icl(&fg, nn) }
+        ret f64(fg.cluster[ix] + 1usize)
+    }
     if str.eq(c.name, "fb") {
         let zz = c.args
         let nn = usize(zz[0usize])
