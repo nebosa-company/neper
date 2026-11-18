@@ -49718,3 +49718,9 @@ The emmeans fixture refits `lm(y ~ A * x)` through `e.algo.stat.emmeans.fit` (de
 `e.algo.stat.survfitpkg.pyears_table` gives, per group, the person-years (time over the scale), the number of subjects and the events of `pyears(Surv(time, status) ~ g, scale = ...)`.
 
 **Result.** 15 data sets of two to four groups (scale 1 and 365.25; 129 values) equal `pyears` on Windows exactly. Age-banded and rate-table forms are not ported. Linux pending. L311 stays partial: exact ties, counting-process coxph, the Efron and cluster robust variance, frailty, tmerge, the Schoenfeld and score residuals, survdiff with strata, interval and left censoring in survreg, pyears with age bands.
+
+## D7283 — mlogit: the multinomial logit
+
+`mlogit(choice ~ 0 | z)` is the conditional logit of `e.algo.stat.mlogitpkg.clogit` with alternative-specific constants and, for each alternative j >= 2, the individual's covariates entered as columns that are non-zero only for that alternative (so each alternative gets its own coefficient), which the fixture builds from the raw individual covariates.
+
+**Result.** `oracle_mlogit` gains 15 data sets (80 to 200 choosers, three or four alternatives, one or two covariates; coefficients and standard errors by position-weighted sums and the log-likelihood: 45 values) and equals mlogit on Windows at 1e-4 (the optimiser's own tolerance). No library change was needed. Linux pending. L456 stays partial: nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, predictions and marginal effects.

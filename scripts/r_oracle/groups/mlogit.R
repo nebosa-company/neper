@@ -22,4 +22,23 @@ for (rep in 1:20) {
   a <- c(n, J, k, asc, ch - 1, as.vector(aperm(X, c(3, 2, 1))))
   add("coef", a, ws(cf)); add("se", a, ws(se)); add("ll", a, as.numeric(logLik(f)))
 }
+# individual-specific covariates (the multinomial logit): "mnl_coef", "mnl_se", "mnl_ll" args (n, J, q, choice[n] 0-based, Z[n*q] row-major); the coefficient order is the intercepts of alternatives 2..J, then for alternatives 2..J each covariate
+for (rep in 1:15) {
+  n <- sample(80:200, 1); J <- sample(3:4, 1); qq <- sample(1:2, 1)
+  Z <- matrix(round(rnorm(n * qq), 3), n, qq); B <- matrix(rnorm((J - 1) * qq, 0, 0.7), qq, J - 1); a0 <- c(0, rnorm(J - 1, 0, 0.4))
+  U <- sapply(1:J, function(j) a0[j] + (if (j == 1) rep(0, n) else as.vector(Z %*% matrix(B[, j - 1], qq, 1)))) + matrix(-log(-log(runif(n * J))), n)
+  ch <- apply(U, 1, which.max)
+  d <- data.frame(id = rep(1:n, each = J), alt = factor(rep(1:J, n)))
+  for (c in 1:qq) d[[paste0("z", c)]] <- rep(Z[, c], each = J)
+  d$choice <- as.vector(t(outer(ch, 1:J, "==")))
+  m <- dfidx(d, idx = c("id", "alt"))
+  fm <- as.formula(paste("choice ~ 0 |", paste0("z", 1:qq, collapse = " + ")))
+  f <- tryCatch(mlogit(fm, m, reltol = 1e-14, tol = 1e-14, iterlim = 500), error = function(e) NULL); if (is.null(f)) next
+  nm <- c(paste0("(Intercept):", 2:J), unlist(lapply(2:J, function(j) paste0("z", 1:qq, ":", j))))
+  cf <- coef(f)[nm]; se <- sqrt(diag(vcov(f)))[nm]
+  a <- c(n, J, qq, ch - 1, as.vector(t(Z)))
+  cases[[length(cases) + 1]] <- case("mnl_coef", a, ws(cf), rel = 1e-4, abs = 1e-6)
+  cases[[length(cases) + 1]] <- case("mnl_se", a, ws(se), rel = 1e-4, abs = 1e-6)
+  cases[[length(cases) + 1]] <- case("mnl_ll", a, as.numeric(logLik(f)), rel = 1e-4, abs = 1e-6)
+}
 emit("mlogit", "mlogit", list(cases))

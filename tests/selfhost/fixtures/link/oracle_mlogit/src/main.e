@@ -11,6 +11,46 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.starts_with(c.name, "mnl_") {
+        let mn = usize(z[0usize])
+        let mj = usize(z[1usize])
+        let mq = usize(z[2usize])
+        let kk = (mj - 1usize) * mq
+        let (dx, de) = mem.alloc[f64](a, mn * mj * kk)
+        let (mo, me) = mem.alloc[f64](a, 2usize * (mj - 1usize + kk) + 1usize)
+        if de != ok || me != ok { ret nan }
+        var i = 0usize
+        while i < mn * mj * kk {
+            dx[i] = 0.0f64
+            i += 1usize
+        }
+        // X[i][j][(j - 1) q + l] = z[i][l] for alternatives j >= 1
+        i = 0usize
+        while i < mn {
+            var jj = 1usize
+            while jj < mj {
+                var l = 0usize
+                while l < mq {
+                    dx[(i * mj + jj) * kk + (jj - 1usize) * mq + l] = z[3usize + mn + i * mq + l]
+                    l += 1usize
+                }
+                jj += 1usize
+            }
+            i += 1usize
+        }
+        if ml.clogit(a, dx, z[3usize..3usize + mn], mn, mj, kk, true, mo) != ok { ret nan }
+        let qn = mj - 1usize + kk
+        if str.eq(c.name, "mnl_ll") { ret mo[2usize * qn] }
+        var lo2 = 0usize
+        if str.eq(c.name, "mnl_se") { lo2 = qn }
+        var s2 = 0.0f64
+        var t = 0usize
+        while t < qn {
+            s2 += mo[lo2 + t] * f64(t + 1usize)
+            t += 1usize
+        }
+        ret s2
+    }
     let n = usize(z[0usize])
     let j = usize(z[1usize])
     let k = usize(z[2usize])
