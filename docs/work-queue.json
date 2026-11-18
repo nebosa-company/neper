@@ -26,17 +26,6 @@
       "evidence": "Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows; oracle_dbscanpkg; Linux pending). Open: hdbscan, sNNclust, extractXi, extractDBSCAN, jpclust. Was: Open (CRAN rank 368). Small to mid. e.ml.cluster.density has dbscan and optics. Acceptance, equal to dbscan: hdbscan with its condensed tree, membership probabilities and outlier scores, lof, sNN and sNNclust, kNN and frNN, kNNdist, extractXi and extractDBSCAN, jpclust."
     },
     {
-      "id": "L379",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 604,
-      "title": "gmp: arbitrary-precision numbers",
-      "score": 0.6,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6161, D7117, D7287 bigq add, subtract, multiply and divide). bigz add, multiply, quotient, remainder, gcd, lcm, powm, inverse, isprime, nextprime, chooseZ, fibnum, lucnum, factorialZ and factorize (D7117: perfect powers, ECM, Pollard rho) equal gmp on Windows (oracle_gmp, 41 factorize cases; Linux pending). Open: as.character in bases other than 10 (no oracle case yet), vectorised forms. Was: Open (CRAN rank 301). Small to mid. Acceptance, equal to gmp: bigz and bigq arithmetic, gcd, lcm, powm, inverse, isprime, nextprime, factorize, binomial, fibnum, lucnum, sizeinbase, as.character in any base."
-    },
-    {
       "id": "L380",
       "category": "library",
       "group": "CRAN parity",

@@ -56,4 +56,14 @@ for (rep in 1:15) {
     cases[[length(cases) + 1]] <- case("qden_nd", args, nchar(as.character(de)), rel = 1e-12, abs = 1e-9)
   }
 }
+# as.character(bigz, b) and sizeinbase in bases 2 to 36: "base_sum" (checksum: sum over positions of (position * digit value) mod 1e9), "base_len" (digit count) args (b, n1, chunks of a)
+dv <- function(ch) if (ch >= "0" && ch <= "9") utf8ToInt(ch) - 48 else utf8ToInt(ch) - 87
+for (rep in 1:20) {
+  a <- rnd(sample(5:50, 1)); b <- sample(2:36, 1); st <- tolower(as.character(a, b = b))
+  chs <- strsplit(st, "")[[1]]; sm <- sum(seq_along(chs) * sapply(chs, dv)) %% 1e9
+  args <- c(b, length(chunks(a)), chunks(a))
+  cases[[length(cases) + 1]] <- case("base_sum", args, as.numeric(sm), rel = 1e-12, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("base_len", args, nchar(st), rel = 1e-12, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("base_size", args, as.numeric(sizeinbase(a, b)), rel = 1e-12, abs = 1e-9)
+}
 emit("gmp", "gmp", list(cases))

@@ -4,6 +4,7 @@
 use e.algo.bignum as bn
 use e.algo.gmp as g
 use e.io
+use e.math
 use e.mem
 use e.os
 use e.str
@@ -72,7 +73,45 @@ fn answer_q(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret f64(nd)
 }
 
+fn answer_base(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let radix = u8(x[0usize])
+    let n1 = usize(x[1usize])
+    let va = build(a, x, 2usize, n1)
+    if str.eq(c.name, "base_size") {
+        // mpz_sizeinbase: exact for a power-of-two base, otherwise floor(bits ln 2 / ln b) + 1, which may be one too big
+        let bits = bn.int_bits(va)
+        let rd = usize(radix)
+        let pow2 = rd == 2usize || rd == 4usize || rd == 8usize || rd == 16usize || rd == 32usize
+        if pow2 {
+            var lg = 1usize
+            while (1usize << lg) < usize(radix) { lg += 1usize }
+            ret f64((bits + lg - 1usize) / lg)
+        }
+        ret math.floor[f64](f64(bits) * math.log[f64](2.0f64) / math.log[f64](f64(radix))) + 1.0f64
+    }
+    let (b0, be) = str.builder(a, 64usize)
+    if be != ok { os.exit(62) }
+    var b = b0
+    if bn.int_format(va, &b, radix) != ok { os.exit(61) }
+    let st = str.done(&b)
+    if str.eq(c.name, "base_len") { ret f64(st.len) }
+    var sm = 0.0f64
+    var i = 0usize
+    while i < st.len {
+        let ch = st[i]
+        var d = 0u32
+        if ch >= 48u8 && ch <= 57u8 { d = u32(ch) - 48u32 } else if ch >= 97u8 && ch <= 122u8 { d = u32(ch) - 87u32 } else { d = u32(ch) - 55u32 }
+        sm += f64(i + 1usize) * f64(d)
+        i += 1usize
+    }
+    var md = sm
+    while md >= 1000000000.0f64 { md = md - 1000000000.0f64 }
+    ret md
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.starts_with(c.name, "base_") { ret answer_base(a, c) }
     if str.starts_with(c.name, "qnum") || str.starts_with(c.name, "qden") { ret answer_q(a, c) }
     let x = c.args
     let op = usize(x[0usize])

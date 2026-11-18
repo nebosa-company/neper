@@ -49748,3 +49748,9 @@ The generators of NO, LO, EXP and LOGNO are R's own (`rnorm`, `rlogis`, `rexp` w
 The gmp fixture runs `e.algo.bignum`'s rational type (`rat_make` to lowest terms with a positive denominator, `rat_add`, `rat_sub`, `rat_mul`, `rat_div`) on pairs of big integers of 5 to 25 digits and compares the numerator's absolute value and the denominator, each by its residue modulo 1e9 and its digit count, with `numerator` and `denominator` of gmp's `as.bigq` results.
 
 **Result.** 15 quadruples under four operations (240 values) equal gmp on Windows exactly. No library change was needed. Linux pending. L379 stays partial: as.character in bases other than 10 (no oracle case yet), the vectorised forms.
+
+## D7288 — gmp: bases and sizeinbase; L379 closed
+
+The gmp fixture formats big integers in bases 2 to 36 through `bn.int_format` and compares a position-weighted digit checksum and the digit count with `as.character(bigz, b)`, and `sizeinbase` follows `mpz_sizeinbase`: exact for the power-of-two bases and otherwise floor(bits ln 2 / ln b) + 1, which GMP documents as exact or one too big (the exact count differed by one in 3 of 20 first-run cases).
+
+**Result.** 20 numbers of 5 to 50 digits in random bases (60 values) equal gmp on Windows. With D7287 every function in L379's acceptance list is covered and the item is closed (Linux pending).
