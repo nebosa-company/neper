@@ -21,6 +21,8 @@ for (rep in 1:30) {
   cd <- cohens_d(x, y, ci = lev); hg <- hedges_g(x, y, ci = lev); gd <- glass_delta(x, y, ci = lev); cv <- c(cd$CI_low, cd$CI_high, hg$CI_low, hg$CI_high, gd$CI_low, gd$CI_high)
   rb <- rank_biserial(x, y, ci = lev)
   for (q in 1:2) add("rbsci", c(n1, n2, x, y, lev, q - 1), c(rb$CI_low, rb$CI_high)[q])
+  cdl <- cliffs_delta(x, y, ci = lev)
+  for (q in 1:2) add("rbsci", c(n1, n2, x, y, lev, q - 1), c(cdl$CI_low, cdl$CI_high)[q])
   for (q in 1:6) cases[[length(cases) + 1]] <- case("smdci", c(n1, n2, x, y, lev, q - 1), cv[q], rel = 2e-5, abs = 2e-6)
   G <- sample(2:4, 1); sz <- sample(4:12, G, TRUE); yy <- round(rnorm(sum(sz), rep(seq_len(G) * 0.4, sz), 1.2), 2); g <- factor(rep(seq_len(G), sz))
   m <- aov(yy ~ g)

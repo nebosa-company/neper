@@ -49892,3 +49892,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `smd_ci` also returns the adjusted Glass delta interval (noncentral t on n2 - 1 df, noncentrality scaled by sqrt(1/n2 + v1/(n1 v2)), times the Hedges correction) and `rbs_ci` the two-sample rank-biserial interval, tanh(atanh(r) +- z sqrt((n1 + n2 + 1)/(3 n1 n2))).
 
 **Result.** `oracle_vcdeffect` (964 cases, 120 new) equals effectsize on Windows (Glass delta to 2e-5, rank-biserial to 1e-8). Linux pending. L389 stays partial: reference categories, the mantelhaen helpers, the cliffs_delta interval.
+
+## D7308 — effectsize: cliffs_delta interval; L389 closed
+
+**Decision.** `cliffs_delta(x, y, ci = level)` is `rank_biserial` in effectsize, so `rbs_ci` covers it.
+
+**Result.** `oracle_vcdeffect` (1024 cases) equals effectsize on Windows. Linux pending. L389 is closed: the installed vcd has no mantelhaen helper, no reference-category argument on `oddsratio` and no CMHtest (that is vcdExtra), so those acceptance items have nothing to equal.
