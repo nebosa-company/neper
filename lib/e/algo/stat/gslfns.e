@@ -787,3 +787,95 @@ fn elljac(u0: f64, m: f64, out: []f64, em: []f64, en: []f64) {
     out[1usize] = cn
     out[2usize] = dn
 }
+
+// ---- Carlson's RJ by the duplication algorithm, the incomplete elliptic integrals of the third kind P and the D integral through RF, RJ and RD, and the Bessel Y
+// functions of integer order through the integral representation Y_n(x) = (1 / pi) int_0^pi sin(x sin t - n t) dt - (1 / pi) int_0^Inf (e^(n t) + (-1)^n e^(-n t)) e^(-x sinh t) dt
+fn ellint_rj(x: f64, y: f64, z: f64, p: f64) -> f64 {
+    var xt = x
+    var yt = y
+    var zt = z
+    var pt = p
+    var sum = 0.0f64
+    var fac = 1.0f64
+    var ave = 0.0f64
+    var delx = 0.0f64
+    var dely = 0.0f64
+    var delz = 0.0f64
+    var delp = 0.0f64
+    var it = 0usize
+    while it < 200usize {
+        it += 1usize
+        let sx = math.sqrt[f64](xt)
+        let sy = math.sqrt[f64](yt)
+        let sz = math.sqrt[f64](zt)
+        let alamb = sx * (sy + sz) + sy * sz
+        let alpha = (pt * (sx + sy + sz) + sx * sy * sz) * (pt * (sx + sy + sz) + sx * sy * sz)
+        let beta = pt * (pt + alamb) * (pt + alamb)
+        sum += fac * ellint_rc(alpha, beta)
+        fac = 0.25f64 * fac
+        xt = 0.25f64 * (xt + alamb)
+        yt = 0.25f64 * (yt + alamb)
+        zt = 0.25f64 * (zt + alamb)
+        pt = 0.25f64 * (pt + alamb)
+        ave = 0.2f64 * (xt + yt + zt + pt + pt)
+        delx = (ave - xt) / ave
+        dely = (ave - yt) / ave
+        delz = (ave - zt) / ave
+        delp = (ave - pt) / ave
+        var mx = math.abs[f64](delx)
+        if math.abs[f64](dely) > mx { mx = math.abs[f64](dely) }
+        if math.abs[f64](delz) > mx { mx = math.abs[f64](delz) }
+        if math.abs[f64](delp) > mx { mx = math.abs[f64](delp) }
+        if mx < 0.0015f64 { break }
+    }
+    let ea = delx * (dely + delz) + dely * delz
+    let eb = delx * dely * delz
+    let ec = delp * delp
+    let ed = ea - 3.0f64 * ec
+    let ee = eb + 2.0f64 * delp * (ea - ec)
+    let c1 = 3.0f64 / 14.0f64
+    let c2 = 1.0f64 / 3.0f64
+    let c3 = 3.0f64 / 22.0f64
+    let c4 = 3.0f64 / 26.0f64
+    let c5 = 0.75f64 * c3
+    let c6 = 1.5f64 * c4
+    let c7 = 0.5f64 * c2
+    let c8 = c3 + c3
+    ret 3.0f64 * sum + fac * (1.0f64 + ed * (0.0f64 - c1 + c5 * ed - c6 * ee) + eb * (c7 + delp * (0.0f64 - c8 + delp * c4)) + delp * ea * (c2 - delp * c3) - c2 * delp * ec) / (ave * math.sqrt[f64](ave))
+}
+
+fn ellint_p(phi: f64, k: f64, n: f64) -> f64 {
+    let s = math.sin[f64](phi)
+    let c = math.cos[f64](phi)
+    let x = c * c
+    let y = 1.0f64 - k * k * s * s
+    ret s * ellint_rf(x, y, 1.0f64) - (n / 3.0f64) * s * s * s * ellint_rj(x, y, 1.0f64, 1.0f64 + n * s * s)
+}
+
+fn ellint_d(phi: f64, k: f64) -> f64 {
+    let s = math.sin[f64](phi)
+    let c = math.cos[f64](phi)
+    ret s * s * s * ellint_rd(c * c, 1.0f64 - k * k * s * s, 1.0f64) / 3.0f64
+}
+
+type Yc = struct { n: f64, x: f64, kind: usize }
+
+fn yc_fn(c: *Yc, t: f64) -> f64 {
+    if c.kind == 0usize { ret math.sin[f64](c.x * math.sin[f64](t) - c.n * t) }
+    var sg = 1.0f64
+    if c.n - 2.0f64 * math.floor[f64](c.n / 2.0f64) == 1.0f64 { sg = 0.0f64 - 1.0f64 }
+    let sh = c.x * (math.exp[f64](t) - math.exp[f64](0.0f64 - t)) / 2.0f64
+    ret math.exp[f64](c.n * t - sh) + sg * math.exp[f64](0.0f64 - c.n * t - sh)
+}
+
+fn bessel_yn(a: *mem.Arena, n: usize, x: f64) -> f64 {
+    var c: Yc = zero
+    c.n = f64(n)
+    c.x = x
+    c.kind = 0usize
+    let (r1, e1) = qp.qags[Yc](a, &c, yc_fn, 0.0f64, 3.141592653589793238462643383279f64, 0.0f64, 0.0000000000001f64, 200usize)
+    c.kind = 1usize
+    let (r2, e2) = qp.qagi[Yc](a, &c, yc_fn, 0.0f64, 1i64, 0.0f64, 0.0000000000001f64, 200usize)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    ret (r1.result - r2.result) / 3.141592653589793238462643383279f64
+}

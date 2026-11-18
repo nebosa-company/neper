@@ -49364,3 +49364,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains Si, Ci, Shi, Chi, atanint and expint_3 (adaptive quadrature of integrands made regular at 0, the logarithmic parts added back), `expint_en` (the tail integral from 1 by the infinite-range routine), `eta` and `zetam1` (from the Hurwitz zeta), `laguerre_n` and `gegenpoly_n` (three-term recurrences), `legendre_q0` and `legendre_ql` (the recurrence from Q0), `log_1plusx` and `log_1plusx_mx`, Carlson's `ellint_rc` and `elljac` (sn, cn and dn by the descending Landen scale, with the arithmetic-geometric stopping tolerance tightened to 1e-15 for double precision).
 
 **Result.** `oracle_gslfns` has 1995 values (285 added over 15 arguments each, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: Coulomb functions, ellint_RJ, ellint_P and ellint_D, the Bessel Y family, the complex functions and the error estimates.
+
+## D7224 — gsl: ellint_RJ, ellint_P, ellint_D and the Bessel Y functions
+
+`e.algo.stat.gslfns` gains Carlson's `ellint_rj` (the duplication algorithm with the fifth-order correction series, stopping at a relative spread of 0.0015, which truncates below 1e-16), `ellint_p` (the incomplete third-kind integral as sin(phi) RF less n / 3 sin^3(phi) RJ), `ellint_d` (sin^3(phi) RD / 3) and `bessel_yn` (Y of integer order by the Schlaefli integral representation, the finite part by `qags` and the tail by `qagi`). The first Y version overflowed in the tail integrand (e^(n t) times a vanishing factor); writing the two exponentials as single exponentials of n t - x sinh t fixed it.
+
+**Result.** `oracle_gslfns` has 2055 values (60 added over 15 arguments each, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, Y of real order, the complex functions and the error estimates.

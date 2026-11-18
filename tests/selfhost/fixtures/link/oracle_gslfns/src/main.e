@@ -66,6 +66,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         gs.elljac(x[1usize], x[2usize], jo, jm, jn)
         ret jo[code - 16usize]
     }
+    if str.eq(k, "h4") {
+        let code = usize(x[0usize])
+        if code == 0usize { ret gs.ellint_rj(x[1usize], x[2usize], x[3usize], x[4usize]) }
+        if code == 1usize { ret gs.ellint_p(x[1usize], x[2usize], x[3usize]) }
+        if code == 2usize { ret gs.ellint_d(x[1usize], x[2usize]) }
+        ret gs.bessel_yn(a, usize(x[1usize]), x[2usize])
+    }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }

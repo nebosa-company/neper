@@ -65,4 +65,12 @@ for (rep in 1:15) {
   add("h3", c(13, q), log_1plusx(q)); add("h3", c(14, q), log_1plusx_mx(q)); add("h3", c(15, x, y), ellint_RC(x, y))
   jj <- elljac(u, m); add("h3", c(16, u, m), jj$sn); add("h3", c(17, u, m), jj$cn); add("h3", c(18, u, m), jj$dn)
 }
+# ellint_RJ, ellint_P, ellint_D and the Bessel Y functions under "h4": 0 RJ (x, y, z, p), 1 P (phi, k, n), 2 D (phi, k), 3 Yn (n, x)
+for (rep in 1:15) {
+  r <- runif(4, 0.1, 5); ph <- runif(1, 0.1, 1.4); k <- runif(1, 0.05, 0.9); nn <- runif(1, -0.5, 2); n <- sample(0:4, 1); x <- runif(1, 0.3, 15)
+  cases[[length(cases) + 1]] <- case("h4", c(0, r), ellint_RJ(r[1], r[2], r[3], r[4]), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("h4", c(1, ph, k, nn), ellint_P(ph, k, nn), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("h4", c(2, ph, k), ellint_D(ph, k), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("h4", c(3, n, x), bessel_Yn(n, x), rel = 1e-9, abs = 1e-12)
+}
 emit("gslfns", "gsl", list(cases))
