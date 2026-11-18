@@ -149,3 +149,17 @@ fn prg(x: f64, mu: f64, sigma: f64) -> f64 {
 }
 
 fn qrg(p: f64, mu: f64, sigma: f64) -> f64 { ret mu - sigma * math.log[f64](0.0f64 - math.log[f64](p)) }
+
+// the Pareto type II PARETO2 of gamlss.dist (scale mu, shape sigma): density exp(-log sigma + log(mu) / sigma - (1 / sigma + 1) log(x + mu)) for x > 0,
+// distribution 1 - (mu / (mu + x))^(1 / sigma), quantile mu ((1 - p)^(-sigma) - 1)
+fn dpareto2(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret math.exp[f64](0.0f64 - math.log[f64](sigma) + math.log[f64](mu) / sigma - (1.0f64 / sigma + 1.0f64) * math.log[f64](x + mu))
+}
+
+fn ppareto2(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret 1.0f64 - math.pow[f64](mu / (mu + x), 1.0f64 / sigma)
+}
+
+fn qpareto2(p: f64, mu: f64, sigma: f64) -> f64 { ret mu * (math.pow[f64](1.0f64 - p, 0.0f64 - sigma) - 1.0f64) }

@@ -3921,4 +3921,5 @@ D7131	833	TSA: the cumulative periodogram
 D7132	895	vcd: goodfit for the Poisson distribution by maximum likelihood
 D7133	627	vcd: goodfit for the binomial distribution by maximum likelihood
 D7134	517	gamlss.dist: the EXP family
-D7135	517	gamlss.dist: the RG (reverse Gumbel) family
+D7135	518	gamlss.dist: the RG (reverse Gumbel) family
+D7136	552	gamlss.dist: the PARETO2 family
