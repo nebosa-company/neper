@@ -49670,3 +49670,9 @@ The emmeans fixture builds each contrast as a coefficient vector over the factor
 `e.algo.stat.psych.corr_test` gives, for a pair of columns, the correlation, t = r sqrt((n - 2) / (1 - r^2)), the two-sided p on n - 2 degrees of freedom, the 95% Fisher-z interval (tanh of atanh(r) plus or minus qnorm(0.975) / sqrt(n - 3)) and the Holm-adjusted p over all column pairs (`p.adjust` order: the running maximum of (m - rank) p).
 
 **Result.** `oracle_psych` gains 15 data sets of three to five columns (n 20 to 60; every pair, six quantities: 726 values) and equals psych on Windows at 1e-8. Linux pending. L312 stays partial: omega, fa and rotations, principal, polychoric, tetrachoric, biserial, fa.parallel, VSS, describeBy, scoreItems.
+
+## D7275 — survival: coxph with strata, an offset and the robust variance
+
+New `e.algo.stat.coxext.coxph_s`: the partial likelihood summed over strata (risk sets reset at each stratum, rows ordered by stratum and descending time), an offset added to the linear predictor, Breslow or Efron ties by Newton-Raphson as in `e.algo.stat.cox`, and the robust sandwich variance inverse-information x (sum of score residuals' outer products) x inverse-information from the Breslow score residuals (x less the risk-set mean at the row's own event time, less every earlier event time's e (x - mean) d / R).
+
+**Result.** `oracle_coxph` gains 14 data sets with three strata and an offset under Efron, Breslow and Breslow-robust (162 coefficients, standard errors and log-likelihoods) and equals survival on Windows at 1e-6. Linux pending. L311 stays partial: exact ties, counting-process data, the Efron and cluster robust variance, frailty, survreg, cox.zph, survSplit, tmerge, pyears, residuals, survdiff with strata.
