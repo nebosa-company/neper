@@ -1,13 +1,38 @@
 // e.algo.stat.flexmixpkg against flexmix (the Gaussian regression mixture from a given initial clustering). tests/oracle/flexmix_gauss.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R flexmix_gauss`; the layout is at the top of scripts/r_oracle/groups/flexmix_gauss.R.
 
+use e.algo.rand.r as rg
 use e.algo.stat.flexmixpkg as fx
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
+fn answer_seeded(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let z = c.args
+    let n = usize(z[0usize])
+    let p = usize(z[1usize])
+    let k = usize(z[2usize])
+    let what = usize(z[3usize])
+    let idx = usize(z[4usize])
+    let x = z[6usize..6usize + n * p]
+    let y = z[6usize + n * p..6usize + n * p + n]
+    var rng: rg.Rng = zero
+    rg.seed(&rng, i64(z[5usize]))
+    let (f, e) = fx.gaussian_random(a, &rng, x, y, n, p, k, 200usize, 0.05f64, 0.000001f64)
+    if e != ok { os.exit(5) }
+    if what == 0usize { ret f.llh }
+    if what == 1usize { ret f64(f.iter) }
+    if what == 2usize { ret f64(f.k) }
+    if what == 3usize { ret f.prior[idx] }
+    if what == 4usize { ret f.coef[idx] }
+    if what == 5usize { ret f.sigma[idx] }
+    ret f64(f.cluster[idx] + 1usize)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "fs") { ret answer_seeded(a, c) }
     let z = c.args
     let n = usize(z[0usize])
     let p = usize(z[1usize])

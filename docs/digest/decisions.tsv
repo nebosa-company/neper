@@ -3983,4 +3983,5 @@ D7193	999	stabledist: qstable with lower.tail and log.p, alpha = 1, and the log 
 D7194	633	stabledist: oracle values for qstable and rstable in pm = 1 and pm = 2
 D7195	815	GeneralizedHyperbolic: the skew-Laplace distribution, quantile and random numbers, the GIG density and mean
 D7196	564	GeneralizedHyperbolic: GIG mode, raw moments and variance
-D7197	1209	flexmix: the Gaussian regression mixture by EM from a given start
+D7197	1210	flexmix: the Gaussian regression mixture by EM from a given start
+D7198	696	flexmix: the random start under set.seed

@@ -49208,3 +49208,9 @@ For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (t
 New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input), flexmix's EM for a mixture of Gaussian linear regressions (FLXMRglm, gaussian family, the default multinomial prior, the weighted EM): initial posteriors 0.9 for the given component and 0.1 for the others, components below minprior removed, the weighted least-squares M step with sigma = sqrt(sum(w r^2) / mean(w) / (n - rank)), the E step on the log scale and R's convergence test |llh - llh_old| / (|llh| + 0.1) < tolerance. A session that began this module and its fixture left them uncommitted; the module was rewritten to the fixture's interface when an edit overwrote the file, and the fixture, its oracle group and golden are that session's.
 
 **Result.** `oracle_flexmix_gauss` equals flexmix on Windows on three simulated mixtures: log-likelihood, iteration count, components kept, priors, coefficients, sigmas and cluster assignments. Linux pending. L413 stays partial: the random start (the cluster sampled with `sample`), stepFlexmix, the other families (binomial, Poisson, Gamma), FLXMRglmfix, concomitant variables, CEM, and BIC, ICL.
+
+## D7198 — flexmix: the random start under set.seed
+
+`e.algo.stat.flexmixpkg` gains `gaussian_random`: without a cluster argument flexmix draws the start with `sample(seq_len(k), n, replace = TRUE)`, which the stream module's `sample_int` reproduces, and the same EM follows. Three seeded fits (two and three components) agree with R, including the iteration counts, so the stream, the 0.9/0.1 initial posteriors and the EM path all match.
+
+**Result.** `oracle_flexmix_gauss` has 804 values and equals flexmix on Windows. Linux pending. L413 stays partial: stepFlexmix (the repeated starts and their selection), the other families, FLXMRglmfix, concomitant variables, CEM and SEM, BIC and ICL.

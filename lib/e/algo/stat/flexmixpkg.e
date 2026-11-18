@@ -2,6 +2,7 @@
 // "auto" classification, which is the weighted EM). The start is a given cluster vector (flexmix's cluster argument, codes 1..k): the initial posteriors are 0.9
 // for the given component and 0.1 for the others, as flexmix's initPosteriors. Components whose prior falls below minprior are removed.
 
+use e.algo.rand.r as rg
 use e.algo.stat.olsfit as ols
 use e.math
 use e.math.dist as dist
@@ -262,4 +263,19 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, k
     }
     if k != 0usize && k < f.k { ret (g, Malformed) }
     ret (g, ok)
+}
+
+// flexmix(y ~ x, k = k) without a cluster argument: the start is sample(seq_len(k), n, replace = TRUE) on R's stream, then the same EM; x is n by p row-major
+fn gaussian_random(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n: usize, p: usize, k: usize, iter_max: usize, minprior: f64, tol: f64) -> (Fm, err) {
+    let (cl, ce) = rg.sample_int(a, r, i64(k), i64(n), true)
+    if ce != ok { ret (zero, ce) }
+    let (init, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret (zero, Malformed) }
+    var i = 0usize
+    while i < n {
+        init[i] = f64(cl[i] - 1i64)
+        i += 1usize
+    }
+    let (f, fe) = gaussian(a, x, y, n, p, k, init, iter_max, minprior, tol)
+    ret (f, fe)
 }
