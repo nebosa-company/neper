@@ -49094,3 +49094,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 A fixture of its own for `e.math.quadpack`: nine integrands (a Gaussian, x log x, a damped sine, an endpoint singularity 1 / sqrt(x), a kink, a fast cosine, and three infinite-range ones) over finite and infinite ranges, each compared with R's `integrate()` on the integral (1e-10 relative), the reported abs.error (1e-6 relative) and the number of subdivisions (exactly).
 
 **Result.** `oracle_quadpack` passes on Windows: all 27 values equal R's, so the 21-point constants and the extrapolation path of `qags` are the ones R runs, not just convergent. Linux pending.
+
+## D7179 — stabledist: dstable in the S0 parametrisation
+
+New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alpha in [0.02, 2) except 1 (alpha = 2 the normal, alpha = 1 with beta = 0 the Cauchy), a port of stabledist's `.fct1`: Nolan's integral in theta split at the mode of the integrand (found by uniroot on g - 1 and log g, as the package does) and where it drops below 1e-4, each piece integrated with `qags` at tolerance 64 eps and 1000 subdivisions. It is the first user of the finite-range integrator of D7177 for a whole density.
+
+**Result.** `oracle_stabledist` equals stabledist on 180 densities (alpha from 0.3 to 1.99, symmetric and skewed, scaled and shifted) at 1e-8 relative on Windows. Linux pending. Not ported: alpha below 0.02, alpha = 1 with beta != 0, the Pareto-tail fallback when the integral underflows, the other parametrisations, log densities, pstable, qstable, rstable. L407 stays partial.

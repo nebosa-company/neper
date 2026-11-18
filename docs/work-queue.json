@@ -75,10 +75,10 @@
       "group": "CRAN parity",
       "order": 610,
       "title": "stabledist and GeneralizedHyperbolic: heavy-tailed distribution families",
-      "score": 0.15,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6457 dghyp, dnig, dhyperb, dskewlap equal GeneralizedHyperbolic on Windows; oracle_ghyp; Linux pending). Open: p, q and r functions, moments, fits, stabledist. Was: Open (CRAN ranks 592, 555; fBasics 595 uses both). Small to mid. Acceptance, equal to R: stabledist dstable, pstable, qstable, rstable in every parameterization; GeneralizedHyperbolic dghyp, pghyp, qghyp, rghyp, the hyperbolic, NIG, VG and skew-Laplace specials and their moments and fits."
+      "evidence": "Partial (D6457 dghyp, dnig, dhyperb, dskewlap equal GeneralizedHyperbolic on Windows; oracle_ghyp. D7179 stabledist dstable for S0, alpha in [0.02, 2) without alpha = 1 with beta != 0, equal on 180 densities; oracle_stabledist; Linux pending). Open: pstable, qstable, rstable, the other parametrisations, the Pareto tail and small-alpha branches; GeneralizedHyperbolic p, q and r functions, moments, fits. Acceptance, equal to R: stabledist dstable, pstable, qstable, rstable in every parameterization; GeneralizedHyperbolic dghyp, pghyp, qghyp, rghyp, the hyperbolic, NIG, VG and skew-Laplace specials and their moments and fits."
     },
     {
       "id": "L409",
