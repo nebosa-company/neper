@@ -1,7 +1,7 @@
-// R gmp over e.algo.bignum: lcm, modular inverse, a Miller-Rabin primality test, next prime, binomial, factorial, Fibonacci and Lucas numbers
+// R gmp over e.algo.bignum: lcm, modular inverse, a Miller-Rabin primality test, next prime, binomial, factorial, Fibonacci and Lucas numbers, factorize
 // and the digit count in a base. The arithmetic itself (add, sub, mul, divmod, gcd, powm, parse, format) is e.algo.bignum.
 //
-// Not here: bigq beyond e.algo.bignum.Rat, factorize of large numbers (e.algo.bignum.factor_ecm and e.math.ntheory cover it), the vectorised
+// factorize (trial division, then factor_ecm for what is left) is here too. Not here: bigq beyond e.algo.bignum.Rat, the vectorised
 // and matrix forms, and the random generators.
 
 use e.algo.bignum as bn
@@ -228,4 +228,189 @@ fn mod_1e9(a: *mem.Arena, v: bn.Int) -> (u64, err) {
     if e2 != ok { ret (0u64, e2) }
     if r.sign == .Zero { ret (0u64, ok) }
     ret (u64(r.limbs[0usize]), ok)
+}
+
+// the prime factors of n (n > 1) into out, ascending with multiplicity; returns how many. Trial division by 2 to 999 takes the small ones; what
+// is left is split by factor_ecm (several curves and seeds) and each cofactor is decided by is_prime. Fails with Invalid when a split gives up.
+fn factorize(a: *mem.Arena, n: bn.Int, out: []bn.Int) -> (usize, err) {
+    var count = 0usize
+    let (one, e0) = small(a, 1u64)
+    if e0 != ok { ret (0usize, e0) }
+    var work = n
+    var p = 2u64
+    while p < 1000u64 {
+        let (pi, e1) = small(a, p)
+        if e1 != ok { ret (0usize, e1) }
+        var more = true
+        while more {
+            let (q, r, e2) = bn.int_divmod(a, work, pi)
+            if e2 != ok { ret (0usize, e2) }
+            if r.sign != .Zero || work.sign == .Zero {
+                more = false
+            } else {
+                if count >= out.len { ret (0usize, Invalid) }
+                out[count] = pi
+                count += 1usize
+                work = q
+            }
+            if bn.int_cmp(work, one) <= 0i32 { more = false }
+        }
+        p += 1u64
+    }
+    if bn.int_cmp(work, one) <= 0i32 { ret (count, ok) }
+    // the composites still to split, and the primes found among them
+    let (pend, e3) = mem.alloc[bn.Int](a, 128usize)
+    if e3 != ok { ret (0usize, e3) }
+    var np = 1usize
+    pend[0usize] = work
+    while np > 0usize {
+        np -= 1usize
+        let x = pend[np]
+        let (prime, e4) = is_prime(a, x)
+        if e4 != ok { ret (0usize, e4) }
+        if prime {
+            if count >= out.len { ret (0usize, Invalid) }
+            out[count] = x
+            count += 1usize
+        } else {
+            let (d, e5) = split(a, x)
+            if e5 != ok { ret (0usize, e5) }
+            let (q, _, e6) = bn.int_divmod(a, x, d)
+            if e6 != ok { ret (0usize, e6) }
+            if np + 2usize > pend.len { ret (0usize, Invalid) }
+            pend[np] = d
+            pend[np + 1usize] = q
+            np += 2usize
+        }
+    }
+    // insertion sort into ascending order
+    var i = 1usize
+    while i < count {
+        var j = i
+        while j > 0usize && bn.int_cmp(out[j - 1usize], out[j]) > 0i32 {
+            let t = out[j]
+            out[j] = out[j - 1usize]
+            out[j - 1usize] = t
+            j -= 1usize
+        }
+        i += 1usize
+    }
+    ret (count, ok)
+}
+
+// x to the power k (k >= 1)
+fn ipow(a: *mem.Arena, x: bn.Int, k: usize) -> (bn.Int, err) {
+    var p = x
+    var j = 1usize
+    while j < k {
+        let (t, e) = bn.int_mul(a, p, x)
+        if e != ok { ret (x, e) }
+        p = t
+        j += 1usize
+    }
+    ret (p, ok)
+}
+
+// the floor of the k-th root of x (Newton's iteration from x, which decreases to it)
+fn iroot(a: *mem.Arena, x: bn.Int, k: usize) -> (bn.Int, err) {
+    let (kk, e0) = small(a, u64(k))
+    if e0 != ok { ret (x, e0) }
+    let (km1, e1) = small(a, u64(k - 1usize))
+    if e1 != ok { ret (x, e1) }
+    var s = x
+    var it = 0usize
+    while it < 4000usize {
+        let (p, e2) = ipow(a, s, k - 1usize)
+        if e2 != ok { ret (x, e2) }
+        let (q, _, e3) = bn.int_divmod(a, x, p)
+        if e3 != ok { ret (x, e3) }
+        let (m, e4) = bn.int_mul(a, km1, s)
+        if e4 != ok { ret (x, e4) }
+        let (num, e5) = bn.int_add(a, m, q)
+        if e5 != ok { ret (x, e5) }
+        let (t, _, e6) = bn.int_divmod(a, num, kk)
+        if e6 != ok { ret (x, e6) }
+        if bn.int_cmp(t, s) >= 0i32 { break }
+        s = t
+        it += 1usize
+    }
+    ret (s, ok)
+}
+
+// a proper divisor of the odd composite x: a root when x is a perfect power (factor_ecm does not split p^k), else factor_ecm
+// over up to 60 seeds of 16 curves each (a seed that finds nothing reports NotFound and the next one is tried)
+fn split(a: *mem.Arena, x: bn.Int) -> (bn.Int, err) {
+    let (one, e0) = small(a, 1u64)
+    if e0 != ok { ret (x, e0) }
+    var k = 2usize
+    while k <= 128usize {
+        let (r, er) = iroot(a, x, k)
+        if er != ok { ret (x, er) }
+        if bn.int_cmp(r, one) <= 0i32 { break }
+        let (pk, ep) = ipow(a, r, k)
+        if ep != ok { ret (x, ep) }
+        if bn.int_cmp(pk, x) == 0i32 { ret (r, ok) }
+        k += 1usize
+    }
+    var seed = 1u64
+    while seed <= 60u64 {
+        let (d, e1) = bn.factor_ecm(a, x, 2000u64, 16usize, seed)
+        if e1 == ok && bn.int_cmp(d, one) > 0i32 && bn.int_cmp(d, x) < 0i32 { ret (d, ok) }
+        seed += 1u64
+    }
+    let (rd, er) = rho(a, x)
+    if er != ok { ret (x, er) }
+    ret (rd, ok)
+}
+
+// x -> x * x + c (mod n)
+fn rho_step(a: *mem.Arena, x: bn.Int, c: bn.Int, n: bn.Int) -> (bn.Int, err) {
+    let (sq, e1) = bn.int_mul(a, x, x)
+    if e1 != ok { ret (x, e1) }
+    let (_, r1, e2) = bn.int_divmod(a, sq, n)
+    if e2 != ok { ret (x, e2) }
+    let (t, e3) = bn.int_add(a, r1, c)
+    if e3 != ok { ret (x, e3) }
+    let (_, r2, e4) = bn.int_divmod(a, t, n)
+    ret (r2, e4)
+}
+
+// Pollard's rho with Floyd's cycle finding, for the composites ECM does not split (small factors): a proper divisor of x or Invalid
+fn rho(a: *mem.Arena, x: bn.Int) -> (bn.Int, err) {
+    let (one, e0) = small(a, 1u64)
+    if e0 != ok { ret (x, e0) }
+    let (two, e1) = small(a, 2u64)
+    if e1 != ok { ret (x, e1) }
+    var c = 1u64
+    while c <= 8u64 {
+        let (cc, e2) = small(a, c)
+        if e2 != ok { ret (x, e2) }
+        var xv = two
+        var yv = two
+        var d = one
+        var it = 0usize
+        while bn.int_cmp(d, one) == 0i32 && it < 2000000usize {
+            let (x1, f1) = rho_step(a, xv, cc, x)
+            if f1 != ok { ret (x, f1) }
+            xv = x1
+            let (y1, f2) = rho_step(a, yv, cc, x)
+            if f2 != ok { ret (x, f2) }
+            let (y2, f3) = rho_step(a, y1, cc, x)
+            if f3 != ok { ret (x, f3) }
+            yv = y2
+            var diff = yv
+            if bn.int_cmp(xv, yv) >= 0i32 { diff = xv }
+            var other = xv
+            if bn.int_cmp(xv, yv) >= 0i32 { other = yv } else { other = xv }
+            let (df, f4) = bn.int_sub(a, diff, other)
+            if f4 != ok { ret (x, f4) }
+            let (g, f5) = bn.int_gcd(a, df, x)
+            if f5 != ok { ret (x, f5) }
+            d = g
+            it += 1usize
+        }
+        if bn.int_cmp(d, one) > 0i32 && bn.int_cmp(d, x) < 0i32 { ret (d, ok) }
+        c += 1u64
+    }
+    ret (x, Invalid)
 }

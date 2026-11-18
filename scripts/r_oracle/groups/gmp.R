@@ -27,5 +27,18 @@ for (rep in 1:12) {
   emitcase(pack(13, as.bigz(0), as.bigz(0), as.bigz(0), sample(5:120, 1)), 1)
 }
 cases <- Filter(function(cs) !(cs$args[1] == 13), cases)
+# factorize (op 14): extra 0 is the number of prime factors, k the k-th ascending factor modulo 1e9 (the fixture reads the factor list)
+facase <- function(n, idx, want) add("mod9", pack(14, n, extra = idx), as.numeric(want))
+for (rep in 1:10) {
+  ps <- sapply(1:3, function(i) as.numeric(nextprime(as.bigz(sample(10^(2:7), 1)))))
+  n <- if (rep %% 3 == 0) as.bigz(ps[1])^2 * as.bigz(ps[2]) else if (rep %% 2 == 0) as.bigz(ps[1]) * as.bigz(ps[2]) * as.bigz(ps[3]) else as.bigz(ps[1]) * as.bigz(ps[2])
+  fs <- factorize(n)
+  facase(n, 0, length(fs))
+  for (kk in seq_along(fs)) facase(n, kk, as.numeric(fs[kk] %% 1000000000))
+}
+facase(as.bigz(1000000007) * as.bigz(999999937), 0, 2)
+facase(as.bigz(2)^40, 0, 40)
+facase(as.bigz(600851475143), 0, length(factorize(as.bigz(600851475143))))
+facase(as.bigz(600851475143), 4, 6857)
 for (n in c(5, 20, 60, 120)) emitcase(c(13, 1, 1, 1, n, 0, 0, 0), factorialZ(n))
 emit("gmp", "gmp", list(cases))

@@ -37,6 +37,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let va = build(a, x, 5usize, na)
     let vb = build(a, x, 5usize + na, nb)
     let vc = build(a, x, 5usize + na + nb, nc)
+    if op == 14usize {
+        // factorize(a): extra 0 is the number of prime factors, k the k-th one (ascending) modulo 1e9
+        let (fb, fe) = mem.alloc[bn.Int](a, 256usize)
+        if fe != ok { os.exit(42) }
+        let (cnt, ce) = g.factorize(a, va, fb)
+        if ce != ok { os.exit(43) }
+        if extra == 0u64 { ret f64(cnt) }
+        if usize(extra) > cnt { os.exit(44) }
+        let (fm, fme) = g.mod_1e9(a, fb[usize(extra) - 1usize])
+        if fme != ok { os.exit(45) }
+        ret f64(fm)
+    }
     var r = bn.int_zero(a)
     if op == 0usize {
         let (t, e) = bn.int_add(a, va, vb)
