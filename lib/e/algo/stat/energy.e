@@ -5,6 +5,7 @@
 // the Poisson tests, the energy clustering, and the independence coefficients of the other tests.
 
 use e.algo.linalg.lapack_syevr as sy
+use e.algo.rand.r as rg
 use e.algo.stat.gslfns as gs
 use e.math
 use e.math.dist as dist
@@ -383,4 +384,49 @@ fn pdcor(a: *mem.Arena, x: []const f64, y: []const f64, z: []const f64, n: usize
         i += 1usize
     }
     ret (pxy / math.sqrt[f64](pxx * pyy), ok)
+}
+
+// energy::dcov.test(x, y, R = reps): the statistic n dCov^2 and the permutation p value (1 + #(replicates >= statistic)) / (1 + reps). The C routine keeps one index
+// vector across replicates and shuffles it in place (j = floor(m unif), m decreasing, swapping J[j] with J[m]) before each, drawing n - 1 uniforms per replicate; the
+// rows of y are taken in that order. x and y are n by dx and n by dy row-major.
+fn dcov_test(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n: usize, dx: usize, dy: usize, reps: usize) -> (f64, f64, err) {
+    let (d0, _, e0) = dcov_dcor(a, x, y, n, dx, dy, 1.0f64)
+    if e0 != ok { ret (0.0f64, 0.0f64, e0) }
+    let stat = f64(n) * d0 * d0
+    let (jj, e1) = mem.alloc[usize](a, n)
+    let (yp, e2) = mem.alloc[f64](a, n * dy)
+    if e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    var i = 0usize
+    while i < n {
+        jj[i] = i
+        i += 1usize
+    }
+    var k = 0usize
+    var rep = 0usize
+    while rep < reps {
+        var m = n
+        i = 0usize
+        while i + 1usize < n {
+            let j = usize(math.floor[f64](f64(m) * rg.unif(r)))
+            m -= 1usize
+            let t = jj[j]
+            jj[j] = jj[m]
+            jj[m] = t
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var c = 0usize
+            while c < dy {
+                yp[i * dy + c] = y[jj[i] * dy + c]
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (dv, _, ev) = dcov_dcor(a, x, yp, n, dx, dy, 1.0f64)
+        if ev != ok { ret (0.0f64, 0.0f64, ev) }
+        if f64(n) * dv * dv >= stat { k += 1usize }
+        rep += 1usize
+    }
+    ret (stat, f64(1usize + k) / f64(1usize + reps), ok)
 }

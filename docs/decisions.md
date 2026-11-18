@@ -49298,3 +49298,9 @@ New `e.algo.stat.gamlsslink`: gamlss.dist's `make.link.gamlss` for twelve links 
 `e.algo.stat.energy` gains `pdcor`: the cosine, over the entries of the matrices, of the U-centred distance matrices of x and y after each has been projected off the U-centred matrix of z (the coefficient being the ratio of inner products), which is what the package's C++ `partial_dcor` returns.
 
 **Result.** `oracle_energy_normal` has 22 values (10 partial correlations added, with 1 to 3 dimensions in each argument, 1e-8 relative) and equals energy on Windows. Linux pending. L459 stays partial: the permutation tests, the Poisson test and the energy clustering remain.
+
+## D7213 — energy: dcov.test and its permutation stream
+
+`e.algo.stat.energy` gains `dcov_test`: the statistic n dCov^2 and the permutation p value (1 + the number of replicates at least the statistic) / (1 + reps). The package's C routine draws its permutations in a way the source does not show, so the shuffle was found by testing candidates against the replicates R returns: one index vector is kept across replicates and shuffled in place before each (j = floor(m unif), m decreasing from n, swapping J[j] with J[m], n - 1 uniforms per replicate), and the rows of y are taken in that order. The right candidate reproduced all three replicates of a test run, and a candidate that restarted from the identity reproduced only the first.
+
+**Result.** `oracle_energy_normal` has 38 values (16 added: eight seeded dcov.test calls with 50, 99 or 199 replicates; the statistics at 1e-9 and the p values exactly) and equals energy on Windows. Linux pending. L459 stays partial: dcor.test, eqdist.etest and the other permutation tests (the same shuffle should serve them), the Poisson test and the energy clustering remain.

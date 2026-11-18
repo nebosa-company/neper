@@ -1,6 +1,7 @@
 // e.algo.stat.energy's normal_e and mvnorm_e against energy. tests/oracle/energy_normal.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R energy_normal`; the layout is at the top of scripts/r_oracle/groups/energy_normal.R.
 
+use e.algo.rand.r as rg
 use e.algo.stat.energy as en
 use e.io
 use e.mem
@@ -18,9 +19,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let z = c.args
-        let n = usize(z[0usize])
+        var n = usize(z[0usize])
         var got = 0.0f64
-        if str.eq(c.name, "pdcor") {
+        if str.eq(c.name, "dcovtest_stat") || str.eq(c.name, "dcovtest_p") {
+            n = usize(z[2usize])
+            let dx = usize(z[3usize])
+            let dy = usize(z[4usize])
+            var rng: rg.Rng = zero
+            rg.seed(&rng, i64(z[0usize]))
+            let (st, pv, te) = en.dcov_test(a, &rng, z[5usize..5usize + n * dx], z[5usize + n * dx..5usize + n * dx + n * dy], n, dx, dy, usize(z[1usize]))
+            if te != ok { os.exit(8) }
+            if str.eq(c.name, "dcovtest_stat") { got = st } else { got = pv }
+        } else if str.eq(c.name, "pdcor") {
             let dx = usize(z[1usize])
             let dy = usize(z[2usize])
             let dz = usize(z[3usize])
