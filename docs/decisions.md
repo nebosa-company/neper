@@ -49052,3 +49052,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the closed-form distributions and quantiles of SEP3 (with the uniform limit above tau = 10000), SN2 (SEP3 at tau = 2) and SEP4, all through the gamma distribution and its quantile, and pSEP2 by the integrate route of D7170 (capped at 0.99999 as the package does).
 
 **Result.** `oracle_gamlss_exp` has 6109 values across 76 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7172 — gamlss.dist: PIG
+
+`e.algo.stat.gamlssdist` gains the Poisson inverse Gaussian: the probability function derived from the Poisson-mixture integral, which reduces to the modified Bessel function K of half-integer order, built by the recurrence K(v + 1) = K(v - 1) + 2 v K(v) / alpha from K(1/2) (scaled by exp(alpha)), and its distribution by summation. This reproduces the package's C routines (tofyPIG2, tocdf) to 1e-8 relative without porting them.
+
+**Result.** `oracle_gamlss_exp` has 6171 values across 77 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

@@ -3957,4 +3957,5 @@ D7167	663	gamlss.dist: BCT distribution and quantile, BCTo, BCCGo and SHASHo2
 D7168	573	gamlss.dist: BB, BNB, SEP3, SN2 and ST3
 D7169	577	gamlss.dist: the skew t and skew power exponential densities, SN1 and the ST3 quantile
 D7170	794	gamlss.dist: the numerically integrated distributions, pST4, pST5 and qSN1
-D7171	515	gamlss.dist: SEP3, SN2, SEP4 distributions and quantiles, and pSEP2
+D7171	516	gamlss.dist: SEP3, SN2, SEP4 distributions and quantiles, and pSEP2
+D7172	601	gamlss.dist: PIG

@@ -1402,3 +1402,37 @@ fn psep2(a: *mem.Arena, x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if c >= 1.0f64 { ret 0.99999f64 }
     ret c
 }
+
+// PIG: Poisson inverse Gaussian (mean mu, sigma the inverse-Gaussian dispersion), the probability function through the modified Bessel function K of half-integer
+// order, which the recurrence K(v + 1) = K(v - 1) + 2 v K(v) / alpha builds from K(1/2) (scaled by exp(alpha) to stay in range); the distribution is the sum
+fn dpig(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    let al = math.sqrt[f64](1.0f64 / (sigma * sigma) + 2.0f64 * mu / sigma)
+    let kh = math.sqrt[f64](pi() / (2.0f64 * al))
+    // k_prev = K(-1/2), k_cur = K(1/2), both times exp(alpha)
+    var k_prev = kh
+    var k_cur = kh
+    var j = 1.0f64
+    // after the loop k_cur is K(x - 1/2) exp(alpha)
+    while j < x {
+        let nxt = k_prev + (2.0f64 * (j - 0.5f64) / al) * k_cur
+        k_prev = k_cur
+        k_cur = nxt
+        j += 1.0f64
+    }
+    let a1 = mu + 1.0f64 / (2.0f64 * sigma)
+    let b1 = 1.0f64 / (2.0f64 * sigma)
+    let nu = x - 0.5f64
+    ret math.exp[f64](x * math.log[f64](mu) - sp.lgamma(x + 1.0f64) - 0.5f64 * math.log[f64](2.0f64 * pi() * sigma) + 1.0f64 / sigma - al + math.log[f64](2.0f64) + 0.5f64 * nu * math.log[f64](b1 / a1) + math.log[f64](k_cur))
+}
+
+fn ppig(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var j = 0.0f64
+    while j <= x {
+        s += dpig(j, mu, sigma)
+        j += 1.0f64
+    }
+    ret s
+}
