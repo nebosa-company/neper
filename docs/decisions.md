@@ -49898,3 +49898,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `cliffs_delta(x, y, ci = level)` is `rank_biserial` in effectsize, so `rbs_ci` covers it.
 
 **Result.** `oracle_vcdeffect` (1024 cases) equals effectsize on Windows. Linux pending. L389 is closed: the installed vcd has no mantelhaen helper, no reference-category argument on `oddsratio` and no CMHtest (that is vcdExtra), so those acceptance items have nothing to equal.
+
+## D7309 — betareg: loglog and cauchit mean links
+
+**Decision.** `linkinv`, `linkfun` and `gprime` gain loglog (mu = exp(-exp(-eta)), 1 - mu by series for a small exp(-eta)) and cauchit (mu = 1/2 + atan(eta)/pi, g' = pi (1 + tan^2))); the Fisher-information standard errors and all residual and predict types follow.
+
+**Result.** `oracle_betareg` (549 cases, links logit, probit, cloglog, loglog, cauchit) equals betareg on Windows at the optimiser tolerance. Linux pending. L451 stays partial: variable dispersion, bias correction, sweighted2, lrtest.

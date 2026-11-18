@@ -15,10 +15,12 @@ type Data = struct { x: []const f64, y: []const f64, n: usize, p: usize, link: u
 
 fn expit(t: f64) -> f64 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t)) }
 
-// the mean link inverse and link: 0 logit, 1 probit, 2 cloglog
+// the mean link inverse and link: 0 logit, 1 probit, 2 cloglog, 3 loglog, 4 cauchit
 fn linkinv(t: f64, link: usize) -> f64 {
     if link == 0usize { ret expit(t) }
     if link == 1usize { ret dst.pnorm(t, 0.0f64, 1.0f64, true, false) }
+    if link == 3usize { ret math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - t)) }
+    if link == 4usize { ret 0.5f64 + math.atan[f64](t) / 3.141592653589793f64 }
     // -expm1(-exp(t)) without cancellation for a small exp(t)
     let e = math.exp[f64](t)
     if e < 0.00001f64 { ret e - e * e / 2.0f64 + e * e * e / 6.0f64 }
@@ -28,6 +30,8 @@ fn linkinv(t: f64, link: usize) -> f64 {
 fn linkfun(m: f64, link: usize) -> f64 {
     if link == 0usize { ret math.log[f64](m / (1.0f64 - m)) }
     if link == 1usize { ret dst.qnorm(m, 0.0f64, 1.0f64, true, false) }
+    if link == 3usize { ret 0.0f64 - math.log[f64](0.0f64 - math.log[f64](m)) }
+    if link == 4usize { ret math.tan[f64](3.141592653589793f64 * (m - 0.5f64)) }
     ret math.log[f64](0.0f64 - math.log[f64](1.0f64 - m))
 }
 
@@ -199,10 +203,15 @@ fn fit_link(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, l
 }
 
 
-// d mu / d eta of the mean link at mu: 0 logit, 1 probit, 2 cloglog (the inverse of g'(mu))
+// g'(mu) of the mean link at mu: 0 logit, 1 probit, 2 cloglog, 3 loglog, 4 cauchit (the inverse of g'(mu))
 fn gprime(m: f64, link: usize) -> f64 {
     if link == 0usize { ret 1.0f64 / (m * (1.0f64 - m)) }
     if link == 1usize { ret 1.0f64 / dst.dnorm(dst.qnorm(m, 0.0f64, 1.0f64, true, false), 0.0f64, 1.0f64, false) }
+    if link == 3usize { ret 1.0f64 / (m * (0.0f64 - math.log[f64](m))) }
+    if link == 4usize {
+        let tt = math.tan[f64](3.141592653589793f64 * (m - 0.5f64))
+        ret 3.141592653589793f64 * (1.0f64 + tt * tt)
+    }
     ret 0.0f64 - 1.0f64 / ((1.0f64 - m) * math.log[f64](1.0f64 - m))
 }
 
@@ -236,6 +245,11 @@ fn fit_se(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lin
         if link == 2usize {
             omu = math.exp[f64](0.0f64 - math.exp[f64](t))
             gp = 1.0f64 / (omu * math.exp[f64](t))
+        }
+        if link == 3usize {
+            let xx = math.exp[f64](0.0f64 - t)
+            if xx < 0.00001f64 { omu = xx - xx * xx / 2.0f64 + xx * xx * xx / 6.0f64 }
+            gp = 1.0f64 / (mu * xx)
         }
         let t1 = gsl.psi_n(1usize, mu * phi)
         let t2 = gsl.psi_n(1usize, omu * phi)
