@@ -4,12 +4,31 @@
 
 use e.math
 use e.math.nmath as nm
+use e.math.dist as dst
+use e.algo.stat.quantreg as qrb
+use e.algo.stat.gslfns as gsl
 use e.math.opt as opt
 use e.mem
 
-type Data = struct { x: []const f64, y: []const f64, n: usize, p: usize }
+type Data = struct { x: []const f64, y: []const f64, n: usize, p: usize, link: usize }
 
 fn expit(t: f64) -> f64 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t)) }
+
+// the mean link inverse and link: 0 logit, 1 probit, 2 cloglog
+fn linkinv(t: f64, link: usize) -> f64 {
+    if link == 0usize { ret expit(t) }
+    if link == 1usize { ret dst.pnorm(t, 0.0f64, 1.0f64, true, false) }
+    // -expm1(-exp(t)) without cancellation for a small exp(t)
+    let e = math.exp[f64](t)
+    if e < 0.00001f64 { ret e - e * e / 2.0f64 + e * e * e / 6.0f64 }
+    ret 1.0f64 - math.exp[f64](0.0f64 - e)
+}
+
+fn linkfun(m: f64, link: usize) -> f64 {
+    if link == 0usize { ret math.log[f64](m / (1.0f64 - m)) }
+    if link == 1usize { ret dst.qnorm(m, 0.0f64, 1.0f64, true, false) }
+    ret math.log[f64](0.0f64 - math.log[f64](1.0f64 - m))
+}
 
 fn loglik(d: *Data, a: []const f64) -> f64 {
     let phi = math.exp[f64](a[d.p])
@@ -22,7 +41,7 @@ fn loglik(d: *Data, a: []const f64) -> f64 {
             t += d.x[i * d.p + j] * a[j]
             j += 1usize
         }
-        let mu = expit(t)
+        let mu = linkinv(t, d.link)
         let yi = d.y[i]
         s += nm.lgammafn(phi) - nm.lgammafn(mu * phi) - nm.lgammafn((1.0f64 - mu) * phi) + (mu * phi - 1.0f64) * math.log[f64](yi) + ((1.0f64 - mu) * phi - 1.0f64) * math.log[f64](1.0f64 - yi)
         i += 1usize
@@ -40,7 +59,12 @@ type Fit = struct { par: []f64, phi: f64, ll: f64 }
 
 // x is n by p row-major with the intercept column; y in (0, 1)
 fn fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (Fit, err) {
-    var d = Data { x: x, y: y, n: n, p: p }
+    let (f, e) = fit_link(a, x, y, n, p, 0usize)
+    ret (f, e)
+}
+
+fn fit_link(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, link: usize) -> (Fit, err) {
+    var d = Data { x: x, y: y, n: n, p: p, link: link }
     let q = p + 1usize
     let (par, e1) = mem.alloc[f64](a, q)
     if e1 != ok { ret (zero, e1) }
@@ -54,7 +78,7 @@ fn fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (Fi
     if e2 != ok { ret (zero, e2) }
     i = 0usize
     while i < n {
-        z[i] = math.log[f64](y[i] / (1.0f64 - y[i]))
+        z[i] = linkfun(y[i], link)
         i += 1usize
     }
     let (xtx, e3) = mem.alloc[f64](a, p * p)
@@ -148,7 +172,7 @@ fn fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (Fi
             t += x[i * p + j] * par[j]
             j += 1usize
         }
-        let mu = expit(t)
+        let mu = linkinv(t, link)
         let r = y[i] - mu
         rss += r * r
         sig += mu * (1.0f64 - mu)
@@ -171,4 +195,82 @@ fn fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (Fi
         round += 1usize
     }
     ret (Fit { par: par, phi: math.exp[f64](par[p]), ll: 0.0f64 - best }, ok)
+}
+
+
+// d mu / d eta of the mean link at mu: 0 logit, 1 probit, 2 cloglog (the inverse of g'(mu))
+fn gprime(m: f64, link: usize) -> f64 {
+    if link == 0usize { ret 1.0f64 / (m * (1.0f64 - m)) }
+    if link == 1usize { ret 1.0f64 / dst.dnorm(dst.qnorm(m, 0.0f64, 1.0f64, true, false), 0.0f64, 1.0f64, false) }
+    ret 0.0f64 - 1.0f64 / ((1.0f64 - m) * math.log[f64](1.0f64 - m))
+}
+
+// standard errors from the inverse of the Fisher information of Ferrari and Cribari-Neto, which betareg's vcov uses by default (phi on the identity link): K_bb = phi^2 X' W X with
+// w = (psi'(mu phi) + psi'((1 - mu) phi)) / g'(mu)^2, K_bp = X' T c with c = phi (psi'(mu phi) mu - psi'((1 - mu) phi) (1 - mu)), T = 1 / g'(mu), K_pp = sum of
+// psi'(mu phi) mu^2 + psi'((1 - mu) phi) (1 - mu)^2 - psi'(phi); se[0..p] the coefficients, se[p] phi; false when singular
+fn fit_se(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, link: usize, f: *const Fit, se: []f64) -> bool {
+    let q = p + 1usize
+    let (kk, e1) = mem.alloc[f64](a, q * q)
+    let (col, e2) = mem.alloc[f64](a, q)
+    let (mat, e3) = mem.alloc[f64](a, q * q)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    var i = 0usize
+    while i < q * q {
+        kk[i] = 0.0f64
+        i += 1usize
+    }
+    let phi = f.phi
+    i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var j = 0usize
+        while j < p {
+            t += x[i * p + j] * f.par[j]
+            j += 1usize
+        }
+        let mu = linkinv(t, link)
+        // 1 - mu without cancellation for the cloglog link, whose upper tail is exp(-exp(t))
+        var omu = 1.0f64 - mu
+        var gp = gprime(mu, link)
+        if link == 2usize {
+            omu = math.exp[f64](0.0f64 - math.exp[f64](t))
+            gp = 1.0f64 / (omu * math.exp[f64](t))
+        }
+        let t1 = gsl.psi_n(1usize, mu * phi)
+        let t2 = gsl.psi_n(1usize, omu * phi)
+        let w = (t1 + t2) / (gp * gp)
+        let cc = phi * (t1 * mu - t2 * omu)
+        let dd = t1 * mu * mu + t2 * omu * omu - gsl.psi_n(1usize, phi)
+        j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                kk[j * q + k] += phi * phi * w * x[i * p + j] * x[i * p + k]
+                k += 1usize
+            }
+            kk[j * q + p] += x[i * p + j] * cc / gp
+            kk[p * q + j] += x[i * p + j] * cc / gp
+            j += 1usize
+        }
+        kk[p * q + p] += dd
+        i += 1usize
+    }
+    var c = 0usize
+    while c < q {
+        i = 0usize
+        while i < q * q {
+            mat[i] = kk[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < q {
+            col[i] = 0.0f64
+            i += 1usize
+        }
+        col[c] = 1.0f64
+        if !qrb.solve_dense(mat, col, q) { ret false }
+        se[c] = math.sqrt[f64](col[c])
+        c += 1usize
+    }
+    ret true
 }

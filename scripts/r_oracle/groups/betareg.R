@@ -19,4 +19,19 @@ for (rep in 1:10) {
   add(mk(20), coef(f, model = "precision")[[1]], 1e-3)
   add(mk(30), as.numeric(logLik(f)), 1e-6)
 }
+# links and standard errors: "fitl" args (n, p, link 0 logit / 1 probit / 2 cloglog, which, y, design row-major): which 0..p-1 coefficient, 20 precision, 30 log-likelihood, 40 + j the standard error of coefficient j, 60 the standard error of phi
+add2 <- function(args, want, rel) if (is.finite(want)) cases[[length(cases) + 1]] <<- case("fitl", args, want, rel = rel, abs = 1e-4)
+for (rep in 1:12) {
+  n <- sample(60:150, 1); k <- sample(1:2, 1); X <- matrix(rnorm(n * k), n, k); lk <- sample(c("logit", "probit", "cloglog"), 1); lc <- match(lk, c("logit", "probit", "cloglog")) - 1
+  eta <- 0.2 + X %*% c(0.6, -0.5)[1:k]; mu <- switch(lk, logit = plogis(eta), probit = pnorm(eta), cloglog = 1 - exp(-exp(eta))); phi <- runif(1, 8, 40)
+  y <- rbeta(n, mu * phi, (1 - mu) * phi); y <- pmin(pmax(y, 1e-4), 1 - 1e-4)
+  d <- data.frame(y = y, X); names(d) <- c("y", paste0("x", seq_len(k)))
+  f <- betareg(y ~ ., data = d, link = lk); p <- k + 1; design <- cbind(1, X); sm <- summary(f)$coefficients
+  mk <- function(w) c(n, p, lc, w, y, as.vector(t(design)))
+  cf <- coef(f, model = "mean")
+  for (j in seq_len(p)) add2(mk(j - 1), cf[[j]], 2e-3)
+  add2(mk(20), coef(f, model = "precision")[[1]], 2e-3); add2(mk(30), as.numeric(logLik(f)), 1e-6)
+  for (j in seq_len(p)) add2(mk(40 + j - 1), sm$mean[j, 2], 5e-3)
+  add2(mk(60), sm$precision[1, 2], 5e-3)
+}
 emit("betareg", "betareg", list(cases))

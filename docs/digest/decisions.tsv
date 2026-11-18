@@ -4076,4 +4076,5 @@ D7286	724	gamlss.dist: more random numbers
 D7287	650	gmp: bigq arithmetic
 D7288	650	gmp: bases and sizeinbase; L379 closed
 D7289	636	compositions: L477 closed
-D7290	1080	vcd: goodfit by minimum chi-square and the negative binomial
+D7290	1081	vcd: goodfit by minimum chi-square and the negative binomial
+D7291	1083	betareg: probit and cloglog links and the standard errors

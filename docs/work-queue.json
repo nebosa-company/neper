@@ -133,7 +133,7 @@
       "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6158). Logit-link, constant-precision fits (coefficients, precision, log-likelihood) agree with betareg on Windows at optimiser tolerance (oracle_betareg; Linux pending). Open: variable dispersion, other links, bias correction, standard errors. Was: Open (CRAN rank 710). Small to mid. Acceptance, equal to betareg: betareg with logit, probit and cloglog mean links and a precision submodel, ML, bias-corrected and bias-reduced estimation, standard errors, predict types, residual types, lrtest."
+      "evidence": "Partial (D6158, D7291 probit and cloglog mean links and the Fisher-information standard errors). Logit-link, constant-precision fits (coefficients, precision, log-likelihood) agree with betareg on Windows at optimiser tolerance (oracle_betareg; Linux pending). Open: variable dispersion, bias correction, other links (loglog, cauchit), predict and residual types, lrtest. Was: Open (CRAN rank 710). Small to mid. Acceptance, equal to betareg: betareg with logit, probit and cloglog mean links and a precision submodel, ML, bias-corrected and bias-reduced estimation, standard errors, predict types, residual types, lrtest."
     },
     {
       "id": "L452",

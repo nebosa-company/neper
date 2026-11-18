@@ -6,6 +6,7 @@ use e.algo.stat.betareg as br
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn same(a: []const f64, b: []const f64) -> bool {
@@ -24,6 +25,24 @@ fn value(f: *const br.Fit, which: usize) -> f64 {
     ret f.ll
 }
 
+fn fitl_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let link = usize(x[2usize])
+    let which = usize(x[3usize])
+    let (f, e) = br.fit_link(a, x[4usize + n..4usize + n + n * p], x[4usize..4usize + n], n, p, link)
+    if e != ok { os.exit(6) }
+    if which < 10usize { ret f.par[which] }
+    if which == 20usize { ret f.phi }
+    if which == 30usize { ret f.ll }
+    let (se, se_e) = mem.alloc[f64](a, p + 1usize)
+    if se_e != ok { os.exit(7) }
+    if !br.fit_se(a, x[4usize + n..4usize + n + n * p], x[4usize..4usize + n], n, p, link, &f, se) { os.exit(8) }
+    if which == 60usize { ret se[p] }
+    ret se[which - 40usize]
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/betareg.json")
     if load_error != ok { os.exit(2) }
@@ -36,6 +55,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         let x = c.args
+        if str.eq(c.name, "fitl") {
+            let got2 = fitl_answer(a, c)
+            if !oracle.agrees(got2, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, got2))
+                    let _ = io.print("\n")
+                }
+            }
+            at += 1usize
+            continue
+        }
         if !have || !same(prev, x) {
             let n = usize(x[0usize])
             let p = usize(x[1usize])
