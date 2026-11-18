@@ -939,17 +939,6 @@
       "evidence": "Partial (D6635). e.algo.stat.locfitpkg.lpfit (tricube local polynomial regression of degree 0 to 3, nearest-neighbour bandwidth nn or fixed h, evaluated at the data points) equals locfit ev=dat() on Windows to 1e-6 (oracle_locfit, 48 values; Linux pending). Open: other kernels, local likelihood families (binomial, poisson), adaptive and interpolated evaluation (the default), confidence bands, gcv and cp bandwidth selection, several predictors, predict at new points. Was: Open (CRAN rank 259). Mid to large. e.algo.timeseries has loess. Acceptance, equal to locfit: locfit with lp, degree, nn and h bandwidths, adaptive fits, kernels, family gaussian, binomial, poisson and others, predict with se, gcv, cp, plot data and critical values for bands."
     },
     {
-      "id": "L364",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 760,
-      "title": "metafor: meta-analysis",
-      "score": 0.36,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Partial (D6499 Knapp-Hartung, D6498 leave1out, D6497 regtest, ranktest, fsn on a fixed-effect model, D6496 escalc MD, SMD, ROM, RR, OR, RD, COR, ZCOR, D6495 rma.uni intercept-only with FE, DL, HE, HS, SJ exact and PM, ML, REML to the package's stopping tolerance equal metafor on Windows; oracle_metaforpkg; Linux pending). Open: moderators, other estimators, rma.mv, trimfill, random-effects regtest, influence, permutest. Was: Open (CRAN rank 346). Mid to large. e.algo.stat.meta has fixed and DL pooling and meta-regression. Acceptance, equal to metafor: rma.uni with REML, ML, DL, HE, HS, SJ, PM, EB and GENQ estimators and the Knapp-Hartung test, rma.mv multilevel models, escalc for every measure, trimfill, regtest (Egger), ranktest (Begg), leave1out, influence, fsn, profile, confint, permutest."
-    },
-    {
       "id": "L366",
       "category": "library",
       "group": "CRAN parity",

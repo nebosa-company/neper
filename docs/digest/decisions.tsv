@@ -3897,4 +3897,5 @@ D7107	707	gbm engine, loess, OOB gbm.perf, offsets, factors; L414 closed
 D7108	775	mclust: all covariance models, hc, priors, noise, MclustDR, orientation; L348 closed
 D7109	611	rpart full port; L337 closed
 D7110	648	logistf full port; L424 closed
-D7111	652	MuMIn full port; L428 closed
+D7111	654	MuMIn full port; L428 closed
+D7112	938	metafor, escalc, fsn, rma.mv and a port of nlminb; L364 closed

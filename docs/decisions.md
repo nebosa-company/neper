@@ -48685,3 +48685,8 @@ A literal port of the logistf 1.26.1 C code (source downloaded with the user app
 ## D7111 — MuMIn full port; L428 closed
 
 The MuMIn 1.48.19 criteria, dredge table, model.sel, model.avg, predictions and r.squaredGLMM, over lm and glm fits with prior weights, offsets, aliased designs and negative binomial, with the package quirks copied (partial.sd uses p = 0 in the df factor, sigma of a glm is the Pearson dispersion, quasi families have df = rank + 1, adjR2 is the Nagelkerke-type value, rows ordered by row name). The mixed-model r.squaredGLMM takes the fitted pieces from R as data because the repo has no glmer fit. Equal to R on oracles at 1e-9 (1e-7 for mixed models), so L428 moves to docs/work-done.jsonl. Linux pending.
+
+
+## D7112 — metafor, escalc, fsn, rma.mv and a port of nlminb; L364 closed
+
+rma.uni with every estimator and test, confint, predict, the diagnostics, the small-study tests, trimfill, fsn, profile and permutest, escalc for the package measures, and rma.mv with its covariance structures. R default optimizer nlminb (the PORT library: drmnf, drmng and ds7grd, from the R repository sources, downloaded with the user approval) is ported as e.algo.stat.nlminb with iterations, evaluation counts and convergence codes identical to R on 45 runs, and rma.mv uses it by default. On weakly identified rma.mv fits (flat likelihood) the estimates agree with R to 1e-7 rather than 1e-9 because R factorisation rounds differently and the flat optimum amplifies it to about 1e-8; the evaluation counts are equal, so the iterates are the same. The remaining acceptance items all have oracle cases, so L364 moves to docs/work-done.jsonl. Linux pending.
