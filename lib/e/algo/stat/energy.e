@@ -121,3 +121,74 @@ fn edist_stat(x: []const f64, n1: usize, y: []const f64, n2: usize, d: usize, in
     let e = 2.0f64 * xy / (f64(n1) * f64(n2)) - xx / (f64(n1) * f64(n1)) - yy / (f64(n2) * f64(n2))
     ret e * f64(n1) * f64(n2) / (f64(n1) + f64(n2))
 }
+
+// the U-centred Euclidean distance matrix of the n by n row-major D: A_ij = a_ij - row_i / (n - 2) - col_j / (n - 2) + total / ((n - 1)(n - 2)) for i != j,
+// zero on the diagonal (Szekely and Rizzo's bias correction)
+fn ucentred(a: *mem.Arena, x: []const f64, n: usize, d: usize) -> ([]f64, err) {
+    let (m, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { ret (m, e1) }
+    let (rm, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret (m, e2) }
+    var total = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            m[i * n + j] = dist_pow(x, n, d, i, j, 1.0f64)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var j = 0usize
+        while j < n {
+            s += m[i * n + j]
+            j += 1usize
+        }
+        rm[i] = s
+        total += s
+        i += 1usize
+    }
+    let nf = f64(n)
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            if i == j {
+                m[i * n + j] = 0.0f64
+            } else {
+                // the column sum of column j is rm[j] (the distances are symmetric)
+                m[i * n + j] = m[i * n + j] - rm[i] / (nf - 2.0f64) - rm[j] / (nf - 2.0f64) + total / ((nf - 1.0f64) * (nf - 2.0f64))
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (m, ok)
+}
+
+// the unbiased distance covariance of two U-centred matrices: sum A B / (n (n - 3))
+fn dcov_u(ua: []const f64, ub: []const f64, n: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n * n {
+        s += ua[i] * ub[i]
+        i += 1usize
+    }
+    ret s / (f64(n) * (f64(n) - 3.0f64))
+}
+
+// energy::bcdcor(x, y): the bias-corrected distance correlation, dcovU(x, y) / sqrt(dcovU(x, x) dcovU(y, y)); x and y are n by dx and n by dy
+// row-major
+fn bcdcor(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, dx: usize, dy: usize) -> (f64, err) {
+    let (ax, e1) = ucentred(a, x, n, dx)
+    if e1 != ok { ret (0.0f64, e1) }
+    let (ay, e2) = ucentred(a, y, n, dy)
+    if e2 != ok { ret (0.0f64, e2) }
+    let sxy = dcov_u(ax, ay, n)
+    let sxx = dcov_u(ax, ax, n)
+    let syy = dcov_u(ay, ay, n)
+    ret (sxy / math.sqrt[f64](sxx * syy), ok)
+}

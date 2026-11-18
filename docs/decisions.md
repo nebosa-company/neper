@@ -48770,3 +48770,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 **Open.** The sign of the discriminant axes differs from fpc in some cases: the first axis of the K = 4 cases is the negative of R's, with equal magnitude. The cause is not found; candidates are the sign convention of `tdecomp`'s rows (it inherits the eigenvector signs of W) and of the eigenvectors of Z. The oracle therefore compares sign-invariant quantities (squares, absolute values, eigenvalues, W), not the signed projections.
 
 **Result.** `oracle_fpc_discr` passes 96 sign-invariant values (12 data sets with 4 groups, 2 or 3 variables, both pooling rules) on Windows; Linux pending. L468 stays partial: dbscan, mergenormals, cluster.varstats and ncoord are open, and the discriminant axis signs above.
+
+## D7125 — energy: bcdcor, the bias-corrected distance correlation
+
+`e.algo.stat.energy` has `bcdcor`: the Euclidean distance matrices of x and y, each U-centred (the off-diagonal entries less the row and column means over n - 2 and the total over (n - 1)(n - 2), zero on the diagonal), the unbiased distance covariance of two such matrices (sum of the products over n (n - 3)), and bcdcor = dcovU(x, y) / sqrt(dcovU(x, x) dcovU(y, y)). The formula was checked in R against energy::bcdcor before the port (identical to the printed digits).
+
+**Result.** `oracle_energy_bcdcor` equals energy::bcdcor on 18 samples (univariate and bivariate x and y, linear and quadratic dependence, n from 8 to 40) on Windows; `oracle_energy` still passes. Linux pending. L459 stays partial: the permutation tests dcov.test and dcor.test, pdcor, eqdist.etest, the normality and Poisson tests and energy clustering are open.
