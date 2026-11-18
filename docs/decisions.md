@@ -49148,3 +49148,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 `e.algo.stat.ghyp` gains `rgig` (the package's ratio-of-uniforms generator for lambda != 1: the cubic g located by three uniroot calls with the package's tolerances, then pairs of uniforms until the acceptance test passes) and `rghyp` (the mixture: n variance draws from rgig first, then n normals, Y = mu + beta X + sqrt(X) Z), so a stream seeded as `set.seed` gives R's values. `rnig` is lambda = -1/2. The lambda = 1 generator (rgig1) is not ported.
 
 **Result.** `oracle_ghyp` has 933 values (48 seeded draws from 8 streams added, equal at 1e-9 relative) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: rgig1 (lambda = 1), higher moments, fits and the stable branches remain.
+
+## D7188 — GeneralizedHyperbolic: rgig1 (lambda = 1)
+
+For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (the exponent and log m terms vanish) and `uniroot` at its default tolerance for the lower root where `rgig` uses min(eps^0.25, eps + g(0) / 10). The port is the same generator with that one tolerance switched, since the two routines otherwise draw identical uniform pairs.
+
+**Result.** `oracle_ghyp` has 969 values (84 seeded draws, 24 of them at lambda = 1) and equals GeneralizedHyperbolic on Windows at 1e-9 relative. Linux pending. L407 stays partial: higher moments, fits and the stable branches remain.

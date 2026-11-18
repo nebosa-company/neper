@@ -273,7 +273,8 @@ fn rgig(r: *rg.Rng, n: usize, chi: f64, psi: f64, lambda: f64, out: []f64) {
     let eps = 2.220446049250313e-16f64
     var tl = math.pow[f64](eps, 0.25f64)
     let alt = eps + gig_g(&c, 0.0f64) / 10.0f64
-    if alt < tl { tl = alt }
+    // rgig1 (lambda = 1) runs uniroot for the lower root at its default tolerance
+    if alt < tl && lambda != 1.0f64 { tl = alt }
     let ym = pw.zeroin[GigG](&c, gig_g, 0.0f64, m, tl, 1000i64)
     let yp = pw.zeroin[GigG](&c, gig_g, m, upper, pw.uniroot_tol(), 1000i64)
     let a = (yp - m) * math.pow[f64](yp / m, 0.5f64 * (lambda - 1.0f64)) * math.exp[f64](0.0f64 - 0.25f64 * beta * (yp + 1.0f64 / yp - m - 1.0f64 / m))

@@ -36,8 +36,8 @@ for (rep in 1:5) {
   }
 }
 # rghyp: (seed, n, i, mu, delta, alpha, beta, lambda) -> draw i of set.seed(seed); rghyp(n, param) (lambda != 1)
-for (rep in 1:8) {
-  mu <- runif(1, -2, 2); delta <- runif(1, 0.3, 3); alpha <- runif(1, 0.8, 4); beta <- runif(1, -0.8, 0.8) * alpha; lam <- c(runif(1, -3, 0.9), runif(1, 1.1, 3), -0.5)[sample(1:3, 1)]
+for (rep in 1:14) {
+  mu <- runif(1, -2, 2); delta <- runif(1, 0.3, 3); alpha <- runif(1, 0.8, 4); beta <- runif(1, -0.8, 0.8) * alpha; lam <- c(runif(1, -3, 0.9), runif(1, 1.1, 3), -0.5, 1)[sample(1:4, 1)]
   sd0 <- sample(1:100000, 1); n <- 6
   set.seed(sd0); v <- rghyp(n, param = c(mu, delta, alpha, beta, lam))
   for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("rghyp", c(sd0, n, i - 1, mu, delta, alpha, beta, lam), v[i], rel = 1e-9, abs = 1e-12)
