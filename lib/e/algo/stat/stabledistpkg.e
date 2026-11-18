@@ -667,3 +667,112 @@ fn pstable_pm(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f
     let (g, d) = pm_to_s0(a, alpha, beta, gamma, delta, pm)
     ret pstable_ext(a, q, alpha, beta, g, d, 64.0f64 * eps(), 1000usize, lower, log_p)
 }
+
+// ---- qstable with lower.tail and log.p (S0): the bracket uses p0 = the lower-tail probability and its complement, the root function is pstable at the requested tail
+// and scale minus p, and uniroot widens with extendInt "upX" for the lower tail and "downX" for the upper
+type Qx = struct { a: *mem.Arena, alpha: f64, beta: f64, p: f64, lower: bool, log_p: bool }
+
+fn qx_fn(c: *Qx, x: f64) -> f64 { ret pstable_ext(c.a, x, c.alpha, c.beta, 1.0f64, 0.0f64, 0.0000001f64, 200usize, c.lower, c.log_p) - c.p }
+
+fn qstable_ext(a: *mem.Arena, p: f64, alpha: f64, beta: f64, gamma: f64, delta: f64, lower: bool, log_p: bool) -> f64 {
+    var res = 0.0f64
+    var p0 = p
+    var ci = 1.0f64 - p
+    if log_p {
+        if lower {
+            p0 = math.exp[f64](p)
+            ci = 0.0f64 - (math.exp[f64](p) - 1.0f64)
+        } else {
+            p0 = 0.0f64 - (math.exp[f64](p) - 1.0f64)
+            ci = math.exp[f64](p)
+        }
+    } else if !lower {
+        p0 = 1.0f64 - p
+        ci = p
+    }
+    if alpha == 2.0f64 {
+        res = dist.qnorm(p, 0.0f64, math.sqrt[f64](2.0f64), lower, log_p)
+    } else if alpha == 1.0f64 && beta == 0.0f64 {
+        res = math.tan[f64](pi() * (p0 - 0.5f64))
+    } else {
+        let left = p0 < 0.5f64
+        let qn = dist.qnorm(p, 0.0f64, math.sqrt[f64](2.0f64), lower, log_p)
+        let qc = math.tan[f64](pi() * (p0 - 0.5f64))
+        var xmin = 0.0f64
+        var xmax = 0.0f64
+        if beta < 0.0f64 {
+            xmin = 0.0f64 - ci / p0
+            if left { xmax = qn } else { xmax = qc }
+        } else if beta > 0.0f64 {
+            if left { xmin = qc } else { xmin = qn }
+            xmax = p0 / ci
+        } else {
+            if left { xmin = qc } else { xmin = qn }
+            if left { xmax = qn } else { xmax = qc }
+        }
+        if xmin >= xmax {
+            var fdx = 0.0f64
+            if xmin == xmax {
+                var m = math.abs[f64](xmin)
+                if m < 0.0000001f64 { m = 0.0000001f64 }
+                fdx = 0.01f64 * m
+            } else {
+                fdx = 1.01f64 * (xmin - xmax)
+            }
+            xmin = xmin - fdx
+            xmax = xmax + fdx
+        }
+        var c: Qx = zero
+        c.a = a
+        c.alpha = alpha
+        c.beta = beta
+        c.p = p
+        c.lower = lower
+        c.log_p = log_p
+        var flo = qx_fn(&c, xmin)
+        var fup = qx_fn(&c, xmax)
+        var d1 = 0.01f64 * math.abs[f64](xmin)
+        if d1 < 0.000001f64 { d1 = 0.000001f64 }
+        var d2 = 0.01f64 * math.abs[f64](xmax)
+        if d2 < 0.000001f64 { d2 = 0.000001f64 }
+        var it = 0usize
+        if lower {
+            while flo > 0.0f64 {
+                xmin = xmin - d1
+                flo = qx_fn(&c, xmin)
+                it += 1usize
+                if it > 1000usize { ret 0.0f64 / 0.0f64 }
+                d1 = 2.0f64 * d1
+            }
+            it = 0usize
+            while fup < 0.0f64 {
+                xmax = xmax + d2
+                fup = qx_fn(&c, xmax)
+                it += 1usize
+                if it > 1000usize { ret 0.0f64 / 0.0f64 }
+                d2 = 2.0f64 * d2
+            }
+        } else {
+            while flo < 0.0f64 {
+                xmin = xmin - d1
+                flo = qx_fn(&c, xmin)
+                it += 1usize
+                if it > 1000usize { ret 0.0f64 / 0.0f64 }
+                d1 = 2.0f64 * d1
+            }
+            it = 0usize
+            while fup > 0.0f64 {
+                xmax = xmax + d2
+                fup = qx_fn(&c, xmax)
+                it += 1usize
+                if it > 1000usize { ret 0.0f64 / 0.0f64 }
+                d2 = 2.0f64 * d2
+            }
+        }
+        res = pw.zeroin[Qx](&c, qx_fn, xmin, xmax, pw.uniroot_tol(), 1000i64)
+    }
+    ret res * gamma + delta
+}
+
+// the log density
+fn dstable_log(a: *mem.Arena, x: f64, alpha: f64, beta: f64, gamma: f64, delta: f64) -> f64 { ret math.log[f64](dstable(a, x, alpha, beta, gamma, delta)) }

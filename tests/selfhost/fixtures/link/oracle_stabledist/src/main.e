@@ -20,7 +20,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let z = c.args
         var got = 0.0f64
-        if str.eq(c.name, "dpm") {
+        if str.eq(c.name, "qe") {
+            got = sd.qstable_ext(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], z[5usize] > 0.5f64, z[6usize] > 0.5f64)
+        } else if str.eq(c.name, "dl") {
+            got = sd.dstable_log(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize])
+        } else if str.eq(c.name, "dpm") {
             got = sd.dstable_pm(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], usize(z[5usize]))
         } else if str.eq(c.name, "ppm") {
             got = sd.pstable_pm(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], usize(z[5usize]), true, false)

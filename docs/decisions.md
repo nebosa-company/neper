@@ -49178,3 +49178,9 @@ For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (t
 `e.algo.stat.stabledistpkg` gains `dstable_pm` and `pstable_pm`: pm = 1 shifts the location by beta gamma om(gamma, alpha) (om = tan(pi alpha / 2), 2 log(gamma) / pi at alpha = 1, zero at the other integers) and pm = 2 puts the mode at delta, using `stable_mode` (a Brent maximiser of the S0 density over (-0.7, 0) sign(beta) at tolerance eps^0.25, ported as R's optimize) and rescaling gamma by alpha^(-1 / alpha).
 
 **Result.** `oracle_stabledist` has 922 values (100 added: 25 parameter sets, density and distribution in both parametrisations, 1e-6 relative) and equals stabledist on Windows. Linux pending. L407 stays partial: log densities, qstable's upper tail and alpha = 1, and the GeneralizedHyperbolic higher moments and fits remain.
+
+## D7193 — stabledist: qstable with lower.tail and log.p, alpha = 1, and the log density
+
+`e.algo.stat.stabledistpkg` gains `qstable_ext`: the bracket and root function of D7181 generalised to both tails and the log scale (p0 and its complement from R.DT.qIv and R.DT.CIv, the root function pstable at the requested tail and scale minus p, and uniroot's extendInt "upX" for the lower tail and "downX" for the upper, which widen from opposite signs), and it works at alpha = 1 through the skewed branch of D7189. `dstable_log` is the log of the density.
+
+**Result.** `oracle_stabledist` has 1072 values (150 added: quantiles in all four tail and log combinations at alpha below, above and at 1, 1e-3 relative; 30 log densities at 1e-7) and equals stabledist on Windows. Linux pending. stabledist's four functions are now covered in the three parametrisations except qstable and rstable outside S0 (the quantile and the random numbers take the same shift as D7192 but have no oracle values there).

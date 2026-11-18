@@ -85,4 +85,20 @@ for (rep in 1:25) {
     if (is.finite(pv)) cases[[length(cases) + 1]] <- case("ppm", c(al, be, ga, de, x, pm), pv, rel = 1e-6, abs = 1e-10)
   }
 }
+# qstable with the tail and log options, alpha = 1 included: args (alpha, beta, gamma, delta, p, lower, logp) under "qe" (1e-3); the log density under "dl"
+for (rep in 1:30) {
+  al <- c(runif(1, 0.5, 0.98), runif(1, 1.05, 1.95), 1)[sample(1:3, 1)]
+  be <- c(0, runif(1, -0.9, 0.9))[sample(1:2, 1)]
+  if (al == 1 && be == 0) be <- 0.4
+  ga <- runif(1, 0.4, 2.5); de <- rnorm(1)
+  pp <- runif(1, 0.05, 0.95)
+  for (lw in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) {
+    pin <- if (lg) log(pp) else pp
+    qv <- tryCatch(suppressWarnings(qstable(pin, al, be, ga, de, lower.tail = lw, log.p = lg)), error = function(e) NA_real_)
+    if (is.finite(qv)) cases[[length(cases) + 1]] <- case("qe", c(al, be, ga, de, pin, as.numeric(lw), as.numeric(lg)), qv, rel = 1e-3, abs = 1e-4)
+  }
+  x <- de + ga * rnorm(1)
+  dl <- dstable(x, al, be, ga, de, log = TRUE)
+  if (is.finite(dl)) cases[[length(cases) + 1]] <- case("dl", c(al, be, ga, de, x), dl, rel = 1e-7, abs = 1e-10)
+}
 emit("stabledist", "stabledist", list(cases))
