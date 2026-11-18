@@ -48890,3 +48890,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` gains dtf, ptf and qtf (location mu, scale sigma, nu degrees of freedom; the normal above nu = 1e6, as the package does) over `nmath_beta.dt`, `pt` and `qt`. The oracle's fifth argument now carries nu.
 
 **Result.** `oracle_gamlss_exp` has 1080 values across 12 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7145 — gamlss.dist: BCCG distribution and quantile, GP family
+
+`e.algo.stat.gamlssdist` gains pbccg and qbccg (the truncation at the negative end handled as the package does: subtract pnorm(-1 / (sigma |nu|)) only for nu > 0, quantile split by the sign of nu) and the generalised Pareto GP: dgp, pgp and qgp through the F distribution (`nmath_beta.pf`, `qf`).
+
+**Result.** `oracle_gamlss_exp` has 1230 values across 14 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

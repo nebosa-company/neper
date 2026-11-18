@@ -50,7 +50,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nu = z[4usize]
     if which == 33usize { ret gd.dtf(x, mu, sigma, nu) }
     if which == 34usize { ret gd.ptf(x, mu, sigma, nu) }
-    ret gd.qtf(x, mu, sigma, nu)
+    if which == 35usize { ret gd.qtf(x, mu, sigma, nu) }
+    if which == 36usize { ret gd.pbccg(x, mu, sigma, nu) }
+    if which == 37usize { ret gd.qbccg(x, mu, sigma, nu) }
+    if which == 38usize { ret gd.dgp(x, mu, sigma) }
+    if which == 39usize { ret gd.pgp(x, mu, sigma) }
+    ret gd.qgp(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

@@ -282,3 +282,37 @@ fn qtf(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     if nu > 1000000.0f64 { ret qno(p, mu, sigma) }
     ret mu + sigma * nb.qt(p, nu, true, false)
 }
+
+// BCCG: Box-Cox Cole-Green distribution and quantile
+fn pbccg(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    var z = 0.0f64
+    if nu != 0.0f64 { z = (math.pow[f64](x / mu, nu) - 1.0f64) / (nu * sigma) } else { z = math.log[f64](x / mu) / sigma }
+    let f1 = dist.pnorm(z, 0.0f64, 1.0f64, true, false)
+    var f2 = 0.0f64
+    if nu > 0.0f64 { f2 = dist.pnorm(0.0f64 - 1.0f64 / (sigma * math.abs[f64](nu)), 0.0f64, 1.0f64, true, false) }
+    let f3 = dist.pnorm(1.0f64 / (sigma * math.abs[f64](nu)), 0.0f64, 1.0f64, true, false)
+    ret (f1 - f2) / f3
+}
+
+fn qbccg(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    let t = dist.pnorm(1.0f64 / (sigma * math.abs[f64](nu)), 0.0f64, 1.0f64, true, false)
+    var z = 0.0f64
+    if nu <= 0.0f64 { z = dist.qnorm(p * t, 0.0f64, 1.0f64, true, false) } else { z = dist.qnorm(1.0f64 - (1.0f64 - p) * t, 0.0f64, 1.0f64, true, false) }
+    if nu != 0.0f64 { ret mu * math.pow[f64](nu * sigma * z + 1.0f64, 1.0f64 / nu) }
+    ret mu * math.exp[f64](sigma * z)
+}
+
+// GP: generalised Pareto of gamlss.dist, via the F distribution
+fn dgp(x: f64, mu: f64, sigma: f64) -> f64 {
+    let z = x / mu
+    ret math.exp[f64](math.log[f64](z) - math.log[f64](x) - sp.lgamma(sigma) + sp.lgamma(1.0f64 + sigma) - (1.0f64 + sigma) * math.log[f64](1.0f64 + z))
+}
+
+fn pgp(x: f64, mu: f64, sigma: f64) -> f64 { ret nb.pf(sigma * (x / mu), 2.0f64, 2.0f64 * sigma, true, false) }
+
+fn qgp(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    ret mu * (1.0f64 / sigma) * nb.qf(p, 2.0f64, 2.0f64 * sigma, true, false)
+}

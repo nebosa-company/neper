@@ -3930,4 +3930,5 @@ D7140	400	gamlss.dist: the PO (Poisson) family
 D7141	476	gamlss.dist: GA, WEI and LOGNO distribution and quantile
 D7142	520	gamlss.dist: IG distribution and ZIP distribution and quantile
 D7143	343	gamlss.dist: NBI distribution and quantile
-D7144	418	gamlss.dist: the TF (Student t) family
+D7144	419	gamlss.dist: the TF (Student t) family
+D7145	504	gamlss.dist: BCCG distribution and quantile, GP family
