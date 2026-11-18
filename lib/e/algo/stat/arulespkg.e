@@ -529,3 +529,159 @@ fn eclat(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, maxlen: us
     out[1usize] = s
     ret ok
 }
+
+// every frequent itemset of 1 .. maxlen items by the `eclat` search: masks[i] and counts[i] for i < the returned count (written only while i < cap; the count is exact either way)
+fn eclat_collect(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, maxlen: usize, masks: []u64, counts: []u32, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let w = (trans.len + 63usize) / 64usize
+    let (itm, e1) = mem.alloc[u64](a, nitems * w)
+    let (tid, e2) = mem.alloc[u64](a, 9usize * w)
+    let (idx, e3) = mem.alloc[usize](a, 9usize)
+    let (pm, e4) = mem.alloc[u64](a, 9usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    var k = 0usize
+    while k < nitems * w {
+        itm[k] = 0u64
+        k += 1usize
+    }
+    var t = 0usize
+    while t < trans.len {
+        var j = 0usize
+        while j < nitems {
+            if ((trans[t] >> u64(j)) & 1u64) != 0u64 { itm[j * w + t / 64usize] = itm[j * w + t / 64usize] | (1u64 << u64(t % 64usize)) }
+            j += 1usize
+        }
+        t += 1usize
+    }
+    var x = 0usize
+    while x < w {
+        tid[x] = 0u64
+        x += 1usize
+    }
+    t = 0usize
+    while t < trans.len {
+        tid[t / 64usize] = tid[t / 64usize] | (1u64 << u64(t % 64usize))
+        t += 1usize
+    }
+    let need = math.ceil[f64](supp * nt - 1.0e-9f64)
+    var n = 0usize
+    var d = 0usize
+    idx[0usize] = 0usize
+    pm[0usize] = 0u64
+    while true {
+        if idx[d] >= nitems {
+            if d == 0usize { break }
+            d -= 1usize
+            continue
+        }
+        let j = idx[d]
+        idx[d] = j + 1usize
+        var c = 0u32
+        var q = 0usize
+        while q < w {
+            let v = tid[d * w + q] & itm[j * w + q]
+            tid[(d + 1usize) * w + q] = v
+            c += popcount64(v)
+            q += 1usize
+        }
+        if f64(c) >= need {
+            if n < masks.len {
+                masks[n] = pm[d] | (1u64 << u64(j))
+                counts[n] = c
+            }
+            n += 1usize
+            if d + 1usize < maxlen {
+                pm[d + 1usize] = pm[d] | (1u64 << u64(j))
+                d += 1usize
+                idx[d] = j + 1usize
+            }
+        }
+    }
+    out[0usize] = f64(n)
+    ret ok
+}
+
+fn hash_slot(key: u64, size: usize) -> usize {
+    ret usize(key % 1000000007u64) & (size - 1usize)
+}
+
+// the rules of `apriori` (single-item consequent, up to maxlen items, confidence >= conf) for up to 64 items, found from the frequent itemsets of `eclat_collect` with their supports in a hash table: same out layout as `apriori` (rule sums at 2 .. 5, itemsets at 0 and 1)
+fn apriori_big(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f64, maxlen: usize, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let (cn, ec) = mem.alloc[f64](a, 1usize)
+    if ec != ok { ret ec }
+    let (m0, e0) = mem.alloc[u64](a, 1usize)
+    let (c0, e00) = mem.alloc[u32](a, 1usize)
+    if e0 != ok { ret e0 }
+    if e00 != ok { ret e00 }
+    var r1 = eclat_collect(a, trans, nitems, supp, maxlen, m0[0usize..0usize], c0[0usize..0usize], cn)
+    if r1 != ok { ret r1 }
+    let total = usize(cn[0usize])
+    let (masks, e1) = mem.alloc[u64](a, total + 1usize)
+    let (counts, e2) = mem.alloc[u32](a, total + 1usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    r1 = eclat_collect(a, trans, nitems, supp, maxlen, masks, counts, cn)
+    if r1 != ok { ret r1 }
+    var size = 16usize
+    while size < 2usize * total { size = size * 2usize }
+    let (keys, e3) = mem.alloc[u64](a, size)
+    let (vals, e4) = mem.alloc[u32](a, size)
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    var z = 0usize
+    while z < size {
+        keys[z] = 0u64
+        z += 1usize
+    }
+    var i = 0usize
+    while i < total {
+        var h = hash_slot(masks[i], size)
+        while keys[h] != 0u64 { h = (h + 1usize) & (size - 1usize) }
+        keys[h] = masks[i]
+        vals[h] = counts[i]
+        i += 1usize
+    }
+    var sfreq = 0.0f64
+    var nrule = 0.0f64
+    var srule = 0.0f64
+    var sconf = 0.0f64
+    var slift = 0.0f64
+    i = 0usize
+    while i < total {
+        let m = masks[i]
+        sfreq += f64(counts[i]) / nt
+        if (m & (m - 1u64)) != 0u64 {
+            var j = 0usize
+            while j < nitems {
+                let bit = 1u64 << u64(j)
+                if (m & bit) != 0u64 {
+                    let l = m ^ bit
+                    var h = hash_slot(l, size)
+                    while keys[h] != l { h = (h + 1usize) & (size - 1usize) }
+                    var hr = hash_slot(bit, size)
+                    while keys[hr] != bit { hr = (hr + 1usize) & (size - 1usize) }
+                    let cf = f64(counts[i]) / f64(vals[h])
+                    if cf >= conf - 1.0e-12f64 {
+                        nrule += 1.0f64
+                        srule += f64(counts[i]) / nt
+                        sconf += cf
+                        slift += cf / (f64(vals[hr]) / nt)
+                    }
+                }
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    out[0usize] = f64(total)
+    out[1usize] = sfreq
+    out[2usize] = nrule
+    out[3usize] = srule
+    out[4usize] = sconf
+    out[5usize] = slift
+    ret ok
+}

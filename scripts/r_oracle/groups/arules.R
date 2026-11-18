@@ -51,5 +51,11 @@ for (rep in 1:20) {
   fi <- eclat(tr, parameter = list(supp = supp, minlen = 1, maxlen = ml), control = list(verbose = FALSE))
   a <- c(nt, ni, supp, 0.5, ml, as.vector(t(m)))
   add("e0", a, length(fi)); add("e1", a, if (length(fi)) sum(quality(fi)$support) else 0)
+  conf <- runif(1, 0.1, 0.7)
+  ru <- apriori(tr, parameter = list(supp = supp, conf = conf, minlen = 2, maxlen = max(ml, 2)), control = list(verbose = FALSE))
+  fi2 <- apriori(tr, parameter = list(supp = supp, target = "frequent itemsets", minlen = 1, maxlen = max(ml, 2)), control = list(verbose = FALSE))
+  a2 <- c(nt, ni, supp, conf, max(ml, 2), as.vector(t(m)))
+  q <- if (length(ru)) quality(ru) else data.frame(support = 0, confidence = 0, lift = 0)
+  add("g0", a2, length(fi2)); add("g1", a2, length(ru)); add("g2", a2, sum(q$support)); add("g3", a2, sum(q$confidence)); add("g4", a2, sum(q$lift))
 }
 emit("arules", "arules", list(cases))

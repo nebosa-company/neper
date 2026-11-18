@@ -49838,3 +49838,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `arulespkg.eclat` finds the frequent itemsets of 1 to maxlen (at most 8) items by depth-first intersection of item transaction-id bit sets, so the item count is limited by the 64-bit transaction mask, not by the 2^items counting table of `apriori`.
 
 **Result.** `oracle_arules` (1600 cases, 40 new on 14 to 40 items) equals arules `eclat` on Windows. Linux pending. L462 stays partial: candidate pruning in `apriori` for many items (rules and measures), subsetting, sequences.
+
+## D7299 — arules: apriori rules for many items
+
+**Decision.** `arulespkg.apriori_big` finds the frequent itemsets with the eclat search (`eclat_collect`, two passes: count, then store), keeps their counts in an open-addressing hash on the item mask, and makes the single-consequent rules from it, so the 20-item limit of the subset-counting `apriori` does not apply. Antecedent and consequent counts are always present because a subset of a frequent itemset is frequent.
+
+**Result.** `oracle_arules` (1700 cases, 100 new on 14 to 40 items: itemsets, rules, support, confidence and lift sums) equals arules `apriori` on Windows. Linux pending. L462 stays partial: the interest measures on the many-item path, subsetting, sequences.
