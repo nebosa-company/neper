@@ -439,3 +439,31 @@ fn ghyp_skew(a: *mem.Arena, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: 
     let v = ghyp_mom(a, 2usize, mu, delta, alpha, beta, lambda, 1usize)
     ret ghyp_mom(a, 3usize, mu, delta, alpha, beta, lambda, 1usize) / math.pow[f64](v, 1.5f64)
 }
+
+fn ghyp_kurt(a: *mem.Arena, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
+    let v = ghyp_mom(a, 2usize, mu, delta, alpha, beta, lambda, 1usize)
+    ret ghyp_mom(a, 4usize, mu, delta, alpha, beta, lambda, 1usize) / (v * v) - 3.0f64
+}
+
+// incompleteBesselK(x, y, nu) = integral from 1 to Inf of t^(-nu - 1) exp(-x t - y / t) dt, here by the infinite-range QUADPACK routine at tolerance 1e-13 (the package
+// sums a series in Fortran at tolerance eps^0.85); pgig(q) = 1 - (psi / chi)^(lambda / 2) / (2 K(omega)) q^lambda incompleteBesselK(psi q / 2, chi / (2 q), -lambda)
+type Ibf = struct { x: f64, y: f64, nu: f64 }
+
+fn ibf_fn(c: *Ibf, t: f64) -> f64 { ret math.exp[f64](0.0f64 - (c.nu + 1.0f64) * math.log[f64](t) - c.x * t - c.y / t) }
+
+fn incomplete_bessel_k(a: *mem.Arena, x: f64, y: f64, nu: f64) -> f64 {
+    var c: Ibf = zero
+    c.x = x
+    c.y = y
+    c.nu = nu
+    let (r, e) = qp.qagi[Ibf](a, &c, ibf_fn, 1.0f64, 1i64, 0.0f64, 0.0000000000001f64, 200usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}
+
+fn pgig(a: *mem.Arena, q: f64, chi: f64, psi: f64, lambda: f64) -> f64 {
+    if q <= 0.0f64 { ret 0.0f64 }
+    let omega = math.sqrt[f64](chi * psi)
+    let cst = math.exp[f64]((lambda / 2.0f64) * math.log[f64](psi / chi) - math.log[f64](2.0f64) - log_bessel_k(lambda, omega))
+    ret 1.0f64 - cst * math.pow[f64](q, lambda) * incomplete_bessel_k(a, psi * q / 2.0f64, chi / (2.0f64 * q), 0.0f64 - lambda)
+}

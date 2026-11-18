@@ -66,4 +66,11 @@ for (rep in 1:15) {
   }
   cases[[length(cases) + 1]] <- case("ghypSkew", c(0, 0, mu, delta, alpha, beta, lam), ghypSkew(param = c(mu, delta, alpha, beta, lam)), rel = 1e-6, abs = 1e-9)
 }
+# ghypKurt (order slot 0) and pgig (x, chi, psi, lambda) under "pgig", checked at 1e-7
+for (rep in 1:15) {
+  mu <- rnorm(1); delta <- runif(1, 0.3, 3); alpha <- runif(1, 0.8, 4); beta <- runif(1, -0.8, 0.8) * alpha; lam <- runif(1, -2, 3)
+  cases[[length(cases) + 1]] <- case("ghypKurt", c(0, 0, mu, delta, alpha, beta, lam), ghypKurt(param = c(mu, delta, alpha, beta, lam)), rel = 1e-6, abs = 1e-9)
+  chi <- runif(1, 0.3, 3); psi <- runif(1, 0.3, 3); lg <- runif(1, -2, 2)
+  for (x in c(0.3, 1, 2.5)) cases[[length(cases) + 1]] <- case("pgig", c(x, chi, psi, lg, 0, 0, 0), pgig(x, chi, psi, lg), rel = 1e-7, abs = 1e-10)
+}
 emit("ghyp", "GeneralizedHyperbolic", list(cases))

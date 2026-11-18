@@ -49256,3 +49256,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.ghyp` gains `ghyp_mom` (the raw, central and about-mu moments of any order: the package's `momRecursion` table, the Bessel ratios K(lambda + l, zeta) / K(lambda, zeta), and the binomial expansion of `momChangeAbout`) and `ghyp_skew` (the third central moment over the variance to the 3/2). The mean and variance of D7184 are its orders 1 and 2.
 
 **Result.** `oracle_ghyp` has 1589 values (225 moments of orders 1 to 5 in the three kinds, 15 skewnesses added, 1e-7 and 1e-6 relative) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: pgig and qgig, the kurtosis, and the fits remain.
+
+## D7206 — GeneralizedHyperbolic: the kurtosis and pgig
+
+`e.algo.stat.ghyp` gains `ghyp_kurt` (the fourth central moment over the squared variance, less 3) and `pgig` through `incomplete_bessel_k`, the integral from 1 to infinity of t^(-nu - 1) exp(-x t - y / t), which the package computes with a Fortran series at tolerance eps^0.85; here it is the infinite-range QUADPACK routine at relative tolerance 1e-13, which agrees with the package to better than 1e-7. A first version with the exponent nu - 1 gave a different integral altogether; the package's argument is -lambda for t^(lambda - 1). qgig is not ported: its default spline table uses the incomplete Bessel function at a tolerance of eps^0.25, which only the package's own Fortran series reproduces.
+
+**Result.** `oracle_ghyp` has 1649 values (15 kurtoses, 45 pgig added) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: qgig and the fits (hyperbFit, nigFit, gigFit, hyperblm) remain.
