@@ -110,4 +110,13 @@ while (n9 < 15) {
   if (!(ok(j[1], j[2], j[3]) && ok(j[4], j[5], j[6]) && ok(j[7], j[8], j[9]) && ok(j[1], j[4], j[7]) && ok(j[2], j[5], j[8]) && ok(j[3], j[6], j[9]))) next
   cases[[length(cases) + 1]] <- case("c9", j, coupling_9j(j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9]), rel = 1e-8, abs = 1e-11); n9 <- n9 + 1
 }
+# conical functions under "k1" (0 half, 1 mhalf; lambda, x) and complex functions under "k2" (0 log, 1 sin, 2 cos, 3 logsin; part 0 re / 1 im; re, im)
+for (rep in 1:20) {
+  lam <- runif(1, 0.2, 3); x <- c(runif(1, -0.8, 0.95), runif(1, 1.1, 5))[sample(1:2, 1)]
+  cases[[length(cases) + 1]] <- case("k1", c(0, lam, x), conicalP_half(lam, x), rel = 1e-10, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("k1", c(1, lam, x), conicalP_mhalf(lam, x), rel = 1e-10, abs = 1e-13)
+  z <- complex(real = runif(1, -3, 3), imaginary = runif(1, -2, 2))
+  fl <- list(complex_log(z), complex_sin(z), complex_cos(z), complex_logsin(z))
+  for (k in 0:3) for (pt in 0:1) cases[[length(cases) + 1]] <- case("k2", c(k, pt, Re(z), Im(z)), if (pt == 0) Re(fl[[k + 1]]) else Im(fl[[k + 1]]), rel = 1e-10, abs = 1e-13)
+}
 emit("gslfns", "gsl", list(cases))

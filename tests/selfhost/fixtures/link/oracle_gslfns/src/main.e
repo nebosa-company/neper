@@ -97,6 +97,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "c3") { ret gs.coupling_3j(i64(x[0usize]), i64(x[1usize]), i64(x[2usize]), i64(x[3usize]), i64(x[4usize]), i64(x[5usize])) }
     if str.eq(k, "c6") { ret gs.coupling_6j(i64(x[0usize]), i64(x[1usize]), i64(x[2usize]), i64(x[3usize]), i64(x[4usize]), i64(x[5usize])) }
     if str.eq(k, "c9") { ret gs.coupling_9j(i64(x[0usize]), i64(x[1usize]), i64(x[2usize]), i64(x[3usize]), i64(x[4usize]), i64(x[5usize]), i64(x[6usize]), i64(x[7usize]), i64(x[8usize])) }
+    if str.eq(k, "k1") {
+        if x[0usize] == 0.0f64 { ret gs.conical_p_half(x[1usize], x[2usize]) }
+        ret gs.conical_p_mhalf(x[1usize], x[2usize])
+    }
+    if str.eq(k, "k2") {
+        let (co, g4) = mem.alloc[f64](a, 2usize)
+        if g4 != ok { os.exit(4) }
+        let code = usize(x[0usize])
+        if code == 0usize { gs.complex_log(x[2usize], x[3usize], co) }
+        if code == 1usize { gs.complex_sin(x[2usize], x[3usize], co) }
+        if code == 2usize { gs.complex_cos(x[2usize], x[3usize], co) }
+        if code == 3usize { gs.complex_logsin(x[2usize], x[3usize], co) }
+        ret co[usize(x[1usize])]
+    }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }

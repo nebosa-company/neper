@@ -1013,3 +1013,46 @@ fn coupling_9j(j1: i64, j2: i64, j3: i64, j4: i64, j5: i64, j6: i64, j7: i64, j8
     }
     ret s
 }
+
+// ---- the conical Legendre functions of order +-1/2 (closed forms in cos or cosh of the angle) and the elementary complex functions: out receives (re, im)
+fn conical_p_half(lam: f64, x: f64) -> f64 {
+    let pi_ = 3.141592653589793238462643383279f64
+    if x < 1.0f64 {
+        let th = math.acos[f64](x)
+        ret math.sqrt[f64](2.0f64 / (pi_ * math.sin[f64](th))) * ((math.exp[f64](lam * th) + math.exp[f64](0.0f64 - lam * th)) / 2.0f64)
+    }
+    let eta_ = math.log[f64](x + math.sqrt[f64](x * x - 1.0f64))
+    ret math.sqrt[f64](2.0f64 / (pi_ * ((math.exp[f64](eta_) - math.exp[f64](0.0f64 - eta_)) / 2.0f64))) * math.cos[f64](lam * eta_)
+}
+
+fn conical_p_mhalf(lam: f64, x: f64) -> f64 {
+    let pi_ = 3.141592653589793238462643383279f64
+    if x < 1.0f64 {
+        let th = math.acos[f64](x)
+        ret math.sqrt[f64](2.0f64 / (pi_ * math.sin[f64](th))) * ((math.exp[f64](lam * th) - math.exp[f64](0.0f64 - lam * th)) / 2.0f64) / lam
+    }
+    let eta_ = math.log[f64](x + math.sqrt[f64](x * x - 1.0f64))
+    ret math.sqrt[f64](2.0f64 / (pi_ * ((math.exp[f64](eta_) - math.exp[f64](0.0f64 - eta_)) / 2.0f64))) * math.sin[f64](lam * eta_) / lam
+}
+
+fn complex_log(re: f64, im: f64, out: []f64) {
+    out[0usize] = 0.5f64 * math.log[f64](re * re + im * im)
+    out[1usize] = math.atan2[f64](im, re)
+}
+
+fn complex_sin(re: f64, im: f64, out: []f64) {
+    out[0usize] = math.sin[f64](re) * ((math.exp[f64](im) + math.exp[f64](0.0f64 - im)) / 2.0f64)
+    out[1usize] = math.cos[f64](re) * ((math.exp[f64](im) - math.exp[f64](0.0f64 - im)) / 2.0f64)
+}
+
+fn complex_cos(re: f64, im: f64, out: []f64) {
+    out[0usize] = math.cos[f64](re) * ((math.exp[f64](im) + math.exp[f64](0.0f64 - im)) / 2.0f64)
+    out[1usize] = 0.0f64 - math.sin[f64](re) * ((math.exp[f64](im) - math.exp[f64](0.0f64 - im)) / 2.0f64)
+}
+
+fn complex_logsin(re: f64, im: f64, out: []f64) {
+    complex_sin(re, im, out)
+    let sr = out[0usize]
+    let si_ = out[1usize]
+    complex_log(sr, si_, out)
+}

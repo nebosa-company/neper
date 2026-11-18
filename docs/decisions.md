@@ -49388,3 +49388,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains `coupling_3j`, `coupling_6j` and `coupling_9j` for the arguments given as twice the angular momenta, as gsl takes them: Racah's sums over the admissible summation index with the triangle coefficients and the factorials on the log scale (zero outside the selection rules), and the 9j as the sum over twice the intermediate momentum of (-1)^(2x) (2x + 1) times three 6j symbols.
 
 **Result.** `oracle_gslfns` has 2365 values (95 added: 40 random 3j symbols, 40 6j and 15 9j, all admissible, 1e-9 and 1e-8) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, the complex functions and the conical and hyperbolic-space Legendre functions.
+
+## D7228 — gsl: the conical functions of order plus and minus 1/2 and the elementary complex functions
+
+`e.algo.stat.gslfns` gains `conical_p_half` and `conical_p_mhalf` (the closed forms sqrt(2 / (pi sin theta)) cosh(lambda theta) and sinh(lambda theta) / lambda for x below 1, and the cosine and sine forms in eta = acosh(x) above 1) and `complex_log`, `complex_sin`, `complex_cos` and `complex_logsin` (real and imaginary parts).
+
+**Result.** `oracle_gslfns` has 2565 values (200 added over 20 arguments each, 1e-10) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, the complex dilogarithm and log-gamma, the conical functions of orders 0 and 1 and the hyperbolic-space Legendre functions.
