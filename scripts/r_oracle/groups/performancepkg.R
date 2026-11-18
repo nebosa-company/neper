@@ -56,4 +56,16 @@ for (rep in 1:20) {
   cd <- cooks.distance(lm(y ~ X - 1))
   for (i in sample(n, 4)) cases[[length(cases) + 1]] <- case("cook", c(n, p, y, as.vector(t(X)), i - 1), cd[i], rel = 1e-8, abs = 1e-12)
 }
+# logistic fit measures ("hl": bins, n, p, y, x row-major; index 0 chi-square, 1 p value after x. "lm2": which 0 Efron 1 log loss)
+for (rep in 1:25) {
+  n <- sample(60:200, 1); p <- sample(2:4, 1); X <- cbind(1, matrix(round(rnorm(n * (p - 1)), 4), n, p - 1))
+  y <- rbinom(n, 1, plogis(as.vector(X %*% runif(p, -1, 1)))); if (length(unique(y)) < 2) next
+  dfx <- as.data.frame(X[, -1, drop = FALSE]); names(dfx) <- paste0("v", seq_len(p - 1)); dfx$y <- y
+  m <- glm(as.formula(paste("y ~", paste(names(dfx)[-p], collapse = " + "))), data = dfx, family = binomial)
+  bins <- sample(c(5, 8, 10), 1); hl <- performance_hosmer(m, n_bins = bins)
+  cases[[length(cases) + 1]] <- case("hl", c(bins, n, p, y, as.vector(t(X)), 0), hl$chisq, rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("hl", c(bins, n, p, y, as.vector(t(X)), 1), hl$p.value, rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("lm2", c(0, n, p, y, as.vector(t(X))), as.numeric(r2_efron(m)), rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("lm2", c(1, n, p, y, as.vector(t(X))), as.numeric(performance_logloss(m)), rel = 1e-8, abs = 1e-12)
+}
 emit("performancepkg", "performance", list(cases))

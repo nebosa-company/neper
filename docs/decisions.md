@@ -49532,3 +49532,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.performancepkg` gains `zscore_distance` (the largest absolute z-score over the columns, robust with the median and 1.4826 times the median absolute deviation or classic with the mean and standard deviation), `mahalanobis_distance` (against the sample mean and covariance by a Gauss-Jordan inverse) and `cook_distance` (of an lm, (e / (1 - h))^2 h / (s^2 p)): the distances `check_outliers` compares with its thresholds (qnorm(1 - 0.001 / 2), qchisq(1 - 0.001, q), qf(0.5, p, n - p)).
 
 **Result.** `oracle_performancepkg` gains 20 data sets with planted outliers (the zscore twice, mahalanobis and cook at 4 rows each: 320 values) and equals performance and stats on Windows at 1e-8 to 1e-9. The flags and the other methods (mcd, ics, optics, iqr, pareto) are not ported. Linux pending. L339 stays partial: those outlier methods, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.
+
+## D7252 — performance: Hosmer-Lemeshow, Efron R2 and the log loss
+
+`e.algo.stat.performancepkg` gains `hosmer` (the fitted probabilities of a logistic regression cut at their n_bins type-7 quantiles into (lo, hi] groups, the lowest closed; chi-square of observed against expected successes and failures, p value on n_bins - 2 degrees of freedom) and `logit_fit_measure` (r2_efron: 1 - sum (y - p)^2 / sum (y - ybar)^2; performance_logloss: minus the mean log-likelihood).
+
+**Result.** `oracle_performancepkg` gains 25 logistic regressions (5, 8 and 10 bins; chi-square, p value, Efron and log loss: 100 values) and equals performance on Windows at 1e-8. Linux pending. L339 stays partial: the other outlier methods, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.

@@ -40,6 +40,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let cn = usize(x[0usize])
             let cp = usize(x[1usize])
             got = pf.cook_distance(a, x[2usize + cn..2usize + cn + cn * cp], x[2usize..2usize + cn], cn, cp, usize(x[2usize + cn + cn * cp]))
+        } else if str.eq(c.name, "hl") {
+            let hb = usize(x[0usize])
+            let hn = usize(x[1usize])
+            let hp = usize(x[2usize])
+            let (ho, he) = mem.alloc[f64](a, 2usize)
+            if he != ok { os.exit(4) }
+            if pf.hosmer(a, x[3usize + hn..3usize + hn + hn * hp], x[3usize..3usize + hn], hn, hp, hb, ho) != ok { os.exit(5) }
+            got = ho[usize(x[3usize + hn + hn * hp])]
+        } else if str.eq(c.name, "lm2") {
+            let mn = usize(x[1usize])
+            let mp = usize(x[2usize])
+            got = pf.logit_fit_measure(a, x[3usize + mn..3usize + mn + mn * mp], x[3usize..3usize + mn], mn, mp, usize(x[0usize]))
         } else if str.eq(c.name, "vif") {
             let vn = usize(x[0usize])
             let vq = usize(x[1usize])

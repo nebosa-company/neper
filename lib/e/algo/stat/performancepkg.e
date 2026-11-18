@@ -361,3 +361,115 @@ fn cook_distance(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
     let r = f.resid[row] / (1.0f64 - f.hat[row])
     ret r * r * f.hat[row] / (s2 * f64(p))
 }
+
+// the fitted probabilities of the logistic regression of binary y on x (n by p row-major), into pr
+fn logit_fitted(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, pr: []f64) -> err {
+    let (xc, e1) = mem.alloc[f64](a, n * p)
+    let (w, e2) = mem.alloc[f64](a, n)
+    let (sz, e3) = mem.alloc[f64](a, n)
+    let (b, e4) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret fx.Malformed }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xc[c * n + i] = x[i * p + c]
+            c += 1usize
+        }
+        w[i] = 1.0f64
+        sz[i] = 1.0f64
+        i += 1usize
+    }
+    let e = fx.binom_glm(a, xc, n, p, y, sz, w, b, false)
+    if e != ok { ret e }
+    i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var c = 0usize
+        while c < p {
+            t += xc[c * n + i] * b[c]
+            c += 1usize
+        }
+        pr[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
+        i += 1usize
+    }
+    ret ok
+}
+
+// stats::quantile type 7 of the sorted sample at probability pp
+fn quant7_sorted(s: []const f64, pp: f64) -> f64 {
+    let h = (f64(s.len) - 1.0f64) * pp
+    let lo = math.floor[f64](h)
+    let k = usize(lo)
+    if k + 1usize >= s.len { ret s[s.len - 1usize] }
+    ret s[k] + (h - lo) * (s[k + 1usize] - s[k])
+}
+
+// performance_hosmer(m, n_bins) of a logistic regression: out receives (chi-square, p value); the fitted values are cut at their n_bins quantiles into (lo, hi] groups (the lowest closed)
+fn hosmer(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, bins: usize, out: []f64) -> err {
+    let (pr, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret fx.Malformed }
+    let e = logit_fitted(a, x, y, n, p, pr)
+    if e != ok { ret e }
+    let (sorted, e2) = dt.sorted_copy(a, pr)
+    if e2 != ok { ret e2 }
+    let (br, e3) = mem.alloc[f64](a, bins + 1usize)
+    if e3 != ok { ret fx.Malformed }
+    var k = 0usize
+    while k <= bins {
+        br[k] = quant7_sorted(sorted, f64(k) / f64(bins))
+        k += 1usize
+    }
+    var chisq = 0.0f64
+    k = 0usize
+    while k < bins {
+        var o1 = 0.0f64
+        var o0 = 0.0f64
+        var e1s = 0.0f64
+        var e0s = 0.0f64
+        var i = 0usize
+        while i < n {
+            var inb = pr[i] > br[k] && pr[i] <= br[k + 1usize]
+            if k == 0usize && pr[i] == br[0usize] { inb = true }
+            if inb {
+                o1 += y[i]
+                o0 += 1.0f64 - y[i]
+                e1s += pr[i]
+                e0s += 1.0f64 - pr[i]
+            }
+            i += 1usize
+        }
+        if e1s > 0.0f64 { chisq += (o1 - e1s) * (o1 - e1s) / e1s }
+        if e0s > 0.0f64 { chisq += (o0 - e0s) * (o0 - e0s) / e0s }
+        k += 1usize
+    }
+    out[0usize] = chisq
+    out[1usize] = 1.0f64 - nm.pchisq(chisq, f64(bins) - 2.0f64, true, false)
+    ret ok
+}
+
+// r2_efron (1 - sum (y - p)^2 / sum (y - ybar)^2) and the mean log loss of a logistic regression: which 0 Efron, 1 log loss
+fn logit_fit_measure(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, which: usize) -> f64 {
+    let (pr, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    if logit_fitted(a, x, y, n, p, pr) != ok { ret 0.0f64 / 0.0f64 }
+    var ybar = 0.0f64
+    var i = 0usize
+    while i < n {
+        ybar += y[i]
+        i += 1usize
+    }
+    ybar = ybar / f64(n)
+    var num = 0.0f64
+    var den = 0.0f64
+    var ll = 0.0f64
+    i = 0usize
+    while i < n {
+        num += (y[i] - pr[i]) * (y[i] - pr[i])
+        den += (y[i] - ybar) * (y[i] - ybar)
+        if y[i] == 1.0f64 { ll += math.log[f64](pr[i]) } else { ll += math.log[f64](1.0f64 - pr[i]) }
+        i += 1usize
+    }
+    if which == 0usize { ret 1.0f64 - num / den }
+    ret 0.0f64 - ll / f64(n)
+}

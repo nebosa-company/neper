@@ -4037,4 +4037,5 @@ D7247	728	bayestestR: rope with a credible interval and equivalence_test
 D7248	818	performance: check_heteroscedasticity and check_collinearity
 D7249	805	performance: the logistic pseudo R-squared measures
 D7250	582	performance: check_normality
-D7251	995	performance: the check_outliers distances
+D7251	996	performance: the check_outliers distances
+D7252	816	performance: Hosmer-Lemeshow, Efron R2 and the log loss
