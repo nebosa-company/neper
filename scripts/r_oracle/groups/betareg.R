@@ -19,6 +19,7 @@ for (rep in 1:10) {
   add(mk(20), coef(f, model = "precision")[[1]], 1e-3)
   add(mk(30), as.numeric(logLik(f)), 1e-6)
 }
+# lrtest: which 70 chi-square, 72 p-value of dropping the last mean column (p >= 3).
 # links and standard errors: "fitl" args (n, p, link 0 logit / 1 probit / 2 cloglog / 3 loglog / 4 cauchit, which, y, design row-major): which 0..p-1 coefficient, 20 precision, 30 log-likelihood, 40 + j the standard error of coefficient j, 60 the standard error of phi
 add2 <- function(args, want, rel) if (is.finite(want)) cases[[length(cases) + 1]] <<- case("fitl", args, want, rel = rel, abs = 1e-4)
 for (rep in 1:12) {
@@ -33,6 +34,10 @@ for (rep in 1:12) {
   add2(mk(20), coef(f, model = "precision")[[1]], 2e-3); add2(mk(30), as.numeric(logLik(f)), 1e-6)
   for (j in seq_len(p)) add2(mk(40 + j - 1), sm$mean[j, 2], 5e-3)
   add2(mk(60), sm$precision[1, 2], 5e-3)
+  if (p >= 3) {
+    f0 <- betareg(y ~ x1, data = d, link = lk); lr <- lmtest::lrtest(f0, f)
+    add2(mk(70), lr$Chisq[2], 5e-4); add2(mk(72), lr$`Pr(>Chisq)`[2], 5e-3)
+  }
 }
 # residuals and predictions: "bres" args (n, p, link, kind, i, y, design row-major) kind 0 response 1 pearson 2 deviance 3 weighted 4 sweighted 5 quantile 6 predict response 7 link 8 precision 9 variance; i 0-based
 for (rep in 1:10) {

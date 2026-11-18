@@ -9,7 +9,7 @@ L425	library	0.7	1140	ismev: extreme-value model fits	Partial (D6155).
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
 L448	library	0.25	570	mcmc: Metropolis and tempering samplers	Partial (D6610, D7285 initseq and olbm for a scalar chain).
 L450	library	0	289	mediation: causal mediation analysis	Open (CRAN rank 755).
-L451	library	0.3	731	betareg: beta regression	D7309: loglog and cauchit mean links equal to betareg.
+L451	library	0.3	801	betareg: beta regression	D7310: lrtest (statistic and p-value of nested fits) equal to lmtest.
 L452	library	0.35	599	TSA: time-series analysis toolkit	Partial (D6190, D6406 McLeod.Li.test).
 L453	library	0.1	586	cubature: adaptive multidimensional integration	Partial (D6475 box integrals of four fixed integrands agree with hcubature and pcubature to 1e-8 on Windows through a tensor Gauss-Legendre rule, not the package's adaptive algorithms;
 L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).

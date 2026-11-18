@@ -49904,3 +49904,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `linkinv`, `linkfun` and `gprime` gain loglog (mu = exp(-exp(-eta)), 1 - mu by series for a small exp(-eta)) and cauchit (mu = 1/2 + atan(eta)/pi, g' = pi (1 + tan^2))); the Fisher-information standard errors and all residual and predict types follow.
 
 **Result.** `oracle_betareg` (549 cases, links logit, probit, cloglog, loglog, cauchit) equals betareg on Windows at the optimiser tolerance. Linux pending. L451 stays partial: variable dispersion, bias correction, sweighted2, lrtest.
+
+## D7310 — betareg: lrtest
+
+**Decision.** `betareg.lrtest` gives the statistic 2 (ll1 - ll0), the degrees of freedom (the parameter counts differ by the dropped mean columns) and the chi-square upper tail of `lmtest::lrtest` for two nested fits.
+
+**Result.** `oracle_betareg` equals betareg and lmtest on Windows for dropping the last mean column (statistic to 5e-4, p-value to 5e-3 relative, the optimiser's tolerance). Linux pending. L451 stays partial: variable dispersion, bias correction, sweighted2.

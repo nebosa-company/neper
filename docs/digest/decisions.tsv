@@ -4099,4 +4099,5 @@ D7305	656	effectsize: cohens_d and hedges_g intervals
 D7306	937	effectsize: eta, omega and epsilon squared intervals
 D7307	582	effectsize: glass_delta and rank_biserial intervals
 D7308	446	effectsize: cliffs_delta interval; L389 closed
-D7309	555	betareg: loglog and cauchit mean links
+D7309	556	betareg: loglog and cauchit mean links
+D7310	508	betareg: lrtest

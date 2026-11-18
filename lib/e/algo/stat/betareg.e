@@ -323,3 +323,12 @@ fn fit_value(x: []const f64, y: []const f64, p: usize, link: usize, f: *const Fi
     if kind == 3usize { ret (ystar - mustar) / math.sqrt[f64](phi * v) }
     ret (ystar - mustar) / math.sqrt[f64](v)
 }
+
+// lmtest::lrtest(f0, f1) for nested fits: the statistic 2 (ll1 - ll0), the degrees of freedom npar1 - npar0 (npar counts the precision too) and the upper chi-square tail
+fn lrtest(ll1: f64, npar1: usize, ll0: f64, npar0: usize, out: []f64) {
+    let stat = 2.0f64 * (ll1 - ll0)
+    let df = f64(npar1) - f64(npar0)
+    out[0usize] = stat
+    out[1usize] = df
+    out[2usize] = nm.pchisq(stat, df, false, false)
+}
