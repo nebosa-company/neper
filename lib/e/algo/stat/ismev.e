@@ -489,3 +489,133 @@ fn fit_pp(a: *mem.Arena, x: []const f64, u: f64, npy: usize) -> (Fit, err) {
     let _ = m
     ret (Fit { par: par, se: se, nllh: nllh }, ok)
 }
+
+// the profile likelihoods behind gev.prof and gpd.prof: ismev plots them, so the values are the minima of the profile negative log-likelihood at each
+// return level of a grid, each search started from the previous solution
+type Prof = struct { x: []const f64, xp: f64, p: f64, m: f64, la: f64, u: f64 }
+
+fn gev_plik(d: *Prof, a: []const f64) -> f64 {
+    let n = d.x.len
+    var i = 0usize
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    if math.abs[f64](a[1usize]) < 0.000001f64 {
+        let mu = d.xp + a[0usize] * math.log[f64](0.0f64 - math.log[f64](1.0f64 - d.p))
+        if a[0usize] <= 0.0f64 { ret 1.0e6f64 }
+        while i < n {
+            let y = (d.x[i] - mu) / a[0usize]
+            s1 += math.exp[f64](0.0f64 - y)
+            s2 += y
+            i += 1usize
+        }
+        ret f64(n) * math.log[f64](a[0usize]) + s1 + s2
+    }
+    let mu = d.xp - a[0usize] / a[1usize] * (math.pow[f64](0.0f64 - math.log[f64](1.0f64 - d.p), 0.0f64 - a[1usize]) - 1.0f64)
+    if a[0usize] <= 0.0f64 { ret 1.0e6f64 }
+    while i < n {
+        let y = 1.0f64 + a[1usize] * ((d.x[i] - mu) / a[0usize])
+        if y <= 0.0f64 { ret 1.0e6f64 }
+        s1 += math.pow[f64](y, 0.0f64 - 1.0f64 / a[1usize])
+        s2 += math.log[f64](y)
+        i += 1usize
+    }
+    ret f64(n) * math.log[f64](a[0usize]) + s1 + s2 * (1.0f64 / a[1usize] + 1.0f64)
+}
+
+fn gpd_plik(d: *Prof, a: []const f64) -> f64 {
+    let n = d.x.len
+    let xi = a[0usize]
+    let sc = (xi * (d.xp - d.u)) / (math.pow[f64](d.m * d.la, xi) - 1.0f64)
+    var i = 0usize
+    if math.abs[f64](xi) < 0.0001f64 {
+        var t = 0.0f64
+        while i < n {
+            t += d.x[i] - d.u
+            i += 1usize
+        }
+        ret f64(n) * math.log[f64](sc) + t / sc
+    }
+    var ls = 0.0f64
+    while i < n {
+        let y = 1.0f64 + xi * ((d.x[i] - d.u) / sc)
+        if y <= 0.0f64 || sc <= 0.0f64 { ret 1.0e6f64 }
+        ls += math.log[f64](y)
+        i += 1usize
+    }
+    ret f64(n) * math.log[f64](sc) + ls * (1.0f64 / xi + 1.0f64)
+}
+
+// Nelder-Mead on the profile objective, restarted until the value stops moving
+fn min_prof(a: *mem.Arena, d: *Prof, f: fn(*Prof, []const f64) -> f64, par: []f64) -> (f64, err) {
+    let p = par.len
+    let (scr, e2) = mem.alloc[f64](a, (p + 1usize) * (p + 1usize) + 4usize * p)
+    if e2 != ok { ret (0.0f64, e2) }
+    var round = 0usize
+    var last = 1.0e30f64
+    var val = 0.0f64
+    while round < 40usize {
+        let (r, e3) = opt.nelder_mead[Prof](d, f, par, 0.1f64 * (1.0f64 + math.abs[f64](par[0usize])), 1.0e-15f64, 20000u32, scr)
+        if e3 != ok { ret (0.0f64, e3) }
+        val = r.value
+        if math.abs[f64](last - r.value) < 1.0e-14f64 * (1.0f64 + math.abs[f64](r.value)) && round > 2usize { break }
+        last = r.value
+        round += 1usize
+    }
+    ret (val, ok)
+}
+
+// gev.prof: the profile negative log-likelihood at nint return levels of the m-block return level from xlow to xup, out has nint entries
+fn gev_profile(a: *mem.Arena, x: []const f64, m: f64, xlow: f64, xup: f64, nint: usize, out: []f64) -> err {
+    let (f, e0) = fit(a, x, 0usize, 0.0f64)
+    if e0 != ok { ret e0 }
+    var d = Prof { x: x, xp: 0.0f64, p: 1.0f64 / m, m: m, la: 0.0f64, u: 0.0f64 }
+    let (sol, e1) = mem.alloc[f64](a, 2usize)
+    if e1 != ok { ret e1 }
+    sol[0usize] = f.par[1usize]
+    sol[1usize] = f.par[2usize]
+    var i = 0usize
+    while i < nint {
+        d.xp = xlow + (xup - xlow) * f64(i) / f64(nint - 1usize)
+        let (v, e2) = min_prof(a, &d, gev_plik, sol)
+        if e2 != ok { ret e2 }
+        out[i] = v
+        i += 1usize
+    }
+    ret ok
+}
+
+// gpd.prof: the profile at nint return levels of the m-year level (npy observations a year), the threshold u and the exceedance rate la of gpd.fit
+fn gpd_profile(a: *mem.Arena, x: []const f64, u: f64, m: f64, npy: f64, xlow: f64, xup: f64, nint: usize, out: []f64) -> err {
+    let (f, e0) = fit(a, x, 1usize, u)
+    if e0 != ok { ret e0 }
+    var cnt = 0usize
+    var i = 0usize
+    while i < x.len {
+        if x[i] > u { cnt += 1usize }
+        i += 1usize
+    }
+    let (ex, e1) = mem.alloc[f64](a, cnt)
+    if e1 != ok { ret e1 }
+    cnt = 0usize
+    i = 0usize
+    while i < x.len {
+        if x[i] > u {
+            ex[cnt] = x[i]
+            cnt += 1usize
+        }
+        i += 1usize
+    }
+    var d = Prof { x: ex, xp: 0.0f64, p: 0.0f64, m: m * npy, la: f64(cnt) / f64(x.len), u: u }
+    let (sol, e2) = mem.alloc[f64](a, 1usize)
+    if e2 != ok { ret e2 }
+    sol[0usize] = f.par[1usize]
+    i = 0usize
+    while i < nint {
+        d.xp = xlow + (xup - xlow) * f64(i) / f64(nint - 1usize)
+        let (v, e3) = min_prof(a, &d, gpd_plik, sol)
+        if e3 != ok { ret e3 }
+        out[i] = v
+        i += 1usize
+    }
+    ret ok
+}

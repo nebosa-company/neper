@@ -10,6 +10,21 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "pr") {
+        let kind = usize(x[0usize])
+        let n = usize(x[1usize])
+        let nint = usize(x[5usize])
+        let (out, oe) = mem.alloc[f64](a, nint)
+        if oe != ok { os.exit(7) }
+        var pe = ok
+        if kind == 0usize {
+            pe = im.gev_profile(a, x[9usize..9usize + n], x[2usize], x[3usize], x[4usize], nint, out)
+        } else {
+            pe = im.gpd_profile(a, x[9usize..9usize + n], x[6usize], x[2usize], x[7usize], x[3usize], x[4usize], nint, out)
+        }
+        if pe != ok { os.exit(8) }
+        ret out[usize(x[8usize])]
+    }
     if str.eq(c.name, "pp") {
         let n = usize(x[0usize])
         let (g, ge) = im.fit_pp(a, x[4usize..4usize + n], x[2usize], usize(x[1usize]))

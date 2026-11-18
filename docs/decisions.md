@@ -49784,3 +49784,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.ismev` gains `fit_pp`: the point-process model of the exceedances of a constant threshold with npy observations per year (mu, sigma, xi), the likelihood of ismev's pp.lik (1e6 penalties for a non-positive scale, a negative threshold term when there are exceedances, or a non-positive 1 + xi (x - mu) / sigma anywhere in the data), ismev's start (the exceedance moments moved to the rate scale with shape 1e-8, then shape 0.1), Nelder-Mead and the numerical Hessian standard errors.
 
 **Result.** `oracle_ismev_rlarg` now has 77 cases (rlarg.fit and pp.fit with three npy values) and equals ismev within optimiser tolerance on Windows. Linux pending. L425 stays partial: scale and shape covariates and links, covariates for pp.fit and rlarg.fit, and the profile likelihoods remain.
+
+## D7294 — ismev: the profile likelihoods of gev.prof and gpd.prof
+
+`e.algo.stat.ismev` gains `gev_profile` and `gpd_profile`. ismev only plots these, so the port returns what it plots: the minimum of the profile negative log-likelihood at each return level of a grid, each search warm-started from the previous solution (the two-parameter GEV search over scale and shape with the location solved from the return level, the one-parameter GPD search over the shape with the scale solved from the return level and the exceedance rate). The oracle replays ismev's loops in R. Where R's own optimiser returned its 1e6 penalty at a grid point the point is left out of the oracle.
+
+**Result.** `oracle_ismev_rlarg` has 98 cases (rlarg.fit, pp.fit, a GEV profile and a GPD profile) and equals ismev within optimiser tolerance (profile values 2e-4) on Windows. Linux pending. L425 stays partial: scale and shape covariates and links, and covariates for pp.fit and rlarg.fit remain.
