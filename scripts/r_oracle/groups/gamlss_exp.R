@@ -290,6 +290,15 @@ for (rep in 1:30) {
   add("ex", c(232, bi_m, bi_sg, bi_x, bi_n, bi_t), dBEINF(bi_x, mu = bi_m, sigma = bi_sg, nu = bi_n, tau = bi_t))
   add("ex", c(233, bi_m, bi_sg, bi_x, bi_n, bi_t), pBEINF(bi_x, mu = bi_m, sigma = bi_sg, nu = bi_n, tau = bi_t))
   add("ex", c(234, bi_m, bi_sg, bi_p, bi_n, bi_t), qBEINF(bi_p, mu = bi_m, sigma = bi_sg, nu = bi_n, tau = bi_t))
+  # GB1 235-236 (d, p; mu, sigma in (0, 1), nu, tau > 0), SIMPLEX d 237, BCPE 238-240 (d, p at x, q at p)
+  g1_n <- runif(1, 0.5, 3); g1_t <- runif(1, 0.5, 3); g1_x <- runif(1, 0.05, 0.95)
+  add("ex", c(235, bi_m, bi_sg, g1_x, g1_n, g1_t), dGB1(g1_x, mu = bi_m, sigma = bi_sg, nu = g1_n, tau = g1_t))
+  add("ex", c(236, bi_m, bi_sg, g1_x, g1_n, g1_t), pGB1(g1_x, mu = bi_m, sigma = bi_sg, nu = g1_n, tau = g1_t))
+  add("ex", c(237, bi_m, bi_sg, g1_x), dSIMPLEX(g1_x, mu = bi_m, sigma = bi_sg))
+  cp_m <- runif(1, 1, 5); cp_s <- runif(1, 0.1, 0.5); cp_n <- runif(1, 0.3, 2) * sample(c(-1, 0, 1), 1); cp_t <- runif(1, 1, 4); cp_x <- runif(1, 0.3, 2) * cp_m
+  add("ex", c(238, cp_m, cp_s, cp_x, cp_n, cp_t), dBCPE(cp_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
+  add("ex", c(239, cp_m, cp_s, cp_x, cp_n, cp_t), pBCPE(cp_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
+  add("ex", c(240, cp_m, cp_s, bi_p, cp_n, cp_t), qBCPE(bi_p, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
 }
 # random numbers by the quantile function on runif: args (seed, i, which, mu, sigma, nu) under "rq": which 0 rGA, 1 rNBI, 2 rGU, 3 rBE, 4 rPARETO2, 5 rTF, 6 rBCCG; draw i (0-based) of 8
 for (rep in 1:6) {

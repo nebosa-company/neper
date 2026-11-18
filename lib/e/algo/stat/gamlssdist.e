@@ -1809,3 +1809,85 @@ fn qbeinf(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     let a = binf_a(mu, sigma)
     ret nb.qbeta((p - nu / t) * t, a, a * (1.0f64 - mu) / mu, true, false)
 }
+
+// GB1 (generalised beta of the first kind), SIMPLEX density, and BCPE (Box-Cox power exponential) d, p, q
+fn gb1_ab(mu: f64, sigma: f64) -> (f64, f64) {
+    let a = mu * (1.0f64 / (sigma * sigma) - 1.0f64)
+    ret (a, a * (1.0f64 - mu) / mu)
+}
+
+fn dgb1(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x <= 0.0f64 || x >= 1.0f64 { ret 0.0f64 }
+    let (a, b) = gb1_ab(mu, sigma)
+    let ll = math.log[f64](tau) + b * math.log[f64](nu) + (tau * a - 1.0f64) * math.log[f64](x) + (b - 1.0f64) * math.log[f64](1.0f64 - math.pow[f64](x, tau)) - sp.lgamma(a) - sp.lgamma(b) + sp.lgamma(a + b) - (a + b) * math.log[f64](nu + (1.0f64 - nu) * math.pow[f64](x, tau))
+    ret math.exp[f64](ll)
+}
+
+fn pgb1(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if q <= 0.0f64 { ret 0.0f64 }
+    if q >= 1.0f64 { ret 1.0f64 }
+    let (a, b) = gb1_ab(mu, sigma)
+    let qt = math.pow[f64](q, tau)
+    ret nb.pbeta(qt / (nu + (1.0f64 - nu) * qt), a, b, true, false)
+}
+
+fn dsimplex(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 || x >= 1.0f64 { ret 0.0f64 }
+    let r = (x - mu) / (mu * (1.0f64 - mu))
+    ret math.exp[f64](0.0f64 - r * r / (2.0f64 * x * (1.0f64 - x) * sigma * sigma) - (math.log[f64](2.0f64 * pi() * sigma * sigma) + 3.0f64 * (math.log[f64](x) + math.log[f64](1.0f64 - x))) / 2.0f64)
+}
+
+fn bcpe_ft_cdf(t: f64, tau: f64) -> f64 {
+    let c = pe_c(tau)
+    let sh = 0.5f64 * math.pow[f64](math.abs[f64](t / c), tau)
+    var sg = 1.0f64
+    if t < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    if t == 0.0f64 { sg = 0.0f64 }
+    ret 0.5f64 * (1.0f64 + nm.pgamma(sh, 1.0f64 / tau, 1.0f64, true, false) * sg)
+}
+
+fn bcpe_z(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if nu != 0.0f64 { ret (math.pow[f64](x / mu, nu) - 1.0f64) / (nu * sigma) }
+    ret math.log[f64](x / mu) / sigma
+}
+
+fn dbcpe(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let c = pe_c(tau)
+    let z = bcpe_z(x, mu, sigma, nu)
+    let lc = math.log[f64](c)
+    let lft = math.log[f64](tau) - lc - 0.5f64 * math.pow[f64](math.abs[f64](z / c), tau) - (1.0f64 + 1.0f64 / tau) * math.log[f64](2.0f64) - sp.lgamma(1.0f64 / tau)
+    let lfz = lft - math.log[f64](bcpe_ft_cdf(1.0f64 / (sigma * math.abs[f64](nu)), tau))
+    ret math.exp[f64]((nu - 1.0f64) * math.log[f64](x) - nu * math.log[f64](mu) - math.log[f64](sigma) + lfz)
+}
+
+fn pbcpe(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if q <= 0.0f64 { ret 0.0f64 }
+    let z = bcpe_z(q, mu, sigma, nu)
+    let f1 = bcpe_ft_cdf(z, tau)
+    var f2 = 0.0f64
+    if nu > 0.0f64 { f2 = bcpe_ft_cdf(0.0f64 - 1.0f64 / (sigma * math.abs[f64](nu)), tau) }
+    let f3 = bcpe_ft_cdf(1.0f64 / (sigma * math.abs[f64](nu)), tau)
+    ret (f1 - f2) / f3
+}
+
+fn bcpe_qt(p: f64, tau: f64) -> f64 {
+    let c = pe_c(tau)
+    var sg = 1.0f64
+    if p < 0.5f64 { sg = 0.0f64 - 1.0f64 }
+    if p == 0.5f64 { sg = 0.0f64 }
+    let s = nm.qgamma((2.0f64 * p - 1.0f64) * sg, 1.0f64 / tau, 1.0f64, true, false)
+    ret sg * math.pow[f64](2.0f64 * s, 1.0f64 / tau) * c
+}
+
+fn qbcpe(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var za = 0.0f64
+    if nu < 0.0f64 { za = bcpe_qt(p * bcpe_ft_cdf(1.0f64 / (sigma * math.abs[f64](nu)), tau), tau) }
+    if nu == 0.0f64 { za = bcpe_qt(p, tau) }
+    if nu > 0.0f64 { za = bcpe_qt(1.0f64 - (1.0f64 - p) * bcpe_ft_cdf(1.0f64 / (sigma * math.abs[f64](nu)), tau), tau) }
+    if nu != 0.0f64 { ret mu * math.pow[f64](nu * sigma * za + 1.0f64, 1.0f64 / nu) }
+    ret mu * math.exp[f64](sigma * za)
+}

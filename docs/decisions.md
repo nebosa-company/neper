@@ -49424,3 +49424,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gamlssdist` gains d, p and q of BEOI and BEZI (shapes mu sigma and (1 - mu) sigma, a mass nu at 1 or at 0) and of BEINF0, BEINF1 and BEINF (the BE parametrization with masses nu and tau relative to the beta part), with the package's edge answers (q of p = 0 is -Inf for the one-inflated families, +Inf for p = 1 of the zero-inflated ones).
 
 **Result.** `oracle_gamlss_exp` gains 15 cases at interior points and at the masses (x = 0 and 1) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: the other families (BCPE, GB1, SIMPLEX, SST, ST1, ST3C, PE2, DEL, DBI, DBURR12, ZAIG, ZASICHEL, LOGSHASH, NOF, MN3 to MN5 and the beta-binomial inflated families), moments and random numbers.
+
+## D7234 — gamlss.dist: BCPE, GB1 and SIMPLEX
+
+`e.algo.stat.gamlssdist` gains BCPE d, p and q (the power-exponential cdf through the incomplete gamma, truncation at 1 / (sigma |nu|), the three nu cases of the quantile), GB1 d and p (through the beta cdf of x^tau / (nu + (1 - nu) x^tau)) and the SIMPLEX density.
+
+**Result.** `oracle_gamlss_exp` gains 6 cases per draw (176 values added across the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: GB1 q, SIMPLEX p and q, BCPEo, SST, ST1, ST3C, PE2, DEL, DBI, DBURR12, ZAIG, ZASICHEL, LOGSHASH, NOF, MN3 to MN5 and the beta-binomial inflated families, moments and random numbers.
