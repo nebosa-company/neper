@@ -1436,3 +1436,51 @@ fn ppig(x: f64, mu: f64, sigma: f64) -> f64 {
     }
     ret s
 }
+
+// zero-adjusted and zero-inflated PIG (ZAPIG, ZIPIG, nu the zero mass), PIG2, NBF and ZINBF (tau the zero mass)
+fn dzapig(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    ret (1.0f64 - nu) * dpig(x, mu, sigma) / (1.0f64 - dpig(0.0f64, mu, sigma))
+}
+
+fn pzapig(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    let c0 = ppig(0.0f64, mu, sigma)
+    ret nu + (1.0f64 - nu) * (ppig(x, mu, sigma) - c0) / (1.0f64 - c0)
+}
+
+fn dzipig(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    var f = 0.0f64
+    if sigma > 0.0001f64 { f = dpig(x, mu, sigma) } else { f = nm.dpois(x, mu, false) }
+    if x == 0.0f64 { ret nu + (1.0f64 - nu) * f }
+    ret (1.0f64 - nu) * f
+}
+
+fn pzipig(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    var c = 0.0f64
+    if sigma > 0.0001f64 { c = ppig(x, mu, sigma) } else { c = nm.ppois(x, mu, true, false) }
+    ret nu + (1.0f64 - nu) * c
+}
+
+fn dpig2(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret dpig(x, mu, 1.0f64 / (math.sqrt[f64](mu * mu + sigma * sigma) - mu))
+}
+
+fn dnbf(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    let s1 = sigma * math.pow[f64](mu, nu - 2.0f64)
+    if s1 <= 0.0001f64 { ret nm.dpois(x, mu, false) }
+    ret nb.dnbinom_mu(x, 1.0f64 / s1, mu, false)
+}
+
+fn dzinbf(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    let f = dnbf(x, mu, sigma, nu)
+    if x == 0.0f64 { ret tau + (1.0f64 - tau) * f }
+    ret (1.0f64 - tau) * f
+}

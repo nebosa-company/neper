@@ -49058,3 +49058,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the Poisson inverse Gaussian: the probability function derived from the Poisson-mixture integral, which reduces to the modified Bessel function K of half-integer order, built by the recurrence K(v + 1) = K(v - 1) + 2 v K(v) / alpha from K(1/2) (scaled by exp(alpha)), and its distribution by summation. This reproduces the package's C routines (tofyPIG2, tocdf) to 1e-8 relative without porting them.
 
 **Result.** `oracle_gamlss_exp` has 6171 values across 77 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7173 — gamlss.dist: ZAPIG, ZIPIG, PIG2, NBF and ZINBF
+
+`e.algo.stat.gamlssdist` gains the zero-adjusted and zero-inflated PIG (density and distribution each; ZIPIG falls back to the Poisson below sigma 1e-4), PIG2 (PIG with the inverse-Gaussian dispersion 1 / (sqrt(mu^2 + sigma^2) - mu)), the negative binomial family NBF (sigma scaled by mu^(nu - 2), Poisson below 1e-4) and the zero-inflated ZINBF densities.
+
+**Result.** `oracle_gamlss_exp` has 6531 values across 82 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

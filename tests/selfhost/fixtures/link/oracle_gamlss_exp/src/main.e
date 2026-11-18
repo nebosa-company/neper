@@ -205,7 +205,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 186usize { ret gd.qsep4(x, mu, sigma, nu, tau) }
     if which == 187usize { ret gd.psep2(a, x, mu, sigma, nu, tau) }
     if which == 188usize { ret gd.dpig(x, mu, sigma) }
-    ret gd.ppig(x, mu, sigma)
+    if which == 189usize { ret gd.ppig(x, mu, sigma) }
+    if which == 190usize { ret gd.dzapig(x, mu, sigma, nu) }
+    if which == 191usize { ret gd.pzapig(x, mu, sigma, nu) }
+    if which == 192usize { ret gd.dzipig(x, mu, sigma, nu) }
+    if which == 193usize { ret gd.pzipig(x, mu, sigma, nu) }
+    if which == 194usize { ret gd.dpig2(x, mu, sigma) }
+    if which == 195usize { ret gd.dnbf(x, mu, sigma, nu) }
+    ret gd.dzinbf(x, mu, sigma, nu, tau)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
