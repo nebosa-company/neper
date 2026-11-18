@@ -49586,3 +49586,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.gamlssdist` gains the zero-adjusted and zero-inflated beta negative binomial d and p over dBNB and pBNB (mass tau at zero). The package's `pZABNB` never assigns its adjusted cdf above q = 0 and answers 0 there (the installed version, checked at q = 3), so the port answers the same and says so in a comment.
 
 **Result.** `oracle_gamlss_exp` gains 4 cases per draw (120 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ST3C (compiled in the package), DEL, DBI, ZASICHEL, MN3 to MN5, the discrete quantiles, moments, random numbers.
+
+## D7261 — arm: standardize of a linear model
+
+`e.algo.stat.arm` gains `standardize_lm`: the lm refitted on the predictors rescaled by `rescale` (numeric columns centred and divided by two standard deviations, two-valued columns centred), the coefficients with the intercept first.
+
+**Result.** `oracle_arm` gains 15 models with continuous and binary predictors (2 to 4 columns, 62 coefficients) and equals `arm::standardize` on Windows at 1e-8. The generator needs the data frame and formula in the global environment because `standardize` re-evaluates the call. Linux pending. L409 stays partial: sim, bayesglm, discrete, corrplot data, standardize for glm and factor inputs.

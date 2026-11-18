@@ -26,4 +26,15 @@ for (rep in 1:24) {
   m <- sample(1:4, 1); r <- rescale(x, modes[m])
   for (j in 1:n) add("rescale", c(m - 1, n, x, j - 1), r[j])
 }
+# standardize(lm): "stdlm" args (n, q, y, x row-major without the intercept, index): coefficient index (0 the intercept)
+for (rep in 1:15) {
+  n <- sample(25:80, 1); q <- sample(2:4, 1); Xm <- matrix(round(rnorm(n * q, 1, 2), 3), n, q)
+  if (q >= 3) Xm[, 3] <- rbinom(n, 1, 0.4)
+  y <- round(as.vector(cbind(1, Xm) %*% runif(q + 1, -1, 1)) + rnorm(n), 3)
+  dfx <- as.data.frame(Xm); names(dfx) <- paste0("v", 1:q); dfx$y <- y
+  assign("dfx_g", dfx, envir = globalenv()); assign("fo_g", as.formula(paste("y ~", paste(names(dfx)[1:q], collapse = " + "))), envir = globalenv())
+  m <- lm(fo_g, data = dfx_g)
+  sm <- standardize(m); cf <- as.numeric(coef(sm))
+  for (j in 0:q) cases[[length(cases) + 1]] <- case("stdlm", c(n, q, y, as.vector(t(Xm)), j), cf[j + 1], rel = 1e-8, abs = 1e-11)
+}
 emit("arm", "arm", list(cases))

@@ -8,11 +8,22 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn stdlm_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let q = usize(x[1usize])
+    let (o, e) = mem.alloc[f64](a, q + 1usize)
+    if e != ok { os.exit(20) }
+    if arm.standardize_lm(a, x[2usize + n..2usize + n + n * q], x[2usize..2usize + n], n, q, o) != ok { os.exit(21) }
+    ret o[usize(x[2usize + n + n * q])]
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
     if str.eq(k, "logit") { ret arm.logit(x[0usize]) }
     if str.eq(k, "invlogit") { ret arm.invlogit(x[0usize]) }
+    if str.eq(k, "stdlm") { ret stdlm_answer(a, c) }
     if str.eq(k, "rescale") {
         let n = usize(x[1usize])
         let (o, e) = mem.alloc[f64](a, n)

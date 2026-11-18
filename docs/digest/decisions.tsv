@@ -4046,4 +4046,5 @@ D7256	786	Epi: clogistic on matched sets
 D7257	652	gamlss.dist: LOGSHASH, BCPEo and ST1
 D7258	554	gamlss.dist: PARETO and DBURR12
 D7259	571	gamlss.dist: ZABB and ZIBB
-D7260	630	gamlss.dist: ZABNB and ZIBNB
+D7260	631	gamlss.dist: ZABNB and ZIBNB
+D7261	680	arm: standardize of a linear model

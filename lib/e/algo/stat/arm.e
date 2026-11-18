@@ -160,3 +160,40 @@ fn rescale(x: []const f64, n: usize, mode: usize, out: []f64) {
         i += 1usize
     }
 }
+
+// standardize(lm(y ~ x)): the model refitted on the rescaled predictors (x is n by q row-major without the intercept; each column by `rescale` with the "center" rule for two-valued inputs);
+// out receives the q + 1 coefficients, the intercept first
+fn standardize_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: usize, out: []f64) -> err {
+    let (d, e1) = mem.alloc[f64](a, n * (q + 1usize))
+    let (col, e2) = mem.alloc[f64](a, n)
+    let (sc, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        d[i * (q + 1usize)] = 1.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < q {
+        i = 0usize
+        while i < n {
+            col[i] = x[i * q + c]
+            i += 1usize
+        }
+        rescale(col, n, 0usize, sc)
+        i = 0usize
+        while i < n {
+            d[i * (q + 1usize) + 1usize + c] = sc[i]
+            i += 1usize
+        }
+        c += 1usize
+    }
+    let (f, e) = ols.ols(a, d, y, n, q + 1usize)
+    if e != ok { ret e }
+    var k = 0usize
+    while k <= q {
+        out[k] = f.beta[k]
+        k += 1usize
+    }
+    ret ok
+}
