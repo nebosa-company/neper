@@ -4029,4 +4029,5 @@ D7239	617	energy: eqdist.etest with more than two samples
 D7240	697	energy: disco
 D7241	883	energy: the Poisson E-test
 D7242	696	energy: disco.between
-D7243	956	DescTools: weighted Gini and its bootstrap bca interval
+D7243	957	DescTools: weighted Gini and its bootstrap bca interval
+D7244	582	DescTools: the percentile and basic Gini intervals

@@ -49484,3 +49484,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.desctools` gains `gini_w` (the package's i.gini with weights, stable order by x, unbiased correction 1 / (1 - sum w^2)) and `gini_bca`: boot's ordinary bootstrap (`sample.int(n, n R, TRUE)` read as an R by n array under the seed), the bias constant from the share of replicates below the estimate, the acceleration from the regression empirical influence values of `boot:::empinf` (the replicates regressed on the resample frequencies over n of observations 2 to n, centred), and `norm.inter`'s interpolation of the order statistics on the normal scale.
 
 **Result.** `oracle_desctools_agree` gains 10 data sets (8 to 25 weighted observations, 300 or 500 replicates, biased and unbiased; estimate and both limits, 30 values) and equals DescTools on Windows at 1e-8. Linux pending. L363 stays partial: the remaining acceptance functions and the other interval types of Gini.
+
+## D7244 — DescTools: the percentile and basic Gini intervals
+
+`gini_bca` takes the interval type: 0 bca, 1 percentile (the order statistics at (1 -+ conf) / 2 by `norm.inter`) and 2 basic (2 t0 minus the opposite order statistics). Boot's "norm" type returns three columns, so DescTools' fixed positions 4 and 5 give NA for it and there is nothing to match.
+
+**Result.** `oracle_desctools_agree` has the three types on the same 10 weighted data sets (90 Gini values) and equals DescTools on Windows at 1e-8. Linux pending. L363 stays partial: the remaining acceptance functions.

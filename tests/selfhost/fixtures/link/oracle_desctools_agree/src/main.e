@@ -20,7 +20,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let n = usize(z[1usize])
         var rng: rg.Rng = zero
         rg.seed(&rng, i64(z[2usize]))
-        if dt.gini_bca(a, &rng, z[6usize..6usize + n], z[6usize + n..6usize + 2usize * n], z[5usize] == 1.0f64, z[4usize], usize(z[3usize]), o) != ok { os.exit(9) }
+        if dt.gini_bca(a, &rng, z[6usize..6usize + n], z[6usize + n..6usize + 2usize * n], z[5usize] == 1.0f64, z[4usize], usize(z[3usize]), usize(z[7usize + 2usize * n]), o) != ok { os.exit(9) }
         ret o[usize(z[6usize + 2usize * n])]
     }
     if z[0usize] == 10.0f64 {

@@ -1426,9 +1426,9 @@ fn norm_inter(t: []const f64, alpha: f64) -> f64 {
     ret tk + (t1 - t2) / (t3 - t2) * (tk1 - tk)
 }
 
-// Gini(x, weights, unbiased, conf.level, R, type = "bca"): out receives (gini, lwr, upr); the bootstrap is boot's ordinary one (sample.int(n, n R, TRUE) as an R by n array) and the bca
+// Gini(x, weights, unbiased, conf.level, R, type): kind 0 "bca", 1 "perc", 2 "basic" (boot's "norm" returns no limits to DescTools); out receives (gini, lwr, upr); the bootstrap is boot's ordinary one (sample.int(n, n R, TRUE) as an R by n array) and the bca
 // adjustment uses the regression empirical influence values of boot:::empinf
-fn gini_bca(a: *mem.Arena, r: *rg.Rng, x: []const f64, w: []const f64, unbiased: bool, conf: f64, reps: usize, out: []f64) -> err {
+fn gini_bca(a: *mem.Arena, r: *rg.Rng, x: []const f64, w: []const f64, unbiased: bool, conf: f64, reps: usize, kind: usize, out: []f64) -> err {
     let n = x.len
     let t0 = gini_w(a, x, w, unbiased)
     out[0usize] = t0
@@ -1514,7 +1514,9 @@ fn gini_bca(a: *mem.Arena, r: *rg.Rng, x: []const f64, w: []const f64, unbiased:
         if side == 1usize { al = (1.0f64 + conf) / 2.0f64 }
         let za = dist.qnorm(al, 0.0f64, 1.0f64, true, false)
         let adj = dist.pnorm(w0 + (w0 + za) / (1.0f64 - acc * (w0 + za)), 0.0f64, 1.0f64, true, false)
-        out[1usize + side] = norm_inter(ts, adj)
+        if kind == 0usize { out[1usize + side] = norm_inter(ts, adj) }
+        if kind == 1usize { out[1usize + side] = norm_inter(ts, al) }
+        if kind == 2usize { out[2usize - side] = 2.0f64 * t0 - norm_inter(ts, al) }
         side += 1usize
     }
     ret ok

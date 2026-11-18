@@ -42,11 +42,13 @@ for (rep in 1:10) {
   r1 <- CohenD(x, conf.level = 0.95); for (j in 0:2) cases[[length(cases) + 1]] <- case("b", c(10, nx, x, 0.95, j), as.numeric(r1[j + 1]), rel = 1e-5, abs = 1e-6)
   r2 <- CohenD(x, y, conf.level = 0.95); for (j in 0:2) cases[[length(cases) + 1]] <- case("b", c(11, nx, ny, 0.95, x, y, j), as.numeric(r2[j + 1]), rel = 1e-5, abs = 1e-6)
 }
-# Gini with weights and the bootstrap bca interval: args (12, n, seed, R, conf, unbiased, x, w, j) with j 0 gini, 1 lwr, 2 upr
+# Gini with weights and the bootstrap bca interval: args (12, n, seed, R, conf, unbiased, x, w, j, type 0 bca / 1 perc / 2 basic) with j 0 gini, 1 lwr, 2 upr
 for (rep in 1:10) {
   n <- sample(8:25, 1); x <- round(rexp(n, 0.3) + 0.5, 3); w <- round(runif(n, 0.5, 3), 2); sd0 <- sample(1:100000, 1); R <- sample(c(300, 500), 1)
   ub <- sample(c(TRUE, FALSE), 1)
-  set.seed(sd0); r <- suppressWarnings(Gini(x, weights = w, unbiased = ub, conf.level = 0.95, R = R, type = "bca"))
-  for (j in 0:2) cases[[length(cases) + 1]] <- case("a", c(12, n, sd0, R, 0.95, as.numeric(ub), x, w, j), as.numeric(r[j + 1]), rel = 1e-8, abs = 1e-10)
+  for (ty in c("bca", "perc", "basic")) {
+    set.seed(sd0); r <- suppressWarnings(Gini(x, weights = w, unbiased = ub, conf.level = 0.95, R = R, type = ty))
+    for (j in 0:2) cases[[length(cases) + 1]] <- case("a", c(12, n, sd0, R, 0.95, as.numeric(ub), x, w, j, match(ty, c("bca", "perc", "basic")) - 1), as.numeric(r[j + 1]), rel = 1e-8, abs = 1e-10)
+  }
 }
 emit("desctools_agree", "DescTools", list(cases))
