@@ -49556,3 +49556,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.epi` gains `fisher_ci` (the conditional maximum-likelihood odds ratio of a 2 by 2 table and the exact interval `twoby2` reports from `fisher.test`): the noncentral hypergeometric of the first cell on the support lo to hi, the estimate and each limit by `e.algo.stat.pwr.zeroin` at the uniroot tolerance from R's own brackets (0, 1) and, when the central tail is on the other side, (eps, 1) with the odds ratio inverted. The ncp = 0 cases are the package's special cases (the mean at lo, the tail indicators).
 
 **Result.** `oracle_epi` gains 30 tables at 90%, 95% and 99% (90 values) and equals R at 1e-9, the Brent iterates being the same. A first run answered 1.2e-4 everywhere because log(0) was evaluated at the left bracket; fixed. Linux pending. L513 stays partial: Lexis tools, clogistic, rate and survival tools.
+
+## D7256 — Epi: clogistic on matched sets
+
+`clogistic` on sets of J subjects with one case each is the conditional logit `e.algo.stat.mlogitpkg.clogit` already ports (the likelihood is the same: each set contributes exp(x_case b) over the sum of exp(x_j b)), so the Epi fixture runs it with the case first in every set.
+
+**Result.** `oracle_epi` gains 12 matched-set data sets (40 to 120 sets of 2 to 5 subjects, one to three covariates; 50 coefficients and standard errors) and equals Epi's clogistic on Windows at 1e-5 (the Newton iteration stops short of the optimum, as in the mlogit fixture). A first run passed the covariates column-major where the port reads them row-major; fixed in the generator. Linux pending. L513 stays partial: the Lexis tools, rate and survival tools.

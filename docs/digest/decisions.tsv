@@ -4041,4 +4041,5 @@ D7251	996	performance: the check_outliers distances
 D7252	817	performance: Hosmer-Lemeshow, Efron R2 and the log loss
 D7253	737	Epi: ROC for a given test
 D7254	529	Epi: ROC from a logistic formula
-D7255	906	Epi: the conditional MLE odds ratio and its exact interval
+D7255	907	Epi: the conditional MLE odds ratio and its exact interval
+D7256	785	Epi: clogistic on matched sets

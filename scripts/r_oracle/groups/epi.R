@@ -50,4 +50,24 @@ for (rep in 1:30) {
   v <- c(ft$estimate, ft$conf.int)
   for (j in 0:2) cases[[length(cases) + 1]] <- case("fci", c(a, b, cc, d, cf, j), v[j + 1], rel = 1e-9, abs = 1e-12)
 }
+# clogistic on matched sets of J subjects (the first is the case): "clog" args (n, J, k, x[n*J*k] set, subject, covariate row-major, index) index 0..k-1 coefficients, k..2k-1 standard errors
+for (rep in 1:12) {
+  n <- sample(40:120, 1); J <- sample(2:5, 1); k <- sample(1:3, 1)
+  X <- array(round(rnorm(n * J * k), 3), c(n, J, k)); beta <- rnorm(k, 0, 0.7)
+  # the case of each set is drawn by the model, then moved to position 0
+  Xs <- X
+  for (i in 1:n) {
+    eta <- as.vector(matrix(X[i, , ], J, k) %*% beta); pr <- exp(eta) / sum(exp(eta)); cs <- sample(J, 1, prob = pr)
+    ord <- c(cs, setdiff(1:J, cs)); Xs[i, , ] <- matrix(X[i, ord, ], J, k)
+  }
+  d <- data.frame(set = rep(1:n, each = J), y = rep(c(1, rep(0, J - 1)), n))
+  for (m in 1:k) d[[paste0("x", m)]] <- as.vector(t(matrix(Xs[, , m], n, J)))
+  fo <- as.formula(paste("y ~", paste0("x", 1:k, collapse = " + ")))
+  fit <- suppressWarnings(clogistic(fo, strata = set, data = d))
+  cf <- as.numeric(fit$coefficients); se <- sqrt(diag(as.matrix(fit$var)))
+  for (m in 1:k) {
+    cases[[length(cases) + 1]] <- case("clog", c(n, J, k, as.vector(aperm(Xs, c(3, 2, 1))), m - 1), cf[m], rel = 1e-5, abs = 1e-7)
+    cases[[length(cases) + 1]] <- case("clog", c(n, J, k, as.vector(aperm(Xs, c(3, 2, 1))), k + m - 1), se[m], rel = 1e-5, abs = 1e-7)
+  }
+}
 emit("epi", "Epi", list(cases))

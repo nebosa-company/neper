@@ -4,6 +4,7 @@
 use e.algo.stat.epi as ei
 use e.algo.stat.epir as ep
 use e.algo.stat.performancepkg as pf
+use e.algo.stat.mlogitpkg as ml
 use e.mem
 use e.io
 use e.os
@@ -12,6 +13,21 @@ use e.test.oracle as oracle
 
 fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "clog") {
+        let cn = usize(x[0usize])
+        let cj = usize(x[1usize])
+        let ck = usize(x[2usize])
+        let (co, ce) = mem.alloc[f64](ar, 2usize * ck + 1usize)
+        let (chs, he) = mem.alloc[f64](ar, cn)
+        if ce != ok || he != ok { os.exit(8) }
+        var q = 0usize
+        while q < cn {
+            chs[q] = 0.0f64
+            q += 1usize
+        }
+        if ml.clogit(ar, x[3usize..3usize + cn * cj * ck], chs, cn, cj, ck, false, co) != ok { os.exit(9) }
+        ret co[usize(x[3usize + cn * cj * ck])]
+    }
     if str.eq(c.name, "fci") {
         let (fo, fe) = mem.alloc[f64](ar, 3usize)
         if fe != ok { os.exit(6) }
