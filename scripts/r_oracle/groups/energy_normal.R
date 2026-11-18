@@ -23,5 +23,17 @@ for (rep in 1:8) {
   a <- c(sd0, R, n, dx, dy, as.vector(t(x)), as.vector(t(y)))
   cases[[length(cases) + 1]] <- case("dcovtest_stat", a, as.numeric(tt$statistic), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("dcovtest_p", a, as.numeric(tt$p.value), rel = 1e-12, abs = 1e-12)
+  set.seed(sd0); tc <- dcor.test(x, y, R = R)
+  cases[[length(cases) + 1]] <- case("dcortest_stat", a, as.numeric(tc$statistic), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("dcortest_p", a, as.numeric(tc$p.value), rel = 1e-12, abs = 1e-12)
+}
+# eqdist.etest with two samples: args (seed, reps, n1, n2, d, x row-major) under "eqtest_stat" and "eqtest_p"
+for (rep in 1:8) {
+  n1 <- sample(8:20, 1); n2 <- sample(8:20, 1); d <- sample(1:3, 1); sd0 <- sample(1:100000, 1); R <- sample(c(99, 199), 1)
+  x <- rbind(matrix(rnorm(n1 * d), n1, d), matrix(rnorm(n2 * d, runif(1, 0, 0.8)), n2, d))
+  set.seed(sd0); tt <- eqdist.etest(x, sizes = c(n1, n2), R = R)
+  a <- c(sd0, R, n1, n2, d, as.vector(t(x)))
+  cases[[length(cases) + 1]] <- case("eqtest_stat", a, as.numeric(tt$statistic), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("eqtest_p", a, as.numeric(tt$p.value), rel = 1e-12, abs = 1e-12)
 }
 emit("energy_normal", "energy", list(cases))

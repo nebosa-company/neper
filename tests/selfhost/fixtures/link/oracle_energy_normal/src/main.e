@@ -21,15 +21,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let z = c.args
         var n = usize(z[0usize])
         var got = 0.0f64
-        if str.eq(c.name, "dcovtest_stat") || str.eq(c.name, "dcovtest_p") {
+        if str.eq(c.name, "dcovtest_stat") || str.eq(c.name, "dcovtest_p") || str.eq(c.name, "dcortest_stat") || str.eq(c.name, "dcortest_p") {
             n = usize(z[2usize])
             let dx = usize(z[3usize])
             let dy = usize(z[4usize])
             var rng: rg.Rng = zero
             rg.seed(&rng, i64(z[0usize]))
-            let (st, pv, te) = en.dcov_test(a, &rng, z[5usize..5usize + n * dx], z[5usize + n * dx..5usize + n * dx + n * dy], n, dx, dy, usize(z[1usize]))
+            var st = 0.0f64
+            var pv = 0.0f64
+            var te = ok
+            if str.eq(c.name, "dcortest_stat") || str.eq(c.name, "dcortest_p") {
+                let (s1, p1, t1) = en.dcor_test(a, &rng, z[5usize..5usize + n * dx], z[5usize + n * dx..5usize + n * dx + n * dy], n, dx, dy, usize(z[1usize]))
+                st = s1
+                pv = p1
+                te = t1
+            } else {
+                let (s2, p2, t2) = en.dcov_test(a, &rng, z[5usize..5usize + n * dx], z[5usize + n * dx..5usize + n * dx + n * dy], n, dx, dy, usize(z[1usize]))
+                st = s2
+                pv = p2
+                te = t2
+            }
             if te != ok { os.exit(8) }
-            if str.eq(c.name, "dcovtest_stat") { got = st } else { got = pv }
+            if str.eq(c.name, "dcovtest_stat") || str.eq(c.name, "dcortest_stat") { got = st } else { got = pv }
+        } else if str.eq(c.name, "eqtest_stat") || str.eq(c.name, "eqtest_p") {
+            let n1 = usize(z[2usize])
+            let n2 = usize(z[3usize])
+            let d = usize(z[4usize])
+            var rng2: rg.Rng = zero
+            rg.seed(&rng2, i64(z[0usize]))
+            let (st, pv, te) = en.eqdist_etest(a, &rng2, z[5usize..5usize + (n1 + n2) * d], n1, n2, d, usize(z[1usize]))
+            if te != ok { os.exit(8) }
+            if str.eq(c.name, "eqtest_stat") { got = st } else { got = pv }
         } else if str.eq(c.name, "pdcor") {
             let dx = usize(z[1usize])
             let dy = usize(z[2usize])

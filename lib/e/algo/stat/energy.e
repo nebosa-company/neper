@@ -390,9 +390,21 @@ fn pdcor(a: *mem.Arena, x: []const f64, y: []const f64, z: []const f64, n: usize
 // vector across replicates and shuffles it in place (j = floor(m unif), m decreasing, swapping J[j] with J[m]) before each, drawing n - 1 uniforms per replicate; the
 // rows of y are taken in that order. x and y are n by dx and n by dy row-major.
 fn dcov_test(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n: usize, dx: usize, dy: usize, reps: usize) -> (f64, f64, err) {
-    let (d0, _, e0) = dcov_dcor(a, x, y, n, dx, dy, 1.0f64)
+    let (s, p, e) = perm_test(a, r, x, y, n, dx, dy, reps, false)
+    ret (s, p, e)
+}
+
+// energy::dcor.test: the same permutation test on the distance correlation itself (the statistic is dCor, compared as dCor)
+fn dcor_test(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n: usize, dx: usize, dy: usize, reps: usize) -> (f64, f64, err) {
+    let (s, p, e) = perm_test(a, r, x, y, n, dx, dy, reps, true)
+    ret (s, p, e)
+}
+
+fn perm_test(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n: usize, dx: usize, dy: usize, reps: usize, use_cor: bool) -> (f64, f64, err) {
+    let (d0, c0, e0) = dcov_dcor(a, x, y, n, dx, dy, 1.0f64)
     if e0 != ok { ret (0.0f64, 0.0f64, e0) }
-    let stat = f64(n) * d0 * d0
+    var stat = f64(n) * d0 * d0
+    if use_cor { stat = c0 }
     let (jj, e1) = mem.alloc[usize](a, n)
     let (yp, e2) = mem.alloc[f64](a, n * dy)
     if e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, mem.Full) }
@@ -423,9 +435,63 @@ fn dcov_test(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n: usize
             }
             i += 1usize
         }
-        let (dv, _, ev) = dcov_dcor(a, x, yp, n, dx, dy, 1.0f64)
+        let (dv, cv, ev) = dcov_dcor(a, x, yp, n, dx, dy, 1.0f64)
         if ev != ok { ret (0.0f64, 0.0f64, ev) }
-        if f64(n) * dv * dv >= stat { k += 1usize }
+        var v = f64(n) * dv * dv
+        if use_cor { v = cv }
+        if v >= stat { k += 1usize }
+        rep += 1usize
+    }
+    ret (stat, f64(1usize + k) / f64(1usize + reps), ok)
+}
+
+// energy::eqdist.etest(x, sizes = c(n1, n2), R = reps): the two-sample E statistic and its permutation p value; the pooled rows are shuffled by the same
+// in-place index shuffle as dcov.test and the first n1 go to the first sample
+fn eqdist_etest(a: *mem.Arena, r: *rg.Rng, x: []const f64, n1: usize, n2: usize, d: usize, reps: usize) -> (f64, f64, err) {
+    let n = n1 + n2
+    let stat = edist_stat(x[0usize..n1 * d], n1, x[n1 * d..n * d], n2, d, 1.0f64)
+    let (jj, e1) = mem.alloc[usize](a, n)
+    let (pa, e2) = mem.alloc[f64](a, n1 * d)
+    let (pb, e3) = mem.alloc[f64](a, n2 * d)
+    if e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    var i = 0usize
+    while i < n {
+        jj[i] = i
+        i += 1usize
+    }
+    var k = 0usize
+    var rep = 0usize
+    while rep < reps {
+        var m = n
+        i = 0usize
+        while i + 1usize < n {
+            let j = usize(math.floor[f64](f64(m) * rg.unif(r)))
+            m -= 1usize
+            let t = jj[j]
+            jj[j] = jj[m]
+            jj[m] = t
+            i += 1usize
+        }
+        i = 0usize
+        while i < n1 {
+            var c = 0usize
+            while c < d {
+                pa[i * d + c] = x[jj[i] * d + c]
+                c += 1usize
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < n2 {
+            var c = 0usize
+            while c < d {
+                pb[i * d + c] = x[jj[n1 + i] * d + c]
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let v = edist_stat(pa, n1, pb, n2, d, 1.0f64)
+        if v >= stat { k += 1usize }
         rep += 1usize
     }
     ret (stat, f64(1usize + k) / f64(1usize + reps), ok)
