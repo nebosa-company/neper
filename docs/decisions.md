@@ -48962,3 +48962,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the zero-adjusted and zero-inflated negative binomial (ZANBI, ZINBI) and the zero-adjusted gamma (ZAGA), each with density, distribution and quantile, over the NBI and GA functions already there. The quantile shifts are the package's: 1e-10 in ZANBI, 1e-7 in ZINBI, and ZAGA clamps the probability at the zero mass. ZAIG and ZAIG-like inverse-Gaussian forms are not here: pZAIG uses a different inverse-Gaussian cdf than pIG.
 
 **Result.** `oracle_gamlss_exp` has 3619 values across 36 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7157 — gamlss.dist: PE, EGB2 and PARETO2o
+
+`e.algo.stat.gamlssdist` gains the power exponential PE (`dpe_full`, `ppe` with the uniform limit above nu = 10000, `qpe`; `dpe` already names the older density helper), the exponential generalised beta of the second kind EGB2 and the original-parametrisation Pareto PARETO2o, each with density, distribution and quantile.
+
+**Result.** `oracle_gamlss_exp` has 3893 values across 39 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

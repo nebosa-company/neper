@@ -122,7 +122,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 103usize { ret gd.qzinbi(x, mu, sigma, nu) }
     if which == 104usize { ret gd.dzaga(x, mu, sigma, nu) }
     if which == 105usize { ret gd.pzaga(x, mu, sigma, nu) }
-    ret gd.qzaga(x, mu, sigma, nu)
+    if which == 106usize { ret gd.qzaga(x, mu, sigma, nu) }
+    if which == 107usize { ret gd.dpe_full(x, mu, sigma, nu) }
+    if which == 108usize { ret gd.ppe(x, mu, sigma, nu) }
+    if which == 109usize { ret gd.qpe(x, mu, sigma, nu) }
+    if which == 110usize { ret gd.degb2(x, mu, sigma, nu, tau) }
+    if which == 111usize { ret gd.pegb2(x, mu, sigma, nu, tau) }
+    if which == 112usize { ret gd.qegb2(x, mu, sigma, nu, tau) }
+    if which == 113usize { ret gd.dpareto2o(x, mu, sigma) }
+    if which == 114usize { ret gd.ppareto2o(x, mu, sigma) }
+    ret gd.qpareto2o(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

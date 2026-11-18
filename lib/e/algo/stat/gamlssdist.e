@@ -724,3 +724,67 @@ fn qzaga(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     if p <= nu { pp = nu }
     ret qga((pp - nu) / (1.0f64 - nu), mu, sigma)
 }
+
+// PE: power exponential (mu, sigma, nu)
+fn pe_c(nu: f64) -> f64 { ret math.exp[f64](0.5f64 * (0.0f64 - (2.0f64 / nu) * math.log[f64](2.0f64) + sp.lgamma(1.0f64 / nu) - sp.lgamma(3.0f64 / nu))) }
+
+fn dpe_full(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    let c = pe_c(nu)
+    let z = (x - mu) / sigma
+    ret math.exp[f64](0.0f64 - math.log[f64](sigma) + math.log[f64](nu) - math.log[f64](c) - 0.5f64 * math.pow[f64](math.abs[f64](z / c), nu) - (1.0f64 + 1.0f64 / nu) * math.log[f64](2.0f64) - sp.lgamma(1.0f64 / nu))
+}
+
+fn ppe(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if nu > 10000.0f64 { ret (x - (mu - math.sqrt[f64](3.0f64) * sigma)) / (math.sqrt[f64](12.0f64) * sigma) }
+    let c = pe_c(nu)
+    let z = (x - mu) / sigma
+    var sg = 0.0f64
+    if z > 0.0f64 { sg = 1.0f64 }
+    if z < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    let s = 0.5f64 * math.pow[f64](math.abs[f64](z / c), nu)
+    ret 0.5f64 * (1.0f64 + nm.pgamma(s, 1.0f64 / nu, 1.0f64, true, false) * sg)
+}
+
+fn qpe(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    let c = pe_c(nu)
+    var sg = 0.0f64
+    if p > 0.5f64 { sg = 1.0f64 }
+    if p < 0.5f64 { sg = 0.0f64 - 1.0f64 }
+    let s = nm.qgamma((2.0f64 * p - 1.0f64) * sg, 1.0f64 / nu, 1.0f64, true, false)
+    ret mu + sigma * (sg * math.pow[f64](2.0f64 * s, 1.0f64 / nu) * c)
+}
+
+// EGB2: exponential generalised beta of the second kind
+fn degb2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    ret math.exp[f64](nu * z - math.log[f64](math.abs[f64](sigma)) - sp.lgamma(nu) - sp.lgamma(tau) + sp.lgamma(nu + tau) - (nu + tau) * math.log[f64](1.0f64 + math.exp[f64](z)))
+}
+
+fn pegb2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let w = (tau / nu) * math.exp[f64]((x - mu) / sigma)
+    let p = nb.pf(w, 2.0f64 * nu, 2.0f64 * tau, true, false)
+    if sigma < 0.0f64 { ret 1.0f64 - p }
+    ret p
+}
+
+fn qegb2(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var pp = p
+    if sigma < 0.0f64 { pp = 1.0f64 - p }
+    if pp == 0.0f64 { ret 0.0f64 }
+    if pp == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let w = nb.qf(pp, 2.0f64 * nu, 2.0f64 * tau, true, false)
+    ret mu + sigma * math.log[f64]((nu / tau) * w)
+}
+
+// PARETO2o (the original parametrisation) and PARETO1o
+fn dpareto2o(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret math.exp[f64](math.log[f64](sigma) + sigma * math.log[f64](mu) - (sigma + 1.0f64) * math.log[f64](x + mu))
+}
+
+fn ppareto2o(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret 1.0f64 - math.pow[f64](mu / (mu + x), sigma)
+}
+
+fn qpareto2o(p: f64, mu: f64, sigma: f64) -> f64 { ret mu * (math.pow[f64](1.0f64 - p, 0.0f64 - 1.0f64 / sigma) - 1.0f64) }
