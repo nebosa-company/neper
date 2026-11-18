@@ -23,6 +23,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let hn = usize(x[0usize])
             let hp = usize(x[1usize])
             got = pf.heteroscedasticity_p(a, x[2usize + hn..2usize + hn + hn * hp], x[2usize..2usize + hn], hn, hp)
+        } else if str.eq(c.name, "lr2") {
+            let ln = usize(x[1usize])
+            let lp = usize(x[2usize])
+            got = pf.logit_r2(a, x[3usize + ln..3usize + ln + ln * lp], x[3usize..3usize + ln], ln, lp, usize(x[0usize]))
         } else if str.eq(c.name, "vif") {
             let vn = usize(x[0usize])
             let vq = usize(x[1usize])

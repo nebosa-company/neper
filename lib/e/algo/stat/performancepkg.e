@@ -5,6 +5,7 @@
 use e.algo.stat.carlmtest as ols
 use e.math
 use e.math.nmath as nm
+use e.algo.stat.flexmixpkg as fx
 use e.mem
 
 // the index `which` of the lm of y on x (n by p, intercept column included): 0 r2, 1 r2_adjusted, 2 rmse, 3 mae, 4 mse, 5 sigma, 6 loglik, 7 aic, 8 aicc, 9 bic
@@ -117,4 +118,63 @@ fn vif(a: *mem.Arena, x: []const f64, n: usize, q: usize, j: usize) -> f64 {
         i += 1usize
     }
     ret tss / rss
+}
+
+// the pseudo R^2 of a logistic regression of binary y on x (n by p row-major, intercept included): which 0 Tjur, 1 Cox-Snell, 2 Nagelkerke, 3 McFadden, 4 McFadden adjusted
+fn logit_r2(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, which: usize) -> f64 {
+    let (xc, e1) = mem.alloc[f64](a, n * p)
+    let (w, e2) = mem.alloc[f64](a, n)
+    let (sz, e3) = mem.alloc[f64](a, n)
+    let (b, e4) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xc[c * n + i] = x[i * p + c]
+            c += 1usize
+        }
+        w[i] = 1.0f64
+        sz[i] = 1.0f64
+        i += 1usize
+    }
+    if fx.binom_glm(a, xc, n, p, y, sz, w, b, false) != ok { ret 0.0f64 / 0.0f64 }
+    var s1 = 0.0f64
+    var s0 = 0.0f64
+    var n1 = 0.0f64
+    var n0 = 0.0f64
+    var ll = 0.0f64
+    var ybar = 0.0f64
+    i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var c = 0usize
+        while c < p {
+            t += xc[c * n + i] * b[c]
+            c += 1usize
+        }
+        let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
+        if y[i] == 1.0f64 {
+            s1 += pr
+            n1 += 1.0f64
+            ll += math.log[f64](pr)
+        } else {
+            s0 += pr
+            n0 += 1.0f64
+            ll += math.log[f64](1.0f64 - pr)
+        }
+        ybar += y[i]
+        i += 1usize
+    }
+    let nf = f64(n)
+    ybar = ybar / nf
+    let ll0 = nf * (ybar * math.log[f64](ybar) + (1.0f64 - ybar) * math.log[f64](1.0f64 - ybar))
+    let dev = 0.0f64 - 2.0f64 * ll
+    let nulldev = 0.0f64 - 2.0f64 * ll0
+    if which == 0usize { ret s1 / n1 - s0 / n0 }
+    let cs = 1.0f64 - math.exp[f64]((dev - nulldev) / nf)
+    if which == 1usize { ret cs }
+    if which == 2usize { ret cs / (1.0f64 - math.exp[f64](0.0f64 - nulldev / nf)) }
+    if which == 3usize { ret 1.0f64 - ll / ll0 }
+    ret 1.0f64 - (ll - f64(p)) / ll0
 }
