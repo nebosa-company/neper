@@ -49202,3 +49202,9 @@ For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (t
 `e.algo.stat.ghyp` gains `gig_mode`, `gig_raw_mom` (eta^k K(lambda + k, omega) / K(lambda, omega), the package's normal case) and `gig_var` (the second raw moment less the squared mean). pgig is not ported: it sums the package's `incompleteBesselK` series.
 
 **Result.** `oracle_ghyp` has 1349 values (60 added) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: pgig and qgig, the higher moments of the generalised hyperbolic (momRecursion) and the fits remain.
+
+## D7197 — flexmix: the Gaussian regression mixture by EM from a given start
+
+New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input), flexmix's EM for a mixture of Gaussian linear regressions (FLXMRglm, gaussian family, the default multinomial prior, the weighted EM): initial posteriors 0.9 for the given component and 0.1 for the others, components below minprior removed, the weighted least-squares M step with sigma = sqrt(sum(w r^2) / mean(w) / (n - rank)), the E step on the log scale and R's convergence test |llh - llh_old| / (|llh| + 0.1) < tolerance. A session that began this module and its fixture left them uncommitted; the module was rewritten to the fixture's interface when an edit overwrote the file, and the fixture, its oracle group and golden are that session's.
+
+**Result.** `oracle_flexmix_gauss` equals flexmix on Windows on three simulated mixtures: log-likelihood, iteration count, components kept, priors, coefficients, sigmas and cluster assignments. Linux pending. L413 stays partial: the random start (the cluster sampled with `sample`), stepFlexmix, the other families (binomial, Poisson, Gamma), FLXMRglmfix, concomitant variables, CEM, and BIC, ICL.
