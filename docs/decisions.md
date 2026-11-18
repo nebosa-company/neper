@@ -48908,3 +48908,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` gains LNO (log-normal after a Box-Cox transform with fixed power nu: dlno, plno, qlno) and GG (generalised gamma: dgg, pgg, qgg; a gamma of (x / mu)^nu with scale sigma |nu|, the distribution taken on the upper tail for nu < 0 and the log-normal in the limit |nu| <= 1e-6). R requires mu > 0 for LNO, so the oracle draws it positive.
 
 **Result.** `oracle_gamlss_exp` has 1491 values across 17 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial. A first run of this fixture passed against a stale golden because the generator had failed; always check the generator's case count before trusting a pass.
+
+## D7148 — ade4: as.dudi, dudi.pca and dudi.coa
+
+New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with row and column weights, both the direct and the transposed branch when there are fewer rows than columns), `dudi_pca` (centred, scaled or not; population standard deviation) and `dudi_coa`. The eigenvectors come from the LAPACK dsyevr port and are reversed to R's decreasing order, so axis signs equal R's.
+
+**Result.** `oracle_ade4_dudi` equals ade4 on 303 values (eigenvalues, rank, c1, li, co and l1 for a scaled PCA, a centred PCA, a PCA with fewer rows than columns and two correspondence analyses, one of them transposed) on Windows. Linux pending. L381 stays partial: dudi.acm, dudi.mix, dudi.fca, between and within analyses, coinertia, procuste, rlq and the fuzzy analyses remain; the item itself asks whether the overlap with FactoMineR and vegan still matters.
