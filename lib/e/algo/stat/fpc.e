@@ -5,8 +5,12 @@
 //
 // Not here: noise clusters, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats and the plotting coordinates.
 
+use e.algo.linalg.lapack_syevr as sy
+use e.algo.stat.wrs2 as wr
 use e.math
 use e.mem
+
+error Malformed
 
 fn at(d: []const f64, n: usize, i: usize, j: usize) -> f64 { ret d[i * n + j] }
 
@@ -446,4 +450,210 @@ fn compare(a: *mem.Arena, c1: []const usize, k1: usize, c2: []const usize, k2: u
         a1 += 1usize
     }
     ret h1 + h2 - 2.0f64 * icc
+}
+
+// ---- discrcoord: fpc's discriminant coordinates. tdecomp(m) is t(V diag(sqrt(lambda))) of the symmetric eigen decomposition of m, with eigenvalues
+// below 1e-6 raised to 1e-6, and the eigenvectors in R's order (decreasing eigenvalues; LAPACK gives them ascending).
+
+// the covariance (n - 1 divisor) of the rows of x (n by p row-major) with the labels cl equal to l; k is the count of those rows; out p by p
+fn cov_rows(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, l: usize, out: []f64) -> (usize, err) {
+    var k = 0usize
+    var i = 0usize
+    while i < n {
+        if cl[i] == l { k += 1usize }
+        i += 1usize
+    }
+    let (mu, e1) = mem.alloc[f64](a, p)
+    if e1 != ok { ret (k, e1) }
+    var j = 0usize
+    while j < p {
+        var s = 0.0f64
+        i = 0usize
+        while i < n {
+            if cl[i] == l { s += x[i * p + j] }
+            i += 1usize
+        }
+        mu[j] = s / f64(k)
+        j += 1usize
+    }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            i = 0usize
+            while i < n {
+                if cl[i] == l { s += (x[i * p + r] - mu[r]) * (x[i * p + c] - mu[c]) }
+                i += 1usize
+            }
+            out[r * p + c] = s / f64(k - 1usize)
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret (k, ok)
+}
+
+// tdecomp(m) for the symmetric p by p m (row-major) into out (row-major)
+fn tdecomp(a: *mem.Arena, m: []const f64, p: usize, out: []f64) -> err {
+    let (w, e1) = mem.alloc[f64](a, p)
+    if e1 != ok { ret e1 }
+    let (v, e2) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret e2 }
+    let e3 = sy.dsyevr_all(a, m, p, w, v)
+    if e3 != ok { ret e3 }
+    // R's column i is LAPACK's column p - 1 - i
+    var i = 0usize
+    while i < p {
+        let li = p - 1usize - i
+        var wv = w[li]
+        if math.abs[f64](wv) < 0.000001f64 { wv = 0.000001f64 }
+        let s = math.sqrt[f64](wv)
+        var j = 0usize
+        while j < p {
+            out[i * p + j] = v[li * p + j] * s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// discrcoord(x, cl, pool): the pooled within-group covariance W (pool 0 "n": the sum of (n_i - 1) cov_i; pool 1 "equal": (n - 1) cov_i / K summed),
+// T = tdecomp(W), the between-group matrix B = (n - 1) cov(x) - W, the eigen decomposition of Z = t(T^-1) B T^-1 (eigenvalues in R's decreasing order),
+// units = T^-1 V sqrt(n - K) and proj = x units. Returns ev (p), units (p by p), proj (n by p) and W (p by p).
+fn discrcoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, kn: usize, pool: usize, ev: []f64, units: []f64, proj: []f64, wout: []f64) -> err {
+    let (w, e0) = mem.alloc[f64](a, p * p)
+    let (cc, e1) = mem.alloc[f64](a, p * p)
+    if e0 != ok || e1 != ok { ret Malformed }
+    var zi = 0usize
+    while zi < p * p {
+        w[zi] = 0.0f64
+        zi += 1usize
+    }
+    var l = 1usize
+    while l <= kn {
+        let (kc, ec) = cov_rows(a, x, n, p, cl, l, cc)
+        if ec != ok { ret ec }
+        var zz = 0usize
+        while zz < p * p {
+            var coef = f64(kc - 1usize)
+            if pool == 1usize { coef = f64(n - 1usize) / f64(kn) }
+            if kc < 2usize { cc[zz] = 0.0f64 }
+            w[zz] += coef * cc[zz]
+            zz += 1usize
+        }
+        l += 1usize
+    }
+    var z = 0usize
+    while z < p * p {
+        wout[z] = w[z]
+        z += 1usize
+    }
+    let (tm, e2) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret e2 }
+    let e3 = tdecomp(a, w, p, tm)
+    if e3 != ok { ret e3 }
+    let (tinv, e4) = mem.alloc[f64](a, p * p)
+    if e4 != ok { ret e4 }
+    let e5 = wr.invert_small(a, tm, p, tinv)
+    if e5 != ok { ret e5 }
+    // the total covariance of x: all rows as one label
+    let (ones, e6) = mem.alloc[usize](a, n)
+    if e6 != ok { ret e6 }
+    var i = 0usize
+    while i < n {
+        ones[i] = 1usize
+        i += 1usize
+    }
+    let (ct, e7) = mem.alloc[f64](a, p * p)
+    if e7 != ok { ret e7 }
+    let (_, e8) = cov_rows(a, x, n, p, ones, 1usize, ct)
+    if e8 != ok { ret e8 }
+    // B = (n - 1) ct - W; Z = tinv' B tinv
+    let (bm, e9) = mem.alloc[f64](a, p * p)
+    if e9 != ok { ret e9 }
+    z = 0usize
+    while z < p * p {
+        bm[z] = f64(n - 1usize) * ct[z] - w[z]
+        z += 1usize
+    }
+    let (tb, e10) = mem.alloc[f64](a, p * p)
+    let (zm, e11) = mem.alloc[f64](a, p * p)
+    if e10 != ok || e11 != ok { ret Malformed }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += bm[r * p + q] * tinv[q * p + c]
+                q += 1usize
+            }
+            tb[r * p + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += tinv[q * p + r] * tb[q * p + c]
+                q += 1usize
+            }
+            zm[r * p + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let (wv, e12) = mem.alloc[f64](a, p)
+    let (vv, e13) = mem.alloc[f64](a, p * p)
+    if e12 != ok || e13 != ok { ret Malformed }
+    let e14 = sy.dsyevr_all(a, zm, p, wv, vv)
+    if e14 != ok { ret e14 }
+    // R's order: column k of the eigenvectors is LAPACK's column p - 1 - k; the values decrease
+    var kk = 0usize
+    while kk < p {
+        ev[kk] = wv[p - 1usize - kk]
+        kk += 1usize
+    }
+    // units = tinv V sqrt(n - K), V in R's order
+    let scale = math.sqrt[f64](f64(n - kn))
+    r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += tinv[r * p + q] * vv[(p - 1usize - c) * p + q]
+                q += 1usize
+            }
+            units[r * p + c] = s * scale
+            c += 1usize
+        }
+        r += 1usize
+    }
+    // proj = x units
+    i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += x[i * p + q] * units[q * p + c]
+                q += 1usize
+            }
+            proj[i * p + c] = s
+            c += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
 }
