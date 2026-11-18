@@ -1065,10 +1065,10 @@
       "group": "CRAN parity",
       "order": 778,
       "title": "gamlss.dist: GAMLSS distribution families",
-      "score": 0.27,
+      "score": 0.3,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6471 GU, LO, GA, IG, BCCG, PE, D6472 WEI, LOGNO, NBI, ZIP, JSU, SHASH, BCT densities, LO p and q, GU q equal gamlss.dist on Windows; oracle_gamlssdist; Linux pending). D7134 to D7155 (ZIBI, ZABI, ZAP, ZIP2, GEOM, GEOMo, WEI2, WEI3, LOGNO2, BEo, TF2, NBI, TF, BCCG p and q, GP, BE, LNO, GG, GB2, BI, IGAMMA, RGE, NO2 d, p, q added): the EXP, RG, PARETO2, PARETO1, NO, PO, GA, WEI, LOGNO, IG (p) and ZIP (p, q) families (d, p, q) equal to gamlss.dist (oracle_gamlss_exp, 540 values). D7139: exGAUS density and distribution (oracle_gamlss_exgaus, 60 values). Open: exGAUS quantile, the other families, r, moments, links. Was: Open (CRAN rank 788). Mid to large. Overlaps extraDistr (L422). Acceptance, equal to gamlss.dist under set.seed: d, p, q, r, moments and link functions for the roughly 100 continuous, discrete and mixed families (BCT, BCPE, NBI, ZIP, GA, JSU, SHASH, ...)."
+      "evidence": "Partial (D6471 GU, LO, GA, IG, BCCG, PE, D6472 WEI, LOGNO, NBI, ZIP, JSU, SHASH, BCT densities, LO p and q, GU q equal gamlss.dist on Windows; oracle_gamlssdist; Linux pending). D7134 to D7156 (ZANBI, ZINBI, ZAGA, ZIBI, ZABI, ZAP, ZIP2, GEOM, GEOMo, WEI2, WEI3, LOGNO2, BEo, TF2, NBI, TF, BCCG p and q, GP, BE, LNO, GG, GB2, BI, IGAMMA, RGE, NO2 d, p, q added): the EXP, RG, PARETO2, PARETO1, NO, PO, GA, WEI, LOGNO, IG (p) and ZIP (p, q) families (d, p, q) equal to gamlss.dist (oracle_gamlss_exp, 540 values). D7139: exGAUS density and distribution (oracle_gamlss_exgaus, 60 values). Open: exGAUS quantile, the other families, r, moments, links. Was: Open (CRAN rank 788). Mid to large. Overlaps extraDistr (L422). Acceptance, equal to gamlss.dist under set.seed: d, p, q, r, moments and link functions for the roughly 100 continuous, discrete and mixed families (BCT, BCPE, NBI, ZIP, GA, JSU, SHASH, ...)."
     },
     {
       "id": "L467",

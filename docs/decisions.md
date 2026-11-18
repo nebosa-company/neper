@@ -48956,3 +48956,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the zero-inflated and zero-adjusted binomial (ZIBI, ZABI with bd trials) and Poisson (ZAP, and ZIP2 whose Poisson mean is mu / (1 - sigma)), each with density, distribution and quantile. The quantiles keep the package's 1e-10 shift below the zero-mass-adjusted probability (not in ZAP) and its zero-truncated rescaling for the adjusted families.
 
 **Result.** `oracle_gamlss_exp` has 3169 values across 33 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7156 — gamlss.dist: ZANBI, ZINBI and ZAGA
+
+`e.algo.stat.gamlssdist` gains the zero-adjusted and zero-inflated negative binomial (ZANBI, ZINBI) and the zero-adjusted gamma (ZAGA), each with density, distribution and quantile, over the NBI and GA functions already there. The quantile shifts are the package's: 1e-10 in ZANBI, 1e-7 in ZINBI, and ZAGA clamps the probability at the zero mass. ZAIG and ZAIG-like inverse-Gaussian forms are not here: pZAIG uses a different inverse-Gaussian cdf than pIG.
+
+**Result.** `oracle_gamlss_exp` has 3619 values across 36 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

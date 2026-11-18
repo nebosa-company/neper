@@ -663,3 +663,64 @@ fn qzip2(p: f64, mu: f64, sigma: f64) -> f64 {
     if pn > 0.0f64 { ret nm.qpois(pn, mu / (1.0f64 - sigma), true, false) }
     ret 0.0f64
 }
+
+// ZANBI and ZINBI: zero-adjusted and zero-inflated negative binomial (nu the zero mass)
+fn dzanbi(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    ret (1.0f64 - nu) * dnbi(x, mu, sigma) / (1.0f64 - dnbi(0.0f64, mu, sigma))
+}
+
+fn pzanbi(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    let c0 = pnbi(0.0f64, mu, sigma)
+    ret nu + (1.0f64 - nu) * (pnbi(x, mu, sigma) - c0) / (1.0f64 - c0)
+}
+
+fn qzanbi(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let pn = (p - nu) / (1.0f64 - nu) - 0.0000000001f64
+    var pn2 = pnbi(0.0f64, mu, sigma) * (1.0f64 - pn) + pn
+    if pn2 < 0.0f64 { pn2 = 0.0f64 }
+    ret qnbi(pn2, mu, sigma)
+}
+
+fn dzinbi(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu + (1.0f64 - nu) * dnbi(0.0f64, mu, sigma) }
+    ret (1.0f64 - nu) * dnbi(x, mu, sigma)
+}
+
+fn pzinbi(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret nu + (1.0f64 - nu) * pnbi(x, mu, sigma)
+}
+
+fn qzinbi(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var pn = (p - nu) / (1.0f64 - nu) - 0.0000001f64
+    if pn < 0.0f64 { pn = 0.0f64 }
+    ret qnbi(pn, mu, sigma)
+}
+
+// ZAGA: zero-adjusted gamma
+fn dzaga(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    ret (1.0f64 - nu) * dga(x, mu, sigma)
+}
+
+fn pzaga(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    ret nu + (1.0f64 - nu) * pga(x, mu, sigma)
+}
+
+fn qzaga(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    var pp = p
+    if p <= nu { pp = nu }
+    ret qga((pp - nu) / (1.0f64 - nu), mu, sigma)
+}
