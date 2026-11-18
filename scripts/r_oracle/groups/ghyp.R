@@ -42,4 +42,15 @@ for (rep in 1:14) {
   set.seed(sd0); v <- rghyp(n, param = c(mu, delta, alpha, beta, lam))
   for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("rghyp", c(sd0, n, i - 1, mu, delta, alpha, beta, lam), v[i], rel = 1e-9, abs = 1e-12)
 }
+# skew-Laplace p, q, r, and the GIG density and mean
+for (rep in 1:20) {
+  mu <- rnorm(1); al <- runif(1, 0.3, 2); be <- runif(1, 0.3, 2)
+  for (x in mu + c(-2, -0.2, 0.3, 1.7)) cases[[length(cases) + 1]] <- case("pskewlap", c(x, mu, al, be, 0, 0), pskewlap(x, mu, al, be), rel = 1e-10, abs = 1e-14)
+  for (pp in c(0.1, 0.5, 0.9)) cases[[length(cases) + 1]] <- case("qskewlap", c(pp, mu, al, be, 0, 0), qskewlap(pp, mu, al, be), rel = 1e-10, abs = 1e-12)
+  sd0 <- sample(1:100000, 1); n <- 5; set.seed(sd0); v <- rskewlap(n, mu, al, be)
+  for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("rskewlap", c(sd0, n, i - 1, mu, al, be), v[i], rel = 1e-10, abs = 1e-12)
+  chi <- runif(1, 0.3, 3); psi <- runif(1, 0.3, 3); lam <- runif(1, -2, 2)
+  for (x in c(0.2, 1, 3)) cases[[length(cases) + 1]] <- case("dgig", c(x, chi, psi, lam, 0, 0), dgig(x, chi, psi, lam), rel = 1e-8, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("gigMean", c(chi, psi, lam, 0, 0, 0), gigMean(chi, psi, lam), rel = 1e-9, abs = 1e-13)
+}
 emit("ghyp", "GeneralizedHyperbolic", list(cases))

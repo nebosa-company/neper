@@ -49190,3 +49190,9 @@ For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (t
 `qstable_pm` and `rstable_pm` apply the parametrisation shift of D7192 before the S0 quantile and the random generator. They had no oracle values; `oracle_stabledist` now carries 24 quantiles at 1e-3 and 96 seeded draws at 1e-7 in both parametrisations.
 
 **Result.** `oracle_stabledist` has 1192 values and equals stabledist on Windows, closing the gap D7193 listed: dstable, pstable, qstable and rstable are covered in every parametrisation, both tails and the log scale. Linux pending. L407 stays partial on the GeneralizedHyperbolic side only.
+
+## D7195 — GeneralizedHyperbolic: the skew-Laplace distribution, quantile and random numbers, the GIG density and mean
+
+`e.algo.stat.ghyp` gains `pskewlap` and `qskewlap` (closed forms), `rskewlap` (n standard exponentials, then the signs by R's `sample(c(-1, 1), n, replace = TRUE, prob = ...)`, whose algorithm for two outcomes is the sorted-probabilities cumulative search and is ported here instead of adding probability sampling to the stream module), `dgig` (on the log scale, as the package's large-omega branch) and `gig_mean`.
+
+**Result.** `oracle_ghyp` has 1289 values (320 added) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: pgig, qgig and the GIG moments, the higher moments of the generalised hyperbolic, and the fits (hyperbFit, nigFit, gigFit, hyperblm) remain.

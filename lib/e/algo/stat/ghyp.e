@@ -306,3 +306,58 @@ fn rghyp(r: *rg.Rng, n: usize, mu: f64, delta: f64, alpha: f64, beta: f64, lambd
         i += 1usize
     }
 }
+
+// ---- the skew-Laplace distribution function, quantile and random numbers, and the GIG density and mean
+fn pskewlap(q: f64, mu: f64, alpha: f64, beta: f64) -> f64 {
+    let ab = alpha + beta
+    if q < mu { ret (alpha / ab) * math.exp[f64]((q - mu) / alpha) }
+    ret 1.0f64 - (beta / ab) * math.exp[f64]((mu - q) / beta)
+}
+
+fn qskewlap(p: f64, mu: f64, alpha: f64, beta: f64) -> f64 {
+    let ab = alpha + beta
+    if p < alpha / ab { ret alpha * math.log[f64](p * ab / alpha) + mu }
+    ret mu - beta * math.log[f64](ab * (1.0f64 - p) / beta)
+}
+
+// rskewlap: n standard exponentials, then n signs drawn as sample(c(-1, 1), n, replace = TRUE, prob = c(alpha, beta) / (alpha + beta)) does it
+// (R's ProbSampleReplace: the probabilities sorted in decreasing order, then the first cumulative sum at or above each uniform)
+fn rskewlap(r: *rg.Rng, n: usize, mu: f64, alpha: f64, beta: f64, out: []f64, y: []f64) {
+    var i = 0usize
+    while i < n {
+        y[i] = rg.rexp(r, 1.0f64)
+        i += 1usize
+    }
+    let ab = alpha + beta
+    var p0 = alpha / ab
+    var p1 = beta / ab
+    var first_is_minus = true
+    if p1 > p0 {
+        first_is_minus = false
+        let t = p0
+        p0 = p1
+        p1 = t
+    }
+    i = 0usize
+    while i < n {
+        let u = rg.unif(r)
+        var minus = first_is_minus
+        if u > p0 { minus = !first_is_minus }
+        var mult = beta
+        if minus { mult = 0.0f64 - alpha }
+        out[i] = mult * y[i] + mu
+        i += 1usize
+    }
+}
+
+fn dgig(x: f64, chi: f64, psi: f64, lambda: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let omega = math.sqrt[f64](chi * psi)
+    ret math.exp[f64]((lambda / 2.0f64) * math.log[f64](psi / chi) - math.log[f64](2.0f64) - log_bessel_k(lambda, omega) + (lambda - 1.0f64) * math.log[f64](x) - 0.5f64 * (chi / x + psi * x))
+}
+
+fn gig_mean(chi: f64, psi: f64, lambda: f64) -> f64 {
+    let omega = math.sqrt[f64](chi * psi)
+    let eta = math.sqrt[f64](chi / psi)
+    ret eta * gs.bessel_knu(lambda + 1.0f64, omega) / gs.bessel_knu(lambda, omega)
+}

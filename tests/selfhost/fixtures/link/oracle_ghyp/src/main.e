@@ -12,6 +12,20 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "pskewlap") { ret gh.pskewlap(x[0usize], x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "qskewlap") { ret gh.qskewlap(x[0usize], x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "dgig") { ret gh.dgig(x[0usize], x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "gigMean") { ret gh.gig_mean(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "rskewlap") {
+        let nn = usize(x[1usize])
+        let (o, g1) = mem.alloc[f64](a, nn)
+        let (yy, g2) = mem.alloc[f64](a, nn)
+        if g1 != ok || g2 != ok { os.exit(7) }
+        var rng: rg.Rng = zero
+        rg.seed(&rng, i64(x[0usize]))
+        gh.rskewlap(&rng, nn, x[3usize], x[4usize], x[5usize], o, yy)
+        ret o[usize(x[2usize])]
+    }
     if str.eq(k, "rghyp") {
         let nn = usize(x[1usize])
         let (o, g1) = mem.alloc[f64](a, nn)
