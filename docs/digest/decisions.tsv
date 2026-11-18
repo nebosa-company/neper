@@ -4000,4 +4000,5 @@ D7210	908	gamlss.dist: the link functions
 D7211	962	energy: the multivariate normality statistic
 D7212	630	energy: the partial distance correlation
 D7213	1122	energy: dcov.test and its permutation stream
-D7214	871	energy: dcor.test and eqdist.etest
+D7214	872	energy: dcor.test and eqdist.etest
+D7215	681	DescTools: CCC and CronbachAlpha

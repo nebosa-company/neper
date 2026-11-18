@@ -1055,3 +1055,110 @@ fn outlier_hampel(a: *mem.Arena, x: []const f64) -> (usize, f64, err) {
     }
     ret (cnt, sum, ok)
 }
+
+// ---- CCC (Lin's concordance correlation coefficient with the z-transform or asymptotic limits) and CronbachAlpha
+// ccc(x, y, conf, ci): out receives (estimate, lower, upper, s.shift, l.shift, C.b); ci 0 the z-transform interval, 1 the asymptotic one
+fn ccc(x: []const f64, y: []const f64, conf: f64, ci: usize, out: []f64) {
+    let k = f64(x.len)
+    let zv = dist.qnorm(1.0f64 - (1.0f64 - conf) / 2.0f64, 0.0f64, 1.0f64, true, false)
+    let yb = mean_of(y)
+    let xb = mean_of(x)
+    var vy = 0.0f64
+    var vx = 0.0f64
+    var cxy = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        vy += (y[i] - yb) * (y[i] - yb)
+        vx += (x[i] - xb) * (x[i] - xb)
+        cxy += (x[i] - xb) * (y[i] - yb)
+        i += 1usize
+    }
+    let sy2 = vy / (k - 1.0f64) * (k - 1.0f64) / k
+    let sx2 = vx / (k - 1.0f64) * (k - 1.0f64) / k
+    let sd1 = math.sqrt[f64](vy / (k - 1.0f64))
+    let sd2 = math.sqrt[f64](vx / (k - 1.0f64))
+    let r = cxy / math.sqrt[f64](vx * vy)
+    let sxy = r * math.sqrt[f64](sx2 * sy2)
+    let p = 2.0f64 * sxy / (sx2 + sy2 + (yb - xb) * (yb - xb))
+    let v = sd1 / sd2
+    let u = (yb - xb) / math.pow[f64](sx2 * sy2, 0.25f64)
+    let cb = p / r
+    let sep = math.sqrt[f64](((1.0f64 - r * r) * p * p * (1.0f64 - p * p) / (r * r) + (2.0f64 * p * p * p * (1.0f64 - p) * u * u / r) - 0.5f64 * math.pow[f64](p, 4.0f64) * math.pow[f64](u, 4.0f64) / (r * r)) / (k - 2.0f64))
+    var lo = p - zv * sep
+    var up = p + zv * sep
+    if ci == 0usize {
+        let t = math.log[f64]((1.0f64 + p) / (1.0f64 - p)) / 2.0f64
+        let set_ = sep / (1.0f64 - p * p)
+        let llt = t - zv * set_
+        let ult = t + zv * set_
+        lo = (math.exp[f64](2.0f64 * llt) - 1.0f64) / (math.exp[f64](2.0f64 * llt) + 1.0f64)
+        up = (math.exp[f64](2.0f64 * ult) - 1.0f64) / (math.exp[f64](2.0f64 * ult) + 1.0f64)
+    }
+    out[0usize] = p
+    out[1usize] = lo
+    out[2usize] = up
+    out[3usize] = v
+    out[4usize] = u
+    out[5usize] = cb
+}
+
+// CronbachAlpha(x, conf.level): x is n rows by nc columns row-major; out receives (alpha, lower, upper) (the limits are NaN when conf is NaN). The interval takes
+// N as the total number of cells, as the package does.
+fn cronbach_alpha(a: *mem.Arena, x: []const f64, n: usize, nc: usize, conf: f64, out: []f64) -> err {
+    let (rs, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    var sumvar = 0.0f64
+    var j = 0usize
+    while j < nc {
+        var m = 0.0f64
+        var i = 0usize
+        while i < n {
+            m += x[i * nc + j]
+            i += 1usize
+        }
+        m = m / f64(n)
+        var s = 0.0f64
+        i = 0usize
+        while i < n {
+            s += (x[i * nc + j] - m) * (x[i * nc + j] - m)
+            i += 1usize
+        }
+        sumvar += s / f64(n - 1usize)
+        j += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var s = 0.0f64
+        j = 0usize
+        while j < nc {
+            s += x[i * nc + j]
+            j += 1usize
+        }
+        rs[i] = s
+        i += 1usize
+    }
+    var m = 0.0f64
+    i = 0usize
+    while i < n {
+        m += rs[i]
+        i += 1usize
+    }
+    m = m / f64(n)
+    var tv = 0.0f64
+    i = 0usize
+    while i < n {
+        tv += (rs[i] - m) * (rs[i] - m)
+        i += 1usize
+    }
+    let total = tv / f64(n - 1usize)
+    let res = (total - sumvar) / total * (f64(nc) / f64(nc - 1usize))
+    out[0usize] = res
+    out[1usize] = 0.0f64 / 0.0f64
+    out[2usize] = 0.0f64 / 0.0f64
+    if conf == conf {
+        let nn = f64(n * nc)
+        out[1usize] = 1.0f64 - (1.0f64 - res) * nb.qf(1.0f64 - (1.0f64 - conf) / 2.0f64, nn - 1.0f64, f64(nc - 1usize) * (nn - 1.0f64), true, false)
+        out[2usize] = 1.0f64 - (1.0f64 - res) * nb.qf((1.0f64 - conf) / 2.0f64, nn - 1.0f64, f64(nc - 1usize) * (nn - 1.0f64), true, false)
+    }
+    ret ok
+}

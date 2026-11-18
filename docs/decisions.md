@@ -49310,3 +49310,9 @@ New `e.algo.stat.gamlsslink`: gamlss.dist's `make.link.gamlss` for twelve links 
 The shuffle found for dcov.test (D7213) serves the other permutation tests of the package. `e.algo.stat.energy` gains `dcor_test` (the same permutation test on the distance correlation, the statistic being dCor itself) and `eqdist_etest` (the two-sample E-test: the pooled rows are shuffled with the same in-place index vector and the first n1 go to the first sample, the p value being (1 + #(replicates >= statistic)) / (1 + R)). `dcov_test` and `dcor_test` share `perm_test`.
 
 **Result.** `oracle_energy_normal` has 70 values (32 added: eight seeded dcor.test and eight seeded eqdist.etest calls, the statistics at 1e-9 and the p values exactly) and equals energy on Windows. Linux pending. L459 stays partial: more than two samples in eqdist.etest, the disco methods, the Poisson test and the energy clustering remain.
+
+## D7215 — DescTools: CCC and CronbachAlpha
+
+`e.algo.stat.desctools` gains `ccc` (Lin's concordance correlation coefficient with the package's z-transform and asymptotic limits, the scale and location shifts and the bias-correction factor C.b) and `cronbach_alpha` (the coefficient from the item variances and the variance of the row sums, with the F-based interval whose N the package takes as the total number of cells, a quirk reproduced).
+
+**Result.** `oracle_desctools_agree` equals DescTools on 225 values (15 data sets, CCC in both interval types and CronbachAlpha with its limits) at 1e-8 or better on Windows. Linux pending. L363 stays partial: the rest of the package.
