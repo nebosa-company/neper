@@ -3955,4 +3955,5 @@ D7165	687	gamlss.dist: the exGAUS quantile
 D7166	593	gamlss.dist: JSU, JSUo, SHASHo and SHASH distribution functions and quantiles
 D7167	663	gamlss.dist: BCT distribution and quantile, BCTo, BCCGo and SHASHo2
 D7168	573	gamlss.dist: BB, BNB, SEP3, SN2 and ST3
-D7169	576	gamlss.dist: the skew t and skew power exponential densities, SN1 and the ST3 quantile
+D7169	577	gamlss.dist: the skew t and skew power exponential densities, SN1 and the ST3 quantile
+D7170	793	gamlss.dist: the numerically integrated distributions, pST4, pST5 and qSN1

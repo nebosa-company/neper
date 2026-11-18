@@ -10,6 +10,8 @@ use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.math.special as sp
 use e.algo.stat.pwr as pw
+use e.math.quadpack as qp
+use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
@@ -1259,4 +1261,90 @@ fn qst3(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
     if p < 1.0f64 / (1.0f64 + nu * nu) { ret mu + (sigma / nu) * nb.qt(p * (1.0f64 + nu * nu) / 2.0f64, tau, true, false) }
     ret mu + (sigma * nu) * nb.qt((p * (1.0f64 + nu * nu) - 1.0f64) / (2.0f64 * nu * nu) + 0.5f64, tau, true, false)
+}
+
+// the distributions that gamlss.dist integrates numerically (integrate() over (-Inf, z], its defaults: relative and absolute tolerance eps^0.25, 100
+// subdivisions), through the QUADPACK port of R's rdqagie in e.math.quadpack; kind 0 SN1, 1 SEP1, 2 ST2
+type IntCtx = struct { kind: usize, nu: f64, tau: f64 }
+
+fn int_dens(c: *IntCtx, x: f64) -> f64 {
+    if c.kind == 0usize { ret dsn1(x, 0.0f64, 1.0f64, c.nu) }
+    if c.kind == 1usize { ret dsep1(x, 0.0f64, 1.0f64, c.nu, c.tau) }
+    ret dst2(x, 0.0f64, 1.0f64, c.nu, c.tau)
+}
+
+fn pint(a: *mem.Arena, kind: usize, x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var c: IntCtx = zero
+    c.kind = kind
+    c.nu = nu
+    c.tau = tau
+    let tol = pw.uniroot_tol()
+    let (r, e) = qp.qagi[IntCtx](a, &c, int_dens, (x - mu) / sigma, 0i64 - 1i64, tol, tol, 100usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}
+
+fn psn1(a: *mem.Arena, x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret pint(a, 0usize, x, mu, sigma, nu, 0.0f64) }
+
+fn psep1(a: *mem.Arena, x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret pint(a, 1usize, x, mu, sigma, nu, tau) }
+
+fn pst2(a: *mem.Arena, x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret pint(a, 2usize, x, mu, sigma, nu, tau) }
+
+fn pst4(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var lk1 = sp.lgamma(0.5f64) + sp.lgamma(nu / 2.0f64) - sp.lgamma((nu + 1.0f64) / 2.0f64) + 0.5f64 * math.log[f64](nu)
+    if nu >= 1000000.0f64 { lk1 = 0.5f64 * math.log[f64](2.0f64 * pi()) }
+    var lk2 = sp.lgamma(0.5f64) + sp.lgamma(tau / 2.0f64) - sp.lgamma((tau + 1.0f64) / 2.0f64) + 0.5f64 * math.log[f64](tau)
+    if tau >= 1000000.0f64 { lk2 = 0.5f64 * math.log[f64](2.0f64 * pi()) }
+    let k = math.exp[f64](lk2 - lk1)
+    let z = (x - mu) / sigma
+    var c = 0.0f64
+    if x < mu { c = 2.0f64 * nb.pt(z, nu, true, false) } else { c = 1.0f64 + 2.0f64 * k * (nb.pt(z, tau, true, false) - 0.5f64) }
+    ret c / (1.0f64 + k)
+}
+
+fn pst5(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    let ve = 2.0f64 / tau
+    let lam = 2.0f64 * nu / (tau * math.sqrt[f64](2.0f64 * tau + nu * nu))
+    let aa = (ve + lam) / 2.0f64
+    let bb = (ve - lam) / 2.0f64
+    ret nb.pbeta((1.0f64 + z / math.sqrt[f64](aa + bb + z * z)) / 2.0f64, aa, bb, true, false)
+}
+
+// qSN1: the package's bracket (grown in steps of sigma from mu) and uniroot over pSN1
+type Sn1Root = struct { a: *mem.Arena, mu: f64, sigma: f64, nu: f64, p: f64 }
+
+fn sn1_h(c: *Sn1Root, q: f64) -> f64 { ret psn1(c.a, q, c.mu, c.sigma, c.nu) }
+
+fn sn1_h1(c: *Sn1Root, q: f64) -> f64 { ret psn1(c.a, q, c.mu, c.sigma, c.nu) - c.p }
+
+fn qsn1(a: *mem.Arena, p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var c: Sn1Root = zero
+    c.a = a
+    c.mu = mu
+    c.sigma = sigma
+    c.nu = nu
+    c.p = p
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if sn1_h(&c, mu) < p {
+        lo = mu
+        hi = mu + sigma
+        var j = 2.0f64
+        while sn1_h(&c, hi) < p {
+            hi = mu + j * sigma
+            j += 1.0f64
+        }
+    } else {
+        lo = mu - sigma
+        hi = mu
+        var j = 2.0f64
+        while sn1_h(&c, lo) > p {
+            lo = mu - j * sigma
+            j += 1.0f64
+        }
+    }
+    ret pw.zeroin[Sn1Root](&c, sn1_h1, lo, hi, pw.uniroot_tol(), 1000i64)
 }
