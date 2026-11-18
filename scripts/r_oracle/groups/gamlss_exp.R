@@ -1,5 +1,5 @@
 # gamlss.dist EXP (dEXP, pEXP, qEXP with mu) and RG (dRG, pRG, qRG with mu and sigma). Args: (fn, mu, sigma, x, nu, tau): fn 0 density, 1
-# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 and GA for fn 18..20 and WEI for fn 21..23 and LOGNO for fn 24..26 and IG for fn 27 (distribution) and ZIP for fn 28 (distribution) and 29 (quantile) and NBI for fn 30 (density), 31 (distribution) and 32 (quantile) (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP; nu (the fifth argument) is the degrees of freedom of TF for fn 33 (density), 34 (distribution) and 35 (quantile), and the power of BCCG for fn 36 (distribution) and 37 (quantile); GP is fn 38 (density), 39 (distribution) and 40 (quantile); BE is fn 41, 42 and 43; tau (the sixth argument, 0 when unused) is the second shape of GB2 (fn 50, 51, 52, with nu the first) and the number of trials of BI (fn 53, 54, 55); IGAMMA is fn 56, 57, 58, RGE (nu the shape) fn 59, 60, 61, NO2 (variance sigma) fn 62, 63, 64; GEOM fn 65, 66, 67, GEOMo 68, 69, 70, WEI2 71, 72, 73, WEI3 74, 75, 76, LOGNO2 77, 78, 79, BEo 80, 81, 82, TF2 (nu the degrees of freedom) 83, 84, 85; LNO (nu the power) is fn 44, 45, 46 and GG (nu the power) fn 47, 48, 49.
+# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 and GA for fn 18..20 and WEI for fn 21..23 and LOGNO for fn 24..26 and IG for fn 27 (distribution) and ZIP for fn 28 (distribution) and 29 (quantile) and NBI for fn 30 (density), 31 (distribution) and 32 (quantile) (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP; nu (the fifth argument) is the degrees of freedom of TF for fn 33 (density), 34 (distribution) and 35 (quantile), and the power of BCCG for fn 36 (distribution) and 37 (quantile); GP is fn 38 (density), 39 (distribution) and 40 (quantile); BE is fn 41, 42 and 43; tau (the sixth argument, 0 when unused) is the second shape of GB2 (fn 50, 51, 52, with nu the first) and the number of trials of BI (fn 53, 54, 55); IGAMMA is fn 56, 57, 58, RGE (nu the shape) fn 59, 60, 61, NO2 (variance sigma) fn 62, 63, 64; GEOM fn 65, 66, 67, GEOMo 68, 69, 70, WEI2 71, 72, 73, WEI3 74, 75, 76, LOGNO2 77, 78, 79, BEo 80, 81, 82, TF2 (nu the degrees of freedom) 83, 84, 85; ZIBI 86, 87, 88 and ZABI 89, 90, 91 (tau the trials), ZAP 92, 93, 94, ZIP2 95, 96, 97; LNO (nu the power) is fn 44, 45, 46 and GG (nu the power) fn 47, 48, 49.
 suppressMessages(library(gamlss.dist))
 cases <- list()
 add <- function(fn, args, want, rel = 1e-10, abs = 1e-14) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, c(args, rep(0, max(0, 6 - length(args)))), want, rel = rel, abs = abs)
@@ -115,5 +115,21 @@ for (rep in 1:30) {
   add("ex", c(83, nm, ns, tx, tn2), dTF2(tx, mu = nm, sigma = ns, nu = tn2))
   add("ex", c(84, nm, ns, tx, tn2), pTF2(tx, mu = nm, sigma = ns, nu = tn2))
   add("ex", c(85, nm, ns, p, tn2), qTF2(p, mu = nm, sigma = ns, nu = tn2))
+  zq <- runif(1, 0.05, 0.6); zk <- rbinom(1, bdn, bpr); zp <- rpois(1, pl)
+  for (j in 0:1) {
+    zk2 <- if (j == 0) 0 else zk; zp2 <- if (j == 0) 0 else zp
+    add("ex", c(86, bpr, zq, zk2, 0, bdn), dZIBI(zk2, mu = bpr, sigma = zq, bd = bdn))
+    add("ex", c(87, bpr, zq, zk2, 0, bdn), pZIBI(zk2, mu = bpr, sigma = zq, bd = bdn))
+    add("ex", c(89, bpr, zq, zk2, 0, bdn), dZABI(zk2, mu = bpr, sigma = zq, bd = bdn))
+    add("ex", c(90, bpr, zq, zk2, 0, bdn), pZABI(zk2, mu = bpr, sigma = zq, bd = bdn))
+    add("ex", c(92, pl, zq, zp2), dZAP(zp2, mu = pl, sigma = zq))
+    add("ex", c(93, pl, zq, zp2), pZAP(zp2, mu = pl, sigma = zq))
+    add("ex", c(95, pl, zq, zp2), dZIP2(zp2, mu = pl, sigma = zq))
+    add("ex", c(96, pl, zq, zp2), pZIP2(zp2, mu = pl, sigma = zq))
+  }
+  add("ex", c(88, bpr, zq, p, 0, bdn), qZIBI(p, mu = bpr, sigma = zq, bd = bdn))
+  add("ex", c(91, bpr, zq, p, 0, bdn), qZABI(p, mu = bpr, sigma = zq, bd = bdn))
+  add("ex", c(94, pl, zq, p), qZAP(p, mu = pl, sigma = zq))
+  add("ex", c(97, pl, zq, p), qZIP2(p, mu = pl, sigma = zq))
 }
 emit("gamlss_exp", "gamlss.dist", list(cases))

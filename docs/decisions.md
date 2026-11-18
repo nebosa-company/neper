@@ -48950,3 +48950,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the geometric by mean (GEOM) and by probability (GEOMo), the Weibull parametrised by mu^(-1 / sigma) (WEI2) and by the mean (WEI3), the log-normal by median (LOGNO2), the beta by its two shapes (BEo) and the t by standard deviation (TF2), each with density, distribution and quantile, over `e.math.dist` and `e.math.nmath_beta`.
 
 **Result.** `oracle_gamlss_exp` has 2569 values across 29 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7155 — gamlss.dist: ZIBI, ZABI, ZAP and ZIP2
+
+`e.algo.stat.gamlssdist` gains the zero-inflated and zero-adjusted binomial (ZIBI, ZABI with bd trials) and Poisson (ZAP, and ZIP2 whose Poisson mean is mu / (1 - sigma)), each with density, distribution and quantile. The quantiles keep the package's 1e-10 shift below the zero-mass-adjusted probability (not in ZAP) and its zero-truncated rescaling for the adjusted families.
+
+**Result.** `oracle_gamlss_exp` has 3169 values across 33 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

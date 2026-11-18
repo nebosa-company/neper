@@ -101,7 +101,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 82usize { ret gd.qbeo(x, mu, sigma) }
     if which == 83usize { ret gd.dtf2(x, mu, sigma, nu) }
     if which == 84usize { ret gd.ptf2(x, mu, sigma, nu) }
-    ret gd.qtf2(x, mu, sigma, nu)
+    if which == 85usize { ret gd.qtf2(x, mu, sigma, nu) }
+    if which == 86usize { ret gd.dzibi(x, mu, sigma, tau) }
+    if which == 87usize { ret gd.pzibi(x, mu, sigma, tau) }
+    if which == 88usize { ret gd.qzibi(x, mu, sigma, tau) }
+    if which == 89usize { ret gd.dzabi(x, mu, sigma, tau) }
+    if which == 90usize { ret gd.pzabi(x, mu, sigma, tau) }
+    if which == 91usize { ret gd.qzabi(x, mu, sigma, tau) }
+    if which == 92usize { ret gd.dzap(x, mu, sigma) }
+    if which == 93usize { ret gd.pzap(x, mu, sigma) }
+    if which == 94usize { ret gd.qzap(x, mu, sigma) }
+    if which == 95usize { ret gd.dzip2(x, mu, sigma) }
+    if which == 96usize { ret gd.pzip2(x, mu, sigma) }
+    ret gd.qzip2(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

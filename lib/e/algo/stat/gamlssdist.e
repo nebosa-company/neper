@@ -572,3 +572,94 @@ fn dtf2(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret dtf(x, mu, math.sqrt[
 fn ptf2(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret ptf(x, mu, math.sqrt[f64]((nu - 2.0f64) / nu) * sigma, nu) }
 
 fn qtf2(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret qtf(p, mu, math.sqrt[f64]((nu - 2.0f64) / nu) * sigma, nu) }
+
+// ZIBI and ZABI: zero-inflated and zero-adjusted binomial (mu the probability, sigma the zero mass, bd the trials)
+fn dzibi(x: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if x < 0.0f64 || x > bd { ret 0.0f64 }
+    if x == 0.0f64 { ret sigma + (1.0f64 - sigma) * dbi(0.0f64, mu, bd) }
+    ret (1.0f64 - sigma) * dbi(x, mu, bd)
+}
+
+fn pzibi(x: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x > bd { ret 1.0f64 }
+    ret sigma + (1.0f64 - sigma) * nb.pbinom(x, bd, mu, true, false)
+}
+
+fn qzibi(p: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret bd }
+    let pn = (p - sigma) / (1.0f64 - sigma) - 0.0000000001f64
+    if pn > 0.0f64 { ret nb.qbinom(pn, bd, mu, true, false) }
+    ret 0.0f64
+}
+
+fn dzabi(x: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if x < 0.0f64 || x > bd { ret 0.0f64 }
+    if x == 0.0f64 { ret sigma }
+    ret (1.0f64 - sigma) * dbi(x, mu, bd) / (1.0f64 - dbi(0.0f64, mu, bd))
+}
+
+fn pzabi(x: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x > bd { ret 1.0f64 }
+    if x == 0.0f64 { ret sigma }
+    let c0 = nb.pbinom(0.0f64, bd, mu, true, false)
+    ret sigma + (1.0f64 - sigma) * (nb.pbinom(x, bd, mu, true, false) - c0) / (1.0f64 - c0)
+}
+
+fn qzabi(p: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret bd }
+    let pn = (p - sigma) / (1.0f64 - sigma) - 0.0000000001f64
+    if pn > 0.0f64 {
+        let pn2 = nb.pbinom(0.0f64, bd, mu, true, false) * (1.0f64 - pn) + pn
+        ret nb.qbinom(pn2, bd, mu, true, false)
+    }
+    ret 0.0f64
+}
+
+// ZAP: zero-adjusted Poisson; ZIP2: zero-inflated Poisson with mean mu (the Poisson mean mu / (1 - sigma))
+fn dzap(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret sigma }
+    ret (1.0f64 - sigma) * nm.dpois(x, mu, false) / (1.0f64 - nm.dpois(0.0f64, mu, false))
+}
+
+fn pzap(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret sigma }
+    let c0 = nm.ppois(0.0f64, mu, true, false)
+    ret sigma + (1.0f64 - sigma) * (nm.ppois(x, mu, true, false) - c0) / (1.0f64 - c0)
+}
+
+fn qzap(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let pn = (p - sigma) / (1.0f64 - sigma)
+    if pn > 0.0f64 {
+        let pn2 = nm.ppois(0.0f64, mu, true, false) * (1.0f64 - pn) + pn
+        ret nm.qpois(pn2, mu, true, false)
+    }
+    ret 0.0f64
+}
+
+fn dzip2(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    let mus = mu / (1.0f64 - sigma)
+    if x == 0.0f64 { ret sigma + (1.0f64 - sigma) * math.exp[f64](0.0f64 - mus) }
+    ret math.exp[f64]((1.0f64 - x) * math.log[f64](1.0f64 - sigma) - mus + x * math.log[f64](mu) - sp.lgamma(x + 1.0f64))
+}
+
+fn pzip2(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret sigma + (1.0f64 - sigma) * nm.ppois(x, mu / (1.0f64 - sigma), true, false)
+}
+
+fn qzip2(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let pn = (p - sigma) / (1.0f64 - sigma) - 0.0000000001f64
+    if pn > 0.0f64 { ret nm.qpois(pn, mu / (1.0f64 - sigma), true, false) }
+    ret 0.0f64
+}
