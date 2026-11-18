@@ -49394,3 +49394,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains `conical_p_half` and `conical_p_mhalf` (the closed forms sqrt(2 / (pi sin theta)) cosh(lambda theta) and sinh(lambda theta) / lambda for x below 1, and the cosine and sine forms in eta = acosh(x) above 1) and `complex_log`, `complex_sin`, `complex_cos` and `complex_logsin` (real and imaginary parts).
 
 **Result.** `oracle_gslfns` has 2565 values (200 added over 20 arguments each, 1e-10) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, the complex dilogarithm and log-gamma, the conical functions of orders 0 and 1 and the hyperbolic-space Legendre functions.
+
+## D7229 — gsl: the complex log-gamma function
+
+`e.algo.stat.gslfns` gains `lngamma_complex`: Stirling's series with ten Bernoulli terms after shifting the real part above 15 by the recurrence (the shift's complex logs summed), the reflection formula ln pi - ln sin(pi z) - ln Gamma(1 - z) for a real part below 1/2, and the imaginary part reduced to the principal range as the package returns it (the R value for 3 + 20i has imaginary part -0.29, not the continuous phase).
+
+**Result.** `oracle_gslfns` has 2615 values (50 added over real parts -4 to 12 and imaginary parts within 15, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: the complex dilogarithm, the Coulomb functions, the conical functions of orders 0 and 1 and the hyperbolic-space Legendre functions.

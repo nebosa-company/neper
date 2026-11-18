@@ -4014,4 +4014,5 @@ D7224	916	gsl: ellint_RJ, ellint_P, ellint_D and the Bessel Y functions
 D7225	607	gsl: Bessel Y of non-integer order
 D7226	876	gsl: low-order polynomials, Tricomi's U, 2F0 and the integer-argument helpers
 D7227	754	gsl: the 3j, 6j and 9j coupling coefficients
-D7228	731	gsl: the conical functions of order plus and minus 1/2 and the elementary complex functions
+D7228	732	gsl: the conical functions of order plus and minus 1/2 and the elementary complex functions
+D7229	789	gsl: the complex log-gamma function

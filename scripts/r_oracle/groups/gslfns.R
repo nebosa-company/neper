@@ -119,4 +119,11 @@ for (rep in 1:20) {
   fl <- list(complex_log(z), complex_sin(z), complex_cos(z), complex_logsin(z))
   for (k in 0:3) for (pt in 0:1) cases[[length(cases) + 1]] <- case("k2", c(k, pt, Re(z), Im(z)), if (pt == 0) Re(fl[[k + 1]]) else Im(fl[[k + 1]]), rel = 1e-10, abs = 1e-13)
 }
+# complex log-gamma under "k3" (part, re, im), the principal branch of the imaginary part
+for (rep in 1:25) {
+  z <- complex(real = runif(1, -4, 12), imaginary = runif(1, -15, 15))
+  lg <- lngamma_complex(z)
+  cases[[length(cases) + 1]] <- case("k3", c(0, Re(z), Im(z)), Re(lg), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("k3", c(1, Re(z), Im(z)), Im(lg), rel = 1e-9, abs = 1e-12)
+}
 emit("gslfns", "gsl", list(cases))

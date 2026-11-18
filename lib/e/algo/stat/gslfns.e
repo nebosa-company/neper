@@ -1056,3 +1056,82 @@ fn complex_logsin(re: f64, im: f64, out: []f64) {
     let si_ = out[1usize]
     complex_log(sr, si_, out)
 }
+
+// ---- the complex log-gamma function (principal branch of the imaginary part) and the complex dilogarithm; complex values are passed as (re, im) pairs
+fn cx_mul(ar: f64, ai: f64, br: f64, bi: f64, o: []f64) {
+    o[0usize] = ar * br - ai * bi
+    o[1usize] = ar * bi + ai * br
+}
+
+fn cx_div(ar: f64, ai: f64, br: f64, bi: f64, o: []f64) {
+    let d = br * br + bi * bi
+    o[0usize] = (ar * br + ai * bi) / d
+    o[1usize] = (ai * br - ar * bi) / d
+}
+
+fn wrap_pi(t: f64) -> f64 {
+    let pi_ = 3.141592653589793238462643383279f64
+    var u = t
+    while u > pi_ { u = u - 2.0f64 * pi_ }
+    while u <= 0.0f64 - pi_ { u = u + 2.0f64 * pi_ }
+    ret u
+}
+
+// lngamma_complex(re, im): out receives (ln |Gamma|, arg Gamma) with the argument reduced to (-pi, pi]; Stirling's series after shifting the real part above 15,
+// the reflection formula for a negative real part
+fn lngamma_complex(zr: f64, zi: f64, out: []f64, tmp: []f64) {
+    let pi_ = 3.141592653589793238462643383279f64
+    if zr < 0.5f64 {
+        // ln Gamma(z) = ln pi - ln sin(pi z) - ln Gamma(1 - z)
+        complex_sin(pi_ * zr, pi_ * zi, tmp)
+        let sr = tmp[0usize]
+        let si_ = tmp[1usize]
+        complex_log(sr, si_, tmp)
+        let lsr = tmp[0usize]
+        let lsi = tmp[1usize]
+        lngamma_complex(1.0f64 - zr, 0.0f64 - zi, tmp, out)
+        let gr = tmp[0usize]
+        let gi = tmp[1usize]
+        out[0usize] = math.log[f64](pi_) - lsr - gr
+        out[1usize] = wrap_pi(0.0f64 - lsi - gi)
+        ret
+    }
+    var sr = 0.0f64
+    var si_ = 0.0f64
+    var xr = zr
+    while xr < 15.0f64 {
+        complex_log(xr, zi, tmp)
+        sr += tmp[0usize]
+        si_ += tmp[1usize]
+        xr += 1.0f64
+    }
+    // Stirling at z' = xr + i zi
+    complex_log(xr, zi, tmp)
+    let lr = tmp[0usize]
+    let li = tmp[1usize]
+    var re = (xr - 0.5f64) * lr - zi * li - xr + 0.5f64 * math.log[f64](2.0f64 * pi_)
+    var im = (xr - 0.5f64) * li + zi * lr - zi
+    // 1 / z', 1 / z'^2 and the odd powers
+    cx_div(1.0f64, 0.0f64, xr, zi, tmp)
+    var pr = tmp[0usize]
+    var pi2 = tmp[1usize]
+    let ir = pr
+    let ii = pi2
+    cx_mul(ir, ii, ir, ii, tmp)
+    let qr = tmp[0usize]
+    let qi = tmp[1usize]
+    var k = 1usize
+    while k <= 10usize {
+        var sgn = 1.0f64
+        if k % 2usize == 0usize { sgn = 0.0f64 - 1.0f64 }
+        let coef = sgn * bern(k) / (2.0f64 * f64(k) * (2.0f64 * f64(k) - 1.0f64))
+        re += coef * pr
+        im += coef * pi2
+        cx_mul(pr, pi2, qr, qi, tmp)
+        pr = tmp[0usize]
+        pi2 = tmp[1usize]
+        k += 1usize
+    }
+    out[0usize] = re - sr
+    out[1usize] = wrap_pi(im - si_)
+}

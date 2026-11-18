@@ -111,6 +111,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if code == 3usize { gs.complex_logsin(x[2usize], x[3usize], co) }
         ret co[usize(x[1usize])]
     }
+    if str.eq(k, "k3") {
+        let (go, g5) = mem.alloc[f64](a, 2usize)
+        let (gt, g6) = mem.alloc[f64](a, 2usize)
+        if g5 != ok || g6 != ok { os.exit(4) }
+        gs.lngamma_complex(x[1usize], x[2usize], go, gt)
+        ret go[usize(x[0usize])]
+    }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }
