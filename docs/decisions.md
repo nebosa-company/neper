@@ -49112,3 +49112,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 `e.algo.stat.stabledistpkg` gains `qstable` (lower tail, S0): stabledist's bracket (the normal and Cauchy quantiles and the tail bounds p / (1 - p) by the sign of beta, widened when the ends meet), `uniroot` with `extendInt = "upX"` (the end points widen in doubling steps while f(lower) > 0 or f(upper) < 0, a rule ported from R's uniroot), and Brent's zeroin at tolerance eps^0.25 on pstable at integration tolerance 1e-7 and 200 subdivisions, so the quantile follows R's iteration rather than only its tolerance. The first run returned NaN for every bracket that did not already straddle the root, which is the case the extension handles.
 
 **Result.** `oracle_stabledist` has 410 values (50 quantiles added, checked at 1e-3 relative as the root tolerance allows) and equals stabledist on Windows. Linux pending. L407 stays partial: alpha = 1 with beta != 0, rstable, the other parametrisations and the upper tail remain.
+
+## D7182 — stabledist: rstable
+
+`e.algo.stat.stabledistpkg` gains `rstable`: the Chambers-Mallows-Stuck draws from R's uniform stream in the package's order (the n angles first, then the n exponentials, then the Cauchy variates when alpha = 1 and beta = 0), so a stream seeded as `set.seed` gives R's values.
+
+**Result.** `oracle_stabledist` has 482 values (72 draws from 12 seeded streams added, equal at 1e-9 relative) and equals stabledist on Windows. Linux pending. L407 stays partial: alpha = 1 with beta != 0, the other parametrisations, the upper tail and the GeneralizedHyperbolic functions remain.

@@ -1,6 +1,7 @@
 // e.algo.stat.stabledistpkg against stabledist::dstable. tests/oracle/stabledist.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R stabledist`; the layout is at the top of scripts/r_oracle/groups/stabledist.R.
 
+use e.algo.rand.r as rg
 use e.algo.stat.stabledistpkg as sd
 use e.io
 use e.mem
@@ -19,7 +20,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let z = c.args
         var got = 0.0f64
-        if str.eq(c.name, "q") { got = sd.qstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) } else if str.eq(c.name, "p") { got = sd.pstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) } else { got = sd.dstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }
+        if str.eq(c.name, "r") {
+            let nn = usize(z[5usize])
+            let (out, g1) = mem.alloc[f64](a, nn)
+            let (th, g2) = mem.alloc[f64](a, nn)
+            let (ww, g3) = mem.alloc[f64](a, nn)
+            if g1 != ok || g2 != ok || g3 != ok { os.exit(7) }
+            var rng: rg.Rng = zero
+            rg.seed(&rng, i64(z[4usize]))
+            sd.rstable(&rng, nn, z[0usize], z[1usize], z[2usize], z[3usize], out, th, ww)
+            got = out[usize(z[6usize])]
+        } else if str.eq(c.name, "q") { got = sd.qstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) } else if str.eq(c.name, "p") { got = sd.pstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) } else { got = sd.dstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

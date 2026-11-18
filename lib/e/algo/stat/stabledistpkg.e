@@ -11,6 +11,7 @@ use e.math.quadpack as qp
 use e.math.special as sp
 use e.mem
 use e.algo.stat.pwr as pw
+use e.algo.rand.r as rg
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
@@ -341,4 +342,39 @@ fn qstable(a: *mem.Arena, p: f64, alpha: f64, beta: f64, gamma: f64, delta: f64)
         res = pw.zeroin[Qctx](&c, qroot_fn, xmin, xmax, pw.uniroot_tol(), 1000i64)
     }
     ret res * gamma + delta
+}
+
+// rstable(n, alpha, beta, gamma, delta, pm = 0): n draws by the Chambers-Mallows-Stuck formula from R's uniform stream, the angles first (theta = pi (u - 1/2) for all
+// n) and then the exponentials (w = -log u for all n), so a stream seeded as set.seed gives R's values; alpha = 1 with beta = 0 draws the n Cauchy variates after those
+fn rstable(r: *rg.Rng, n: usize, alpha: f64, beta: f64, gamma: f64, delta: f64, out: []f64, theta: []f64, w: []f64) {
+    var i = 0usize
+    while i < n {
+        theta[i] = pi() * (rg.unif(r) - 0.5f64)
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        w[i] = 0.0f64 - math.log[f64](rg.unif(r))
+        i += 1usize
+    }
+    if alpha == 1.0f64 && beta == 0.0f64 {
+        i = 0usize
+        while i < n {
+            out[i] = math.tan[f64](pi() * rg.unif(r)) * gamma + delta
+            i += 1usize
+        }
+        ret
+    }
+    let btp = beta * math.tan[f64](pi2() * alpha)
+    var th0 = math.atan[f64](btp) / alpha
+    if th0 < 0.0f64 - pi2() { th0 = 0.0f64 - pi2() }
+    if th0 > pi2() { th0 = pi2() }
+    let cc = math.pow[f64](1.0f64 + btp * btp, 1.0f64 / (2.0f64 * alpha))
+    i = 0usize
+    while i < n {
+        let at = alpha * (theta[i] + th0)
+        let rr = (cc * math.sin[f64](at) / math.pow[f64](math.cos[f64](theta[i]), 1.0f64 / alpha)) * math.pow[f64](math.cos[f64](theta[i] - at) / w[i], (1.0f64 - alpha) / alpha)
+        out[i] = (rr - btp) * gamma + delta
+        i += 1usize
+    }
 }

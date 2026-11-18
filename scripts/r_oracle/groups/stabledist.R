@@ -29,4 +29,13 @@ for (rep in 1:25) {
     if (is.finite(qv)) cases[[length(cases) + 1]] <- case("q", c(al, be, ga, de, pp), qv, rel = 1e-3, abs = 1e-4)
   }
 }
+# rstable: args (alpha, beta, gamma, delta, seed, n, i) -> the i-th draw (0-based) of set.seed(seed); rstable(n, alpha, beta, gamma, delta)
+for (rep in 1:12) {
+  al <- c(runif(1, 0.4, 0.98), runif(1, 1.02, 2))[sample(1:2, 1)]
+  be <- c(0, runif(1, -1, 1))[sample(1:2, 1)]
+  if (rep == 1) { al <- 1; be <- 0 }
+  ga <- runif(1, 0.4, 2.5); de <- rnorm(1); sd0 <- sample(1:100000, 1); n <- 6
+  set.seed(sd0); v <- rstable(n, al, be, ga, de)
+  for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("r", c(al, be, ga, de, sd0, n, i - 1), v[i], rel = 1e-9, abs = 1e-12)
+}
 emit("stabledist", "stabledist", list(cases))
