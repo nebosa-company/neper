@@ -500,3 +500,4 @@ oracle_agricolae_ammi
 oracle_fpc_dbscan
 oracle_fpc_ncoord
 oracle_lpsolve_int
+oracle_mgcv_cr
