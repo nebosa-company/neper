@@ -4,9 +4,9 @@ use e.math
 use e.mem
 use e.algo.stat.quantreg as qrb
 
-// the square roots of the diagonal of the inverse of the Hessian of f at est (k parameters, second central differences with step 1e-4, at most 8 parameters): what unmarked reports from optim's Hessian of minus the log-likelihood;
+// the inverse of the Hessian of f at est (k parameters, second central differences with step 1e-4, at most 8 parameters): what unmarked reports from optim's Hessian of minus the log-likelihood;
 // false when the Hessian is singular
-fn hessian_se[C: type](a: *mem.Arena, ctx: *C, f: fn(*C, []const f64) -> f64, est: []const f64, k: usize, out: []f64) -> bool {
+fn hessian_inv[C: type](a: *mem.Arena, ctx: *C, f: fn(*C, []const f64) -> f64, est: []const f64, k: usize, inv: []f64) -> bool {
     let (par, e2) = mem.alloc[f64](a, k)
     let (hs, e3) = mem.alloc[f64](a, k * k)
     let (col, e4) = mem.alloc[f64](a, k)
@@ -65,8 +65,25 @@ fn hessian_se[C: type](a: *mem.Arena, ctx: *C, f: fn(*C, []const f64) -> f64, es
         }
         col[cj] = 1.0f64
         if !qrb.solve_dense(mat[0usize..k * k], col, k) { ret false }
-        out[cj] = math.sqrt[f64](col[cj])
+        t = 0usize
+        while t < k {
+            inv[t * k + cj] = col[t]
+            t += 1usize
+        }
         cj += 1usize
+    }
+    ret true
+}
+
+// the square roots of the diagonal of that inverse
+fn hessian_se[C: type](a: *mem.Arena, ctx: *C, f: fn(*C, []const f64) -> f64, est: []const f64, k: usize, out: []f64) -> bool {
+    let (inv, e1) = mem.alloc[f64](a, k * k)
+    if e1 != ok { ret false }
+    if !hessian_inv[C](a, ctx, f, est, k, inv) { ret false }
+    var i = 0usize
+    while i < k {
+        out[i] = math.sqrt[f64](inv[i * k + i])
+        i += 1usize
     }
     ret true
 }
