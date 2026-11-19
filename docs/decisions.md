@@ -50370,4 +50370,4 @@ vanWaerdenManyOneTest(p.adjust.method = "single-step") takes its p from the same
 
 **Decision.** `psych.yule` (Q, or Y), `phi`, `biserial` (clipped to +-1 as psych does) and `tetrachoric` (the maximum-likelihood rho from `optimize` on (-1, 1) with `pbivnorm` cell probabilities, thresholds from the margins, zero cells replaced by `correct` = 0.5), all for the cases psych computes directly from a table or a 0/1 variable.
 
-**Result.** `oracle_psych` (1396 cases, 670 new from the earlier count) equals psych on Windows (rho to 1e-6, the rest to 1e-8 or better). Linux pending. L312 stays partial: polychoric, tetrachoric and biserial matrices of raw data, omega, fa with rotations, principal, fa.parallel, VSS, scoreItems, describeBy.
+**Result.** `oracle_psych` (1396 cases, 150 new) equals psych on Windows (rho to 1e-6, the rest to 1e-8 or better). Linux pending. L312 stays partial: polychoric, tetrachoric and biserial matrices of raw data, omega, fa with rotations, principal, fa.parallel, VSS, scoreItems, describeBy.

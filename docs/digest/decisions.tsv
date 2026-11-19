@@ -4206,4 +4206,4 @@ D7407	557	PMCMRplus kwManyOneConoverTest single-step
 D7408	756	PMCMRplus vanWaerdenManyOneTest single-step and one-sided dunnettTest
 D7409	538	PMCMRplus tamhaneDunnettTest
 D7410	495	PMCMRplus frdAllPairsSiegelTest
-D7316	725	psych: Yule, phi, biserial, tetrachoric of a 2 by 2 table
+D7316	702	psych: Yule, phi, biserial, tetrachoric of a 2 by 2 table
