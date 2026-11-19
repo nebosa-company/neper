@@ -4529,4 +4529,5 @@ D7640	818	VGAM: adjacent categories model
 D7705	529	gamlss.dist zero-adjusted family moments
 D7641	839	VGAM: continuation-ratio models
 D7706	587	gamlss.dist moments with Bessel and beta terms
-D7707	403	gamlss.dist GG moments
+D7707	404	gamlss.dist GG moments
+D7708	845	gamlss.dist multinomial families

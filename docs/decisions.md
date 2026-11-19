@@ -51520,3 +51520,6 @@ The tree likelihood is split into `gtr_site_lik` (per-site likelihood at a rate 
 
 ## D7707 — gamlss.dist GG moments
 `family_moment2` gains GG: the mean and variance with the package's conditions (nu > 0, or nu < 0 with sigma^2 |nu| < 1 for the mean and < 0.5 for the variance, Inf otherwise) written with a = 1 / (sigma^2 nu^2). Equal to gamlss.dist for 8 parameter sets (oracle_gamlss_mom, 752 values in all, rel 1e-9) on the first run. The multinomial families stay open for L464.
+
+## D7708 — gamlss.dist multinomial families
+`family_mn` ports dMN3, dMN4, dMN5, pMN3 to pMN5 and qMN3 to qMN5 for the categories 1 to k with the weights (mu, sigma, nu, tau) on the first k - 1 and 1 on the last: the density is the weight over the total, the distribution the cumulative weight over the total (1 at the last category), the quantile the first category whose cumulative share is above p (with -Inf at 0 and Inf at 1 as the MN3 code has; the MN4 and MN5 versions refuse p outside (0, 1)). Equal to gamlss.dist for 30 random weight sets (10 each for k = 3, 4, 5) at every category and at 7 probabilities (oracle_gamlss_mom, 1202 values in all) on the first run. This closes the list of open pieces of L464 (the multinomial families, r, moments and links); r through q(runif) is oracle_gamlss_exp's and the links are gamlsslink.e's.

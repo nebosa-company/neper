@@ -21,4 +21,12 @@ for (f in 0:34) for (rep in 1:8) {
   args <- list(mu = mu, sigma = sg, nu = nu, bd = nu, tau = tau)
   for (w in 0:1) { fn <- if (w == 0) o$mean else o$variance; fm <- names(formals(fn)); v <- do.call(fn, args[fm]); if (is.finite(v)) cases[[length(cases) + 1]] <- case("fm2", c(f, w, mu, sg, nu, tau), v, rel = 1e-9, abs = 1e-12) }
 }
+# the multinomial families: "mn" args (kind 0 d 1 p 2 q, k = 3, 4 or 5, x or p, mu, sigma, nu, tau)
+for (k in 3:5) for (rep in 1:10) {
+  par <- runif(4, 0.2, 4); mu <- par[1]; sg <- par[2]; nu <- par[3]; ta <- par[4]
+  f <- list(`3` = list(d = dMN3, p = pMN3, q = qMN3), `4` = list(d = dMN4, p = pMN4, q = qMN4), `5` = list(d = dMN5, p = pMN5, q = qMN5))[[as.character(k)]]
+  pr <- list(mu = mu, sigma = sg, nu = nu, tau = ta)[c("mu", "sigma", "nu", "tau")[seq_len(k - 1)]]
+  for (x in 1:k) { cases[[length(cases) + 1]] <- case("mn", c(0, k, x, par), do.call(f$d, c(list(x), pr)), rel = 1e-12, abs = 0); cases[[length(cases) + 1]] <- case("mn", c(1, k, x, par), do.call(f$p, c(list(x), pr)), rel = 1e-12, abs = 0) }
+  for (u in c(runif(6), 0.5)) cases[[length(cases) + 1]] <- case("mn", c(2, k, u, par), do.call(f$q, c(list(u), pr)), rel = 0, abs = 0)
+}
 emit("gamlss_mom", "gamlss.dist", list(cases))

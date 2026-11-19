@@ -2685,3 +2685,47 @@ fn family_moment2(fam: usize, which: usize, mu: f64, sigma: f64, nu: f64, tau: f
     if which == 0usize { ret mu }
     ret mu + mu * mu * sigma * (1.0f64 - nu) * (1.0f64 - nu)
 }
+
+// the multinomial families MN3, MN4 and MN5 over the categories 1 .. k with the weights (mu, sigma, nu, tau) for the categories 1 .. k - 1 and 1 for the last: kind 0 density at x, 1 distribution
+// at q (an integer from 1 to k), 2 quantile at p (the smallest category whose cumulative share exceeds p; -Inf at 0, Inf at 1, NaN outside)
+fn family_mn(kind: usize, k: usize, v: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var w: [5]f64 = zero
+    w[0usize] = mu
+    w[1usize] = sigma
+    w[2usize] = nu
+    w[3usize] = tau
+    w[k - 1usize] = 1.0f64
+    var tot = 0.0f64
+    var i = 0usize
+    while i < k {
+        tot += w[i]
+        i += 1usize
+    }
+    if kind == 0usize {
+        let xi = usize(v)
+        ret w[xi - 1usize] / tot
+    }
+    if kind == 1usize {
+        let qi = usize(v)
+        if qi >= k { ret 1.0f64 }
+        var c = 0.0f64
+        i = 0usize
+        while i < qi {
+            c += w[i]
+            i += 1usize
+        }
+        ret c / tot
+    }
+    if v < 0.0f64 || v > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if v == 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if v == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var q = 1usize
+    var c = 0.0f64
+    i = 0usize
+    while i + 1usize < k {
+        c += w[i]
+        if v >= c / tot { q = i + 2usize }
+        i += 1usize
+    }
+    ret f64(q)
+}

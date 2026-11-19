@@ -18,6 +18,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let x = c.args
         var got = gd.family_moment(usize(x[0usize]), usize(x[1usize]), x[2usize], x[3usize])
+        if c.name.len == 2usize && c.name[0usize] == 109u8 { got = gd.family_mn(usize(x[0usize]), usize(x[1usize]), x[2usize], x[3usize], x[4usize], x[5usize], x[6usize]) }
         if c.name.len == 3usize { got = gd.family_moment2(usize(x[0usize]), usize(x[1usize]), x[2usize], x[3usize], x[4usize], x[5usize]) }
         if !oracle.agrees(got, c) {
             failures += 1usize
