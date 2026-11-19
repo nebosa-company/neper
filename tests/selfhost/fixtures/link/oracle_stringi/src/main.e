@@ -27,6 +27,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     let s = str.done(&b)
+    if str.eq(c.name, "seg") {
+        var it = uc.graphemes(s)
+        var gc = 0usize
+        while true {
+            let (g, more) = uc.graphemes_next(&it)
+            if !more { break }
+            let _ = g
+            gc += 1usize
+        }
+        ret f64(gc)
+    }
     let f = usize(x[1usize + n])
     var form = nz.Form.Nfc
     if f == 1usize { form = nz.Form.Nfd }

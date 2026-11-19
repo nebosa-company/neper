@@ -4446,4 +4446,6 @@ D7587	920	strucchange efp OLS-MOSUM with sctest
 D7588	822	strucchange efp Rec-MOSUM with sctest
 D7589	774	cubature integrals with infinite limits
 D7590	738	foreign write.arff for numeric and factor columns
-D7592	561	stringi Unicode normalization
+D7592	562	stringi Unicode normalization
+D7593	953	stringi boundaries: e.text.unicode graphemes and e.text.segment words differ from ICU
+D7594	755	graphemes: a ZWJ joins only an Extended_Pictographic after a pictographic run

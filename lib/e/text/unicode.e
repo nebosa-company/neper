@@ -13,6 +13,7 @@
 // derived property (which adds Other_Alphabetic marks); tables are byte strings
 // read little-endian, three or four bytes a scalar.
 use e.mem
+use e.text.segment as sg
 
 type Category = enum u8 { Lu, Ll, Lt, Lm, Lo, Mn, Mc, Me, Nd, Nl, No, Pc, Pd, Ps, Pe, Pi, Pf, Po, Sm, Sc, Sk, So, Zs, Zl, Zp, Cc, Cf, Cs, Co, Cn }
 type Graphemes = struct { text: str, off: usize }
@@ -248,13 +249,13 @@ fn is_hangul_lv(scalar: u32) -> bool { ret scalar >= 44032u32 && scalar <= 55203
 fn is_hangul_lvt(scalar: u32) -> bool { ret scalar >= 44032u32 && scalar <= 55203u32 && (scalar - 44032u32) % 28u32 != 0u32 }
 
 // Whether a cluster may continue from `previous` into `current`.
-fn joins(previous: u32, current: u32, regional_run: usize) -> bool {
+fn joins(previous: u32, current: u32, regional_run: usize, pictographic_run: bool) -> bool {
     if previous == 13u32 && current == 10u32 { ret true }
     if previous == 13u32 || previous == 10u32 || current == 13u32 || current == 10u32 { ret false }
     let previous_category = category(previous)
     if previous_category == .Cc || category(current) == .Cc { ret false }
     if is_extend(current) { ret true }
-    if previous == 8205u32 { ret true }
+    if previous == 8205u32 && pictographic_run && sg.is_extended_pictographic(current) { ret true }
     if is_regional(previous) && is_regional(current) { ret regional_run % 2usize == 1usize }
     if is_hangul_l(previous) && (is_hangul_l(current) || is_hangul_v(current) || is_hangul_lv(current) || is_hangul_lvt(current)) { ret true }
     if (is_hangul_lv(previous) || is_hangul_v(previous)) && (is_hangul_v(current) || is_hangul_t(current)) { ret true }
@@ -270,10 +271,12 @@ fn graphemes_next(it: *Graphemes) -> (str, bool) {
     var previous = first
     var regional_run = 0usize
     if is_regional(first) { regional_run = 1usize }
+    var pictographic_run = sg.is_extended_pictographic(first)
     while at < it.text.len {
         let (current, width) = read_utf8(it.text, at)
-        if !joins(previous, current, regional_run) { break }
+        if !joins(previous, current, regional_run, pictographic_run) { break }
         if is_regional(current) { regional_run += 1usize } else { regional_run = 0usize }
+        if sg.is_extended_pictographic(current) { pictographic_run = true } else if !is_extend(current) { pictographic_run = false }
         previous = current
         at += width
     }

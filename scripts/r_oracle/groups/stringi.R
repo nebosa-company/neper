@@ -14,4 +14,10 @@ for (rep in 1:60) {
     cases[[length(cases) + 1]] <- case("norm", c(n, cp, f, 1), sum(u * seq_along(u)), rel = 0, abs = 0)
   }
 }
+# grapheme clusters: "seg" args (n, cp[n], what 0): the number of segments stri_count_boundaries finds with type = "character" (no Thai or Lao SARA AM: the tables here are Unicode 15.0, ICU 15.1)
+gpool <- c(0x41, 0x61, 0xE9, 0x301, 0x308, 0x200D, 0x1F600, 0x1F468, 0x1F469, 0x1F1E6, 0x1F1E7, 0x1F1E8, 0xD, 0xA, 0x1100, 0x1161, 0x11A8, 0xAC01, 0x20, 0xFE0F)
+for (rep in 1:80) {
+  n <- sample(2:14, 1); cp <- sample(gpool, n, TRUE); s <- intToUtf8(cp)
+  cases[[length(cases) + 1]] <- case("seg", c(n, cp, 0), stri_count_boundaries(s, type = "character"), rel = 0, abs = 0)
+}
 emit("stringi", "stringi", list(cases))
