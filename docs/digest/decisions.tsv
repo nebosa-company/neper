@@ -4571,4 +4571,5 @@ D7670	932	emmeans: one-way contrasts with a covariate
 D7671	1170	emmeans: Dunnett adjustments
 D7672	1029	emmeans: additive second factor
 D7673	1277	emmeans: contrasts in an interaction model
-D7674	520	emmeans: mean_chg and identity coefficient matrices
+D7674	521	emmeans: mean_chg and identity coefficient matrices
+D7675	1022	mirt: analytic graded gradient

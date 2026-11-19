@@ -379,21 +379,91 @@ type GrGrad = struct { c: *GrCtx, x: []f64 }
 fn gr_fw(t: *GrGrad, par: []const f64) -> f64 { ret gr_f(t.c, par) }
 
 fn gr_g(t: *GrGrad, par: []const f64, g: []f64) {
-    let m = par.len
-    var i = 0usize
-    while i < m {
-        t.x[i] = par[i]
-        i += 1usize
+    let c = t.c
+    let kc = c.kc
+    let j = c.j
+    let nq = c.nq
+    // gr_f at par fills lt (log P(y = cat | theta_k) per item and point); the gradient is -sum over persons of the posterior-weighted score of the log probability of the observed category
+    let fv = gr_f(c, par)
+    var z = 0usize
+    while z < j * kc {
+        g[z] = 0.0f64
+        z += 1usize
     }
-    i = 0usize
-    while i < m {
-        let h = 1.0e-6f64
-        t.x[i] = par[i] + h
-        let fp = gr_f(t.c, t.x[0usize..m])
-        t.x[i] = par[i] - h
-        let fm = gr_f(t.c, t.x[0usize..m])
-        t.x[i] = par[i]
-        g[i] = (fp - fm) / (2.0f64 * h)
+    var i = 0usize
+    while i < c.n {
+        var mx = 0.0f64 - 1.0e300f64
+        var k = 0usize
+        while k < nq {
+            var s = math.log[f64](c.w[k])
+            var jj = 0usize
+            while jj < j {
+                s += c.lt[(jj * nq + k) * kc + usize(c.y[i * j + jj])]
+                jj += 1usize
+            }
+            c.g[k] = s
+            if s > mx { mx = s }
+            k += 1usize
+        }
+        var tot = 0.0f64
+        k = 0usize
+        while k < nq {
+            c.g[k] = math.exp[f64](c.g[k] - mx)
+            tot += c.g[k]
+            k += 1usize
+        }
+        k = 0usize
+        while k < nq {
+            let r = c.g[k] / tot
+            var it = 0usize
+            while it < j {
+                let base = it * kc
+                let yc = usize(c.y[i * j + it])
+                let py = math.exp[f64](c.lt[(it * nq + k) * kc + yc])
+                // boundary densities gb[cat] = P*(1 - P*) for cat = 1 .. kc - 1 (gb[0] = gb[kc] = 0)
+                var gb: [16]f64 = zero
+                var d = 0.0f64
+                var cat = 1usize
+                while cat < kc {
+                    if cat == 1usize { d = par[base + 1usize] } else { d = d - math.exp[f64](par[base + cat]) }
+                    let pb = lgst(par[base] * c.q[k] + d)
+                    gb[cat] = pb * (1.0f64 - pb)
+                    cat += 1usize
+                }
+                let up = gb[yc]
+                var lo = 0.0f64
+                if yc + 1usize < kc { lo = gb[yc + 1usize] }
+                g[base] += 0.0f64 - r * (up - lo) * c.q[k] / py
+                // d(ll)/d(d_cat): + gb[cat] / py when yc == cat, - gb[cat] / py when yc == cat - 1
+                var dd: [16]f64 = zero
+                cat = 1usize
+                while cat < kc {
+                    if yc == cat { dd[cat] = gb[cat] / py }
+                    if yc + 1usize == cat { dd[cat] = 0.0f64 - gb[cat] / py }
+                    cat += 1usize
+                }
+                var sum = 0.0f64
+                cat = 1usize
+                while cat < kc {
+                    sum += dd[cat]
+                    cat += 1usize
+                }
+                g[base + 1usize] += 0.0f64 - r * sum
+                var m2 = 2usize
+                while m2 < kc {
+                    var tl = 0.0f64
+                    cat = m2
+                    while cat < kc {
+                        tl += dd[cat]
+                        cat += 1usize
+                    }
+                    g[base + m2] += r * tl * math.exp[f64](par[base + m2])
+                    m2 += 1usize
+                }
+                it += 1usize
+            }
+            k += 1usize
+        }
         i += 1usize
     }
 }
