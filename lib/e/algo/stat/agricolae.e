@@ -6,6 +6,7 @@
 
 use e.math
 use e.math.nmath_beta as nb
+use e.algo.linalg.lapack_gesdd as gsd
 use e.algo.rand.r as rr
 use e.algo.stat.algdesign_block as blk
 use e.math.nmath as nm
@@ -622,4 +623,144 @@ fn design_bib(a: *mem.Arena, rng: *rr.Rng, v: usize, k: usize, r: usize, out: []
         i += 1usize
     }
     ret ok
+}
+
+// ---- AMMI for a complete genotype by environment table of means with a scalar number of replicates and a given error mean square (agricolae's AMMI): the residuals of
+// the additive model, their singular value decomposition, the analysis table of the interaction axes (percent and cumulative percent of the interaction sum of squares,
+// degrees of freedom, sums of squares, mean squares, F and its p value, rounded as the package rounds them) and the genotype and environment scores U sqrt(L), V sqrt(L)
+type Ammi = struct { rows: usize, m: usize, percent: []f64, acum: []f64, df: []f64, ss: []f64, ms: []f64, f: []f64, p: []f64, scoreg: []f64, scoree: []f64, gmean: []f64, emean: []f64 }
+
+fn round_d(v: f64, d: i32) -> f64 {
+    var m = 1.0f64
+    var i = 0i32
+    while i < d {
+        m = m * 10.0f64
+        i += 1i32
+    }
+    ret math.floor[f64](v * m + 0.5f64) / m
+}
+
+// y is ngen by nenv, row-major (genotypes in rows)
+fn ammi(a: *mem.Arena, y: []const f64, ngen: usize, nenv: usize, nrep: f64, mse: f64) -> (Ammi, err) {
+    var out: Ammi = zero
+    var m = ngen
+    if nenv < m { m = nenv }
+    let (res, e0) = mem.alloc[f64](a, ngen * nenv)
+    let (gm, e1) = mem.alloc[f64](a, ngen)
+    let (em, e2) = mem.alloc[f64](a, nenv)
+    if e0 != ok || e1 != ok || e2 != ok { ret (out, mem.Full) }
+    var grand = 0.0f64
+    var g = 0usize
+    while g < ngen {
+        gm[g] = 0.0f64
+        g += 1usize
+    }
+    var e = 0usize
+    while e < nenv {
+        em[e] = 0.0f64
+        e += 1usize
+    }
+    g = 0usize
+    while g < ngen {
+        e = 0usize
+        while e < nenv {
+            gm[g] += y[g * nenv + e] / f64(nenv)
+            em[e] += y[g * nenv + e] / f64(ngen)
+            grand += y[g * nenv + e] / f64(ngen * nenv)
+            e += 1usize
+        }
+        g += 1usize
+    }
+    // column-major for the decomposition
+    g = 0usize
+    while g < ngen {
+        e = 0usize
+        while e < nenv {
+            res[e * ngen + g] = y[g * nenv + e] - gm[g] - em[e] + grand
+            e += 1usize
+        }
+        g += 1usize
+    }
+    let (sv, e3) = mem.alloc[f64](a, m)
+    let (uu, e4) = mem.alloc[f64](a, ngen * m)
+    let (vt, e5) = mem.alloc[f64](a, m * nenv)
+    if e3 != ok || e4 != ok || e5 != ok { ret (out, mem.Full) }
+    let es = gsd.svd_all(a, res, ngen, nenv, sv, uu, vt)
+    if es != ok { ret (out, es) }
+    let (ssv, e6) = mem.alloc[f64](a, m)
+    let (pc, e7) = mem.alloc[f64](a, m)
+    let (ac, e8) = mem.alloc[f64](a, m)
+    let (dfv, e9) = mem.alloc[f64](a, m)
+    let (msv, e10) = mem.alloc[f64](a, m)
+    let (fv, e11) = mem.alloc[f64](a, m)
+    let (pv, e12) = mem.alloc[f64](a, m)
+    if e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok { ret (out, mem.Full) }
+    var suma = 0.0f64
+    var i = 0usize
+    while i < m {
+        ssv[i] = sv[i] * sv[i] * nrep
+        suma += ssv[i]
+        dfv[i] = 0.0f64
+        ac[i] = 0.0f64
+        msv[i] = 0.0f64
+        fv[i] = 0.0f64
+        pv[i] = 0.0f64
+        i += 1usize
+    }
+    let dfe = f64(nenv) * (f64(ngen) - 1.0f64) * (nrep - 1.0f64)
+    var rows = 0usize
+    var acumula = 0.0f64
+    i = 0usize
+    while i + 1usize < m {
+        let df = (f64(ngen) - 1.0f64) + (f64(nenv) - 1.0f64) - (2.0f64 * f64(i + 1usize) - 1.0f64)
+        if df <= 0.0f64 { break }
+        dfv[i] = df
+        acumula += (1.0f64 / suma) * ssv[i] * 100.0f64
+        ac[i] = acumula
+        msv[i] = ssv[i] / df
+        fv[i] = round_d(msv[i] / mse, 2i32)
+        pv[i] = round_d(1.0f64 - nb.pf(fv[i], df, dfe, true, false), 4i32)
+        rows += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        pc[i] = round_d((1.0f64 / suma) * ssv[i] * 100.0f64, 1i32)
+        ac[i] = round_d(ac[i], 1i32)
+        msv[i] = round_d(msv[i], 6i32)
+        ssv[i] = round_d(ssv[i], 6i32)
+        i += 1usize
+    }
+    let (sg, e13) = mem.alloc[f64](a, ngen * m)
+    let (se, e14) = mem.alloc[f64](a, nenv * m)
+    if e13 != ok || e14 != ok { ret (out, mem.Full) }
+    var c = 0usize
+    while c < m {
+        let r = math.sqrt[f64](sv[c])
+        g = 0usize
+        while g < ngen {
+            sg[g * m + c] = uu[c * ngen + g] * r
+            g += 1usize
+        }
+        e = 0usize
+        while e < nenv {
+            se[e * m + c] = vt[e * m + c] * r
+            e += 1usize
+        }
+        c += 1usize
+    }
+    out.rows = rows
+    out.m = m
+    out.percent = pc
+    out.acum = ac
+    out.df = dfv
+    out.ss = ssv
+    out.ms = msv
+    out.f = fv
+    out.p = pv
+    out.scoreg = sg
+    out.scoree = se
+    out.gmean = gm
+    out.emean = em
+    ret (out, ok)
 }

@@ -50002,3 +50002,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `betareg.fit_se_var` inverts the Fisher information of the joint fit with the log precision link: K_bb = X' diag(phi^2 w) X, K_bg = X' diag(c phi / g') Z, K_gg = Z' diag(d phi^2) Z.
 
 **Result.** `oracle_betareg` (669 cases, 49 new) equals `summary(betareg(y ~ x | z))` standard errors on Windows to 1e-2 relative (they inherit the optimiser's tolerance on the coefficients). Linux pending. L451 stays partial: other precision links, bias correction and bias reduction, sweighted2.
+
+## D7324 — agricolae: AMMI
+
+`e.algo.stat.agricolae` gains `ammi` for a complete genotype by environment table of means with a scalar number of replicates and a given error mean square: the residuals of the additive model (two-way centring), their singular value decomposition through the dgesdd port (so the axis signs are R's), the analysis table of the interaction axes (percent and cumulative percent of the interaction sum of squares, degrees of freedom (ngen - 1) + (nenv - 1) - (2 i - 1) while positive, the sums of squares scaled by the replicates, mean squares, F rounded to two decimals against the error mean square, its p value rounded to four, as the package rounds them) and the genotype and environment scores U sqrt(L) and V sqrt(L), with the genotype and environment means. The raw-data form (a replicate factor, missing cells filled by a linear model, the ANOVA table, the PC variant) is not ported.
+
+**Result.** `oracle_agricolae_ammi` equals agricolae on 503 values (eight tables of 4 to 7 genotypes by 4 to 6 environments) on Windows. Linux pending. L396 stays partial: design.alpha, design.lattice and the raw-data AMMI form remain.
