@@ -4215,4 +4215,7 @@ D7319	583	psych: principal with varimax
 D7320	659	psych: fa by principal axis
 D7413	1038	PMCMRplus steelsKSampleTest
 D7414	595	PMCMRplus lsdTest and gamesHowellTest
-D7321	787	psych: scoreItems
+D7321	788	psych: scoreItems
+D7415	729	PMCMRplus snkTest and duncanTest
+D7416	622	PMCMRplus tamhaneT2Test and dunnettT3Test
+D7417	816	L487 closed: hsAllPairsTest statistic, and the acceptance list is met
