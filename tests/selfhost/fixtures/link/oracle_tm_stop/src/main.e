@@ -17,6 +17,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.push_byte(&bd, u8(c.args[i])) != ok { ret 0.0f64 / 0.0f64 }
         i += 1usize
     }
+    if str.eq(c.name, "rqn") || str.eq(c.name, "rqs") {
+        let (b2, eb2) = str.builder(a, c.args.len + 1usize)
+        if eb2 != ok { ret 0.0f64 / 0.0f64 }
+        var bd2 = b2
+        var j = 1usize
+        while j < c.args.len {
+            if str.push_byte(&bd2, u8(c.args[j])) != ok { ret 0.0f64 / 0.0f64 }
+            j += 1usize
+        }
+        let fl = usize(c.args[0usize])
+        let (r2, er2) = ts.remove_punctuation_opts(a, str.done(&bd2), fl == 1usize || fl == 3usize, fl == 2usize || fl == 3usize)
+        if er2 != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(c.name, "rqn") { ret f64(r2.len) }
+        var sm2 = 0.0f64
+        var k2 = 0usize
+        while k2 < r2.len {
+            sm2 += f64(r2[k2]) * f64(k2 + 1usize)
+            k2 += 1usize
+        }
+        ret sm2
+    }
     let w = str.done(&bd)
     if str.eq(c.name, "rpn") || str.eq(c.name, "rps") {
         let (r, er) = ts.remove_punctuation(a, w)

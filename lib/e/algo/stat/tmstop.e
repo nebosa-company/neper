@@ -215,3 +215,54 @@ fn remove_punctuation(a: *mem.Arena, s: str) -> (str, err) {
     }
     ret (str.done(&bd), ok)
 }
+
+fn is_word_byte(b: u8) -> bool { ret (b >= 48u8 && b <= 57u8) || (b >= 65u8 && b <= 90u8) || b == 95u8 || (b >= 97u8 && b <= 122u8) }
+
+// gsub("(\w)<ch>(\w)", "\1<mark>\2", x, perl = TRUE) for ASCII text: scanning left to right, a match consumes both neighbours, so in a'b'c only the first apostrophe is marked
+fn mark_intra(a: *mem.Arena, s: str, ch: u8, mark: u8) -> (str, err) {
+    let (bld, eb) = str.builder(a, s.len + 1usize)
+    if eb != ok { ret ("", eb) }
+    var bd = bld
+    var i = 0usize
+    while i < s.len {
+        if i + 2usize < s.len + 0usize && is_word_byte(s[i]) && s[i + 1usize] == ch && is_word_byte(s[i + 2usize]) {
+            if str.push_byte(&bd, s[i]) != ok { ret ("", mem.Full) }
+            if str.push_byte(&bd, mark) != ok { ret ("", mem.Full) }
+            if str.push_byte(&bd, s[i + 2usize]) != ok { ret ("", mem.Full) }
+            i += 3usize
+        } else {
+            if str.push_byte(&bd, s[i]) != ok { ret ("", mem.Full) }
+            i += 1usize
+        }
+    }
+    ret (str.done(&bd), ok)
+}
+
+// tm removePunctuation(x, preserve_intra_word_contractions, preserve_intra_word_dashes): the marked apostrophes and dashes (codes 1 and 2) survive the removal and are written back
+fn remove_punctuation_opts(a: *mem.Arena, s: str, keep_contractions: bool, keep_dashes: bool) -> (str, err) {
+    var cur = s
+    if keep_contractions {
+        let (r, e) = mark_intra(a, cur, 39u8, 1u8)
+        if e != ok { ret ("", e) }
+        cur = r
+    }
+    if keep_dashes {
+        let (r, e) = mark_intra(a, cur, 45u8, 2u8)
+        if e != ok { ret ("", e) }
+        cur = r
+    }
+    let (rp, e2) = remove_punctuation(a, cur)
+    if e2 != ok { ret ("", e2) }
+    let (bld, eb) = str.builder(a, rp.len + 1usize)
+    if eb != ok { ret ("", eb) }
+    var bd = bld
+    var i = 0usize
+    while i < rp.len {
+        var c = rp[i]
+        if keep_contractions && c == 1u8 { c = 39u8 }
+        if keep_dashes && c == 2u8 { c = 45u8 }
+        if str.push_byte(&bd, c) != ok { ret ("", mem.Full) }
+        i += 1usize
+    }
+    ret (str.done(&bd), ok)
+}

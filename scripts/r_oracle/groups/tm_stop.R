@@ -13,4 +13,11 @@ for (rep in 1:60) {
   cases[[length(cases) + 1]] <- case("rpn", utf8ToInt(txt), length(cc), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("rps", utf8ToInt(txt), sum(cc * seq_along(cc)), rel = 0, abs = 0)
 }
+# the preserve options: "rq" with args (flags 1 contractions 2 dashes 3 both, then the text codes): length and position-weighted sum
+for (rep in 1:80) {
+  txt <- paste(sample(c(letters[1:6], "'", "-", " ", ".", "_", "1", "'", "-"), sample(3:30, 1), TRUE), collapse = ""); fl <- 1 + rep %% 3
+  r <- removePunctuation(txt, preserve_intra_word_contractions = fl %in% c(1, 3), preserve_intra_word_dashes = fl %in% c(2, 3)); cc <- utf8ToInt(r)
+  cases[[length(cases) + 1]] <- case("rqn", c(fl, utf8ToInt(txt)), length(cc), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("rqs", c(fl, utf8ToInt(txt)), sum(cc * seq_along(cc)), rel = 0, abs = 0)
+}
 emit("tm_stop", "tm", list(cases))

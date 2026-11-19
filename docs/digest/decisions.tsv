@@ -4370,4 +4370,5 @@ D7512	468	ordinal clm predictions
 D7513	477	ordinal clm anova
 D7514	543	tm stopwords("english")
 D7515	676	tm removePunctuation
-D7516	655	tm stopword lists for the thirteen languages
+D7516	656	tm stopword lists for the thirteen languages
+D7517	742	tm removePunctuation preserve options
