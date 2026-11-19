@@ -556,7 +556,7 @@ fn discrcoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usi
     if e3 != ok { ret e3 }
     let (tinv, e4) = mem.alloc[f64](a, p * p)
     if e4 != ok { ret e4 }
-    let e5 = wr.invert_small(a, tm, p, tinv)
+    let e5 = lu_inverse(a, tm, p, tinv)
     if e5 != ok { ret e5 }
     // the total covariance of x: all rows as one label
     let (ones, e6) = mem.alloc[usize](a, n)
@@ -802,4 +802,459 @@ fn dist_xy(x: []const f64, p: usize, i: usize, j: usize) -> f64 {
         k += 1usize
     }
     ret math.sqrt[f64](s)
+}
+
+// ---- R's solve(): the inverse of an n by n matrix as LAPACK's dgesv answers it with the identity as right-hand side (dgetrf2, the recursive LU with partial pivoting, then
+// dgetrs with the reference dtrsm), operation for operation so that the rounding is R's. The arrays are column-major (element (i, j) at i + j * n).
+
+// the element index of (i, j) of the block starting at off
+fn lu_at(off: usize, lda: usize, i: usize, j: usize) -> usize { ret off + i + j * lda }
+
+// dlaswp on ncols columns starting at column coff: the rows k1..k2-1 (0-based) exchanged with ipiv (0-based absolute row)
+fn lu_laswp(aa: []f64, lda: usize, coff: usize, ncols: usize, k1: usize, k2: usize, ipiv: []const usize) {
+    var i = k1
+    while i < k2 {
+        let ip = ipiv[i]
+        if ip != i {
+            var c = 0usize
+            while c < ncols {
+                let x1 = (coff + c) * lda + i
+                let x2 = (coff + c) * lda + ip
+                let t = aa[x1]
+                aa[x1] = aa[x2]
+                aa[x2] = t
+                c += 1usize
+            }
+        }
+        i += 1usize
+    }
+}
+
+// dgetrf2 on the m by n block at off; ipiv[ioff ..] receives the pivots relative to the block's first row (0-based)
+fn lu_getrf2(aa: []f64, lda: usize, off: usize, m: usize, n: usize, ipiv: []usize, ioff: usize) {
+    if m == 1usize {
+        ipiv[ioff] = 0usize
+        ret
+    }
+    if n == 1usize {
+        var imax = 0usize
+        var best = math.abs[f64](aa[off])
+        var i = 1usize
+        while i < m {
+            let v = math.abs[f64](aa[off + i])
+            if v > best {
+                best = v
+                imax = i
+            }
+            i += 1usize
+        }
+        ipiv[ioff] = imax
+        if aa[off + imax] != 0.0f64 {
+            if imax != 0usize {
+                let t = aa[off]
+                aa[off] = aa[off + imax]
+                aa[off + imax] = t
+            }
+            let sfmin = 2.2250738585072014e-308f64
+            if math.abs[f64](aa[off]) >= sfmin {
+                let r = 1.0f64 / aa[off]
+                i = 1usize
+                while i < m {
+                    aa[off + i] = aa[off + i] * r
+                    i += 1usize
+                }
+            } else {
+                i = 1usize
+                while i < m {
+                    aa[off + i] = aa[off + i] / aa[off]
+                    i += 1usize
+                }
+            }
+        }
+        ret
+    }
+    var mn = m
+    if n < mn { mn = n }
+    let n1 = mn / 2usize
+    let n2 = n - n1
+    lu_getrf2(aa, lda, off, m, n1, ipiv, ioff)
+    // A12: the rows exchanged
+    var i = 0usize
+    while i < n1 {
+        let ip = ipiv[ioff + i]
+        if ip != i {
+            var c = 0usize
+            while c < n2 {
+                let x1 = off + (n1 + c) * lda + i
+                let x2 = off + (n1 + c) * lda + ip
+                let t = aa[x1]
+                aa[x1] = aa[x2]
+                aa[x2] = t
+                c += 1usize
+            }
+        }
+        i += 1usize
+    }
+    // dtrsm L, L, N, U: A12 = L11^-1 A12
+    var j = 0usize
+    while j < n2 {
+        var k = 0usize
+        while k < n1 {
+            let bkj = aa[off + k + (n1 + j) * lda]
+            if bkj != 0.0f64 {
+                var r = k + 1usize
+                while r < n1 {
+                    aa[off + r + (n1 + j) * lda] = aa[off + r + (n1 + j) * lda] - bkj * aa[off + r + k * lda]
+                    r += 1usize
+                }
+            }
+            k += 1usize
+        }
+        j += 1usize
+    }
+    // dgemm: A22 = A22 - A21 A12
+    j = 0usize
+    while j < n2 {
+        var l = 0usize
+        while l < n1 {
+            let temp = 0.0f64 - aa[off + l + (n1 + j) * lda]
+            var r = 0usize
+            while r < m - n1 {
+                aa[off + n1 + r + (n1 + j) * lda] = aa[off + n1 + r + (n1 + j) * lda] + temp * aa[off + n1 + r + l * lda]
+                r += 1usize
+            }
+            l += 1usize
+        }
+        j += 1usize
+    }
+    lu_getrf2(aa, lda, off + n1 + n1 * lda, m - n1, n2, ipiv, ioff + n1)
+    i = n1
+    while i < mn {
+        ipiv[ioff + i] += n1
+        i += 1usize
+    }
+    // exchange the rows of A21 with the second block's pivots
+    i = n1
+    while i < mn {
+        let ip = ipiv[ioff + i]
+        if ip != i {
+            var c = 0usize
+            while c < n1 {
+                let x1 = off + c * lda + i
+                let x2 = off + c * lda + ip
+                let t = aa[x1]
+                aa[x1] = aa[x2]
+                aa[x2] = t
+                c += 1usize
+            }
+        }
+        i += 1usize
+    }
+}
+
+// the inverse of the n by n row-major matrix m, as solve(m): out is n by n row-major
+fn lu_inverse(a: *mem.Arena, m: []const f64, n: usize, out: []f64) -> err {
+    let (aa, e0) = mem.alloc[f64](a, n * n)
+    let (bb, e1) = mem.alloc[f64](a, n * n)
+    let (ipiv, e2) = mem.alloc[usize](a, n)
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            aa[i + j * n] = m[i * n + j]
+            bb[i + j * n] = 0.0f64
+            if i == j { bb[i + j * n] = 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    lu_getrf2(aa, n, 0usize, n, n, ipiv, 0usize)
+    i = 0usize
+    while i < n {
+        if aa[i + i * n] == 0.0f64 { ret Malformed }
+        i += 1usize
+    }
+    // dgetrs: the row exchanges on B, then L (unit lower) and U
+    lu_laswp(bb, n, 0usize, n, 0usize, n, ipiv)
+    var j = 0usize
+    while j < n {
+        var k = 0usize
+        while k < n {
+            if bb[k + j * n] != 0.0f64 {
+                var r = k + 1usize
+                while r < n {
+                    bb[r + j * n] = bb[r + j * n] - bb[k + j * n] * aa[r + k * n]
+                    r += 1usize
+                }
+            }
+            k += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < n {
+        var k = n
+        while k > 0usize {
+            k -= 1usize
+            if bb[k + j * n] != 0.0f64 {
+                bb[k + j * n] = bb[k + j * n] / aa[k + k * n]
+                var r = 0usize
+                while r < k {
+                    bb[r + j * n] = bb[r + j * n] - bb[k + j * n] * aa[r + k * n]
+                    r += 1usize
+                }
+            }
+        }
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        j = 0usize
+        while j < n {
+            out[i * n + j] = bb[i + j * n]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// Neumaier step: R's colMeans, rowSums and sum() accumulate in long double, which a compensated sum reproduces
+fn cstep(s: f64, c: f64, v: f64) -> (f64, f64) {
+    let t = s + v
+    var cc = c
+    if math.abs[f64](s) >= math.abs[f64](v) { cc += (s - t) + v } else { cc += (v - t) + s }
+    ret (t, cc)
+}
+
+// ---- ncoord (fpc): neighbourhood-based discriminant coordinates. x is n by p row-major, cl the 0-based class of every point, nn the neighbourhood size; sphere is the
+// covariance matrix to sphere the data by (p by p, row-major) or an empty slice for no sphering ("none"). ev (p), units (p by p) and proj (n by p) receive the eigenvalues in
+// decreasing order, the coordinate directions (columns, in R's eigenvector order and sign) and the projections of the original data.
+fn ncoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, kn: usize, nn: usize, weighted: bool, sphere: []const f64, ev: []f64, units: []f64, proj: []f64) -> err {
+    let (z, e0) = mem.alloc[f64](a, n * p)
+    let (yy, e1) = mem.alloc[f64](a, p * p)
+    if e0 != ok || e1 != ok { ret mem.Full }
+    var i = 0usize
+    while i < p * p {
+        yy[i] = 0.0f64
+        i += 1usize
+    }
+    if sphere.len > 0usize {
+        let (tm, e2) = mem.alloc[f64](a, p * p)
+        if e2 != ok { ret e2 }
+        let e3 = tdecomp(a, sphere, p, tm)
+        if e3 != ok { ret e3 }
+        let e4 = lu_inverse(a, tm, p, yy)
+        if e4 != ok { ret e4 }
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < p {
+                var s = 0.0f64
+                var q = 0usize
+                while q < p {
+                    s += x[i * p + q] * yy[q * p + j]
+                    q += 1usize
+                }
+                z[i * p + j] = s
+                j += 1usize
+            }
+            i += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < p {
+            yy[i * p + i] = 1.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < n * p {
+            z[i] = x[i]
+            i += 1usize
+        }
+    }
+    let (b, e5) = mem.alloc[f64](a, p * p)
+    let (bi, e6) = mem.alloc[f64](a, p * p)
+    let (mds, e7) = mem.alloc[f64](a, n)
+    let (omah, e8) = mem.alloc[usize](a, nn)
+    let (mi, e9) = mem.alloc[f64](a, p)
+    let (v, e10) = mem.alloc[f64](a, p)
+    if e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret mem.Full }
+    i = 0usize
+    while i < p * p {
+        b[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var t = 0usize
+        while t < p * p {
+            bi[t] = 0.0f64
+            t += 1usize
+        }
+        var q = 0usize
+        while q < n {
+            var d = 0.0f64
+            var dc = 0.0f64
+            var j = 0usize
+            while j < p {
+                let df = z[q * p + j] - z[i * p + j]
+                let (d1, d2) = cstep(d, dc, df * df)
+                d = d1
+                dc = d2
+                j += 1usize
+            }
+            mds[q] = d + dc
+            q += 1usize
+        }
+        // order(mds)[1:nn]: the nn smallest, ties by position
+        q = 0usize
+        while q < n {
+            var rank = 0usize
+            var r = 0usize
+            while r < n {
+                if mds[r] < mds[q] || (mds[r] == mds[q] && r < q) { rank += 1usize }
+                r += 1usize
+            }
+            if rank < nn { omah[rank] = q }
+            q += 1usize
+        }
+        var j = 0usize
+        while j < p {
+            var s = 0.0f64
+            var sc = 0.0f64
+            var r = 0usize
+            while r < nn {
+                let (s1, s2) = cstep(s, sc, z[omah[r] * p + j])
+                s = s1
+                sc = s2
+                r += 1usize
+            }
+            mi[j] = (s + sc) / f64(nn)
+            j += 1usize
+        }
+        var c = 0usize
+        while c < kn {
+            var nj = 0usize
+            var r = 0usize
+            while r < nn {
+                if cl[omah[r]] == c { nj += 1usize }
+                r += 1usize
+            }
+            let pij = f64(nj) / f64(nn)
+            j = 0usize
+            while j < p {
+                v[j] = 0.0f64
+                j += 1usize
+            }
+            if nj > 0usize {
+                j = 0usize
+                while j < p {
+                    var s = 0.0f64
+                    var sc = 0.0f64
+                    r = 0usize
+                    while r < nn {
+                        if cl[omah[r]] == c {
+                            let (s1, s2) = cstep(s, sc, z[omah[r] * p + j])
+                            s = s1
+                            sc = s2
+                        }
+                        r += 1usize
+                    }
+                    v[j] = (s + sc) / f64(nj) - mi[j]
+                    j += 1usize
+                }
+            }
+            var u1 = 0usize
+            while u1 < p {
+                var u2 = 0usize
+                while u2 < p {
+                    bi[u1 * p + u2] += pij * (v[u1] * v[u2])
+                    u2 += 1usize
+                }
+                u1 += 1usize
+            }
+            c += 1usize
+        }
+        if weighted {
+            var sb0 = 0.0f64
+            var sbc = 0.0f64
+            var d2 = 0usize
+            while d2 < p {
+                let (t1, t2) = cstep(sb0, sbc, bi[d2 * p + d2])
+                sb0 = t1
+                sbc = t2
+                d2 += 1usize
+            }
+            let sb = sb0 + sbc
+            if sb > 0.0f64 {
+                var u = 0usize
+                while u < p * p {
+                    bi[u] = bi[u] / sb
+                    u += 1usize
+                }
+            }
+        }
+        var u = 0usize
+        while u < p * p {
+            b[u] += bi[u]
+            u += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < p * p {
+        b[i] = b[i] / f64(n)
+        i += 1usize
+    }
+    let (w, e11) = mem.alloc[f64](a, p)
+    let (vv, e12) = mem.alloc[f64](a, p * p)
+    if e11 != ok || e12 != ok { ret mem.Full }
+    let e13 = sy.dsyevr_all(a, b, p, w, vv)
+    if e13 != ok { ret e13 }
+    let (u0, e14) = mem.alloc[f64](a, p * p)
+    if e14 != ok { ret e14 }
+    var k = 0usize
+    while k < p {
+        ev[k] = w[p - 1usize - k]
+        var r = 0usize
+        while r < p {
+            u0[r * p + k] = vv[(p - 1usize - k) * p + r]
+            r += 1usize
+        }
+        k += 1usize
+    }
+    // units = Y %*% units (the identity without sphering), proj = x %*% units
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += yy[r * p + q] * u0[q * p + c]
+                q += 1usize
+            }
+            units[r * p + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += x[i * p + q] * units[q * p + c]
+                q += 1usize
+            }
+            proj[i * p + c] = s
+            c += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
 }

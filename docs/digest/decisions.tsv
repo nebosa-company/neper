@@ -4122,4 +4122,5 @@ D7326	1093	agricolae: design.alpha
 D7327	1025	agricolae: stability.nonpar
 D7328	1115	agricolae: stability.par
 D7329	1273	agricolae: AMMI from raw data, the grouped Kruskal and Friedman tests; L396 closed
-D7330	1063	fpc: dbscan
+D7330	1064	fpc: dbscan
+D7331	1786	fpc: ncoord, and R's solve() in the LU order
