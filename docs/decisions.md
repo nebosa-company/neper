@@ -50281,3 +50281,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7384 — sampling postest (post-strata only)
 `post_estimator` is postest for a data frame with a poststratum column and no Stratum column: over the post-strata in order of first appearance, NG[j] sum(y/pik) / sum(1/pik) within the j-th, summed. Equal to sampling to 1e-10 on twenty samples. The two-way version (a Stratum column with a matrix NG) is not ported. L508 at 0.94.
+
+## D7385 — sampling srswr and R's rbinom inversion
+`rbinom_inv` in e.algo.rand.r is R's rbinom for n min(p, 1 - p) < 30 (the inverse-cdf loop with the restart after 110 steps, p folded to at most 1/2 and the answer reflected for p > 1/2); the BTPE branch is not ported, so a larger mean answers NaN. `srswr(n, N)` is rmultinom(1, n, rep(n/N, N)): sequential binomials of what is left, each with probability prob / p_tot. R accumulates p_tot in long double, so that probability is 1 / (N - k) correctly rounded; with a double running sum the last pair came out as 0.5 plus an ulp, which flips rbinom's p > 0.5 branch and swapped the last two counts (the first run disagreed in about one draw in four for that reason). Equal to sampling under set.seed on 40 draws. L508 at 0.96.

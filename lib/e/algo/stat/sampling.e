@@ -1561,3 +1561,26 @@ fn post_estimator(y: []const f64, pik: []const f64, post: []const f64, ng: []con
     }
     ret total
 }
+
+// srswr(n, N): rmultinom(1, n, rep(n / N, N)), i.e. sequential binomials of what is left with success probability prob / p_tot. R keeps p_tot in long double, so that probability is
+// 1 / (N - k) correctly rounded (a double running sum drifts off the exact 1/2 of the last pair and flips rbinom's p > 0.5 branch); the draws use R's inversion sampler, so n times the
+// smaller of p and 1 - p must stay under 30. s receives the counts.
+fn srswr(g: *rr.Rng, n: usize, total: usize, s: []f64) {
+    var left = f64(n)
+    var k = 0usize
+    while k < total {
+        s[k] = 0.0f64
+        k += 1usize
+    }
+    k = 0usize
+    while k + 1usize < total {
+        let pp = 1.0f64 / f64(total - k)
+        var v = left
+        if pp < 1.0f64 { v = rr.rbinom_inv(g, left, pp) }
+        s[k] = v
+        left -= v
+        if left <= 0.0f64 { ret }
+        k += 1usize
+    }
+    s[total - 1usize] = left
+}

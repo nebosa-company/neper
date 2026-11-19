@@ -251,3 +251,43 @@ fn sample_int(a: *mem.Arena, r: *Rng, n: i64, size: i64, replace: bool) -> ([]i6
     }
     ret (y, ok)
 }
+
+// rbinom(1, n, pp) by R's inversion algorithm, which R uses when n min(pp, 1 - pp) < 30; the BTPE branch for larger means is not here and the answer is NaN
+fn rbinom_inv(r: *Rng, n: f64, pp: f64) -> f64 {
+    if n != n || pp != pp || n < 0.0f64 || pp < 0.0f64 || pp > 1.0f64 { ret special.nan() }
+    let nn = math.floor[f64](n + 0.5f64)
+    if nn == 0.0f64 || pp == 0.0f64 { ret 0.0f64 }
+    if pp == 1.0f64 { ret nn }
+    var p = pp
+    if 1.0f64 - pp < p { p = 1.0f64 - pp }
+    let q = 1.0f64 - p
+    let np = nn * p
+    if np >= 30.0f64 { ret special.nan() }
+    let rr = p / q
+    let g = rr * (nn + 1.0f64)
+    let qn = math.pow[f64](q, nn)
+    var ix = 0.0f64
+    var found = false
+    while !found {
+        ix = 0.0f64
+        var f = qn
+        var u = unif(r)
+        var inner = true
+        while inner {
+            if u < f {
+                found = true
+                inner = false
+            } else {
+                if ix > 110.0f64 {
+                    inner = false
+                } else {
+                    u -= f
+                    ix += 1.0f64
+                    f *= (g / ix - rr)
+                }
+            }
+        }
+    }
+    if pp > 0.5f64 { ix = nn - ix }
+    ret ix
+}
