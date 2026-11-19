@@ -5,11 +5,19 @@ use e.algo.stat.margeff as mf
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "mpred") {
+        let pp = usize(z[0usize])
+        let (op, ep) = mem.alloc[f64](a, 2usize)
+        if ep != ok { ret nan }
+        mf.glm_pred(usize(z[1usize]), z[2usize + pp + pp * pp..2usize + pp + pp * pp + pp], z[2usize..2usize + pp], z[2usize + pp..2usize + pp + pp * pp], pp, op)
+        ret op[usize(z[2usize + pp + pp * pp + pp])]
+    }
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let (o, e) = mem.alloc[f64](a, 2usize)

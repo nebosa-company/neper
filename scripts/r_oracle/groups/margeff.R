@@ -35,4 +35,20 @@ for (rep in 1:20) {
   cmp <- as.data.frame(avg_comparisons(m, variables = list(v1 = 0:1)))
   for (w in 0:1) add(c(n, p, 1, w, link, 1, b, V, Xm), if (w == 0) cmp$estimate[1] else cmp$std.error[1])
 }
+# predictions at new rows: "mpred" args (p, link, beta[p], vcov[p p], x row[p], which 0 estimate 1 se)
+set.seed(20262494)
+for (rep in 1:30) {
+  link <- rep %% 7; n <- sample(100:200, 1); k <- sample(2:3, 1); X <- matrix(round(rnorm(n * k), 3), n, k); X[, 1] <- rbinom(n, 1, 0.5)
+  eta <- 0.3 + X %*% c(0.6, -0.4, 0.3)[1:k] * 0.8
+  y <- switch(link + 1, as.vector(eta) + rnorm(n), rbinom(n, 1, plogis(eta)), rpois(n, exp(eta * 0.6)), rbinom(n, 1, pnorm(eta)), rbinom(n, 1, 1 - exp(-exp(eta))), rgamma(n, 4, 4 * (0.9 + 0.15 * X[, 2])), rpois(n, (0.8 + 0.15 * X[, 2])^2 * 3))
+  d <- data.frame(y = y, X); names(d) <- c("y", paste0("v", 1:k))
+  fam <- list(gaussian(), binomial(), poisson(), binomial(link = "probit"), binomial(link = "cloglog"), Gamma(link = "inverse"), poisson(link = "sqrt"))[[link + 1]]
+  m <- tryCatch(suppressWarnings(glm(as.formula(paste("y ~", paste0("v", 1:k, collapse = " + "))), fam, d)), error = function(e) NULL)
+  if (is.null(m) || !m$converged) next
+  b <- coef(m); V <- vcov(m); p <- length(b)
+  nd <- data.frame(matrix(round(rnorm(4 * k), 2), 4, k)); names(nd) <- paste0("v", 1:k)
+  pr <- tryCatch(as.data.frame(predictions(m, newdata = nd)), error = function(e) NULL)
+  if (is.null(pr)) next
+  for (r in 1:4) { xr <- c(1, as.numeric(nd[r, ])); for (w in 0:1) { v <- if (w == 0) pr$estimate[r] else if ("std.error" %in% names(pr)) pr$std.error[r] else NA_real_; if (length(v) == 1 && is.finite(v)) cases[[length(cases) + 1]] <- case("mpred", c(p, link, b, V, xr, w), v, rel = 1e-5, abs = 1e-8) } }
+}
 emit("margeff", "marginaleffects", list(cases))

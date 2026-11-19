@@ -51058,3 +51058,6 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7521 — marginaleffects for four more links
 `mu_d` gains the probit (Phi, phi, -eta phi), cloglog (1 - exp(-e^eta), with its density and its derivative), inverse (1 / eta, -1 / eta^2, 2 / eta^3) and square-root (eta^2, 2 eta, 2) inverse links with their first two derivatives, so avg_predictions, avg_slopes and the 0 / 1 avg_comparisons (delta-method standard errors, analytic Jacobian) cover binomial probit and cloglog, Gamma inverse and Poisson sqrt; equal to marginaleffects at 1e-5 on 20 more glms (84 values added to oracle_margeff, 264 in all). Open for L415: other families and links (inverse-square, cauchit), comparisons for factors and other contrasts, predictions at a grid, conditional effects, hypotheses.
+
+## D7522 — marginaleffects predictions at new rows
+`glm_pred` is predictions(model, newdata) of a glm at one new row: mu(x'b) and the delta-method standard error |mu'(eta)| sqrt(x' V x), for the seven inverse links of `mu_d` (identity, logit, log, probit, cloglog, inverse, sqrt); equal to marginaleffects at 1e-5 on four random rows of each of 30 glms (120 values added to oracle_margeff, 384 in all). Open for L415: other links, comparisons for factors and other contrasts, conditional effects, hypotheses.

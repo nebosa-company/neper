@@ -123,3 +123,27 @@ fn glm_avg(a: *mem.Arena, link: usize, kind: usize, x: []const f64, beta: []cons
     out[0usize] = est
     out[1usize] = math.sqrt[f64](v)
 }
+
+// predictions(model, newdata) of a glm for one new row x (p values, intercept first): the response mu(eta) and its delta-method standard error mu'(eta) sqrt(x' V x); beta and vcov (p by p, column-major) from the fit; out = (estimate, standard error)
+fn glm_pred(link: usize, x: []const f64, beta: []const f64, vcov: []const f64, p: usize, out: []f64) {
+    var eta = 0.0f64
+    var i = 0usize
+    while i < p {
+        eta += x[i] * beta[i]
+        i += 1usize
+    }
+    var d: [3]f64 = zero
+    mu_d(link, eta, d[0usize..3usize])
+    var q = 0.0f64
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            q += x[i] * vcov[j * p + i] * x[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    out[0usize] = d[0usize]
+    out[1usize] = math.abs[f64](d[1usize]) * math.sqrt[f64](q)
+}
