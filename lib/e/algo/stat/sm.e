@@ -1207,3 +1207,49 @@ fn regression_test(a: *mem.Arena, x: []const f64, y: []const f64, h: f64, kind: 
     let cc = k1 - aa * bb
     ret (1.0f64 - nm.pchisq(0.0f64 - cc / aa, bb, true, false), ok)
 }
+
+// cv.crit.dens of sm for two variables (unit weights, no binning): the bandwidths are h1, h2
+fn cv_density_2d(x1: []const f64, x2: []const f64, h1: f64, h2: f64) -> f64 {
+    let n = x1.len
+    let nn = f64(n)
+    let pi2 = 6.283185307179586f64
+    let s2 = math.sqrt[f64](2.0f64)
+    let c0 = 1.0f64 / (math.sqrt[f64](pi2) * s2 * h1) / (math.sqrt[f64](pi2) * s2 * h2)
+    var hc = nn * c0 / (nn * (nn - 1.0f64))
+    var a = 0.0f64
+    var b = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            if i != j {
+                let d1 = x1[i] - x1[j]
+                let d2 = x2[i] - x2[j]
+                a += math.exp[f64](0.0f64 - 0.5f64 * (d1 / (h1 * s2)) * (d1 / (h1 * s2))) / (math.sqrt[f64](pi2) * h1 * s2) * (math.exp[f64](0.0f64 - 0.5f64 * (d2 / (h2 * s2)) * (d2 / (h2 * s2))) / (math.sqrt[f64](pi2) * h2 * s2))
+                b += math.exp[f64](0.0f64 - 0.5f64 * (d1 / h1) * (d1 / h1)) / (math.sqrt[f64](pi2) * h1) * (math.exp[f64](0.0f64 - 0.5f64 * (d2 / h2) * (d2 / h2)) / (math.sqrt[f64](pi2) * h2))
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    hc += a * (nn - 2.0f64) / (nn * (nn - 1.0f64) * (nn - 1.0f64))
+    hc -= b * 2.0f64 / (nn * (nn - 1.0f64))
+    ret hc
+}
+
+type Cv2Ctx = struct { x1: []const f64, x2: []const f64, s1: f64, s2: f64 }
+
+fn cv2_log(c: *Cv2Ctx, lh: f64) -> f64 {
+    let h = math.exp[f64](lh)
+    let v = cv_density_2d(c.x1, c.x2, h * c.s1, h * c.s2)
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+// h.select(cbind(x1, x2), method = "cv") with the default scaled structure (start 0.5): the factor times the two standard deviations; which 0 the first bandwidth, 1 the second
+fn hselect_cv_2d(x1: []const f64, x2: []const f64, which: usize) -> f64 {
+    var c = Cv2Ctx { x1: x1, x2: x2, s1: sd_of(x1), s2: sd_of(x2) }
+    let f = math.exp[f64](fd.brent_min[Cv2Ctx](&c, cv2_log, math.log[f64](0.5f64 / 8.0f64), math.log[f64](0.5f64 * 4.0f64)))
+    if which == 0usize { ret f * c.s1 }
+    ret f * c.s2
+}

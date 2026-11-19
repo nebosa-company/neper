@@ -93,4 +93,10 @@ for (rep in 1:30) {
     cases[[length(cases) + 1]] <- case(if (m == "linear") "hql" else "hqn", c(n, h, x, y), r$q.squared, rel = 1e-9, abs = 1e-12)
   }
 }
+# hc2 (n, which, x[n], y[n]): h.select(cbind(x, y), method = "cv") (n <= 100, scaled structure), bandwidth 1 or 2
+for (rep in 1:20) {
+  n <- sample(30:90, 1); x <- rnorm(n); y <- 0.5 * x + rnorm(n, 0, 0.8)
+  r <- tryCatch(h.select(cbind(x, y), method = "cv"), error = function(e) NULL)
+  if (!is.null(r) && all(is.finite(r))) for (w in 1:2) cases[[length(cases) + 1]] <- case("hc2", c(n, w - 1, x, y), r[w], rel = 1e-6, abs = 1e-10)
+}
 emit("sm_hsel", "sm", list(cases))

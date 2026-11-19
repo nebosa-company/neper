@@ -50848,3 +50848,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7461 — sm.regression reference-band tests
 `regression_test` is the model test of sm.regression(model = "no.effect" or "linear") for one covariate, unbinned, unit weights: the residual maker S of the constant or the (1, x - mean) design, W = (I - W0)'(I - W0) of the local-linear smoother, r0 = |S y|^2, r1 = e'We, ts = (r0 - r1) / r1, and p.quad.moment(I - (1 + ts) W, S, ts, 0); also q.squared = (r0 - r1) / r0. Equal to sm on 30 samples per model (p at 1e-7, q.squared at 1e-9) in oracle_sm_hsel. Open for L505: the band itself (se only), 2-d and binned ancova and tests, 2-d bandwidth selection, sm.options.
+
+## D7462 — sm h.select cv for two variables
+`hselect_cv_2d` is h.select(cbind(x, y), method = "cv") with the default scaled structure and no binning (n <= 100): the factor minimising the two-variable density cross-validation score (the product of the Gaussian kernels in each term, `cv_density_2d`) over log(0.5 / 8) to log(0.5 * 4), times the two standard deviations. Equal to sm on 20 samples, both bandwidths, in oracle_sm_hsel. Open for L505: the common and separate structures, 2-d binned and 2-d regression criteria, 2-d and binned ancova, band curves, sm.options.
