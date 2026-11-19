@@ -69,6 +69,37 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ep.epi_ccc(x[1usize..1usize + nc], x[1usize + nc..1usize + 2usize * nc], 0.95f64, ov[0usize..10usize])
         ret ov[usize(x[1usize + 2usize * nc])]
     }
+    if str.eq(c.name, "pp") {
+        let kp = usize(x[0usize])
+        var v0 = 0.0f64
+        var v1 = 0.0f64
+        var v2 = 0.0f64
+        var v3 = 0.0f64
+        if kp == 0usize {
+            let (a0, a1, a2, a3) = ep.conf_prop_single(x[2usize], x[3usize], 0.95f64)
+            v0 = a0
+            v1 = a1
+            v2 = a2
+            v3 = a3
+        } else if kp == 1usize {
+            let (b0, b1, b2, b3) = ep.conf_prop_unpaired(x[2usize], x[3usize], x[4usize], x[5usize], 0.95f64)
+            v0 = b0
+            v1 = b1
+            v2 = b2
+            v3 = b3
+        } else {
+            let (c0, c1, c2, c3) = ep.conf_prop_paired(x[2usize], x[3usize], x[4usize], x[5usize], 0.95f64)
+            v0 = c0
+            v1 = c1
+            v2 = c2
+            v3 = c3
+        }
+        let wp = usize(x[1usize])
+        if wp == 0usize { ret v0 }
+        if wp == 1usize { ret v1 }
+        if wp == 2usize { ret v2 }
+        ret v3
+    }
     if str.eq(c.name, "cm") {
         let kd = usize(x[0usize])
         let n1 = usize(x[2usize])
@@ -175,9 +206,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "dt") {
         let td = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
         let code = usize(x[4usize])
-        let (e7, l7, h7) = ep.epi_tests(td, 0.95f64, code / 3usize)
-        if code % 3usize == 0usize { ret e7 }
-        if code % 3usize == 1usize { ret l7 }
+        let (e7, l7, h7) = ep.epi_tests(td, 0.95f64, (code % 100usize) / 3usize, code / 100usize)
+        if (code % 100usize) % 3usize == 0usize { ret e7 }
+        if (code % 100usize) % 3usize == 1usize { ret l7 }
         ret h7
     }
     let t = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }

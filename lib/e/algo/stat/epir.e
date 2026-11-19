@@ -177,11 +177,11 @@ fn af_risk(t: Table2, level: f64) -> (f64, f64, f64) {
     ret ((rr - 1.0f64) / rr, math.min[f64](f1, f2), math.max[f64](f1, f2))
 }
 
-// epi.tests with the exact method for a table with test positive and disease positive a, test positive and disease negative b, test negative
+// epi.tests (method 0 exact, 1 Wilson, 2 Agresti-Coull, 3 Jeffreys for the proportions) for a table with test positive and disease positive a, test positive and disease negative b, test negative
 // and disease positive c, test negative and disease negative d; stat 0 apparent prevalence, 1 true prevalence, 2 sensitivity, 3 specificity,
 // 4 diagnostic accuracy, 5 diagnostic odds ratio, 6 number needed to diagnose, 7 Youden's index, 8 positive predictive value, 9 negative
 // predictive value, 10 positive likelihood ratio, 11 negative likelihood ratio: (est, lower, upper)
-fn epi_tests(t: Table2, level: f64, stat: usize) -> (f64, f64, f64) {
+fn epi_tests(t: Table2, level: f64, stat: usize, method: usize) -> (f64, f64, f64) {
     let a = t.a
     let b = t.b
     let c = t.c
@@ -191,35 +191,35 @@ fn epi_tests(t: Table2, level: f64, stat: usize) -> (f64, f64, f64) {
     let m0 = b + d
     let z = z_of(level)
     if stat == 0usize {
-        let (pe0, pl0, pu0) = exact_prop(a + b, n, level)
+        let (pe0, pl0, pu0) = prop_ci(a + b, n, level, method)
         ret (pe0, pl0, pu0)
     }
     if stat == 1usize {
-        let (pe1, pl1, pu1) = exact_prop(a + c, n, level)
+        let (pe1, pl1, pu1) = prop_ci(a + c, n, level, method)
         ret (pe1, pl1, pu1)
     }
     if stat == 2usize {
-        let (pe2, pl2, pu2) = exact_prop(a, m1, level)
+        let (pe2, pl2, pu2) = prop_ci(a, m1, level, method)
         ret (pe2, pl2, pu2)
     }
     if stat == 3usize {
-        let (pe3, pl3, pu3) = exact_prop(d, m0, level)
+        let (pe3, pl3, pu3) = prop_ci(d, m0, level, method)
         ret (pe3, pl3, pu3)
     }
     if stat == 4usize {
-        let (pe4, pl4, pu4) = exact_prop(a + d, n, level)
+        let (pe4, pl4, pu4) = prop_ci(a + d, n, level, method)
         ret (pe4, pl4, pu4)
     }
     if stat == 8usize {
-        let (pe8, pl8, pu8) = exact_prop(a, a + b, level)
+        let (pe8, pl8, pu8) = prop_ci(a, a + b, level, method)
         ret (pe8, pl8, pu8)
     }
     if stat == 9usize {
-        let (pe9, pl9, pu9) = exact_prop(d, c + d, level)
+        let (pe9, pl9, pu9) = prop_ci(d, c + d, level, method)
         ret (pe9, pl9, pu9)
     }
-    let (se, sel, seu) = exact_prop(a, m1, level)
-    let (sp, spl, spu) = exact_prop(d, m0, level)
+    let (se, sel, seu) = prop_ci(a, m1, level, method)
+    let (sp, spl, spu) = prop_ci(d, m0, level, method)
     if stat == 5usize {
         let o = a * d / (b * c)
         let s = z * math.sqrt[f64](1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d)
@@ -1091,4 +1091,55 @@ fn conf_odds(a: f64, b: f64, level: f64) -> (f64, f64, f64) {
     let al = nb.qbinom(1.0f64 - nq, a + b, a / (a + b), true, false) / (a + b)
     let au = nb.qbinom(nq, a + b, a / (a + b), true, false) / (a + b)
     ret (a / b, al / (1.0f64 - al), au / (1.0f64 - au))
+}
+
+// epi.conf's internal .propsingle (Wilson score, with the standard error of the proportion): the row (r successes, m failures) answers (p, se, lower, upper)
+fn conf_prop_single(r: f64, m: f64, level: f64) -> (f64, f64, f64, f64) {
+    let z = z_of(level)
+    let n = r + m
+    let p = r / n
+    let q = 1.0f64 - r / n
+    let se = math.sqrt[f64](p * q / n)
+    let aa = 2.0f64 * r + z * z
+    let bb = z * math.sqrt[f64](z * z + 4.0f64 * r * q)
+    let cc = 2.0f64 * (n + z * z)
+    ret (p, se, (aa - bb) / cc, (aa + bb) / cc)
+}
+
+// prop.unpaired: the difference of two independent proportions (r1, m1) and (r2, m2) with the Newcombe hybrid-score interval: (est, se, lower, upper)
+fn conf_prop_unpaired(r1: f64, m1: f64, r2: f64, m2: f64, level: f64) -> (f64, f64, f64, f64) {
+    let (p1, s1, l1, u1) = conf_prop_single(r1, m1, level)
+    let (p2, s2, l2, u2) = conf_prop_single(r2, m2, level)
+    let n1 = r1 + m1
+    let n2 = r2 + m2
+    let d = p1 - p2
+    let se = math.sqrt[f64](p1 * (1.0f64 - p1) / n1 + p2 * (1.0f64 - p2) / n2)
+    let _ = s1
+    let _ = s2
+    ret (d, se, d - math.sqrt[f64]((p1 - l1) * (p1 - l1) + (u2 - p2) * (u2 - p2)), d + math.sqrt[f64]((p2 - l2) * (p2 - l2) + (u1 - p1) * (u1 - p1)))
+}
+
+// prop.paired: the difference of two paired proportions from the 2 by 2 counts (r, s, t, u) with Newcombe's correlation-corrected interval: (est, se, lower, upper)
+fn conf_prop_paired(r: f64, s: f64, t: f64, u: f64, level: f64) -> (f64, f64, f64, f64) {
+    let n = r + s + t + u
+    let p1 = (r + s) / n
+    let p2 = (r + t) / n
+    let d = (s - t) / n
+    let aa = (r + s) * (t + u) * (r + t) * (s + u)
+    let bb = r * u - s * t
+    let se = math.sqrt[f64](s + t - (s - t) * (s - t) / n) / n
+    var cc = 0.0f64
+    if bb > n / 2.0f64 { cc = bb - n / 2.0f64 }
+    if bb < 0.0f64 { cc = bb }
+    var phi = cc / math.sqrt[f64](aa)
+    if r + s == 0.0f64 || t + u == 0.0f64 || r + t == 0.0f64 || s + u == 0.0f64 { phi = 0.0f64 }
+    let (e1, s1, l1, u1) = conf_prop_single(r + s, n - (r + s), level)
+    let (e2, s2, l2, u2) = conf_prop_single(r + t, n - (r + t), level)
+    let _ = e1
+    let _ = s1
+    let _ = e2
+    let _ = s2
+    let lo = d - math.sqrt[f64]((p1 - l1) * (p1 - l1) - 2.0f64 * phi * (p1 - l1) * (u2 - p2) + (u2 - p2) * (u2 - p2))
+    let hi = d + math.sqrt[f64]((p2 - l2) * (p2 - l2) - 2.0f64 * phi * (p2 - l2) * (u1 - p1) + (u1 - p1) * (u1 - p1))
+    ret (d, se, lo, hi)
 }

@@ -37,6 +37,10 @@ for (rep in 1:25) {
   r <- epi.tests(dat, conf.level = 0.95)$detail
   nm <- c("ap", "tp", "se", "sp", "diag.ac", "diag.or", "nndx", "youden", "pv.pos", "pv.neg", "lr.pos", "lr.neg")
   for (i in seq_along(nm)) { row <- r[r$statistic == nm[i], ]; for (j in 1:3) cases[[length(cases) + 1]] <- case("dt", c(a, b, cc, d, (i - 1) * 3 + j - 1), as.numeric(row[1, j + 1]), rel = 1e-8, abs = 1e-12) }
+  for (mi in 1:3) {
+    rm <- epi.tests(dat, method = c("wilson", "agresti", "jeffreys")[mi], conf.level = 0.95)$detail
+    for (i in seq_along(nm)) { row <- rm[rm$statistic == nm[i], ]; for (j in 1:3) cases[[length(cases) + 1]] <- case("dt", c(a, b, cc, d, mi * 100 + (i - 1) * 3 + j - 1), as.numeric(row[1, j + 1]), rel = 1e-8, abs = 1e-12) }
+  }
 }
 # epi.conf proportions: "pc" args (x, n, method 0 exact 1 wilson 2 agresti 3 jeffreys, part 0 est 1 lower 2 upper)
 for (rep in 1:30) {
@@ -216,5 +220,14 @@ for (rep in 1:30) {
   aa <- sample(2:80, 1); bb <- sample(2:90, 1)
   o <- epi.conf(as.matrix(cbind(aa, bb)), ctype = "odds"); vo <- c(o$est, o$lower, o$upper)
   for (w in 0:2) cases[[length(cases) + 1]] <- case("co", c(aa, bb, w), vo[w + 1], rel = 1e-9, abs = 1e-12)
+}
+# epi.conf proportions: "pp" args (kind 0 prop.single (r, m), 1 prop.unpaired (r1, m1, r2, m2), 2 prop.paired (r, s, t, u), which 0 est 1 se 2 lower 3 upper, then the counts)
+for (rep in 1:30) {
+  kd <- rep %% 3
+  if (kd == 0) { r <- sample(2:40, 1); m <- sample(2:60, 1); res <- epi.conf(matrix(c(r, m), ncol = 2), ctype = "prop.single"); cnt <- c(r, m) }
+  if (kd == 1) { cnt <- sample(2:50, 4, TRUE); res <- epi.conf(matrix(cnt, ncol = 4), ctype = "prop.unpaired") }
+  if (kd == 2) { cnt <- sample(2:40, 4, TRUE); res <- epi.conf(matrix(cnt, ncol = 4), ctype = "prop.paired") }
+  v <- c(res$est, res$se, res$lower, res$upper)
+  for (w in 0:3) cases[[length(cases) + 1]] <- case("pp", c(kd, w, cnt), v[w + 1], rel = 1e-9, abs = 1e-12)
 }
 emit("epir", "epiR", list(cases))
