@@ -684,3 +684,11 @@ fn rand_draw(g: *rr.Rng, kind: usize, p1: f64, p2: f64, sc: f64) -> f64 {
     if kind == 4usize { ret math.exp[f64](rr.rgamma(g, p1, 1.0f64 / p2)) }
     ret p2 / math.pow[f64](rr.unif(g), 1.0f64 / p1)
 }
+
+// actuar random draw for the transformed beta maps (tb_params kinds 0 burr .. 6 invparalogis): the inversion runs on 1 - u for burr, pareto, llogis and paralogis and on u for the inverse families
+fn rand_tb(g: *rr.Rng, kind: u8, s1: f64, s2: f64, sc: f64) -> f64 {
+    let (a, ga, t) = tb_params(kind, s1, s2, 1.0f64)
+    let u = rr.unif(g)
+    if kind == 1u8 || kind == 3u8 || kind == 6u8 { ret tb_q(u, a, ga, t, sc) }
+    ret tb_q(1.0f64 - u, a, ga, t, sc)
+}

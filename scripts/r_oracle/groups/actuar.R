@@ -195,6 +195,13 @@ for (rep in 1:60) {
   if (kd == 4) p2 <- p2 + 2
   cases[[length(cases) + 1]] <- case("rg", c(sd, kd, p1, p2, sc, n), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
 }
+# transformed beta generators under set.seed: "rt" args (seed, kind 0 burr 1 invburr 2 pareto 3 invpareto 4 llogis 5 paralogis 6 invparalogis, s1, s2, sc, n)
+for (rep in 1:70) {
+  kd <- rep %% 7; sd <- sample(1:100000, 1); n <- sample(3:10, 1); s1 <- runif(1, 1, 4); s2 <- runif(1, 1, 3); sc <- runif(1, 0.5, 3)
+  set.seed(sd)
+  v <- switch(kd + 1, rburr(n, s1, s2, scale = sc), rinvburr(n, s1, s2, scale = sc), rpareto(n, s1, scale = sc), rinvpareto(n, s1, scale = sc), rllogis(n, s1, scale = sc), rparalogis(n, s1, scale = sc), rinvparalogis(n, s1, scale = sc))
+  cases[[length(cases) + 1]] <- case("rt", c(sd, kd, s1, s2, sc, n), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

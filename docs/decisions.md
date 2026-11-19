@@ -51142,3 +51142,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7549 — actuar random generators under set.seed
 `rand_draw` reproduces actuar rburr, rtrgamma, rinvgamma, rgumbel, rlgamma and rpareto1 draw for draw from the R streams of e.algo.rand.r. Probed in R first: rburr inverts the cdf at 1 - u (not u), rtrgamma is scale rgamma(a)^(1/t), rinvgamma is scale / rgamma(a), rgumbel is alpha - scale log(rexp), rlgamma is exp(rgamma(shape, rate)) and rpareto1 is min / u^(1/shape). Equal to actuar on 60 seeded runs (57 values added to oracle_actuar, 5121 in all). The other families' generators, rphtype and the aggregate generators stay open.
+
+## D7550 — actuar transformed beta generators under set.seed
+`rand_tb` draws rburr, rpareto, rllogis and rparalogis by inverting the cdf at 1 - u and rinvburr, rinvpareto and rinvparalogis at u, through the tb parameter maps; equal to actuar draw for draw on 70 seeded runs (64 values added to oracle_actuar, 5185 in all). Probed and not matched yet: rgenpareto, rtrbeta, rgenbeta, rinvweibull, rinvexp and rinvtrgamma (the vectorised C code draws its gamma pairs in a different order than a plain loop), so they stay open.
