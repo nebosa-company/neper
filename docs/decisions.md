@@ -50221,3 +50221,6 @@ kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and una
 
 ## D7364 — RSpectra eigs_sym shift-invert
 `eigs_sym` takes a `sigma` and `which` 4: the k eigenvalues nearest sigma (selection key minus |lambda - sigma|), then listed in decreasing order like the other modes, which is what `eigs_sym(A, k, sigma = s)` returns. Done through the existing full decomposition, so it is exact and not an iteration; six cases join oracle_spectra (the golden was regenerated, which reshuffles the random streams of the existing cases, all still passing). L334 at 0.35.
+
+## D7365 — sm hsj (Sheather-Jones bandwidth)
+`sj` is sm's fixed-point residual with the pilot bandwidths a = 0.92 IQR n^(-1/7) and b = 0.912 IQR n^(-1/9) (type-7 quantiles) and the phi4 and phi6 double sums over all ordered pairs; `hsj` starts at hnorm, steps by 1.1 or 0.9 until the residual changes sign and interpolates linearly, exactly as sm does. Unbinned only (sm bins above 100 observations; the oracle uses 20 to 90). Equal to R on 30 samples including bimodal ones to 1e-9. L505 at 0.35.

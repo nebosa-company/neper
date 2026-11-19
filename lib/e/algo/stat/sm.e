@@ -1,9 +1,10 @@
 // R sm: the normal-reference bandwidth hnorm, sm.density in one and two dimensions with the Gaussian kernel, and sm.regression at evaluation points
 // (local constant or local linear, Gaussian kernel), all on unbinned data (sm bins only above 100 observations).
 //
-// Not here: hcv and h.select by cross-validation, bands and standard errors, sm.ancova, sm.survival and sm.options.
+// Not here: h.select dispatch, bands and standard errors, sm.ancova, sm.survival and sm.options.
 
 use e.math
+use e.mem
 
 fn sd_of(x: []const f64) -> f64 {
     var m = 0.0f64
@@ -169,4 +170,83 @@ fn hcv(x: []const f64, y: []const f64, regression_cv: bool) -> f64 {
     let aa = (v1 - v0 - (l1 - l0) * (v1 - v2) / (l1 - l2)) / (l1 * l1 - l0 * l0 - (l1 * l1 - l2 * l2) * (l1 - l0) / (l1 - l2))
     let bb = (v1 - v2 - aa * (l1 * l1 - l2 * l2)) / (l1 - l2)
     ret math.exp[f64](0.0f64 - bb / (2.0f64 * aa))
+}
+
+// quantile of x (type 7, R's default) with the sorted copy in s
+fn quantile7(s: []const f64, p: f64) -> f64 {
+    let n = s.len
+    let h = f64(n - 1usize) * p
+    let lo = usize(math.floor[f64](h))
+    var hi = lo + 1usize
+    if hi >= n { hi = n - 1usize }
+    ret s[lo] + (h - f64(lo)) * (s[hi] - s[lo])
+}
+
+fn phi4(z: f64) -> f64 { ret (z * z * z * z - 6.0f64 * z * z + 3.0f64) * phi(z) }
+
+fn phi6(z: f64) -> f64 {
+    let z2 = z * z
+    ret (z2 * z2 * z2 - 15.0f64 * z2 * z2 + 45.0f64 * z2 - 15.0f64) * phi(z)
+}
+
+// the double sum over all ordered pairs (i, j) of f((x_i - x_j) / b), diagonal included
+fn pair_sum(x: []const f64, b: f64, which: usize) -> f64 {
+    var t = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        var j = 0usize
+        while j < x.len {
+            let z = (x[i] - x[j]) / b
+            if which == 6usize { t += phi6(z) } else { t += phi4(z) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret t
+}
+
+// sm's sj(x, h): the Sheather-Jones fixed-point residual at bandwidth h (unbinned, as sm does below 100 observations); s is the sorted copy of x
+fn sj(x: []const f64, s: []const f64, h: f64) -> f64 {
+    let n = f64(x.len)
+    let lambda = quantile7(s, 0.75f64) - quantile7(s, 0.25f64)
+    let a = 0.92f64 * lambda * math.pow[f64](n, 0.0f64 - 1.0f64 / 7.0f64)
+    let b = 0.912f64 * lambda * math.pow[f64](n, 0.0f64 - 1.0f64 / 9.0f64)
+    let tdb = 0.0f64 - pair_sum(x, b, 6usize) / (n * (n - 1.0f64) * math.pow[f64](b, 7.0f64))
+    let sda = pair_sum(x, a, 4usize) / (n * (n - 1.0f64) * math.pow[f64](a, 5.0f64))
+    let alpha2 = 1.357f64 * math.pow[f64](math.abs[f64](sda / tdb), 1.0f64 / 7.0f64) * math.pow[f64](h, 5.0f64 / 7.0f64)
+    let sdalpha2 = pair_sum(x, alpha2, 4usize) / (n * (n - 1.0f64) * math.pow[f64](alpha2, 5.0f64))
+    let d0 = 1.0f64 / math.sqrt[f64](4.0f64 * 3.141592653589793238462643383279f64)
+    ret math.pow[f64](d0 / (n * math.abs[f64](sdalpha2)), 0.2f64) - h
+}
+
+// hsj: the Sheather-Jones bandwidth, stepping the normal-reference one by 1.1 or 0.9 until sj changes sign and interpolating linearly
+fn hsj(a: *mem.Arena, x: []const f64) -> (f64, err) {
+    let (s, e0) = mem.alloc[f64](a, x.len)
+    if e0 != ok { ret (0.0f64, e0) }
+    var i = 0usize
+    while i < x.len {
+        let v = x[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > v {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = v
+        i += 1usize
+    }
+    var h0 = hnorm(x, 1usize)
+    var v0 = sj(x, s, h0)
+    var step = 0.9f64
+    if v0 > 0.0f64 { step = 1.1f64 }
+    var h1 = h0 * step
+    var v1 = sj(x, s, h1)
+    var guard = 0usize
+    while v1 * v0 > 0.0f64 && guard < 2000usize {
+        h0 = h1
+        v0 = v1
+        h1 = h0 * step
+        v1 = sj(x, s, h1)
+        guard += 1usize
+    }
+    ret (h0 + (h1 - h0) * math.abs[f64](v0) / (math.abs[f64](v0) + math.abs[f64](v1)), ok)
 }
