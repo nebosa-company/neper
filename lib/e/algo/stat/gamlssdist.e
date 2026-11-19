@@ -2542,3 +2542,91 @@ fn family_moment(fam: usize, which: usize, mu: f64, sigma: f64) -> f64 {
     if which == 0usize { ret mu }
     ret sigma * sigma * mu * mu
 }
+
+// more family mean and variance functions: fam 0 PARETO2, 1 RG, 2 TF, 3 EGB2, 4 PE, 5 IGAMMA, 6 NO2, 7 BI (bd in nu), 8 GEOM, 9 GEOMo, 10 WEI2, 11 WEI3, 12 BEo, 13 TF2, 14 ZIP2, 15 ZIBI (bd in nu),
+// 16 NBII, 17 ZINBI, 18 ZAGA, 19 PARETO1o and PARETO2o, 20 LG, 21 YULE, 22 GPO, 23 JSU, 24 exGAUS, 25 SN1, 26 DEL; infinite where the package answers Inf, NaN where it answers NaN
+fn family_moment2(fam: usize, which: usize, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let inf = 1.0f64 / 0.0f64
+    let s2 = sigma * sigma
+    if fam == 0usize {
+        if which == 0usize { if sigma < 1.0f64 { ret mu * sigma / (1.0f64 - sigma) } else { ret inf } }
+        if sigma < 0.5f64 { ret s2 * mu * mu / ((1.0f64 - sigma) * (1.0f64 - sigma) * (1.0f64 - 2.0f64 * sigma)) } else { ret inf }
+    }
+    if fam == 1usize {
+        if which == 0usize { ret mu - gs.psi(1.0f64) * sigma }
+        ret 3.141592653589793f64 * 3.141592653589793f64 * s2 / 6.0f64
+    }
+    if fam == 2usize {
+        if which == 0usize { if nu > 1.0f64 { ret mu } else { ret 0.0f64 / 0.0f64 } }
+        if nu > 2.0f64 { ret s2 * nu / (nu - 2.0f64) } else { ret inf }
+    }
+    if fam == 3usize {
+        if which == 0usize { ret mu + sigma * (gs.psi(nu) - gs.psi(tau)) }
+        ret s2 * (gs.psi_1(nu) + gs.psi_1(tau))
+    }
+    if fam == 4usize { if which == 0usize { ret mu } else { ret s2 } }
+    if fam == 5usize {
+        if which == 0usize { if s2 < 1.0f64 { ret (1.0f64 + s2) * mu / (1.0f64 - s2) } else { ret inf } }
+        if s2 < 0.5f64 { ret (1.0f64 + s2) * (1.0f64 + s2) * mu * mu * s2 / ((1.0f64 - s2) * (1.0f64 - s2) * (1.0f64 - 2.0f64 * s2)) } else { ret inf }
+    }
+    if fam == 6usize { if which == 0usize { ret mu } else { ret sigma } }
+    if fam == 7usize { if which == 0usize { ret nu * mu } else { ret nu * mu * (1.0f64 - mu) } }
+    if fam == 8usize { if which == 0usize { ret mu } else { ret mu + mu * mu } }
+    if fam == 9usize { if which == 0usize { ret (1.0f64 - mu) / mu } else { ret (1.0f64 - mu) / (mu * mu) } }
+    if fam == 10usize {
+        let g1 = nm.gammafn(1.0f64 / sigma + 1.0f64)
+        if which == 0usize { ret math.pow[f64](mu, 0.0f64 - 1.0f64 / sigma) * g1 }
+        ret math.pow[f64](mu, 0.0f64 - 2.0f64 / sigma) * (nm.gammafn(2.0f64 / sigma + 1.0f64) - g1 * g1)
+    }
+    if fam == 11usize {
+        let g1 = nm.gammafn(1.0f64 / sigma + 1.0f64)
+        if which == 0usize { ret mu }
+        let sc = mu / g1
+        ret sc * sc * (nm.gammafn(2.0f64 / sigma + 1.0f64) - g1 * g1)
+    }
+    if fam == 12usize {
+        if which == 0usize { ret mu / (mu + sigma) }
+        ret mu * sigma / ((mu + sigma) * (mu + sigma) * (mu + sigma + 1.0f64))
+    }
+    if fam == 13usize { if which == 0usize { ret mu } else { ret s2 } }
+    if fam == 14usize { if which == 0usize { ret mu } else { ret mu * (1.0f64 + mu * sigma / (1.0f64 - sigma)) } }
+    if fam == 15usize {
+        if which == 0usize { ret (1.0f64 - sigma) * nu * mu }
+        ret (1.0f64 - sigma) * nu * mu * (1.0f64 - mu + nu * mu * sigma)
+    }
+    if fam == 16usize { if which == 0usize { ret mu } else { ret mu + sigma * mu } }
+    if fam == 17usize {
+        if which == 0usize { ret (1.0f64 - nu) * mu }
+        ret mu * (1.0f64 - nu) + mu * mu * (1.0f64 - nu) * (sigma + nu)
+    }
+    if fam == 18usize {
+        if which == 0usize { ret (1.0f64 - nu) * mu }
+        ret (1.0f64 - nu) * mu * mu * (s2 + nu)
+    }
+    if fam == 19usize {
+        if which == 0usize { if sigma > 1.0f64 { ret mu / (sigma - 1.0f64) } else { ret inf } }
+        if sigma > 2.0f64 { ret sigma * mu * mu / ((sigma - 1.0f64) * (sigma - 1.0f64) * (sigma - 2.0f64)) } else { ret inf }
+    }
+    if fam == 20usize {
+        let l1 = math.log[f64](1.0f64 - mu)
+        if which == 0usize { ret (0.0f64 - 1.0f64 / l1) * mu / (1.0f64 - mu) }
+        ret (0.0f64 - 1.0f64 / l1) * mu * (1.0f64 + mu / l1) / ((1.0f64 - mu) * (1.0f64 - mu))
+    }
+    if fam == 21usize {
+        if which == 0usize { ret mu }
+        if mu < 1.0f64 { ret mu * (mu + 1.0f64) * (mu + 1.0f64) / (1.0f64 - mu) } else { ret inf }
+    }
+    if fam == 22usize {
+        if which == 0usize { ret mu }
+        ret mu * (1.0f64 + sigma * mu) * (1.0f64 + sigma * mu)
+    }
+    if fam == 23usize { if which == 0usize { ret mu } else { ret s2 } }
+    if fam == 24usize { if which == 0usize { ret mu + nu } else { ret s2 + nu * nu } }
+    if fam == 25usize {
+        let pv = 3.141592653589793f64
+        if which == 0usize { ret mu + sigma * nu * math.sqrt[f64](2.0f64 / ((1.0f64 + nu * nu) * pv)) }
+        ret s2 * (1.0f64 - 2.0f64 * nu * nu / ((1.0f64 + nu * nu) * pv))
+    }
+    if which == 0usize { ret mu }
+    ret mu + mu * mu * sigma * (1.0f64 - nu) * (1.0f64 - nu)
+}
