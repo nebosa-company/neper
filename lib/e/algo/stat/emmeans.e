@@ -146,3 +146,78 @@ fn holm(ps_: []f64) {
 }
 
 error Singular
+
+// emmeans::joint_tests of one term: the F statistic (Lb)' (L V L')^-1 (Lb) / r of the r rows of l (row-major r by p, each a linear function of the coefficients), on (r, df) degrees of freedom. out[0] F, out[1] the
+// p value; false when L V L' is singular
+fn joint_f(a: *mem.Arena, m: *const Lm, l: []const f64, r: usize, out: []f64) -> bool {
+    let p = m.p
+    let (lb, e1) = mem.alloc[f64](a, r)
+    let (aug, e2) = mem.alloc[f64](a, r * (r + 1usize))
+    if e1 != ok || e2 != ok { ret false }
+    var i = 0usize
+    while i < r {
+        lb[i] = estimate(m, l[i * p..(i + 1usize) * p])
+        var j = 0usize
+        while j < r {
+            var sv = 0.0f64
+            var u = 0usize
+            while u < p {
+                var w = 0usize
+                while w < p {
+                    sv += l[i * p + u] * m.cov[u * p + w] * l[j * p + w]
+                    w += 1usize
+                }
+                u += 1usize
+            }
+            aug[i * (r + 1usize) + j] = sv
+            j += 1usize
+        }
+        aug[i * (r + 1usize) + r] = lb[i]
+        i += 1usize
+    }
+    var col = 0usize
+    while col < r {
+        var piv = col
+        var q = col + 1usize
+        while q < r {
+            if math.abs[f64](aug[q * (r + 1usize) + col]) > math.abs[f64](aug[piv * (r + 1usize) + col]) { piv = q }
+            q += 1usize
+        }
+        var c2 = 0usize
+        while c2 <= r {
+            let tmp = aug[col * (r + 1usize) + c2]
+            aug[col * (r + 1usize) + c2] = aug[piv * (r + 1usize) + c2]
+            aug[piv * (r + 1usize) + c2] = tmp
+            c2 += 1usize
+        }
+        let dv = aug[col * (r + 1usize) + col]
+        if math.abs[f64](dv) < 1.0e-300f64 { ret false }
+        c2 = 0usize
+        while c2 <= r {
+            aug[col * (r + 1usize) + c2] = aug[col * (r + 1usize) + c2] / dv
+            c2 += 1usize
+        }
+        q = 0usize
+        while q < r {
+            if q != col {
+                let f = aug[q * (r + 1usize) + col]
+                c2 = 0usize
+                while c2 <= r {
+                    aug[q * (r + 1usize) + c2] = aug[q * (r + 1usize) + c2] - f * aug[col * (r + 1usize) + c2]
+                    c2 += 1usize
+                }
+            }
+            q += 1usize
+        }
+        col += 1usize
+    }
+    var chi = 0.0f64
+    i = 0usize
+    while i < r {
+        chi += lb[i] * aug[i * (r + 1usize) + r]
+        i += 1usize
+    }
+    out[0usize] = chi / f64(r)
+    out[1usize] = nb.pf(out[0usize], f64(r), m.df, false, false)
+    ret true
+}

@@ -182,6 +182,38 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     xbar = xbar / f64(n)
     let (m, fe) = em.fit(a, d, y, n, p)
     if fe != ok { ret 0.0f64 / 0.0f64 }
+    if str.eq(c.name, "jt_F") || str.eq(c.name, "jt_p") {
+        // term li: 0 the factor A (differences of its adjusted means from level 0), 1 the factor B, 2 the covariate x
+        var nrw = na - 1usize
+        if li == 1usize { nrw = nb - 1usize }
+        if li == 2usize { nrw = 1usize }
+        let (lm, lme) = mem.alloc[f64](a, nrw * p)
+        if lme != ok { ret 0.0f64 / 0.0f64 }
+        var q0 = 0usize
+        while q0 < nrw * p {
+            lm[q0] = 0.0f64
+            q0 += 1usize
+        }
+        var rw = 0usize
+        while rw < nrw {
+            if li == 0usize {
+                grid_row(r1, na, nb, rw + 1usize, xbar)
+                grid_row(r2, na, nb, 0usize, xbar)
+                var k3 = 0usize
+                while k3 < p {
+                    lm[rw * p + k3] = r1[k3] - r2[k3]
+                    k3 += 1usize
+                }
+            }
+            if li == 1usize { lm[rw * p + na - 1usize + 1usize + rw] = 1.0f64 }
+            if li == 2usize { lm[rw * p + p - 1usize] = 1.0f64 }
+            rw += 1usize
+        }
+        var jo: [2]f64 = zero
+        if !em.joint_f(a, &m, lm, nrw, jo[0usize..2usize]) { ret 0.0f64 / 0.0f64 }
+        if str.eq(c.name, "jt_F") { ret jo[0usize] }
+        ret jo[1usize]
+    }
     if str.eq(c.name, "ctr_est") || str.eq(c.name, "ctr_se") {
         let (wv, we) = mem.alloc[f64](a, na)
         if we != ok { ret 0.0f64 / 0.0f64 }
