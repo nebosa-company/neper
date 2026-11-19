@@ -50575,3 +50575,6 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 **Decision.** `polcapkg.em` treats a response below zero as missing: it leaves the case's likelihood factor out and counts the case only for the variables it answered, so each response probability is divided by the posterior weight of the cases that answered that variable; class sizes still divide by the number of cases.
 
 **Result.** `oracle_polca` (316 cases, 42 new on 14 data sets with 10% of each variable missing) equals `poLCA(..., na.rm = FALSE)` on Windows: log-likelihood to 1e-6, the sums of squares of class sizes and response probabilities to 1e-4. Linux pending. L512 stays partial: covariates (latent class regression), the generalised inverse for singular information, standard errors with missing responses.
+
+## D7423 — pscl zeroinfl weights and offsets
+The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelihood by its case weight and adds the count offset to the linear predictor, starting from the unweighted exact fit. Equal to pscl::zeroinfl(y ~ x + offset(o) | z, weights = w) on eight simulated sets (log-likelihood within 2e-3, position-weighted count coefficients within 5e-3). The hurdle with weights or an offset is not covered (its truncated count part is still the exact unweighted fit), nor are zero-part offsets. L412 at 0.7.

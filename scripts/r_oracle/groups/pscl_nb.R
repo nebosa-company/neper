@@ -47,4 +47,14 @@ for (rep in 1:12) {
   a <- c(n, 2, 2, link, hm, y, as.vector(t(x)), as.vector(t(z))); zc <- coef(f, "zero")
   cases[[length(cases) + 1]] <- case("lkll", a, as.numeric(logLik(f)), rel = 2e-3, abs = 2e-3); cases[[length(cases) + 1]] <- case("lkz", a, sum(zc * 1:2), rel = 5e-3, abs = 5e-3)
 }
+# zeroinfl with case weights and a count offset (logit zero part): "wol" the log-likelihood, "woc" the count coefficients weighted by position (2e-3). Args: (n, p, q, 0, 0, y, x, z, w, o).
+for (rep in 1:8) {
+  n <- sample(250:400, 1); x <- cbind(1, rnorm(n)); z <- cbind(1, rnorm(n)); w <- round(runif(n, 0.5, 2), 3); o <- round(runif(n, -0.5, 0.5), 3)
+  b <- c(0.7, rnorm(1, 0, .3)); g <- c(-0.5, rnorm(1, 0, .5)); lam <- exp(as.vector(x %*% b) + o); pz <- plogis(as.vector(z %*% g))
+  y <- ifelse(runif(n) < pz, 0, rpois(n, lam)); d <- data.frame(y = y, x1 = x[, 2], z1 = z[, 2], w = w, o = o)
+  f <- tryCatch(suppressWarnings(zeroinfl(y ~ x1 + offset(o) | z1, data = d, weights = w, control = zeroinfl.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, 2, 2, 0, 0, y, as.vector(t(x)), as.vector(t(z)), w, o)
+  cases[[length(cases) + 1]] <- case("wol", a, as.numeric(logLik(f)), rel = 2e-3, abs = 2e-3); cases[[length(cases) + 1]] <- case("woc", a, sum(coef(f, "count") * 1:2), rel = 5e-3, abs = 5e-3)
+}
 emit("pscl_nb", "pscl", list(cases))

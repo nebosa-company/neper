@@ -666,7 +666,7 @@ fn link_inv(link: usize, e: f64) -> f64 {
     ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e))
 }
 
-type LkCtx = struct { x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize, part: usize }
+type LkCtx = struct { x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize, part: usize, w: []const f64, off: []const f64 }
 
 // the zero-inflated Poisson log-likelihood (part 0) with the zero part's link, or the binomial log-likelihood of y > 0 (part 1, the hurdle's zero part) on gamma alone
 fn lk_loglik(c: *LkCtx, par: []const f64) -> f64 {
@@ -680,7 +680,7 @@ fn lk_loglik(c: *LkCtx, par: []const f64) -> f64 {
                 zeta += c.z[i * c.q + j] * par[c.p + j]
                 j += 1usize
             }
-            var eta = 0.0f64
+            var eta = c.off[i]
             j = 0usize
             while j < c.p {
                 eta += c.x[i * c.p + j] * par[j]
@@ -689,9 +689,9 @@ fn lk_loglik(c: *LkCtx, par: []const f64) -> f64 {
             let mu = math.exp[f64](eta)
             let pi = link_inv(c.link, zeta)
             if c.y[i] == 0.0f64 {
-                ll += math.log[f64](pi + (1.0f64 - pi) * math.exp[f64](0.0f64 - mu))
+                ll += c.w[i] * math.log[f64](pi + (1.0f64 - pi) * math.exp[f64](0.0f64 - mu))
             } else {
-                ll += math.log[f64](1.0f64 - pi) + c.y[i] * eta - mu - nm.lgammafn(c.y[i] + 1.0f64)
+                ll += c.w[i] * (math.log[f64](1.0f64 - pi) + c.y[i] * eta - mu - nm.lgammafn(c.y[i] + 1.0f64))
             }
         } else {
             while j < c.q {
@@ -699,7 +699,7 @@ fn lk_loglik(c: *LkCtx, par: []const f64) -> f64 {
                 j += 1usize
             }
             let pr = link_inv(c.link, zeta)
-            if c.y[i] > 0.0f64 { ll += math.log[f64](pr) } else { ll += math.log[f64](1.0f64 - pr) }
+            if c.y[i] > 0.0f64 { ll += c.w[i] * math.log[f64](pr) } else { ll += c.w[i] * math.log[f64](1.0f64 - pr) }
         }
         i += 1usize
     }
@@ -741,7 +741,7 @@ fn lk_grad(c: *LkCtx, par: []const f64, g: []f64) {
 
 // zeroinfl (hurdle = false) or hurdle (true) with Poisson counts and a zero part under the link (0 logit, 1 probit, 2 cloglog, 3 cauchit): the count part is the exact fit of the logit
 // model (it does not depend on the link for the hurdle), the zero part / zero-inflation parameters by BFGS from zero; par receives beta (p) then gamma (q); returns the log-likelihood
-fn zero_link_fit(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize, hurdle_model: bool, par: []f64) -> f64 {
+fn zero_link_fit(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, w: []const f64, off: []const f64, n: usize, p: usize, q: usize, link: usize, hurdle_model: bool, par: []f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     if p + q > 32usize { ret nan }
     if hurdle_model {
@@ -753,7 +753,7 @@ fn zero_link_fit(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, 
         if e1 != ok || e2 != ok { ret nan }
         let lzl = lik(3usize, x, z, y, n, p, q, par[p..p + q], gr, hh, false)
         let lcount = l0 - lzl
-        var c = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: link, part: 1usize }
+        var c = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: link, part: 1usize, w: w, off: off }
         let (scr, e3) = mem.alloc[f64](a, q * q + 6usize * q)
         if e3 != ok { ret nan }
         var gam: [8]f64 = zero
@@ -778,7 +778,7 @@ fn zero_link_fit(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, 
         par[p + j] = 0.0f64
         j += 1usize
     }
-    var c = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: link, part: 0usize }
+    var c = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: link, part: 0usize, w: w, off: off }
     let m = p + q
     let (scr, e5) = mem.alloc[f64](a, m * m + 6usize * m)
     if e5 != ok { ret nan }

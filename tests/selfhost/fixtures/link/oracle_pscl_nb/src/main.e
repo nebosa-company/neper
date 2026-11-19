@@ -17,14 +17,29 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = usize(z[2usize])
     let (par, e1) = mem.alloc[f64](a, p + q + 1usize)
     if e1 != ok { ret nan }
-    if str.eq(c.name, "lkll") || str.eq(c.name, "lkz") {
+    if str.eq(c.name, "lkll") || str.eq(c.name, "lkz") || str.eq(c.name, "wol") || str.eq(c.name, "woc") {
+        let weighted = str.eq(c.name, "wol") || str.eq(c.name, "woc")
         let lnk = usize(z[3usize])
         let hm = usize(z[4usize]) == 1usize
         let y2 = z[5usize..5usize + n]
         let x2 = z[5usize + n..5usize + n + n * p]
         let z2 = z[5usize + n + n * p..5usize + n + n * p + n * q]
-        let l2 = ps.zero_link_fit(a, x2, z2, y2, n, p, q, lnk, hm, par)
-        if str.eq(c.name, "lkll") { ret l2 }
+        let (wv, e7) = mem.alloc[f64](a, n)
+        let (ov, e8) = mem.alloc[f64](a, n)
+        if e7 != ok || e8 != ok { ret nan }
+        var u = 0usize
+        while u < n {
+            wv[u] = 1.0f64
+            ov[u] = 0.0f64
+            if weighted {
+                wv[u] = z[5usize + n + n * p + n * q + u]
+                ov[u] = z[5usize + 2usize * n + n * p + n * q + u]
+            }
+            u += 1usize
+        }
+        let l2 = ps.zero_link_fit(a, x2, z2, y2, wv, ov, n, p, q, lnk, hm, par)
+        if str.eq(c.name, "lkll") || str.eq(c.name, "wol") { ret l2 }
+        if weighted { ret par[0usize] + 2.0f64 * par[1usize] }
         ret par[p] + 2.0f64 * par[p + 1usize]
     }
     let y = z[3usize..3usize + n]
