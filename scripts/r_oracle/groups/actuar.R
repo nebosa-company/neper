@@ -217,6 +217,16 @@ for (rep in 1:30) {
   f <- ruin(claims = "phase-type", par.claims = list(prob = pr, rates = T), wait = "exponential", par.wait = list(rate = lam), premium.rate = cc)
   cases[[length(cases) + 1]] <- case("rp", c(m, pr, as.vector(t(T)), lam, cc, u), f(u), rel = 1e-7, abs = 1e-12)
 }
+# rcompound(n, rpois(lambda), rgamma(shape, rate)) under set.seed and the ecdf of aggregateDist("simulation"): "rc" args (seed, n, lambda, shape, rate, which 0 weighted sum of the aggregates, 1 ecdf at the mean, 2 ecdf at the upper quartile)
+for (rep in 1:30) {
+  sd <- sample(1:100000, 1); n <- sample(20:200, 1); lam <- runif(1, 0.5, 5); sh <- runif(1, 1, 4); rt <- runif(1, 0.3, 2)
+  set.seed(sd); x <- rcompound(n, rpois(lam), rgamma(sh, rt))
+  cases[[length(cases) + 1]] <- case("rcp", c(sd, n, lam, sh, rt, 0), sum(x * seq_along(x)), rel = 1e-9, abs = 1e-10)
+  F <- ecdf(x)
+  q <- as.numeric(quantile(x, 0.75))
+  cases[[length(cases) + 1]] <- case("rcp", c(sd, n, lam, sh, rt, 1), F(mean(x)), rel = 0, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("rcp", c(sd, n, lam, sh, rt, 2), F(q), rel = 0, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

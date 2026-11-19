@@ -4471,4 +4471,5 @@ D7613	1033	epiR case-control population attributable fraction
 D7614	761	epiR score risk-ratio interval on boundary tables
 D7615	757	epiR score odds-ratio interval on boundary tables
 D7616	1063	epiR Koopman risk-ratio interval on every table
-D7617	424	L460 (epiR) closed
+D7617	425	L460 (epiR) closed
+D7618	865	actuar rcompound and the simulation aggregate

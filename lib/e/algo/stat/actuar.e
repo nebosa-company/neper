@@ -771,3 +771,25 @@ fn ruin_ph_exp(a: *mem.Arena, prob: []const f64, t: []const f64, m: usize, u: f6
     }
     ret r
 }
+
+// actuar rcompound(n, rpois(lambda), rgamma(shape, rate)): n counts first, then sum(N) severities in one run, summed per simulation in order; out receives the n aggregates
+fn rcompound_pois_gamma(a: *mem.Arena, g: *rr.Rng, n: usize, lambda: f64, shape: f64, rate: f64, out: []f64) -> err {
+    let (cnt, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < n {
+        cnt[i] = usize(rd.rpois(g, lambda))
+        out[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var k = 0usize
+        while k < cnt[i] {
+            out[i] += rd.rgamma(g, shape, 1.0f64 / rate)
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}

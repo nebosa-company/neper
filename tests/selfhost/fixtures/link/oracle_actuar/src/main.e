@@ -3,6 +3,7 @@
 
 use e.algo.stat.actuar as ac
 use e.io
+use e.math
 use e.mem
 use e.os
 use e.algo.rand.r as rr
@@ -194,6 +195,59 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
             it += 1usize
         }
         ret tt
+    }
+    if str.eq(c.name, "rcp") {
+        var gr: rr.Rng = zero
+        rr.seed(&gr, i64(x[0usize]))
+        let nrc = usize(x[1usize])
+        let (agg, ae) = mem.alloc[f64](ar, nrc)
+        if ae != ok { os.exit(30) }
+        let re2 = ac.rcompound_pois_gamma(ar, &gr, nrc, x[2usize], x[3usize], x[4usize], agg)
+        if re2 != ok { os.exit(31) }
+        let wr2 = usize(x[5usize])
+        var mean = 0.0f64
+        var ws = 0.0f64
+        var q = 0usize
+        while q < nrc {
+            mean += agg[q]
+            ws += agg[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        mean = mean / f64(nrc)
+        if wr2 == 0usize { ret ws }
+        var thr = mean
+        if wr2 == 2usize {
+            var srt = 0usize
+            let (cp, ce3) = mem.alloc[f64](ar, nrc)
+            if ce3 != ok { os.exit(32) }
+            while srt < nrc {
+                cp[srt] = agg[srt]
+                srt += 1usize
+            }
+            var ii = 1usize
+            while ii < nrc {
+                let v = cp[ii]
+                var jj = ii
+                while jj > 0usize && cp[jj - 1usize] > v {
+                    cp[jj] = cp[jj - 1usize]
+                    jj -= 1usize
+                }
+                cp[jj] = v
+                ii += 1usize
+            }
+            let h = 0.75f64 * f64(nrc - 1usize)
+            let lo = usize(math.floor[f64](h))
+            let fr = h - f64(lo)
+            thr = cp[lo]
+            if lo + 1usize < nrc { thr = cp[lo] + fr * (cp[lo + 1usize] - cp[lo]) }
+        }
+        var le = 0usize
+        q = 0usize
+        while q < nrc {
+            if agg[q] <= thr { le += 1usize }
+            q += 1usize
+        }
+        ret f64(le) / f64(nrc)
     }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])

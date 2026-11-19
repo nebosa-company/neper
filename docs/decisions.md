@@ -51343,3 +51343,6 @@ conf_prop_single (epi.conf's internal .propsingle: Wilson score with the standar
 
 ## D7617 — L460 (epiR) closed
 The acceptance list of L460 (epi.2by2 for cohort, case-control and cross-sectional tables with exact, Wald and Mantel-Haenszel measures, epi.tests, epi.conf for every interval method, epi.ccc, epi.dsl, epi.iv and the sample-size family) equals epiR on Windows in oracle_epir (9592 cases). The items named in D7616 as outside the list stay open as notes in the done record, not as queue work.
+
+## D7618 — actuar rcompound and the simulation aggregate
+`rcompound_pois_gamma` reproduces actuar rcompound(n, rpois(lambda), rgamma(shape, rate)) under set.seed from the R code of rcompound: n counts are drawn first, then sum(N) severities in one run, and the severities are summed per simulation in order. The aggregateDist "simulation" distribution function is the ecdf of that sample, checked at its mean and its 75 percent quantile. Equal to actuar on 30 seeded runs of 20 to 200 simulations (90 values added to oracle_actuar, 5423 in all, the weighted sum of the aggregates to 1e-9 and the two ecdf values exactly). The oracle names collided with D7574'"'"'s "rc" generator cases on a first run (the new branch answered 0), so these are "rcp". Other frequency and severity families, rphtype and the hierarchical and regression credibility models stay open.
