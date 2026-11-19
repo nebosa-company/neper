@@ -1028,3 +1028,38 @@ fn dunnett_one_sided(x: []const f64, grp: []const usize, k: usize, j: usize, alt
     // pDunnett(lower.tail = TRUE) = 1 - P(all T_i > t) = 1 - P(all -T_i < -t)
     ret 1.0f64 - mvt_one_factor_upper(0.0f64 - tv, lam[0usize..k - 1usize], df, false)
 }
+
+// tamhaneDunnettTest (two-sided): the Welch-type t_j = (mean_j - mean_1) / sqrt(v_j / n_j + v_1 / n_1) of group j (0-based index, labels 1..k) against the control, and
+// p = 1 - P(|T_i| < |t_j| for all i = 1 .. k - 1) for independent t components sharing the chi scale (identity correlation) at n_1 + n_j - 2 degrees of freedom; answers (t, p)
+fn tamhane_dunnett(x: []const f64, grp: []const usize, k: usize, j: usize) -> (f64, f64) {
+    var cnt: [16]f64 = zero
+    var mean: [16]f64 = zero
+    var t = 0usize
+    while t < x.len {
+        cnt[grp[t] - 1usize] += 1.0f64
+        mean[grp[t] - 1usize] += x[t]
+        t += 1usize
+    }
+    var g = 0usize
+    while g < k {
+        mean[g] = mean[g] / cnt[g]
+        g += 1usize
+    }
+    var vr: [16]f64 = zero
+    t = 0usize
+    while t < x.len {
+        let d = x[t] - mean[grp[t] - 1usize]
+        vr[grp[t] - 1usize] += d * d
+        t += 1usize
+    }
+    g = 0usize
+    while g < k {
+        vr[g] = vr[g] / (cnt[g] - 1.0f64)
+        g += 1usize
+    }
+    let tv = (mean[j] - mean[0usize]) / math.sqrt[f64](vr[j] / cnt[j] + vr[0usize] / cnt[0usize])
+    var lam: [16]f64 = zero
+    var at = tv
+    if at < 0.0f64 { at = 0.0f64 - at }
+    ret (tv, 1.0f64 - mvt_one_factor_upper(at, lam[0usize..k - 1usize], cnt[0usize] + cnt[j] - 2.0f64, true))
+}
