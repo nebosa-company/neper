@@ -12,4 +12,10 @@ for (rep in 1:30) {
   if (n >= 3) { t2 <- scaleTau2(x, mu.too = TRUE); add("tmu", a, t2[1]); add("tsd", a, t2[2]) }
   if (n >= 3) { h <- huberM(x); add("hmu", a, h$mu); add("hs", a, h$s); add("hit", a, h$it) }
 }
+# adjboxStats: "ab" args (n, x...) with which 0..4 stats, 5 6 conf, 7 8 fence, 9 number of outliers (even n, continuous data)
+for (rep in 1:30) {
+  n <- 2 * sample(5:30, 1); x <- if (rep %% 2 == 0) rexp(n) else rlnorm(n, 0, 0.8)
+  r <- suppressWarnings(adjboxStats(x)); v <- c(r$stats, r$conf, r$fence, length(r$out))
+  for (w in 0:9) add("ab", c(n, x, w), v[w + 1])
+}
 emit("robustbase", "robustbase", list(cases))

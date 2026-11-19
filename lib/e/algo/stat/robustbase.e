@@ -247,3 +247,62 @@ fn mc(a: *mem.Arena, x: []const f64) -> f64 {
     if e3 != ok { ret 0.0f64 / 0.0f64 }
     ret median_sorted(hs)
 }
+
+// Tukey's five numbers
+fn fivenum_sorted(s: []const f64, out: []f64) {
+    let n = f64(s.len)
+    let n4 = math.floor[f64]((n + 3.0f64) / 2.0f64) / 2.0f64
+    out[0usize] = s[0usize]
+    out[4usize] = s[s.len - 1usize]
+    let d1 = n4
+    let d2 = (n + 1.0f64) / 2.0f64
+    let d3 = n + 1.0f64 - n4
+    out[1usize] = 0.5f64 * (s[usize(math.floor[f64](d1)) - 1usize] + s[usize(math.ceil[f64](d1)) - 1usize])
+    out[2usize] = 0.5f64 * (s[usize(math.floor[f64](d2)) - 1usize] + s[usize(math.ceil[f64](d2)) - 1usize])
+    out[3usize] = 0.5f64 * (s[usize(math.floor[f64](d3)) - 1usize] + s[usize(math.ceil[f64](d3)) - 1usize])
+}
+
+// robustbase adjboxStats for a sample without ties in its medcouple: out = (five numbers with the whiskers moved to the extreme non-outlying values, notch lower, notch upper,
+// fence lower, fence upper, number of outliers)
+fn adjbox_stats(a: *mem.Arena, x: []const f64, coef: f64, ca: f64, cb: f64, out: []f64) {
+    let (s, e) = sort_copy(a, x)
+    if e != ok { ret }
+    var st: [5]f64 = zero
+    fivenum_sorted(s, st[0usize..5usize])
+    let iqr = st[3usize] - st[1usize]
+    let medc = mc(a, x)
+    var f0 = st[1usize] - coef * math.exp[f64](ca * medc) * iqr
+    var f1 = st[3usize] + coef * math.exp[f64](cb * medc) * iqr
+    if medc < 0.0f64 {
+        f0 = st[1usize] - coef * math.exp[f64](0.0f64 - cb * medc) * iqr
+        f1 = st[3usize] + coef * math.exp[f64](0.0f64 - ca * medc) * iqr
+    }
+    var nout = 0usize
+    var lo = 1.0e300f64
+    var hi = -1.0e300f64
+    var i = 0usize
+    while i < x.len {
+        if x[i] < f0 || f1 < x[i] {
+            nout += 1usize
+        } else {
+            if x[i] < lo { lo = x[i] }
+            if x[i] > hi { hi = x[i] }
+        }
+        i += 1usize
+    }
+    if nout > 0usize {
+        st[0usize] = lo
+        st[4usize] = hi
+    }
+    let half = 1.58f64 * iqr / math.sqrt[f64](f64(x.len))
+    out[0usize] = st[0usize]
+    out[1usize] = st[1usize]
+    out[2usize] = st[2usize]
+    out[3usize] = st[3usize]
+    out[4usize] = st[4usize]
+    out[5usize] = st[2usize] - half
+    out[6usize] = st[2usize] + half
+    out[7usize] = f0
+    out[8usize] = f1
+    out[9usize] = f64(nout)
+}

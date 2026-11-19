@@ -16,6 +16,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "qn") { ret rb.qn(a, v) }
     if str.eq(k, "sn") { ret rb.sn(a, v) }
     if str.eq(k, "mc") { ret rb.mc(a, v) }
+    if str.eq(k, "ab") {
+        var ov: [12]f64 = zero
+        rb.adjbox_stats(a, v, 1.5f64, 0.0f64 - 4.0f64, 3.0f64, ov[0usize..12usize])
+        ret ov[usize(x[1usize + n])]
+    }
     if str.eq(k, "tmu") || str.eq(k, "tsd") {
         let (tm, ts) = rb.scale_tau2(a, v, 4.5f64, 3.0f64)
         if str.eq(k, "tmu") { ret tm }

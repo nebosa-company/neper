@@ -51223,3 +51223,6 @@ epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude
 
 ## D7576 — actuar zero-modified generators are not an inversion
 Probed rzmpois, rzmnbinom and rzmgeom against the quantile at the uniform stream: rzmpois(10, 1.56, 0.108) under set.seed(76031) returns 1 0 0 1 1 1 3 2 5 3 while qzmpois at the same uniforms returns 1 1 1 1 1 1 1 0 3 1, and the zeros fall at uniforms (0.111, 0.170) above p0, so the indicator and the count come from different draws and the generator is not a plain inversion. Not ported; rztgeom is in the same position. rztpois, rztnbinom, rztbinom and rlogarithmic are inversions (D7574).
+
+## D7577 — robustbase adjboxStats
+`adjbox_stats` ports adjboxStats for the default coef, a and b: Tukey five numbers (`fivenum_sorted`), the fences Q1 - 1.5 exp(-4 mc) IQR and Q3 + 1.5 exp(3 mc) IQR (mirrored for a negative medcouple), the whiskers moved to the extreme values inside the fences when any point is outside, the notch Q2 +- 1.58 IQR / sqrt(n) and the outlier count. Equal to robustbase on 30 samples of even size (150 values added to oracle_robustbase, 526 in all); the medcouple port is the existing tie-free one, so samples with ties are not covered. lmrob, covMcd, ltsReg, glmrob, nlrob stay open.
