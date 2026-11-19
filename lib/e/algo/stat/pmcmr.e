@@ -394,7 +394,7 @@ fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: u
 
 // van der Waerden all-pairs test: normal scores qnorm(rank / (n + 1)) of the pooled sample; the statistic of cell (row i, column j), i > j, is
 // |mean score_i - mean score_j| / sqrt(s2 (n - 1 - T) / (n - k) (1 / n_i + 1 / n_j)). Answers (t, unadjusted two-sided p, single-step Tukey p).
-fn vdw_pair(a: *mem.Arena, n: usize, k: usize, x: []const f64, grp: []const usize, i: usize, j: usize) -> (f64, f64, f64, err) {
+fn vdw_pair(a: *mem.Arena, n: usize, k: usize, x: []const f64, grp: []const usize, i: usize, j: usize, signed: bool) -> (f64, f64, f64, err) {
     let (r, e0) = mem.alloc[f64](a, n)
     let (aj, e1) = mem.alloc[f64](a, k)
     let (nj, e2) = mem.alloc[f64](a, k)
@@ -427,10 +427,12 @@ fn vdw_pair(a: *mem.Arena, n: usize, k: usize, x: []const f64, grp: []const usiz
     stat = stat / s2
     let kf = f64(k)
     var dif = aj[i] / nj[i] - aj[j] / nj[j]
-    if dif < 0.0f64 { dif = 0.0f64 - dif }
+    if dif < 0.0f64 && !signed { dif = 0.0f64 - dif }
     let tv = dif / math.sqrt[f64](s2 * (nf - 1.0f64 - stat) / (nf - kf) * (1.0f64 / nj[i] + 1.0f64 / nj[j]))
-    let p = 2.0f64 * nb.pt(0.0f64 - tv, nf - kf, true, false)
-    let pt = nb.ptukey(math.sqrt[f64](2.0f64) * tv, 1.0f64, kf, nf - kf, false, false)
+    var at = tv
+    if at < 0.0f64 { at = 0.0f64 - at }
+    let p = 2.0f64 * nb.pt(0.0f64 - at, nf - kf, true, false)
+    let pt = nb.ptukey(math.sqrt[f64](2.0f64) * at, 1.0f64, kf, nf - kf, false, false)
     ret (tv, p, pt, ok)
 }
 

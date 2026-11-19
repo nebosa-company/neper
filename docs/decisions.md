@@ -50212,3 +50212,6 @@ kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and una
 
 ## D7361 — PMCMRplus manyOneUTest
 `manyone_u` ranks groups 0 and j alone, takes the smaller Mann-Whitney U, standardises with the tie-corrected variance n1 n2/(S(S-1)) ((S^3 - S)/12 - sum (t^3 - t)/12) and flips the sign when group 0 has the smaller rank sum; p is the two-sided normal one, Holm over the k - 1 comparisons. Equal to R on twelve random data sets (with and without ties). L487 at 0.65.
+
+## D7362 — PMCMRplus vanWaerdenManyOneTest
+`vdw_pair` gained a `signed` flag: the all-pairs test takes the absolute mean score difference, the many-to-one test the signed one of group j against group 0, with the same variance and degrees of freedom; the p values use |t|. Equal to R on twelve random data sets, Holm over the k - 1 comparisons; the all-pairs fixture still passes. L487 at 0.7.
