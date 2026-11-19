@@ -50908,3 +50908,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7479 — caret varImp for a Poisson glm
 `var_imp_pois` is varImp(glm(family = poisson)): the logistic routine with the log link (start eta = log(y + 0.1), mu = exp(eta), weight mu, working response eta + (y - mu) / mu, deviance 2 (y log(y / mu) - (y - mu)), the same stopping rule and (X'WX)^-1 from the last iteration); the importance is the absolute z value of each non-intercept coefficient. Equal to caret on 15 Poisson fits (about 45 values added to oracle_carets). Open for L519: preProcess method ica, varImp for the Gaussian-identity, Gamma and other glm families and for tree and neural models.
+
+## D7480 — caret varImp for a Gamma(log) glm
+`var_imp_gamma_log` is varImp(glm(family = Gamma(link = "log"))): the IRLS with unit working weights (start eta = log(y), working response eta + (y - mu) / mu, deviance 2 ((y - mu) / mu - log(y / mu))), the covariance (X'X)^-1 scaled by the Pearson dispersion sum(((y - mu) / mu)^2) / (n - p) that summary.glm estimates for this family, and the absolute t value of each non-intercept coefficient. Equal to caret on 15 fits (46 values added to oracle_carets). A Gaussian-identity glm gives the lm routine (`var_imp_lm`). Open for L519: preProcess method ica, varImp for the other links and for tree and neural models.
