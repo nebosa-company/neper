@@ -34,7 +34,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
-        if c.name.len == 2usize && c.name[0usize] == 112u8 {
+        if c.name.len == 2usize && c.name[0usize] == 112u8 && c.name[1usize] == 110u8 {
+            var pno: [3]f64 = zero
+            cb.pcubature_nd(usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], x[2usize + 2usize * d], pno[0usize..3usize])
+            let g5 = pno[usize(x[3usize + 2usize * d])]
+            if !oracle.agrees(g5, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, g5))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
+        if c.name.len == 2usize && c.name[0usize] == 112u8 && c.name[1usize] == 99u8 {
             var po: [3]f64 = zero
             cb.pcubature_1d(usize(x[0usize]), x[2usize], x[3usize], x[4usize], usize(x[5usize]), po[0usize..3usize])
             let g3 = po[usize(x[6usize])]

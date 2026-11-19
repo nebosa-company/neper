@@ -756,3 +756,107 @@ fn hcubature_gm_v(a: *mem.Arena, id: usize, d: usize, lo: []const f64, hi: []con
     out[2usize * nc] = f64(neval)
     ret ok
 }
+
+// the tensor Clenshaw-Curtis estimate of integrand id over the box lo..hi with sz[i] points (2^k + 1) in dimension i
+fn cc_tensor(id: usize, d: usize, lo: []const f64, hi: []const f64, sz: []const usize) -> f64 {
+    var total = 1usize
+    var i = 0usize
+    while i < d {
+        total *= sz[i]
+        i += 1usize
+    }
+    var wts: [8][130]f64 = zero
+    var nds: [8][130]f64 = zero
+    let pi = 3.141592653589793f64
+    i = 0usize
+    while i < d {
+        let nn = sz[i] - 1usize
+        var j = 0usize
+        while j <= nn {
+            let th = pi * f64(j) / f64(nn)
+            var s = 0.0f64
+            var k = 0usize
+            while k <= nn / 2usize {
+                var b0 = 2.0f64
+                if k == 0usize || k == nn / 2usize { b0 = 1.0f64 }
+                s += b0 / (1.0f64 - 4.0f64 * f64(k) * f64(k)) * math.cos[f64](2.0f64 * f64(k) * th)
+                k += 1usize
+            }
+            var wj = 2.0f64 * s / f64(nn)
+            if j == 0usize || j == nn { wj = s / f64(nn) }
+            wts[i][j] = wj * (hi[i] - lo[i]) / 2.0f64
+            nds[i][j] = (lo[i] + hi[i]) / 2.0f64 + (hi[i] - lo[i]) / 2.0f64 * math.cos[f64](th)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var sum = 0.0f64
+    var cell = 0usize
+    while cell < total {
+        var rem = cell
+        var w = 1.0f64
+        var p: [8]f64 = zero
+        i = 0usize
+        while i < d {
+            let ix = rem % sz[i]
+            rem = rem / sz[i]
+            w *= wts[i][ix]
+            p[i] = nds[i][ix]
+            i += 1usize
+        }
+        sum += w * integrand(id, d, p[0usize..d])
+        cell += 1usize
+    }
+    ret sum
+}
+
+// pcubature for d >= 2 dimensions without box splitting: tensor Clenshaw-Curtis rules whose per-dimension sizes start at 5 points; the error is the largest over the dimensions of the distance to
+// the rule with that dimension one level (2^k + 1 -> 2^(k-1) + 1) lower, and the dimension with the largest one grows to the next size until the error is within tol * |integral|;
+// out = (integral, error, evaluations = the product of the sizes)
+fn pcubature_nd(id: usize, d: usize, lo: []const f64, hi: []const f64, tol: f64, out: []f64) {
+    var sz: [8]usize = zero
+    var i = 0usize
+    while i < d {
+        sz[i] = 5usize
+        i += 1usize
+    }
+    var it = 0usize
+    while it < 40usize {
+        let val = cc_tensor(id, d, lo, hi, sz[0usize..d])
+        var best = 0.0f64 - 1.0f64
+        var bi = 0usize
+        i = 0usize
+        while i < d {
+            var lower: [8]usize = zero
+            var c = 0usize
+            while c < d {
+                lower[c] = sz[c]
+                c += 1usize
+            }
+            lower[i] = (sz[i] - 1usize) / 2usize + 1usize
+            let e = math.abs[f64](val - cc_tensor(id, d, lo, hi, lower[0usize..d]))
+            if e > best {
+                best = e
+                bi = i
+            }
+            i += 1usize
+        }
+        var ev = 1usize
+        i = 0usize
+        while i < d {
+            ev *= sz[i]
+            i += 1usize
+        }
+        if best <= tol * math.abs[f64](val) || ev > 300000usize {
+            out[0usize] = val
+            out[1usize] = best
+            out[2usize] = f64(ev)
+            ret
+        }
+        sz[bi] = (sz[bi] - 1usize) * 2usize + 1usize
+        it += 1usize
+    }
+    out[0usize] = 0.0f64 / 0.0f64
+    out[1usize] = 0.0f64
+    out[2usize] = 0.0f64
+}

@@ -4535,4 +4535,5 @@ D7709	985	pcubature in one dimension
 D7710	1089	hcubature with vector integrands
 D7711	1318	robustbase covMcd for one variable
 D7712	674	fpc cluster.varstats varwise tables
-D7713	1218	stats::ar.ols for one series
+D7713	1219	stats::ar.ols for one series
+D7714	1353	pcubature in two and more dimensions

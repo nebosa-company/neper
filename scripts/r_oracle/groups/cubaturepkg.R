@@ -48,4 +48,14 @@ for (rep in 1:20) {
   for (k in 1:nc) { cases[[length(cases) + 1]] <- case("hv", c(a, k - 1), r$integral[k], rel = 1e-9, abs = 1e-12); cases[[length(cases) + 1]] <- case("hv", c(a, nc + k - 1), r$error[k], rel = 1e-6, abs = 1e-12) }
   cases[[length(cases) + 1]] <- case("hv", c(a, 2 * nc), r$functionEvaluations, rel = 0, abs = 0)
 }
+# pcubature in two and three dimensions: "pn" args (id, d, lo[d], hi[d], tol, which) with which 0 the integral, 1 the error estimate, 2 the evaluation count
+for (rep in 1:24) {
+  id <- (rep - 1) %% 4; d <- 2 + rep %% 2; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); tl <- c(1e-3, 1e-5, 1e-7)[1 + rep %% 3]
+  r <- pcubature(fs[[id + 1]], lo, hi, tol = tl, maxEval = 1e6)
+  if (r$functionEvaluations > 20000) next
+  a <- c(id, d, lo, hi, tl)
+  cases[[length(cases) + 1]] <- case("pn", c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("pn", c(a, 1), r$error, rel = 1e-5, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("pn", c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
+}
 emit("cubaturepkg", "cubature", list(cases))
