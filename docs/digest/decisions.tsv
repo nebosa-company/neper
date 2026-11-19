@@ -4218,4 +4218,5 @@ D7414	595	PMCMRplus lsdTest and gamesHowellTest
 D7321	788	psych: scoreItems
 D7415	729	PMCMRplus snkTest and duncanTest
 D7416	622	PMCMRplus tamhaneT2Test and dunnettT3Test
-D7417	816	L487 closed: hsAllPairsTest statistic, and the acceptance list is met
+D7417	817	L487 closed: hsAllPairsTest statistic, and the acceptance list is met
+D7322	849	poLCA: random restarts

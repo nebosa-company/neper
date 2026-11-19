@@ -4,6 +4,7 @@
 
 use e.math
 use e.mem
+use e.algo.rand.r as rg
 
 // data: n by j row-major, categories 0-based; ncat[j] categories for variable j; probs: r classes by (sum ncat) response probabilities, row-major, start in and result out; prior (r) receives the class sizes; returns the log-likelihood
 fn em(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize, nr: usize, probs: []f64, prior: []f64, tol: f64, maxiter: usize) -> f64 {
@@ -199,4 +200,69 @@ fn fit_stats(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []cons
     }
     if which == 2usize { ret 2.0f64 * gsq }
     ret chisq + (f64(n) - sumexp)
+}
+
+// poLCA(..., nrep = nrep) with probs.start = NULL under set.seed(seed): each repetition draws runif(R K_j) for the variables in turn, fills an R by K_j matrix by column and divides each row by its sum;
+// the best log-likelihood (the first one reached when equal repetitions tie, as poLCA keeps a strict improvement) wins. probs and prior receive the winner; returns its log-likelihood
+fn em_restarts(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize, nr: usize, nrep: usize, seed: i64, tol: f64, maxiter: usize, probs: []f64, prior: []f64) -> f64 {
+    var tc = 0usize
+    var v = 0usize
+    while v < nj {
+        tc += ncat[v]
+        v += 1usize
+    }
+    let (cur, e1) = mem.alloc[f64](a, nr * tc)
+    let (cp, e2) = mem.alloc[f64](a, nr)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var rng: rg.Rng = zero
+    rg.seed(&rng, seed)
+    var best = 0.0f64 - 1.0e300f64
+    var rep = 0usize
+    while rep < nrep {
+        var off = 0usize
+        v = 0usize
+        while v < nj {
+            let k = ncat[v]
+            let (u, e3) = mem.alloc[f64](a, nr * k)
+            if e3 != ok { ret 0.0f64 / 0.0f64 }
+            var q = 0usize
+            while q < nr * k {
+                u[q] = rg.unif(&rng)
+                q += 1usize
+            }
+            var r = 0usize
+            while r < nr {
+                var sm = 0.0f64
+                var c = 0usize
+                while c < k {
+                    sm += u[r + c * nr]
+                    c += 1usize
+                }
+                c = 0usize
+                while c < k {
+                    cur[r * tc + off + c] = u[r + c * nr] / sm
+                    c += 1usize
+                }
+                r += 1usize
+            }
+            off += k
+            v += 1usize
+        }
+        let ll = em(a, data, n, nj, ncat, nr, cur, cp, tol, maxiter)
+        if ll > best {
+            best = ll
+            var i = 0usize
+            while i < nr * tc {
+                probs[i] = cur[i]
+                i += 1usize
+            }
+            i = 0usize
+            while i < nr {
+                prior[i] = cp[i]
+                i += 1usize
+            }
+        }
+        rep += 1usize
+    }
+    ret best
 }

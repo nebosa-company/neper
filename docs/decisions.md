@@ -50422,3 +50422,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 
 ## D7417 — L487 closed: hsAllPairsTest statistic, and the acceptance list is met
 `hs_stat` is the Hayter-Stone statistic 2 sqrt(6) (U - n_c n_r / 2) / sqrt(n_c n_r (n_c + n_r + 1)) of a table cell, with "less" negating the data (equal to R on twelve data sets; its p values come from a look-up table or a permutation test and are not ported). With it every item of L487's acceptance list is covered by a test that fails if the behaviour breaks (oracle_pmcmr and the oracle_pmcmr_* groups), so the item is removed from the queue and recorded in work-done.jsonl at score 1. What the package has beyond that list stays out: the normal scores test with ties (random tie breaking), the hsAllPairsTest p values, and the other PMCMRplus functions (trend, ANOVA power and the like) that were never in the acceptance list.
+
+## D7322 — poLCA: random restarts
+
+**Decision.** `polcapkg.em_restarts` reproduces `poLCA(..., nrep = k)` with no `probs.start` under `set.seed(seed)`: each repetition draws `runif(R K_j)` for the variables in turn (filled by column, rows divided by their sums), runs `em` (tol 1e-10, 1000 iterations, poLCA's defaults), and a strictly better log-likelihood replaces the best.
+
+**Result.** `oracle_polca` (236 cases, 36 new) equals poLCA on Windows: log-likelihood to 1e-6 and the class-size and response-probability sums of squares to 1e-4. The comparison uses sums of squares because two repetitions can reach the same optimum with the classes swapped and the winner among such ties is decided by rounding. Linux pending. L512 stays partial: covariates (latent class regression), standard errors, missing responses, poLCA.entropy and relatives.

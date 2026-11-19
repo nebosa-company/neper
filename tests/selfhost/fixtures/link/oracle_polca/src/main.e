@@ -12,6 +12,63 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "rs") {
+        // args (n, J, R, ncat[J], nrep, seed, data[n*J] row-major 1-based, q)
+        let rn = usize(z[0usize])
+        let rj = usize(z[1usize])
+        let rr = usize(z[2usize])
+        let (rc, re1) = mem.alloc[usize](a, rj)
+        if re1 != ok { ret nan }
+        var rtc = 0usize
+        var ri = 0usize
+        while ri < rj {
+            rc[ri] = usize(z[3usize + ri])
+            rtc += rc[ri]
+            ri += 1usize
+        }
+        let nrep = usize(z[3usize + rj])
+        let seed = i64(z[4usize + rj])
+        let (rd, re2) = mem.alloc[f64](a, rn * rj)
+        let (rp, re3) = mem.alloc[f64](a, rr * rtc)
+        let (rpr, re4) = mem.alloc[f64](a, rr)
+        if re2 != ok || re3 != ok || re4 != ok { ret nan }
+        ri = 0usize
+        while ri < rn * rj {
+            rd[ri] = z[5usize + rj + ri] - 1.0f64
+            ri += 1usize
+        }
+        let rll = pl.em_restarts(a, rd, rn, rj, rc, rr, nrep, seed, 1.0e-10f64, 1000usize, rp, rpr)
+        let rq = usize(z[5usize + rj + rn * rj])
+        if rq == 0usize { ret rll }
+        if rq == 1usize {
+            var sp = 0.0f64
+            ri = 0usize
+            while ri < rr {
+                sp += rpr[ri] * rpr[ri]
+                ri += 1usize
+            }
+            ret sp
+        }
+        var sq = 0.0f64
+        var idx = 0usize
+        var roff = 0usize
+        var rv = 0usize
+        while rv < rj {
+            var rcl = 0usize
+            while rcl < rr {
+                var rk = 0usize
+                while rk < rc[rv] {
+                    idx += 1usize
+                    sq += rp[rcl * rtc + roff + rk] * rp[rcl * rtc + roff + rk]
+                    rk += 1usize
+                }
+                rcl += 1usize
+            }
+            roff += rc[rv]
+            rv += 1usize
+        }
+        ret sq
+    }
     let n = usize(z[0usize])
     let nj = usize(z[1usize])
     let nr = usize(z[2usize])
