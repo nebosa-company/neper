@@ -4252,4 +4252,5 @@ D7424	548	pscl pR2 for zeroinfl
 D7425	224	pscl pR2 for the hurdle
 D7345	1181	poLCA: latent class regression
 D7346	640	gamlss.dist: DEL
-D7347	527	gamlss.dist: SICHEL and ZASICHEL distribution functions
+D7347	528	gamlss.dist: SICHEL and ZASICHEL distribution functions
+D7348	564	gamlss.dist: SICHEL and ZASICHEL quantiles

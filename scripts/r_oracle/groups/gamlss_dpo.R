@@ -49,4 +49,10 @@ for (rep in 1:30) {
   add("dp", c(15, mu, sg, xi, nu), pSICHEL(xi, mu = mu, sigma = sg, nu = nu), 1e-7, 1e-12)
   add("dp", c(16, mu, sg, xi, nu, t2), pZASICHEL(xi, mu = mu, sigma = sg, nu = nu, tau = t2), 1e-7, 1e-12)
 }
+# qSICHEL (fn 17) and qZASICHEL (fn 18): mu, sigma, nu, [tau,] p
+for (rep in 1:30) {
+  mu <- runif(1, 0.5, 6); sg <- runif(1, 0.3, 2); nu <- runif(1, -1.5, 1); t2 <- runif(1, 0.05, 0.6); pr <- runif(1, 0.02, 0.98)
+  add("dp", c(17, mu, sg, pr, nu), qSICHEL(pr, mu = mu, sigma = sg, nu = nu), 0, 0)
+  add("dp", c(18, mu, sg, pr, nu, t2), qZASICHEL(pr, mu = mu, sigma = sg, nu = nu, tau = t2), 0, 0)
+}
 emit("gamlss_dpo", "gamlss.dist", list(cases))

@@ -2345,3 +2345,29 @@ fn pzasichel(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     let c1 = psichel(q, mu, sigma, nu)
     ret tau + (1.0f64 - tau) * (c1 - c0) / (1.0f64 - c0)
 }
+
+// qSICHEL: the first count whose distribution function reaches p (up to 10000); qZASICHEL maps p through the zero-truncation as the package does: pnew = (p - tau) / (1 - tau) - 1e-10, then F(0) (1 - pnew) + pnew
+fn qsichel(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p + 1.0e-9f64 >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var j = 0.0f64
+    var res = 0.0f64
+    var cum = 0.0f64
+    while j <= 10000.0f64 {
+        cum += dsichel(j, mu, sigma, nu)
+        res = j
+        if p <= cum { ret res }
+        j += 1.0f64
+    }
+    ret res
+}
+
+fn qzasichel(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let pnew = (p - tau) / (1.0f64 - tau) - 1.0e-10f64
+    let c0 = psichel(0.0f64, mu, sigma, nu)
+    var pn2 = c0 * (1.0f64 - pnew) + pnew
+    if !(pn2 > 0.0f64) { pn2 = 0.0f64 }
+    ret qsichel(pn2, mu, sigma, nu)
+}

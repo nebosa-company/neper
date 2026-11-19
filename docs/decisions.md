@@ -50602,3 +50602,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `gamlssdist.psichel` is the running sum of the Sichel mass (the package accumulates it in compiled code) and `pzasichel` is tau at zero and tau + (1 - tau) (F(q) - F(0)) / (1 - F(0)) above.
 
 **Result.** `oracle_gamlss_dpo` (660 cases, 60 new) equals gamlss.dist on Windows to 1e-7. Linux pending. L464 stays partial: SI, MN3-5, ST3C, quantiles of SICHEL and ZASICHEL, SEP and ZISICHEL p and q, the remaining random-number generators, moments.
+
+## D7348 — gamlss.dist: SICHEL and ZASICHEL quantiles
+
+**Decision.** `gamlssdist.qsichel` returns the first count whose distribution reaches p (accumulating the mass, up to 10000) and `qzasichel` maps p as the package does: pnew = (p - tau) / (1 - tau) - 1e-10, then F(0) (1 - pnew) + pnew floored at 0, and takes the Sichel quantile of that.
+
+**Result.** `oracle_gamlss_dpo` (720 cases, 60 new) equals gamlss.dist on Windows exactly. Linux pending. L464 stays partial: SI, MN3-5, ST3C, SEP and ZISICHEL p and q, the remaining random-number generators, moments.
