@@ -11,6 +11,8 @@ use e.math.nmath_beta as nbt
 use e.math.dist as dst
 use e.algo.stat.desctools as dt
 use e.mem
+use e.algo.stat.fdrtool as fd
+use e.algo.stat.pbivnorm as pbv
 
 // column-major n by p
 fn colmean(x: []const f64, n: usize, j: usize) -> f64 {
@@ -406,4 +408,105 @@ fn corr_test(a: *mem.Arena, x: []const f64, n: usize, p: usize, i: usize, j: usi
         q2 += 1usize
     }
     ret best
+}
+
+// psych::Yule(x) of a 2 by 2 table (column-major a, c, b, d): Q, or Y when y is true
+fn yule(t: []const f64, y: bool) -> f64 {
+    let a = t[0usize]
+    let c = t[1usize]
+    let b = t[2usize]
+    let d = t[3usize]
+    if y { ret (math.sqrt[f64](a * d) - math.sqrt[f64](b * c)) / (math.sqrt[f64](a * d) + math.sqrt[f64](b * c)) }
+    ret (a * d - b * c) / (a * d + b * c)
+}
+
+// psych::phi(t, digits = 12) of a 2 by 2 table: (a / N - c1 r1) / sqrt(r1 r2 c1 c2) with the margins as proportions
+fn phi(t: []const f64) -> f64 {
+    let tot = t[0usize] + t[1usize] + t[2usize] + t[3usize]
+    let r1 = (t[0usize] + t[2usize]) / tot
+    let r2 = (t[1usize] + t[3usize]) / tot
+    let c1 = (t[0usize] + t[1usize]) / tot
+    let c2 = (t[2usize] + t[3usize]) / tot
+    ret (t[0usize] / tot - c1 * r1) / math.sqrt[f64](r1 * r2 * c1 * c2)
+}
+
+// psych::biserial(x, y) with y coded 0 / 1: (mean x in 1 - mean x in 0) p q / (dnorm(qnorm(p)) sd x), p the share of ones, clipped to +-1 as psych does
+fn biserial(x: []const f64, y: []const f64) -> f64 {
+    let n = f64(x.len)
+    var n1 = 0.0f64
+    var s1 = 0.0f64
+    var s0 = 0.0f64
+    var sx = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        sx += x[i]
+        if y[i] > 0.5f64 {
+            n1 += 1.0f64
+            s1 += x[i]
+        } else {
+            s0 += x[i]
+        }
+        i += 1usize
+    }
+    let mx = sx / n
+    var ss = 0.0f64
+    i = 0usize
+    while i < x.len {
+        ss += (x[i] - mx) * (x[i] - mx)
+        i += 1usize
+    }
+    let sd = math.sqrt[f64](ss / (n - 1.0f64))
+    let p = n1 / n
+    let zp = dst.dnorm(dst.qnorm(p, 0.0f64, 1.0f64, true, false), 0.0f64, 1.0f64, false)
+    var r = (s1 / n1 - s0 / (n - n1)) * (p * (1.0f64 - p)) / (zp * sd)
+    if r > 1.0f64 { r = 1.0f64 }
+    if r < 0.0f64 - 1.0f64 { r = 0.0f64 - 1.0f64 }
+    ret r
+}
+
+type TetCtx = struct { tab: [4]f64, rc: f64, cc: f64 }
+
+fn tetra_f(c: *TetCtx, rho: f64) -> f64 {
+    let p11 = pbv.pbivnorm(c.rc, c.cc, rho)
+    let p21 = dst.pnorm(c.rc, 0.0f64, 1.0f64, true, false) - p11
+    let p12 = dst.pnorm(c.cc, 0.0f64, 1.0f64, true, false) - p11
+    let p22 = 1.0f64 - dst.pnorm(c.rc, 0.0f64, 1.0f64, true, false) - p12
+    ret 0.0f64 - (c.tab[0usize] * math.log[f64](p11) + c.tab[1usize] * math.log[f64](p21) + c.tab[2usize] * math.log[f64](p12) + c.tab[3usize] * math.log[f64](p22))
+}
+
+// psych::tetrachoric of a 2 by 2 table of counts (column-major) with correct = 0.5: out[0] rho from R's optimize on (-1, 1), out[1] the row threshold, out[2] the column threshold
+fn tetrachoric(t: []const f64, correct: f64, out: []f64) {
+    var c = TetCtx { tab: zero, rc: 0.0f64, cc: 0.0f64 }
+    var mn = t[0usize]
+    var tot = 0.0f64
+    var i = 0usize
+    while i < 4usize {
+        c.tab[i] = t[i]
+        if t[i] < mn { mn = t[i] }
+        tot += t[i]
+        i += 1usize
+    }
+    if tot > 1.0f64 && mn == 0.0f64 && correct > 0.0f64 {
+        i = 0usize
+        while i < 4usize {
+            if c.tab[i] == 0.0f64 { c.tab[i] = correct }
+            i += 1usize
+        }
+    }
+    var s = 0.0f64
+    i = 0usize
+    while i < 4usize {
+        s += c.tab[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < 4usize {
+        c.tab[i] = c.tab[i] / s
+        i += 1usize
+    }
+    c.rc = dst.qnorm(c.tab[0usize] + c.tab[1usize], 0.0f64, 1.0f64, true, false)
+    c.cc = dst.qnorm(c.tab[0usize] + c.tab[2usize], 0.0f64, 1.0f64, true, false)
+    out[0usize] = fd.brent_min[TetCtx](&c, tetra_f, 0.0f64 - 1.0f64, 1.0f64)
+    out[1usize] = c.cc
+    out[2usize] = c.rc
 }

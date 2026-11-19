@@ -50365,3 +50365,9 @@ vanWaerdenManyOneTest(p.adjust.method = "single-step") takes its p from the same
 
 ## D7410 — PMCMRplus frdAllPairsSiegelTest
 `frd_pair` kind 5 is the Siegel-Castellan all-pairs test on a complete block design: the mean rank difference over sqrt(k (k + 1) / (6 n)) and the two-sided normal p; Holm adjustment runs over the k (k - 1) / 2 pairs through `p_adjust`, in R's column-by-column order of the lower triangle. Equal to R on twelve block designs (statistic, unadjusted and Holm p). L487 at 0.97; frdAllPairsExactTest and steelsKSampleTest remain of its acceptance list.
+
+## D7316 — psych: Yule, phi, biserial, tetrachoric of a 2 by 2 table
+
+**Decision.** `psych.yule` (Q, or Y), `phi`, `biserial` (clipped to +-1 as psych does) and `tetrachoric` (the maximum-likelihood rho from `optimize` on (-1, 1) with `pbivnorm` cell probabilities, thresholds from the margins, zero cells replaced by `correct` = 0.5), all for the cases psych computes directly from a table or a 0/1 variable.
+
+**Result.** `oracle_psych` (1396 cases, 670 new from the earlier count) equals psych on Windows (rho to 1e-6, the rest to 1e-8 or better). Linux pending. L312 stays partial: polychoric, tetrachoric and biserial matrices of raw data, omega, fa with rotations, principal, fa.parallel, VSS, scoreItems, describeBy.

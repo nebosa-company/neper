@@ -44,4 +44,21 @@ for (rep in 1:15) {
     for (w in 0:5) cases[[length(cases) + 1]] <- case("ctest", c(base, w), as.numeric(vals[w + 1]), rel = 1e-8, abs = 1e-10)
   }
 }
+# 2 x 2 tables: "yule" "yuleY" "phi" (a, c, b, d column-major, 0); "tetra" (counts, q) q 0 rho 1 row tau 2 column tau; biserial: "bis" (n, x[n], y[n], 0)
+for (rep in 1:25) {
+  tb <- matrix(rpois(4, 20) + c(10, 0, 0, 10), 2)
+  if (rep %% 5 == 0) tb[sample(4, 1)] <- 0
+  if (all(tb > 0)) {
+    add("yule", c(tb, 0), Yule(tb)); add("yuleY", c(tb, 0), Yule(tb, Y = TRUE)); add("phi", c(tb, 0), psych::phi(tb, digits = 12))
+  }
+  tc <- suppressMessages(tetrachoric(tb, correct = 0.5))
+  cases[[length(cases) + 1]] <- case("tetra", c(tb, 0), tc$rho, rel = 1e-6, abs = 1e-7)
+  cases[[length(cases) + 1]] <- case("tetra", c(tb, 1), tc$tau[1], rel = 1e-9, abs = 1e-10)
+  cases[[length(cases) + 1]] <- case("tetra", c(tb, 2), tc$tau[2], rel = 1e-9, abs = 1e-10)
+}
+for (rep in 1:15) {
+  n <- sample(30:90, 1); yy <- rbinom(n, 1, runif(1, 0.3, 0.7)); xx <- round(rnorm(n) + 0.6 * yy, 3)
+  r <- suppressMessages(suppressWarnings(biserial(xx, yy)))
+  add("bis", c(n, xx, yy, 0), as.numeric(r))
+}
 emit("psych", "psych", list(cases))

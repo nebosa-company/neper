@@ -16,6 +16,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let cp = usize(x[1usize])
         ret ps.corr_test(a, x[2usize..2usize + cn * cp], cn, cp, usize(x[2usize + cn * cp]), usize(x[3usize + cn * cp]), usize(x[4usize + cn * cp]))
     }
+    if str.eq(c.name, "yule") { ret ps.yule(x[0usize..4usize], false) }
+    if str.eq(c.name, "yuleY") { ret ps.yule(x[0usize..4usize], true) }
+    if str.eq(c.name, "phi") { ret ps.phi(x[0usize..4usize]) }
+    if str.eq(c.name, "tetra") {
+        var to: [3]f64 = zero
+        ps.tetrachoric(x[0usize..4usize], 0.5f64, to[0usize..3usize])
+        ret to[usize(x[4usize])]
+    }
+    if str.eq(c.name, "bis") {
+        let bn = usize(x[0usize])
+        ret ps.biserial(x[1usize..1usize + bn], x[1usize + bn..1usize + 2usize * bn])
+    }
     if str.eq(c.name, "desc") {
         let dn = usize(x[0usize])
         ret ps.describe(a, x[1usize..1usize + dn], usize(x[1usize + dn]))

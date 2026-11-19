@@ -4203,4 +4203,7 @@ D7404	400	PMCMRplus kwManyOneNdwTest
 D7405	599	PMCMRplus steelTest and its critical-value table
 D7406	675	a one-factor multivariate-t integral and PMCMRplus dunnettTest
 D7407	557	PMCMRplus kwManyOneConoverTest single-step
-D7408	755	PMCMRplus vanWaerdenManyOneTest single-step and one-sided dunnettTest
+D7408	756	PMCMRplus vanWaerdenManyOneTest single-step and one-sided dunnettTest
+D7409	538	PMCMRplus tamhaneDunnettTest
+D7410	495	PMCMRplus frdAllPairsSiegelTest
+D7316	725	psych: Yule, phi, biserial, tetrachoric of a 2 by 2 table
