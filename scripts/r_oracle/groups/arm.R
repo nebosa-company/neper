@@ -69,6 +69,15 @@ for (rep in 1:9) {
   if (is.null(f)) next
   for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, 3, as.vector(t(X)), y, j, pdf, 4), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
 }
+# bayesglm2 with the cloglog link (family code 4), default prior scale 2.5 and 10
+for (rep in 1:9) {
+  n <- sample(100:200, 1); k <- sample(2:4, 1); pdf <- c(1, Inf, 5)[rep %% 3 + 1]
+  X <- cbind(1, matrix(round(rnorm(n * (k - 1)), 4), n)); b <- c(-0.5, runif(k - 1, -0.6, 0.6)); y <- rbinom(n, 1, 1 - exp(-exp(as.vector(X %*% b))))
+  d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
+  f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = binomial(link = "cloglog"), prior.df = pdf)), error = function(e) NULL)
+  if (is.null(f)) next
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, 4, as.vector(t(X)), y, j, pdf, 2.5), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
+}
 # bayesglm3: per-coefficient prior mean, df and scale (the full vectors, the intercept first): args (n, k, family, x, y, j, mean[k], df[k], scale[k]).
 for (rep in 1:12) {
   fam <- (rep - 1) %% 3; n <- sample(60:150, 1); k <- sample(3:4, 1)

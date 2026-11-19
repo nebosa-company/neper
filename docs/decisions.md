@@ -51229,3 +51229,6 @@ Probed rzmpois, rzmnbinom and rzmgeom against the quantile at the uniform stream
 
 ## D7578 — robustbase medcouple for odd sample sizes
 With an odd n the median is an observation, and the pair (median, median) enters the medcouple kernel with h = sign(i + j - 1 - n) over the sorted positions (zero at the centre); `mc` now adds it, and its oracle covers odd n as well (14 values added to oracle_robustbase, 540 in all). Samples with several ties at the median are not reproduced: a probe with the Brys tie rule gave 1 and 0.333 where robustbase returns 0.75 and 0, so the tie handling of mc.c differs from the published kernel and stays open.
+
+## D7579 — arm bayesglm with the cloglog link
+`bayesglm` takes family code 4, the binomial family with the complementary log-log link: the start value is log(-log(1 - mu0)) from the usual (y + 1/2) / 2, the weights use mu.eta = exp(eta) exp(-exp(eta)) clipped at the machine epsilon and the binomial variance, the fitted mean is 1 - exp(-exp(eta)) clipped to [eps, 1 - eps], and the default scale stays 2.5 (arm rescales only the probit link). Equal to arm on 9 fits with prior df 1, Inf and 5 (the coefficients added to oracle_arm, 1578 cases in all). Other links with offsets, discrete, corrplot data and standardize for glm stay open.
