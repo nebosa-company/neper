@@ -22,8 +22,8 @@ for (rep in 1:10) {
   f <- tryCatch(ugarchfit(spec, y, solver = "hybrid"), error = function(e) NULL)
   if (is.null(f) || convergence(f) != 0) next
   cf <- coef(f); if (cf[["alpha1"]] < 0.02 || cf[["alpha1"]] + cf[["beta1"]] + cf[["gamma1"]] / 2 > 0.97) next
-  v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], cf[["gamma1"]], likelihood(f))
-  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("gjr", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 6) 1e-6 else 2e-2, abs = if (k == 6) 1e-4 else 2e-3)
+  v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], cf[["gamma1"]], likelihood(f), sqrt(diag(vcov(f))))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("gjr", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 6) 1e-6 else if (k > 6) 8e-2 else 2e-2, abs = if (k == 6) 1e-4 else if (k > 6) 1e-2 else 2e-3)
 }
 # sGARCH(1,1), constant mean, standardised Student t: "gart" args (n, y[n], k) k 0 mu, 1 omega, 2 alpha1, 3 beta1, 4 shape, 5 the log-likelihood
 for (rep in 1:10) {
@@ -34,8 +34,8 @@ for (rep in 1:10) {
   f <- tryCatch(ugarchfit(spec, y, solver = "hybrid"), error = function(e) NULL)
   if (is.null(f) || convergence(f) != 0) next
   cf <- coef(f); if (cf[["alpha1"]] < 0.03 || cf[["alpha1"]] + cf[["beta1"]] > 0.97 || cf[["shape"]] > 40) next
-  v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], cf[["shape"]], likelihood(f))
-  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("gart", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 6) 1e-6 else 3e-2, abs = if (k == 6) 1e-4 else 5e-3)
+  v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], cf[["shape"]], likelihood(f), sqrt(diag(vcov(f))))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("gart", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 6) 1e-6 else if (k > 6) 8e-2 else 3e-2, abs = if (k == 6) 1e-4 else if (k > 6) 1e-2 else 5e-3)
 }
 # eGARCH(1,1), constant mean, normal: "egar" args (n, y[n], k) k 0 mu, 1 omega, 2 alpha1, 3 beta1, 4 gamma1, 5 the log-likelihood
 for (rep in 1:10) {
@@ -46,8 +46,8 @@ for (rep in 1:10) {
   f <- tryCatch(ugarchfit(spec, y, solver = "hybrid"), error = function(e) NULL)
   if (is.null(f) || convergence(f) != 0) next
   cf <- coef(f); if (cf[["beta1"]] > 0.97 || cf[["beta1"]] < 0.3) next
-  v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], cf[["gamma1"]], likelihood(f))
-  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("egarch", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 6) 1e-6 else 3e-2, abs = if (k == 6) 1e-4 else 5e-3)
+  v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], cf[["gamma1"]], likelihood(f), sqrt(diag(vcov(f))))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("egarch", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 6) 1e-6 else if (k > 6) 2e-1 else 3e-2, abs = if (k == 6) 1e-4 else if (k > 6) 1e-2 else 5e-3)
 }
 # iGARCH(1,1), constant mean, normal: "igarch" args (n, y[n], k) k 0 mu, 1 omega, 2 alpha1, 3 beta1, 4 the log-likelihood
 for (rep in 1:10) {

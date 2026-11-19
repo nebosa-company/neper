@@ -4588,4 +4588,5 @@ D7687	1070	emmeans: one-way logistic contrasts on both scales
 D7688	712	emmeans: Poisson contrasts
 D7689	692	unmarked: standard errors of the occupancy fit
 D7690	672	unmarked: pcount standard errors, one Hessian routine
-D7691	868	rugarch: sGARCH standard errors; the Hessian routine in its own module
+D7691	869	rugarch: sGARCH standard errors; the Hessian routine in its own module
+D7692	928	rugarch: standard errors of gjrGARCH, eGARCH and the Student t fit

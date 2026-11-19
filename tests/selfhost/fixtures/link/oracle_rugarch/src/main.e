@@ -12,9 +12,18 @@ fn fit_case(a: *mem.Arena, c: *const oracle.Case, out: []f64) -> bool {
     let z = c.args
     let n = usize(z[0usize])
     if c.name.len == 7usize { ret rg.igarch11(a, z[1usize..1usize + n], n, out) }
-    if c.name.len == 6usize { ret rg.egarch11(a, z[1usize..1usize + n], n, out) }
-    if c.name.len == 4usize { ret rg.garch11_t(a, z[1usize..1usize + n], n, out) }
-    if c.name.len == 3usize { ret rg.gjrgarch11(a, z[1usize..1usize + n], n, out) }
+    if c.name.len == 6usize {
+        if !rg.egarch11(a, z[1usize..1usize + n], n, out[0usize..6usize]) { ret false }
+        ret rg.garch5_se(a, z[1usize..1usize + n], n, 2usize, out[0usize..5usize], out[6usize..11usize])
+    }
+    if c.name.len == 4usize {
+        if !rg.garch11_t(a, z[1usize..1usize + n], n, out[0usize..6usize]) { ret false }
+        ret rg.garch5_se(a, z[1usize..1usize + n], n, 3usize, out[0usize..5usize], out[6usize..11usize])
+    }
+    if c.name.len == 3usize {
+        if !rg.gjrgarch11(a, z[1usize..1usize + n], n, out[0usize..6usize]) { ret false }
+        ret rg.garch5_se(a, z[1usize..1usize + n], n, 1usize, out[0usize..5usize], out[6usize..11usize])
+    }
     if !rg.garch11(a, z[1usize..1usize + n], n, out[0usize..5usize]) { ret false }
     ret rg.garch11_se(a, z[1usize..1usize + n], n, out[0usize..4usize], out[5usize..9usize])
 }

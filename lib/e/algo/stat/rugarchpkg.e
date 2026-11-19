@@ -464,3 +464,18 @@ fn garch11_se(a: *mem.Arena, y: []const f64, n: usize, est: []const f64, out: []
     var c = GSeCtx { y: y, n: n }
     ret nh.hessian_se[GSeCtx](a, &c, garch_nat_f, est, 4usize, out)
 }
+
+type GSe5Ctx = struct { y: []const f64, n: usize, model: usize }
+
+// minus the log-likelihood of model 1 gjrGARCH, 2 eGARCH or 3 Student t sGARCH on the natural parameters x = (mu, omega, alpha, beta, gamma or shape)
+fn garch5_f(c: *GSe5Ctx, x: []const f64) -> f64 {
+    if c.model == 1usize { ret 0.0f64 - gjr_ll(c.y, c.n, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
+    if c.model == 2usize { ret 0.0f64 - egarch_ll(c.y, c.n, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
+    ret 0.0f64 - garch_t_ll(c.y, c.n, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize])
+}
+
+// the standard errors of the gjrGARCH (model 1), eGARCH (2) or Student t (3) fits at est, the five natural parameters in the order the fit functions return them
+fn garch5_se(a: *mem.Arena, y: []const f64, n: usize, model: usize, est: []const f64, out: []f64) -> bool {
+    var c = GSe5Ctx { y: y, n: n, model: model }
+    ret nh.hessian_se[GSe5Ctx](a, &c, garch5_f, est, 5usize, out)
+}
