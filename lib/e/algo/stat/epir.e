@@ -695,3 +695,39 @@ fn strata_mh(a: []const f64, b: []const f64, c: []const f64, d: []const f64, lev
     out[7usize] = hr
     out[8usize] = ho
 }
+
+// Mantel-Haenszel risk difference with its Wald interval and the number needed to treat from it, for K cohort tables; out = (RD, lower, upper, NNT, lower, upper)
+fn strata_mh_rd(a: []const f64, b: []const f64, c: []const f64, d: []const f64, level: f64, units: f64, out: []f64) {
+    let k = a.len
+    let z = z_of(level)
+    var num = 0.0f64
+    var den = 0.0f64
+    var vs = 0.0f64
+    var i = 0usize
+    while i < k {
+        let n1 = a[i] + b[i]
+        let n0 = c[i] + d[i]
+        let t = n1 + n0
+        let w = n1 * n0 / t
+        num += (a[i] * n0 - c[i] * n1) / t
+        den += w
+        var v = a[i] * d[i] / (n1 * n1 * (n1 - 1.0f64)) + c[i] * b[i] / (n0 * n0 * (n0 - 1.0f64))
+        if n0 == 1.0f64 || n1 == 1.0f64 { v = 0.0f64 }
+        vs += w * w * v
+        i += 1usize
+    }
+    let est = num / den * units
+    let se = math.sqrt[f64](vs / (den * den)) * units
+    let lo = est - z * se
+    let hi = est + z * se
+    let n_est = 1.0f64 / (est / units)
+    let n1v = 1.0f64 / (lo / units)
+    let n2v = 1.0f64 / (hi / units)
+    let nl = math.min[f64](n1v, n2v)
+    out[0usize] = est
+    out[1usize] = lo
+    out[2usize] = hi
+    out[3usize] = n_est
+    out[4usize] = nl
+    out[5usize] = math.max[f64](n1v, n2v)
+}
