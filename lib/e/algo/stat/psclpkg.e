@@ -674,6 +674,21 @@ fn lk_loglik(c: *LkCtx, par: []const f64) -> f64 {
     var i = 0usize
     while i < c.n {
         var zeta = 0.0f64
+        if c.part == 2usize {
+            // the zero-truncated Poisson count part of a hurdle: positive rows only, parameters beta
+            if c.y[i] > 0.0f64 {
+                var et = c.off[i]
+                var jt = 0usize
+                while jt < c.p {
+                    et += c.x[i * c.p + jt] * par[jt]
+                    jt += 1usize
+                }
+                let mt = math.exp[f64](et)
+                ll += c.w[i] * (c.y[i] * et - mt - nm.lgammafn(c.y[i] + 1.0f64) - math.log[f64](1.0f64 - math.exp[f64](0.0f64 - mt)))
+            }
+            i += 1usize
+            continue
+        }
         var j = 0usize
         if c.part == 0usize {
             while j < c.q {
@@ -713,7 +728,7 @@ fn lk_neg(c: *LkCtx, par: []const f64) -> f64 {
         j += 1usize
     }
     let v = lk_loglik(c, par)
-    if v != v { ret 1.0e300f64 }
+    if v != v || v > 1.0e290f64 || v < -1.0e290f64 { ret 1.0e300f64 }
     ret 0.0f64 - v
 }
 
@@ -975,4 +990,35 @@ fn zeroinfl_geom_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f6
 fn zeroinfl_link_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, w: []const f64, off: []const f64, n: usize, p: usize, q: usize, link: usize, par: []const f64, se: []f64) -> err {
     var c = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: link, part: 0usize, w: w, off: off }
     ret num_hessian_se[LkCtx](a, &c, lk_neg, par[0usize..p + q], se)
+}
+
+// hurdle(y ~ x + offset(o) | z, weights = w, dist = "poisson", zero.dist = "binomial", link): the zero-truncated Poisson count part (beta, BFGS from the exact unweighted fit) and the binomial zero part
+// (gamma under the link, BFGS from zero) maximised separately; par receives beta (p) then gamma (q), se the standard errors of the two blocks (num_hessian_se on each); returns the total log-likelihood
+fn hurdle_full(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, w: []const f64, off: []const f64, n: usize, p: usize, q: usize, link: usize, par: []f64, se: []f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    if p + q > 32usize { ret nan }
+    let l0 = hurdle(a, x, z, y, n, p, q, par[0usize..p + q])
+    if l0 != l0 { ret nan }
+    var cc = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: link, part: 2usize, w: w, off: off }
+    var cz = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: link, part: 1usize, w: w, off: off }
+    let (scr, e1) = mem.alloc[f64](a, (p + q) * (p + q) + 6usize * (p + q))
+    if e1 != ok { ret nan }
+    var gam: [8]f64 = zero
+    var round = 0usize
+    while round < 2usize {
+        let (r, e2) = opt.bfgs[LkCtx](&cc, lk_neg, lk_grad, par[0usize..p], 1.0e-9f64, 400u32, scr)
+        let (r2, e3) = opt.bfgs[LkCtx](&cz, lk_neg, lk_grad, gam[0usize..q], 1.0e-9f64, 400u32, scr)
+        let _ = r
+        let _ = r2
+        if e2 != ok || e3 != ok { ret nan }
+        round += 1usize
+    }
+    var j = 0usize
+    while j < q {
+        par[p + j] = gam[j]
+        j += 1usize
+    }
+    if num_hessian_se[LkCtx](a, &cc, lk_neg, par[0usize..p], se[0usize..p]) != ok { ret nan }
+    if num_hessian_se[LkCtx](a, &cz, lk_neg, gam[0usize..q], se[p..p + q]) != ok { ret nan }
+    ret lk_loglik(&cc, par[0usize..p]) + lk_loglik(&cz, gam[0usize..q])
 }

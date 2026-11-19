@@ -17,6 +17,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = usize(z[2usize])
     let (par, e1) = mem.alloc[f64](a, p + q + 1usize)
     if e1 != ok { ret nan }
+    if str.eq(c.name, "hwl") || str.eq(c.name, "hwc") || str.eq(c.name, "hwz") || str.eq(c.name, "hwse") {
+        let lnk = usize(z[3usize])
+        let y2 = z[5usize..5usize + n]
+        let x2 = z[5usize + n..5usize + n + n * p]
+        let z2 = z[5usize + n + n * p..5usize + n + n * p + n * q]
+        let w2 = z[5usize + n + n * p + n * q..5usize + 2usize * n + n * p + n * q]
+        let o2 = z[5usize + 2usize * n + n * p + n * q..5usize + 3usize * n + n * p + n * q]
+        let (se, e6) = mem.alloc[f64](a, p + q)
+        if e6 != ok { ret nan }
+        let lh = ps.hurdle_full(a, x2, z2, y2, w2, o2, n, p, q, lnk, par, se)
+        if str.eq(c.name, "hwl") { ret lh }
+        if str.eq(c.name, "hwc") { ret par[0usize] + 2.0f64 * par[1usize] }
+        if str.eq(c.name, "hwz") { ret par[p] + 2.0f64 * par[p + 1usize] }
+        var t = 0.0f64
+        var u = 0usize
+        while u < p + q {
+            t += se[u] * f64(u + 1usize)
+            u += 1usize
+        }
+        ret t
+    }
     if str.eq(c.name, "gzse") {
         let yg = z[3usize..3usize + n]
         let xg = z[3usize + n..3usize + n + n * p]

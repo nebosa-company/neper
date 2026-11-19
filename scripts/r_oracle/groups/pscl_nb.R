@@ -67,4 +67,15 @@ for (rep in 1:6) {
   f2 <- tryCatch(suppressWarnings(zeroinfl(y ~ x1 | z1, data = d, link = lk, control = zeroinfl.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
   if (!is.null(f2)) { sv <- sqrt(diag(vcov(f2))); cases[[length(cases) + 1]] <- case("lkse", c(n, 2, 2, link, 0, yp, as.vector(t(x)), as.vector(t(z))), sum(sv * seq_along(sv)), rel = 2e-2, abs = 2e-3) }
 }
+# hurdle with weights and a count offset, logit or probit zero part: "hwl" log-likelihood, "hwc" count coefficients and "hwz" zero coefficients (position-weighted, 5e-3), "hwse" the standard errors (1e-2). Args: (n, p, q, link, 1, y, x, z, w, o).
+for (rep in 1:8) {
+  n <- sample(250:350, 1); x <- cbind(1, rnorm(n)); z <- cbind(1, rnorm(n)); w <- round(runif(n, 0.5, 2), 3); o <- round(runif(n, -0.5, 0.5), 3); link <- rep %% 2
+  b <- c(0.7, rnorm(1, 0, .3)); g <- c(-0.5, rnorm(1, 0, .5)); lam <- exp(as.vector(x %*% b) + o); pz <- plogis(as.vector(z %*% g))
+  y <- rpois(n, lam); y[runif(n) < pz] <- 0; d <- data.frame(y = y, x1 = x[, 2], z1 = z[, 2], w = w, o = o)
+  f <- tryCatch(suppressWarnings(hurdle(y ~ x1 + offset(o) | z1, data = d, weights = w, zero.dist = "binomial", link = c("logit", "probit")[link + 1], control = hurdle.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, 2, 2, link, 1, y, as.vector(t(x)), as.vector(t(z)), w, o); cc <- coef(f, "count"); zc <- coef(f, "zero"); sv <- sqrt(diag(vcov(f)))
+  cases[[length(cases) + 1]] <- case("hwl", a, as.numeric(logLik(f)), rel = 2e-3, abs = 2e-3); cases[[length(cases) + 1]] <- case("hwc", a, sum(cc * 1:2), rel = 5e-3, abs = 5e-3)
+  cases[[length(cases) + 1]] <- case("hwz", a, sum(zc * 1:2), rel = 5e-3, abs = 5e-3); cases[[length(cases) + 1]] <- case("hwse", a, sum(sv * seq_along(sv)), rel = 2e-2, abs = 2e-3)
+}
 emit("pscl_nb", "pscl", list(cases))
