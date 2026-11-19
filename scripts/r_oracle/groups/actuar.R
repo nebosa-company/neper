@@ -88,6 +88,18 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("du", c(cs, 0), d[1], rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("du", c(cs, 1), sum(d * seq_along(d)), rel = 1e-9, abs = 1e-12)
 }
+# cm(): Buhlmann-Straub: "cm" args (I, n[I], x[N], w[N], stat); the answer is s2, a, k, the collective mean or the first contract's credibility factor
+for (rep in 1:30) {
+  I <- sample(3:8, 1); ns <- sample(3:7, I, TRUE); mu <- rnorm(I, 10, 3); N <- sum(ns)
+  id <- rep(1:I, ns); w <- runif(N, 1, 5); x <- mu[id] + rnorm(N, 0, 1) / sqrt(w)
+  mx <- max(ns); X <- matrix(NA, I, mx); W <- X
+  for (i in 1:I) { j <- which(id == i); X[i, seq_along(j)] <- x[j]; W[i, seq_along(j)] <- w[j] }
+  dd <- data.frame(contract = 1:I, X, W); names(dd) <- c("contract", paste0("x", 1:mx), paste0("w", 1:mx))
+  f <- tryCatch(suppressWarnings(cm(~contract, dd, ratios = paste0("x", 1:mx), weights = paste0("w", 1:mx))), error = function(e) NULL)
+  if (is.null(f) || !is.finite(f$unbiased[1]) || f$unbiased[1] <= 0) next
+  vals <- c(f$unbiased[2], f$unbiased[1], f$unbiased[2] / f$unbiased[1], f$means[[1]], f$cred[1])
+  for (st in 0:4) cases[[length(cases) + 1]] <- case("cm", c(I, ns, x, w, st), unname(vals[st + 1]), rel = 1e-9, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

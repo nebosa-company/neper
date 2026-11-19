@@ -314,3 +314,82 @@ fn discretize_unbiased(ex: []const f64, n: usize, h: f64, f0: f64, f1: f64, out:
     out[n] = (ex[n] - ex[n - 1usize]) / h - 1.0f64 + f1
     ret n + 1usize
 }
+
+// actuar cm(): Buhlmann-Straub credibility for I contracts; ns[i] the years of contract i, x and w (ratios and weights) the years of contract 0 first, then contract 1 and so on; out = (within variance s2, between variance a, k = s2 / a, collective mean m); the credibility premium of contract i is z_i xbar_i + (1 - z_i) m with z_i = w_i / (w_i + k)
+fn cm_buhlmann_straub(ns: []const usize, x: []const f64, w: []const f64, out: []f64) {
+    let ni = ns.len
+    var wtot = 0.0f64
+    var ws2 = 0.0f64
+    var xw = 0.0f64
+    var s2num = 0.0f64
+    var df = 0.0f64
+    var pos = 0usize
+    var i = 0usize
+    while i < ni {
+        var wi = 0.0f64
+        var si = 0.0f64
+        var j = 0usize
+        while j < ns[i] {
+            wi += w[pos + j]
+            si += w[pos + j] * x[pos + j]
+            j += 1usize
+        }
+        let xb = si / wi
+        j = 0usize
+        while j < ns[i] {
+            let d = x[pos + j] - xb
+            s2num += w[pos + j] * d * d
+            j += 1usize
+        }
+        df += f64(ns[i]) - 1.0f64
+        wtot += wi
+        ws2 += wi * wi
+        xw += si
+        pos += ns[i]
+        i += 1usize
+    }
+    let s2 = s2num / df
+    let xbar = xw / wtot
+    var bn = 0.0f64
+    pos = 0usize
+    i = 0usize
+    while i < ni {
+        var wi = 0.0f64
+        var si = 0.0f64
+        var j = 0usize
+        while j < ns[i] {
+            wi += w[pos + j]
+            si += w[pos + j] * x[pos + j]
+            j += 1usize
+        }
+        let d = si / wi - xbar
+        bn += wi * d * d
+        pos += ns[i]
+        i += 1usize
+    }
+    let a = (bn - (f64(ni) - 1.0f64) * s2) / (wtot - ws2 / wtot)
+    let k = s2 / a
+    var zs = 0.0f64
+    var zx = 0.0f64
+    pos = 0usize
+    i = 0usize
+    while i < ni {
+        var wi = 0.0f64
+        var si = 0.0f64
+        var j = 0usize
+        while j < ns[i] {
+            wi += w[pos + j]
+            si += w[pos + j] * x[pos + j]
+            j += 1usize
+        }
+        let z = wi / (wi + k)
+        zs += z
+        zx += z * si / wi
+        pos += ns[i]
+        i += 1usize
+    }
+    out[0usize] = s2
+    out[1usize] = a
+    out[2usize] = k
+    out[3usize] = zx / zs
+}

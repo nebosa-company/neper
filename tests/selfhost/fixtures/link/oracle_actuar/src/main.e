@@ -66,6 +66,28 @@ fn answer(c: *const oracle.Case) -> f64 {
         }
         ret sd
     }
+    if str.eq(c.name, "cm") {
+        let ni = usize(x[0usize])
+        var nsv: [16]usize = zero
+        var tot = 0usize
+        var q = 0usize
+        while q < ni {
+            nsv[q] = usize(x[1usize + q])
+            tot += nsv[q]
+            q += 1usize
+        }
+        var ov: [4]f64 = zero
+        ac.cm_buhlmann_straub(nsv[0usize..ni], x[1usize + ni..1usize + ni + tot], x[1usize + ni + tot..1usize + ni + 2usize * tot], ov[0usize..4usize])
+        let st = usize(x[1usize + ni + 2usize * tot])
+        if st < 4usize { ret ov[st] }
+        var w0 = 0.0f64
+        q = 0usize
+        while q < nsv[0usize] {
+            w0 += x[1usize + ni + tot + q]
+            q += 1usize
+        }
+        ret w0 / (w0 + ov[2usize])
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])

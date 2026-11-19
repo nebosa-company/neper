@@ -51100,3 +51100,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7535 — actuar discretize, unbiased method
 `discretize_unbiased` takes the limited expected value at the n + 1 grid points and the cdf at both ends and returns the n + 1 masses (first and last carry the tail corrections), as actuar's unbiased method does. Equal to actuar on 40 gamma cases with lev from levgamma (81 values added to oracle_actuar, 3608 in all). The caller supplies lev, so any distribution already in the module works.
+
+## D7536 — actuar cm: Buhlmann-Straub credibility
+`cm_buhlmann_straub` takes the years per contract and the ratios and weights and answers the within variance s2, the between variance a, k = s2 / a and the collective mean (credibility-weighted, as actuar does); the credibility factor is w_i / (w_i + k). Equal to actuar cm(~contract, ...) on 30 portfolios (150 values added to oracle_actuar, 3761 in all). actuar's `unbiased` vector is (a, s2), not (s2, a), which the first oracle run caught. Portfolios with a non-positive a are skipped, where actuar falls back to another estimator. Hierarchical and regression models stay open.

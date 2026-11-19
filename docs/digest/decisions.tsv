@@ -4390,4 +4390,5 @@ D7531	832	actuar discretize (upper, lower, rounding)
 D7532	698	actuar aggregateDist convolution
 D7533	684	actuar aggregateDist normal and Normal Power
 D7534	1002	actuar grouped data: ogive, emm and elev
-D7535	441	actuar discretize, unbiased method
+D7535	442	actuar discretize, unbiased method
+D7536	634	actuar cm: Buhlmann-Straub credibility
