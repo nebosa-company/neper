@@ -423,3 +423,25 @@ L283	library	0	538	CommonMark and GFM conformance with xml, latex and man render
 L276	library	0	418	Sass/SCSS compiler (sass, libsass)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
 L518	library	0.2	552	tweedie: powers above 2 and the series beyond statmod	Partial (D7368): dtweedie_series for power above 2 (the Wright-type series with its reliability check) equal to tweedie on 59 values on Windows (oracle_gaussq;
 L519	library	0	399	caret remainder: numeric-response folds, ica and varImp for other models	D7477: createFolds for a numeric response equals caret.
+L521	library	0	560	N-d arrays: broadcasting, slicing, einsum and elementwise families over e.algo.linalg.tensor	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L522	library	0	827	Computer algebra depth in e.math.sym: simplify, expand, factor, limits, series, systems and ODEs	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L523	library	0	535	Boundary-value problems in e.math.ode: collocation and shooting	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L524	library	0	555	Generalized eigenproblem: QZ, symmetric-definite pencils and ordered forms	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L525	library	0	693	LTI system models in e.control: transfer function, state space, frequency and time response	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L526	library	0	551	Interval arithmetic: outward-rounded f64 intervals and MPFR balls	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L527	library	0	695	CODATA constants in e.math.units and uncertainty propagation	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L528	library	0	551	Permutation groups by Schreier-Sims and LLL lattice reduction	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L529	library	0	628	Markov chains, queueing formulas and a discrete-event simulation kernel	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L530	library	0	394	Tensor decompositions: CP, Tucker and tensor train	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L531	library	0	377	Persistent homology of Vietoris-Rips complexes	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L532	library	0	506	Wavelets: continuous transform, stationary transform, packets and families beyond Haar and Db4	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L533	library	0	800	Tensor autograd, convolution and normalisation layers, ONNX inference and safetensors in e.ml	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L534	library	0	579	Sequence and structure formats: FASTA, FASTQ, GenBank, SAM, BAM, VCF, PDB and mmCIF	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L535	library	0	704	Molecules: SMILES and Molfile, the periodic table and stoichiometry	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L536	library	0	499	Thermophysical properties: IAPWS steam, humid air, ideal-gas mixtures and cubic equations of state	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L537	library	0	440	FITS files: headers, images, ASCII and binary tables	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L538	library	0	594	Astronomical time scales, coordinate systems and ephemerides	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L539	library	0	679	Geoscience formats: Shapefile, GeoPackage, GeoJSON, GRIB2, SEG-Y and Zarr	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L540	library	0	533	Medical imaging formats: DICOM and NIfTI	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L541	library	0	479	Circuit simulation by modified nodal analysis and RF network parameters	Opened 2026-11-19 from the STEM gap sweep (D7717).
+L542	library	0	554	Digital modulation: PSK and QAM mapping, pulse shaping, OFDM and error-rate curves	Opened 2026-11-19 from the STEM gap sweep (D7717).

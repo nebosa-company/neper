@@ -4666,6 +4666,248 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "D7477: createFolds for a numeric response equals caret. Split from L328, which met its acceptance list (D6087, D6812-D6816, D6822, D6834, D6835, D6962-D6964). D7478-D7480: createMultiFolds for numeric y and varImp for Poisson and Gamma(log) glms equal caret. Remaining, equal to caret: preProcess method ica (fastICA with its seeded start), varImp for the other links and for tree and neural models."
+    },
+    {
+      "id": "L521",
+      "category": "library",
+      "group": "Library",
+      "order": 832,
+      "title": "N-d arrays: broadcasting, slicing, einsum and elementwise families over e.algo.linalg.tensor",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to NumPy on generated cases: shapes of any rank with strided views and negative steps; broadcasting of binary operations; basic and boolean-mask indexing; reductions (sum, mean, min, max, argmin, argmax, cumsum) along an axis with keepdims; transpose, concatenate, stack and tile; einsum for contraction, trace, outer product and batched matmul; elementwise maths over f32, f64 and i64. Size L. Checked open: e.algo.linalg.tensor has reshape, view, fill, copy and add only; no einsum in lib."
+    },
+    {
+      "id": "L522",
+      "category": "library",
+      "group": "Library",
+      "order": 833,
+      "title": "Computer algebra depth in e.math.sym: simplify, expand, factor, limits, series, systems and ODEs",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to SymPy on a fixed corpus: expand and collect; factor for univariate and multivariate polynomials over the rationals; cancel and together for rational functions; trigonometric and power simplification identities; substitution; limits at finite points and at infinity; series to a given order; integration of rational functions by partial fractions and of the standard elementary forms; linear systems and polynomial systems through Groebner bases (lex and grevlex); first-order separable and linear ODEs and constant-coefficient linear ODEs; determinant, inverse and eigenvalues of symbolic matrices up to 4 by 4; a LaTeX printer. Size L. Checked open: e.math.sym exports parse, eval, diff, integrate (polynomials and by parts) and solve (polynomials) only."
+    },
+    {
+      "id": "L523",
+      "category": "library",
+      "group": "Library",
+      "order": 834,
+      "title": "Boundary-value problems in e.math.ode: collocation and shooting",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to SciPy solve_bvp and R bvpSolve within tolerance: two-point problems for first-order systems by fourth-order collocation with residual control and mesh refinement, unknown parameters and a singular term; single and multiple shooting over rkf45; the Bratu problem, a boundary-layer case and a Sturm-Liouville eigenvalue case. Size M. Checked open: no boundary_value, bvp_ or shooting in lib; L343 holds the stiff, DAE and delay solvers, not boundary-value problems."
+    },
+    {
+      "id": "L524",
+      "category": "library",
+      "group": "Library",
+      "order": 835,
+      "title": "Generalized eigenproblem: QZ, symmetric-definite pencils and ordered forms",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to LAPACK through R geigen and scipy.linalg: eigenvalues and vectors of a general real pencil (A, B) by QZ, infinite eigenvalues included; the symmetric-definite problem A x = lambda B x by Cholesky reduction; ordered real Schur and QZ forms under a selection predicate; eigen of a complex Hermitian matrix. Size M. Checked open: e.algo.linalg.decomp.eigen solves the standard problem through an internal Schur form; no generalized solver in lib; the public Schur form stays under L315."
+    },
+    {
+      "id": "L525",
+      "category": "library",
+      "group": "Library",
+      "order": 836,
+      "title": "LTI system models in e.control: transfer function, state space, frequency and time response",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to python-control: transfer-function, state-space and zero-pole-gain models with conversions; series, parallel and feedback connection; poles, zeros and DC gain; frequency response with gain and phase margins; step, impulse and forced responses; discretisation by zero-order hold and Tustin; continuous and discrete algebraic Riccati equations; controllability and observability matrices and gramians; root-locus points. Size M. Checked open: e.control has PID, lqr by Riccati iteration, pole_placement, observers and Kalman, with no model type; e.gfx.chart draws Bode and Nyquist from sampled data and would be fed by this."
+    },
+    {
+      "id": "L526",
+      "category": "library",
+      "group": "Library",
+      "order": 837,
+      "title": "Interval arithmetic: outward-rounded f64 intervals and MPFR balls",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance: add, sub, mul, div, sqrt, integer powers, exp, log, sin, cos and atan with directed rounding so every result encloses the exact value, checked against e.algo.mpfr at 200 bits on generated inputs and against mpmath.iv; division by an interval containing zero; intersection, hull and containment; interval Newton and bisection root enclosure; a midpoint-radius ball over MPFR. Size M. Checked open: no interval arithmetic module in lib (the interval hits are scheduling and spatial ranges)."
+    },
+    {
+      "id": "L527",
+      "category": "library",
+      "group": "Library",
+      "order": 838,
+      "title": "CODATA constants in e.math.units and uncertainty propagation",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance: the CODATA 2022 constants with value, unit and standard uncertainty equal to scipy.constants.physical_constants, from a generated table; a value-with-uncertainty type with first-order propagation through arithmetic and the elementary functions that tracks correlation between derived quantities (x - x is exactly 0 with 0 uncertainty), equal to Python uncertainties on a corpus; covariance matrix in and out; Monte Carlo propagation per GUM Supplement 1; formatting rounded to the uncertainty's significant digits. Size M. Checked open: no codata, planck, boltzmann, avogadro or error_propagation in lib beyond an HTML entity table."
+    },
+    {
+      "id": "L528",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 839,
+      "title": "Permutation groups by Schreier-Sims and LLL lattice reduction",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to SymPy combinatorics and fplll: permutations with compose, inverse, cycle form, order and parity; a group from generators with base and strong generating set, order, membership, orbits, stabilizers and a seeded random element; the symmetric, alternating, cyclic and dihedral groups; LLL reduction at delta 3/4 over exact integers on fixed bases, with a shortest-vector and a knapsack case. Size M. Checked open: no schreier, permutation_group, lll_reduce or lattice_reduce in lib."
+    },
+    {
+      "id": "L529",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 840,
+      "title": "Markov chains, queueing formulas and a discrete-event simulation kernel",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance: discrete- and continuous-time chains with state classification, stationary distribution, absorption probabilities, mean first passage and n-step transition, equal to R markovchain; M/M/1, M/M/c, M/M/c/K and M/G/1 measures and Erlang B and C equal to R queueing; an event-calendar kernel with processes, queued resources and seeded streams whose M/M/c run converges to the formula and whose event trace equals a fixed simmer scenario. Size M. Checked open: no markov_chain, stationary_dist, absorbing, erlang_b, erlang_c or event_calendar in lib (HMM and MCMC only)."
+    },
+    {
+      "id": "L530",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 841,
+      "title": "Tensor decompositions: CP, Tucker and tensor train",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to TensorLy and R rTensor on seeded tensors: mode-n unfold, fold and product, Khatri-Rao product; CP by alternating least squares from a fixed start; HOSVD and HOOI Tucker; TT-SVD; reconstruction error and factors equal up to sign and permutation. Needs L521. Size M. Checked open: no tucker, parafac, khatri or hosvd in lib."
+    },
+    {
+      "id": "L531",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 842,
+      "title": "Persistent homology of Vietoris-Rips complexes",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to Ripser and R TDA: barcodes in dimensions 0 to 2 over Z/2 from a point cloud or a distance matrix under a threshold, by boundary-matrix reduction with clearing; bottleneck and Wasserstein distances between diagrams; Betti curves. Size M. Checked open: no persistent_homology, vietoris or simplicial in lib."
+    },
+    {
+      "id": "L532",
+      "category": "library",
+      "group": "Library",
+      "order": 843,
+      "title": "Wavelets: continuous transform, stationary transform, packets and families beyond Haar and Db4",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to PyWavelets: Daubechies 1 to 20, Symlet, Coiflet and biorthogonal filter banks with the boundary modes; the stationary transform and wavelet packets; the continuous transform with Morlet, Mexican hat, Paul and complex Gaussian wavelets and scale-to-frequency conversion; soft and hard threshold denoising. Size M. Checked open: e.math.fft has Wavelet = { Haar, Db4 } with dwt, idwt, wavedec and waverec; no continuous transform in lib."
+    },
+    {
+      "id": "L533",
+      "category": "library",
+      "group": "Library",
+      "order": 844,
+      "title": "Tensor autograd, convolution and normalisation layers, ONNX inference and safetensors in e.ml",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance: reverse-mode gradients over n-d tensors with broadcasting equal to PyTorch on a corpus of operations; conv1d and conv2d, pooling, batch and layer normalisation, dropout, embedding and linear layers; a small convolutional network trained on a seeded set matches PyTorch's loss per step from the same initialisation under Adam; an ONNX opset subset reader runs an exported MLP, CNN and transformer block equal to ONNX Runtime within 1e-5; safetensors read and write. Needs L521; shares reverse mode with L284. Size L. Checked open: e.ml.nn has a scalar tape, attention and perceptrons, e.ml.recurrent has LSTM and GRU forward passes, e.gpu.tensor has add and matmul; no conv2d, max_pool, batch_norm, layer_norm, onnx or safetensors in lib."
+    },
+    {
+      "id": "L534",
+      "category": "library",
+      "group": "Formats",
+      "order": 845,
+      "title": "Sequence and structure formats: FASTA, FASTQ, GenBank, SAM, BAM, VCF, PDB and mmCIF",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to Biopython, samtools and bcftools output: streaming readers and writers for FASTA and FASTQ (Phred 33 and 64, multi-line records); GenBank features and locations; SAM with CIGAR and optional tags; BAM over BGZF with region queries through the BAI index; VCF 4.x header, INFO and genotype fields; PDB ATOM and HETATM records and the mmCIF atom_site loop; limits on hostile input. Size M. Checked open: no fasta, fastq, genbank, bgzf or mmcif in lib; e.algo.align and e.ml.hmm take sequences already in memory."
+    },
+    {
+      "id": "L535",
+      "category": "library",
+      "group": "Library",
+      "order": 846,
+      "title": "Molecules: SMILES and Molfile, the periodic table and stoichiometry",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to RDKit: SMILES parse and canonical write with aromaticity, charges, isotopes and stereo marks; Molfile V2000 and V3000 and SDF read and write; implicit hydrogens and a valence check; the element table (symbol, standard atomic weight, electronegativity) generated from IUPAC data; formula parsing, molar mass, composition and equation balancing; the parsed graph feeds e.ml.fingerprint and Tanimoto rankings agree with RDKit on a fixed set. Size L. Checked open: e.ml.fingerprint has Morgan and path fingerprints, Tanimoto, Butina and FMCS over a supplied graph; no smiles, molfile, periodic_table, molar_mass or atomic_weight in lib."
+    },
+    {
+      "id": "L536",
+      "category": "library",
+      "group": "Library",
+      "order": 847,
+      "title": "Thermophysical properties: IAPWS steam, humid air, ideal-gas mixtures and cubic equations of state",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance: IAPWS-IF97 regions 1 to 5, forward and backward equations, equal to the IAPWS verification tables; IAPWS-95 Helmholtz properties and the saturation line; humid-air psychrometrics; Peng-Robinson and Soave-Redlich-Kwong with a flash at given temperature and pressure equal to CoolProp; NASA seven-coefficient polynomials for heat capacity, enthalpy and entropy. Size M. Checked open: no if97, iapws, peng_robinson or psychrometric in lib."
+    },
+    {
+      "id": "L537",
+      "category": "library",
+      "group": "Formats",
+      "order": 848,
+      "title": "FITS files: headers, images, ASCII and binary tables",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to astropy.io.fits: primary and extension units; 80-character cards with CONTINUE and HIERARCH; BITPIX 8 to -64 with BSCALE and BZERO; ASCII and binary tables with variable-length arrays; CHECKSUM and DATASUM; tile-compressed images (Rice, gzip); an uncompressed file round-trips byte for byte. Size M. Checked open: no FITS reader in lib (no bitpix), queue or work-done."
+    },
+    {
+      "id": "L538",
+      "category": "library",
+      "group": "Library",
+      "order": 849,
+      "title": "Astronomical time scales, coordinate systems and ephemerides",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to the ERFA/SOFA test vectors and Astropy: Julian and modified Julian dates; UTC, TAI, TT, TDB and UT1 with leap seconds and a delta-T table; sidereal time and the Earth rotation angle; IAU 2006/2000A precession-nutation; ICRS, FK5, galactic, ecliptic and horizontal frames with refraction; Sun, Moon and planet positions from truncated VSOP87 and ELP series to a stated accuracy; rise, set and twilight; angular separation. Size L. Checked open: no ephemeris, julian_date, sidereal, right_ascension, vsop or nutation in lib."
+    },
+    {
+      "id": "L539",
+      "category": "library",
+      "group": "Formats",
+      "order": 850,
+      "title": "Geoscience formats: Shapefile, GeoPackage, GeoJSON, GRIB2, SEG-Y and Zarr",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to GDAL (ogrinfo, gdalinfo), ecCodes and ObsPy: Shapefile shp and shx with e.fmt.dbf attributes and the prj text; GeoPackage features over x.sqlite with WKB geometry; a standalone GeoJSON reader and writer shared with e.gfx.chart.geojson; GRIB2 sections with simple and complex packing, other packings returning a named error; SEG-Y revision 1 headers with IBM and IEEE traces; Zarr v2 and v3 arrays with chunking under the gzip and zstd codecs. GeoTIFF stays under L285 and HDF5 under L352. Size L. Checked open: no shapefile, geopackage, grib, segy or zarr reader in lib; GeoJSON only in gfx/chart/geojson.e."
+    },
+    {
+      "id": "L540",
+      "category": "library",
+      "group": "Formats",
+      "order": 851,
+      "title": "Medical imaging formats: DICOM and NIfTI",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance, equal to pydicom and nibabel: DICOM part 10 files with explicit and implicit VR in both byte orders, sequences and undefined lengths, a data dictionary generated from the standard, pixel data uncompressed, RLE and baseline JPEG through e.fmt.jpeg with rescale slope and intercept, multi-frame images; NIfTI-1 and NIfTI-2 as single file and pair, gzip, every data type, the sform and qform affines; limits on hostile input. Size M. Checked open: no dicom or nifti in lib."
+    },
+    {
+      "id": "L541",
+      "category": "library",
+      "group": "Library",
+      "order": 852,
+      "title": "Circuit simulation by modified nodal analysis and RF network parameters",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance: a SPICE netlist subset (R, L, C, independent and controlled sources, diode, ideal op-amp) with DC operating point, AC sweep and transient analysis (trapezoidal with Newton iteration) equal to ngspice within tolerance on a fixed set; Touchstone .sNp read and write; S, Z, Y, ABCD and T conversions, cascading, de-embedding and renormalisation equal to scikit-rf. Size L. Checked open: no netlist or touchstone in lib."
+    },
+    {
+      "id": "L542",
+      "category": "library",
+      "group": "Library",
+      "order": 853,
+      "title": "Digital modulation: PSK and QAM mapping, pulse shaping, OFDM and error-rate curves",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance: Gray-mapped BPSK, QPSK, 8-PSK and 16/64/256-QAM modulators with hard and soft (log-likelihood) demodulators equal to CommPy; raised-cosine and root-raised-cosine filters equal to scipy and commpy taps; OFDM with a cyclic prefix over e.math.fft; seeded AWGN and Rayleigh channels whose bit-error rates match the closed forms within the Monte Carlo interval; composition with the e.algo.ecc codes. Size M. Checked open: no qpsk, modulator, raised_cosine or ofdm in lib beyond unrelated tables."
     }
   ]
 }
