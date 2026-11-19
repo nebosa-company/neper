@@ -1125,3 +1125,280 @@ fn gam_gcv_select2(a: *mem.Arena, dm: []const f64, n: usize, q1: usize, s1: []co
     }
     ret ok
 }
+
+// ---- the thin-plate regression spline of one covariate (bs = "tp", m = 2), in mgcv's order (Wood 2003): the eta function r^3 / 12 on the unique data values u_j, the full matrix
+// E = U D U' truncated to its k eigenpairs of largest magnitude, the constraint T'U_k d = 0 (T = [1, u]) absorbed by Z_k, the last k - 2 columns of the Householder Q of U_k'T.
+// The model matrix is [1, x, E(x, u) U_k Z_k] and the penalty blockdiag(0, 0, Z_k' D_k Z_k). tp_build writes dm (n by k, row-major) and pen0 (k by k, row-major).
+fn tp_eta(r: f64) -> f64 { ret r * r * r / 12.0f64 }
+
+fn unique_sorted(a: *mem.Arena, x: []const f64, out: []f64) -> usize {
+    var cnt = 0usize
+    let (s, e0) = mem.alloc[f64](a, x.len)
+    if e0 != ok { ret 0usize }
+    var i = 0usize
+    while i < x.len {
+        let v = x[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > v {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = v
+        i += 1usize
+    }
+    i = 0usize
+    while i < x.len {
+        if i == 0usize || s[i] != s[i - 1usize] {
+            out[cnt] = s[i]
+            cnt += 1usize
+        }
+        i += 1usize
+    }
+    ret cnt
+}
+
+fn tp_build(a: *mem.Arena, x: []const f64, k: usize, dm: []f64, pen0: []f64) -> err {
+    let n = x.len
+    let (u, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret e0 }
+    let m = unique_sorted(a, x, u)
+    let (ee, e1) = mem.alloc[f64](a, m * m)
+    let (w, e2) = mem.alloc[f64](a, m)
+    let (vv, e3) = mem.alloc[f64](a, m * m)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            ee[i * m + j] = tp_eta(math.abs[f64](u[i] - u[j]))
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let es = sy.dsyevr_all(a, ee, m, w, vv)
+    if es != ok { ret es }
+    // the k eigenpairs of largest |value|: pick[c] indexes the column of vv (column-major: element j of column c at vv[c * m + j])
+    let (pick, e4) = mem.alloc[usize](a, k)
+    let (taken, e5) = mem.alloc[bool](a, m)
+    if e4 != ok || e5 != ok { ret mem.Full }
+    i = 0usize
+    while i < m {
+        taken[i] = false
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        var best = 0usize
+        var bv = -1.0f64
+        i = 0usize
+        while i < m {
+            if !taken[i] && math.abs[f64](w[i]) > bv {
+                bv = math.abs[f64](w[i])
+                best = i
+            }
+            i += 1usize
+        }
+        taken[best] = true
+        pick[c] = best
+        c += 1usize
+    }
+    // t = U_k'T (k by 2), then the Householder Q (k by k) of its two columns
+    let (t, e6) = mem.alloc[f64](a, k * 2usize)
+    let (q, e7) = mem.alloc[f64](a, k * k)
+    if e6 != ok || e7 != ok { ret mem.Full }
+    c = 0usize
+    while c < k {
+        var s0 = 0.0f64
+        var s1 = 0.0f64
+        var j = 0usize
+        while j < m {
+            let vj = vv[pick[c] * m + j]
+            s0 += vj
+            s1 += vj * u[j]
+            j += 1usize
+        }
+        t[c * 2usize] = s0
+        t[c * 2usize + 1usize] = s1
+        var d = 0usize
+        while d < k {
+            q[c * k + d] = 0.0f64
+            if c == d { q[c * k + d] = 1.0f64 }
+            d += 1usize
+        }
+        c += 1usize
+    }
+    var col = 0usize
+    while col < 2usize {
+        var nrm = 0.0f64
+        i = col
+        while i < k {
+            nrm += t[i * 2usize + col] * t[i * 2usize + col]
+            i += 1usize
+        }
+        nrm = math.sqrt[f64](nrm)
+        if t[col * 2usize + col] < 0.0f64 { nrm = 0.0f64 - nrm }
+        let (v, e8) = mem.alloc[f64](a, k)
+        if e8 != ok { ret e8 }
+        i = 0usize
+        while i < k {
+            v[i] = 0.0f64
+            i += 1usize
+        }
+        i = col
+        while i < k {
+            v[i] = t[i * 2usize + col] / nrm
+            i += 1usize
+        }
+        v[col] += 1.0f64
+        var c2 = 0usize
+        while c2 < 2usize {
+            var dot = 0.0f64
+            i = col
+            while i < k {
+                dot += v[i] * t[i * 2usize + c2]
+                i += 1usize
+            }
+            i = col
+            while i < k {
+                t[i * 2usize + c2] = t[i * 2usize + c2] - v[i] * dot / v[col]
+                i += 1usize
+            }
+            c2 += 1usize
+        }
+        var r = 0usize
+        while r < k {
+            var dot = 0.0f64
+            i = col
+            while i < k {
+                dot += q[r * k + i] * v[i]
+                i += 1usize
+            }
+            i = col
+            while i < k {
+                q[r * k + i] = q[r * k + i] - dot * v[i] / v[col]
+                i += 1usize
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    // Zk = q[., 2..k]; penalty Zk' D_k Zk
+    let kk = k - 2usize
+    i = 0usize
+    while i < k * k {
+        pen0[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < kk {
+        var j = 0usize
+        while j < kk {
+            var v = 0.0f64
+            c = 0usize
+            while c < k {
+                v += q[c * k + 2usize + i] * w[pick[c]] * q[c * k + 2usize + j]
+                c += 1usize
+            }
+            pen0[(2usize + i) * k + 2usize + j] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // basis on the unique values: (U_k Zk)[j, b] = sum_c U[j, pick c] q[c, 2 + b]; then the data rows
+    let (zu, e9) = mem.alloc[f64](a, m * kk)
+    if e9 != ok { ret mem.Full }
+    i = 0usize
+    while i < m {
+        var b = 0usize
+        while b < kk {
+            var v = 0.0f64
+            c = 0usize
+            while c < k {
+                v += vv[pick[c] * m + i] * q[c * k + 2usize + b]
+                c += 1usize
+            }
+            zu[i * kk + b] = v
+            b += 1usize
+        }
+        i += 1usize
+    }
+    var r = 0usize
+    while r < n {
+        dm[r * k] = 1.0f64
+        dm[r * k + 1usize] = x[r]
+        var b = 0usize
+        while b < kk {
+            var v = 0.0f64
+            var j = 0usize
+            while j < m {
+                v += tp_eta(math.abs[f64](x[r] - u[j])) * zu[j * kk + b]
+                j += 1usize
+            }
+            dm[r * k + 2usize + b] = v
+            b += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+// GCV selection of sp for a model matrix dm (n by p) with the base penalty pen0 (p by p, scaled by sp): the grid and golden-section search of gam_gcv_select over log(sp)
+fn gcv_gen_at(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen0: []const f64, y: []const f64, rho: f64, pen: []f64, coef: []f64, fitted: []f64) -> f64 {
+    let sp = math.exp[f64](rho)
+    var i = 0usize
+    while i < p * p {
+        pen[i] = sp * pen0[i]
+        i += 1usize
+    }
+    let m = mem.mark(a)
+    let (edf, rss, e) = pls_fit(a, dm, n, p, pen, y, coef, fitted)
+    mem.reset(a, m)
+    if e != ok { ret 1.0e300f64 }
+    let nf = f64(n)
+    ret nf * rss / ((nf - edf) * (nf - edf))
+}
+
+fn gcv_gen_select(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen0: []const f64, y: []const f64, coef: []f64, fitted: []f64) -> f64 {
+    let (pen, e0) = mem.alloc[f64](a, p * p)
+    if e0 != ok { ret 1.0f64 }
+    var best = 1.0e300f64
+    var bi = 0usize
+    let steps = 200usize
+    var i = 0usize
+    while i <= steps {
+        let rho = 0.0f64 - 40.0f64 + 80.0f64 * f64(i) / f64(steps)
+        let v = gcv_gen_at(a, dm, n, p, pen0, y, rho, pen, coef, fitted)
+        if v < best {
+            best = v
+            bi = i
+        }
+        i += 1usize
+    }
+    var lo = 0.0f64 - 40.0f64 + 80.0f64 * f64(bi) / f64(steps) - 0.4f64
+    var hi = lo + 0.8f64
+    if bi == 0usize { lo = 0.0f64 - 40.0f64 }
+    if bi == steps { hi = 40.0f64 }
+    let gr = 0.6180339887498949f64
+    var c = hi - gr * (hi - lo)
+    var d = lo + gr * (hi - lo)
+    var fc = gcv_gen_at(a, dm, n, p, pen0, y, c, pen, coef, fitted)
+    var fd = gcv_gen_at(a, dm, n, p, pen0, y, d, pen, coef, fitted)
+    var it = 0usize
+    while hi - lo > 1.0e-10f64 && it < 200usize {
+        if fc < fd {
+            hi = d
+            d = c
+            fd = fc
+            c = hi - gr * (hi - lo)
+            fc = gcv_gen_at(a, dm, n, p, pen0, y, c, pen, coef, fitted)
+        } else {
+            lo = c
+            c = d
+            fc = fd
+            d = lo + gr * (hi - lo)
+            fd = gcv_gen_at(a, dm, n, p, pen0, y, d, pen, coef, fitted)
+        }
+        it += 1usize
+    }
+    ret math.exp[f64](0.5f64 * (lo + hi))
+}
