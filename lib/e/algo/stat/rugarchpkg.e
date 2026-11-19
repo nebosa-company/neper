@@ -610,14 +610,16 @@ fn sgarch_pq(a: *mem.Arena, y: []const f64, n: usize, p: usize, q: usize, out: [
     ret true
 }
 
-type ArCtx = struct { y: []const f64, n: usize, k: usize, r: []f64, qq: []f64 }
+type ArCtx = struct { y: []const f64, n: usize, k: usize, q: usize, r: []f64, qq: []f64 }
 
-// the log-likelihood of an AR(k) mean with sGARCH(1,1): the residuals are (y_t - mu) - sum phi_i (y_{t-i} - mu) once t > m = max(k, 1) and y_t - mu before (the demeaned form, which reproduced ugarchfit at its own coefficients, where the
-// intercept form did not), h_1 = mean(r^2), then the usual recursion; par = mu, phi_1 .. phi_k, omega, alpha, beta
+// the log-likelihood of an ARMA(k, q) mean with sGARCH(1,1): the residuals are r_t = (y_t - mu) - sum phi_i (y_{t-i} - mu) - sum theta_j r_{t-j} once t > m = max(k, q, 1) and y_t - mu before (the demeaned form, which
+// reproduced ugarchfit at its own coefficients, where the intercept form did not), the first m conditional variances mean(r^2), then the usual recursion; par = mu, phi_1 .. phi_k, theta_1 .. theta_q, omega, alpha, beta
 fn ar_ll(c: *ArCtx, par: []const f64) -> f64 {
     let n = c.n
     let k = c.k
+    let q = c.q
     var m = k
+    if q > m { m = q }
     if m < 1usize { m = 1usize }
     var i = 0usize
     var m2 = 0.0f64
@@ -629,20 +631,24 @@ fn ar_ll(c: *ArCtx, par: []const f64) -> f64 {
                 r = r - par[1usize + l] * (c.y[i - 1usize - l] - par[0usize])
                 l += 1usize
             }
+            l = 0usize
+            while l < q {
+                r = r - par[1usize + k + l] * c.r[i - 1usize - l]
+                l += 1usize
+            }
         }
         c.r[i] = r
         m2 += r * r
         i += 1usize
     }
     m2 = m2 / f64(n)
-    let om = par[1usize + k]
-    let al = par[2usize + k]
-    let be = par[3usize + k]
+    let om = par[1usize + k + q]
+    let al = par[2usize + k + q]
+    let be = par[3usize + k + q]
     var h = m2
     var ll = 0.0f64
     i = 0usize
     while i < n {
-        // the first m conditional variances are mean(r^2), as the max-order rule found for the pure GARCH orders
         if i >= m { h = om + al * c.r[i - 1usize] * c.r[i - 1usize] + be * h }
         ll += 0.0f64 - 0.5f64 * (math.log[f64](2.0f64 * 3.141592653589793238462643383279f64) + math.log[f64](h) + c.r[i] * c.r[i] / h)
         i += 1usize
@@ -650,24 +656,25 @@ fn ar_ll(c: *ArCtx, par: []const f64) -> f64 {
     ret ll
 }
 
-// minus the log-likelihood at x = (mu, phi_1 .. phi_k, log omega, log alpha, log beta); persistence at or above one costs a large constant
+// minus the log-likelihood at x = (mu, phi_1 .. phi_k, theta_1 .. theta_q, log omega, log alpha, log beta); persistence at or above one costs a large constant
 fn ar_f(c: *ArCtx, x: []const f64) -> f64 {
     let k = c.k
-    var par: [8]f64 = zero
+    let q = c.q
+    var par: [10]f64 = zero
     var i = 0usize
-    while i <= k {
+    while i <= k + q {
         par[i] = x[i]
         i += 1usize
     }
-    par[1usize + k] = math.exp[f64](x[1usize + k])
-    par[2usize + k] = math.exp[f64](x[2usize + k])
-    par[3usize + k] = math.exp[f64](x[3usize + k])
-    if par[2usize + k] + par[3usize + k] >= 0.9999f64 { ret 1.0e8f64 }
-    ret 0.0f64 - ar_ll(c, par[0usize..4usize + k])
+    par[1usize + k + q] = math.exp[f64](x[1usize + k + q])
+    par[2usize + k + q] = math.exp[f64](x[2usize + k + q])
+    par[3usize + k + q] = math.exp[f64](x[3usize + k + q])
+    if par[2usize + k + q] + par[3usize + k + q] >= 0.9999f64 { ret 1.0e8f64 }
+    ret 0.0f64 - ar_ll(c, par[0usize..4usize + k + q])
 }
 
 fn ar_g(c: *ArCtx, x: []const f64, g: []f64) {
-    let m = 4usize + c.k
+    let m = 4usize + c.k + c.q
     var i = 0usize
     while i < m {
         c.qq[i] = x[i]
@@ -686,9 +693,9 @@ fn ar_g(c: *ArCtx, x: []const f64, g: []f64) {
     }
 }
 
-// ugarchfit of an AR(k) mean (k at most 2) with sGARCH(1,1) and normal innovations: out = mu, phi_1 .. phi_k, omega, alpha1, beta1, the log-likelihood
-fn sgarch_ar(a: *mem.Arena, y: []const f64, n: usize, k: usize, out: []f64) -> bool {
-    let m = 4usize + k
+// ugarchfit of an ARMA(k, q) mean (k and q at most 2) with sGARCH(1,1) and normal innovations: out = mu, phi_1 .. phi_k, theta_1 .. theta_q, omega, alpha1, beta1, the log-likelihood
+fn sgarch_arma(a: *mem.Arena, y: []const f64, n: usize, k: usize, q: usize, out: []f64) -> bool {
+    let m = 4usize + k + q
     let (rr, e1) = mem.alloc[f64](a, n)
     let (qq, e2) = mem.alloc[f64](a, m)
     let (scr, e3) = mem.alloc[f64](a, 256usize)
@@ -707,12 +714,12 @@ fn sgarch_ar(a: *mem.Arena, y: []const f64, n: usize, k: usize, out: []f64) -> b
         i += 1usize
     }
     v = v / f64(n)
-    var x: [8]f64 = zero
+    var x: [10]f64 = zero
     x[0usize] = mean
-    x[1usize + k] = math.log[f64](v * 0.05f64)
-    x[2usize + k] = math.log[f64](0.1f64)
-    x[3usize + k] = math.log[f64](0.7f64)
-    var c = ArCtx { y: y, n: n, k: k, r: rr, qq: qq }
+    x[1usize + k + q] = math.log[f64](v * 0.05f64)
+    x[2usize + k + q] = math.log[f64](0.1f64)
+    x[3usize + k + q] = math.log[f64](0.7f64)
+    var c = ArCtx { y: y, n: n, k: k, q: q, r: rr, qq: qq }
     var round = 0usize
     while round < 3usize {
         let (r2, e5) = opt.nelder_mead[ArCtx](&c, ar_f, x[0usize..m], 0.05f64, 1.0e-16f64, 4000u32, scr)
@@ -722,13 +729,16 @@ fn sgarch_ar(a: *mem.Arena, y: []const f64, n: usize, k: usize, out: []f64) -> b
         round += 1usize
     }
     i = 0usize
-    while i <= k {
+    while i <= k + q {
         out[i] = x[i]
         i += 1usize
     }
-    out[1usize + k] = math.exp[f64](x[1usize + k])
-    out[2usize + k] = math.exp[f64](x[2usize + k])
-    out[3usize + k] = math.exp[f64](x[3usize + k])
+    out[1usize + k + q] = math.exp[f64](x[1usize + k + q])
+    out[2usize + k + q] = math.exp[f64](x[2usize + k + q])
+    out[3usize + k + q] = math.exp[f64](x[3usize + k + q])
     out[m] = 0.0f64 - ar_f(&c, x[0usize..m])
     ret true
 }
+
+// the AR(k) special case
+fn sgarch_ar(a: *mem.Arena, y: []const f64, n: usize, k: usize, out: []f64) -> bool { ret sgarch_arma(a, y, n, k, 0usize, out) }

@@ -84,4 +84,15 @@ for (rep in 1:12) {
   v <- c(cf[["mu"]], cf[grep("^ar", names(cf))], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], likelihood(f))
   for (idx in seq_along(v)) cases[[length(cases) + 1]] <- case("garcharmean", c(n, k, y, idx - 1), as.numeric(v[idx]), rel = if (idx == length(v)) 6e-6 else 3e-2, abs = if (idx == length(v)) 1e-2 else 6e-3)
 }
+# ARMA(k, 1) mean with sGARCH(1,1), normal (MA(2) fits differed from R in both directions and are not compared): "garcharma" args (n, k, q, y[n], idx) idx 0 mu, then the ar, then the ma, then omega, alpha1, beta1, the log-likelihood
+for (rep in 1:14) {
+  n <- sample(600:900, 1); k <- sample(0:1, 1); q <- 1; phi <- c(0.3)[seq_len(k)]; theta <- c(0.3); mu <- runif(1, -0.1, 0.1); e <- rnorm(n); h <- rep(1, n); r <- numeric(n); y <- numeric(n); r[1] <- e[1]; y[1] <- mu + r[1]
+  for (t in 2:n) { h[t] <- 0.1 + 0.2 * r[t - 1]^2 + 0.5 * h[t - 1]; r[t] <- sqrt(h[t]) * e[t]; y[t] <- mu + r[t] + sum(theta * r[pmax(t - 1:q, 1)]) + (if (k > 0) phi * (y[t - 1] - mu) else 0) }
+  spec <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), mean.model = list(armaOrder = c(k, q), include.mean = TRUE), distribution.model = "norm")
+  f <- tryCatch(ugarchfit(spec, y, solver = "hybrid"), error = function(e) NULL)
+  if (is.null(f) || convergence(f) != 0) next
+  cf <- coef(f); if (cf[["alpha1"]] < 0.03 || cf[["alpha1"]] + cf[["beta1"]] > 0.97 || cf[["beta1"]] < 0.05) next
+  v <- c(cf[["mu"]], cf[grep("^ar", names(cf))], cf[grep("^ma", names(cf))], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], likelihood(f))
+  for (idx in seq_along(v)) cases[[length(cases) + 1]] <- case("garcharma", c(n, k, q, y, idx - 1), as.numeric(v[idx]), rel = if (idx == length(v)) 6e-6 else 3e-2, abs = if (idx == length(v)) 1e-2 else 6e-3)
+}
 emit("rugarch", "rugarch", list(cases))
