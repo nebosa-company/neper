@@ -52,4 +52,14 @@ for (rep in 1:8) {
     for (cc in seq_len(nrow(s))) { v <- c(s$estimate[cc], s$SE[cc], s$df[cc], s$t.ratio[cc], s$p.value[cc], st[cc], sa[[1]][cc], sa[[2]][cc], sa[[3]][cc], sa[[4]][cc]); for (ff in 0:9) if (is.finite(v[ff + 1]) && !(ff == 6 && kind %in% 5:6)) cases[[length(cases) + 1]] <- case("emminteract", c(kind, k, n, nh, g, h, y, cc - 1, ff), as.numeric(v[ff + 1]), rel = 1e-8, abs = 1e-10) }
   }
 }
+# logistic regression glm(y ~ g, binomial): "emmlogit" args (kind, k, n, g[n], y[n], c, f) f 0 link estimate, 1 SE, 2 z, 3 p, 4 response-scale estimate, 5 SE, 6 z, 7 p (contrast of regrid(emmeans))
+for (rep in 1:10) {
+  k <- sample(3:5, 1); ns <- sample(20:50, k, TRUE); g <- rep(0:(k - 1), ns); n <- length(g); y <- rbinom(n, 1, plogis(c(-0.5, 0.3, 0.9, -0.2, 0.6)[g + 1]))
+  if (any(tapply(y, g, function(v) length(unique(v))) < 2)) next
+  d <- data.frame(g = factor(g), y = y); e <- emmeans(glm(y ~ g, binomial, d), "g"); er <- regrid(e)
+  for (kind in 0:7) {
+    s1 <- summary(contrast(e, meth[kind + 1], adjust = "none")); s2 <- summary(contrast(er, meth[kind + 1], adjust = "none"))
+    for (cc in seq_len(nrow(s1))) { v <- c(s1$estimate[cc], s1$SE[cc], s1$z.ratio[cc], s1$p.value[cc], s2$estimate[cc], s2$SE[cc], s2$z.ratio[cc], s2$p.value[cc]); for (ff in 0:7) cases[[length(cases) + 1]] <- case("emmlogit", c(kind, k, n, g, y, cc - 1, ff), as.numeric(v[ff + 1]), rel = 5e-4, abs = 1e-5) }
+  }
+}
 emit("emmeanscontr", "emmeans", list(cases))
