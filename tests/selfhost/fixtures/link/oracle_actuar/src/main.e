@@ -145,6 +145,11 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         if usize(x[0usize]) == 0usize { ret ac.gb_lev(x[5usize], x[6usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
         ret ac.gu_m(usize(x[6usize]), x[1usize], x[2usize])
     }
+    if str.eq(c.name, "zq") {
+        let kq = usize(x[0usize])
+        if usize(x[5usize]) == 0usize { ret ac.zt_q(kq, x[4usize], x[1usize], x[2usize]) }
+        ret ac.zm_q(kq, x[4usize], x[1usize], x[2usize], x[3usize])
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])

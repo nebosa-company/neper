@@ -639,3 +639,22 @@ fn gu_m(k: usize, al: f64, sc: f64) -> f64 {
     if k == 2usize { ret al * al + 2.0f64 * al * sc * g + sc * sc * (g * g + pi2 / 6.0f64) }
     ret nan()
 }
+
+// quantile of the base count law by search (smallest x with cdf >= p, R's 1 - 64 eps fuzz)
+fn cnt_q(kind: usize, p: f64, a: f64, b: f64) -> f64 {
+    let goal = p * (1.0f64 - 64.0f64 * 2.220446049250313e-16f64)
+    var x = 0.0f64
+    while cnt_p(kind, x, a, b) < goal && x < 1.0e6f64 { x += 1.0f64 }
+    ret x
+}
+
+// zero-truncated quantile: the base quantile at p + (1 - p) f(0)
+fn zt_q(kind: usize, p: f64, a: f64, b: f64) -> f64 {
+    ret cnt_q(kind, p + (1.0f64 - p) * cnt_d(kind, 0.0f64, a, b), a, b)
+}
+
+// zero-modified quantile: 0 up to p0, then the zero-truncated quantile of the rescaled probability
+fn zm_q(kind: usize, p: f64, a: f64, b: f64, p0: f64) -> f64 {
+    if p <= p0 { ret 0.0f64 }
+    ret zt_q(kind, (p - p0) / (1.0f64 - p0), a, b)
+}

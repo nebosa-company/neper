@@ -51133,3 +51133,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7546 — actuar generalised beta limited moments and Gumbel moments
 `gb_lev` is scale^k G(a + b) G(a + k / t) / (G(a) G(a + b + k / t)) pbeta(u, a + k / t, b) + x^k (1 - pbeta(u, a, b)), the raw moment at or beyond the scale; `gu_m` gives the Gumbel raw moments of order 1 and 2 only, since actuar answers NaN above order 2. Equal to actuar levgenbeta and mgumbel on 40 draws each (79 values added to oracle_actuar, 4918 in all).
+
+## D7547 — actuar zero-truncated and zero-modified count quantiles
+`zt_q` and `zm_q` find the quantile by searching the base cdf (R's 1 - 64 eps fuzz): the zero-truncated quantile is the base quantile at p + (1 - p) f(0), the zero-modified one is 0 up to p0 and the zero-truncated quantile of (p - p0) / (1 - p0) above it. Equal to actuar qzt* and qzm* for Poisson, negative binomial, binomial and geometric bases on 60 draws (109 values added to oracle_actuar, 5017 in all); actuar answers NaN for qzmbinom at p <= p0, which is not compared.

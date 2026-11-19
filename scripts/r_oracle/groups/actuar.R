@@ -174,6 +174,14 @@ for (rep in 1:40) {
   al <- rnorm(1, 0, 2); s2 <- runif(1, 0.4, 3); kk <- sample(1:2, 1)
   cases[[length(cases) + 1]] <- case("gl", c(1, al, s2, 0, 0, 0, kk), mgumbel(kk, al, s2), rel = 1e-8, abs = 1e-11)
 }
+# zero-truncated and zero-modified count quantiles: "zq" args (kind 0 pois 1 nbinom 2 binom 3 geom, a, b, p0, p, stat 0 zt 1 zm)
+for (rep in 1:60) {
+  kd <- rep %% 4; a <- if (kd == 2) sample(2:12, 1) else runif(1, 0.5, 5); b <- runif(1, 0.2, 0.9); p0 <- runif(1, 0.05, 0.8); pp <- runif(1, 0.02, 0.98)
+  zt <- switch(kd + 1, qztpois(pp, a), qztnbinom(pp, a, b), qztbinom(pp, a, b), qztgeom(pp, b))
+  zm <- switch(kd + 1, qzmpois(pp, a, p0), qzmnbinom(pp, a, b, p0), qzmbinom(pp, a, b, p0), qzmgeom(pp, b, p0))
+  cases[[length(cases) + 1]] <- case("zq", c(kd, a, b, p0, pp, 0), zt, rel = 0, abs = 0)
+  if (is.finite(zm)) cases[[length(cases) + 1]] <- case("zq", c(kd, a, b, p0, pp, 1), zm, rel = 0, abs = 0)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)
