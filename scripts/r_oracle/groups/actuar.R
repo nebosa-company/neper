@@ -167,6 +167,13 @@ for (rep in 1:40) {
   zm <- if (kd == 2) c(dzmbinom(xx, a, b, p0), pzmbinom(xx, a, b, p0)) else c(dzmgeom(xx, b, p0), pzmgeom(xx, b, p0))
   for (st in 0:3) cases[[length(cases) + 1]] <- case("zc", c(kd, a, b, p0, xx, st), c(zt, zm)[st + 1], rel = 1e-9, abs = 1e-13)
 }
+# generalised beta limited moments and Gumbel moments: "gl" args (kind 0 levgenbeta 1 mgumbel, p1, p2, p3, scale, x, order)
+for (rep in 1:40) {
+  a <- runif(1, 0.6, 4); b <- runif(1, 0.6, 4); tt <- runif(1, 0.5, 3); sc <- runif(1, 0.5, 5); xx <- sc * runif(1, 0.05, 1.2); k <- runif(1, 0.1, 3)
+  cases[[length(cases) + 1]] <- case("gl", c(0, a, b, tt, sc, xx, k), levgenbeta(xx, a, b, tt, scale = sc, order = k), rel = 1e-8, abs = 1e-13)
+  al <- rnorm(1, 0, 2); s2 <- runif(1, 0.4, 3); kk <- sample(1:2, 1)
+  cases[[length(cases) + 1]] <- case("gl", c(1, al, s2, 0, 0, 0, kk), mgumbel(kk, al, s2), rel = 1e-8, abs = 1e-11)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

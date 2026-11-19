@@ -51130,3 +51130,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7545 — actuar zero-truncated and zero-modified binomial and geometric
 The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 geometric; equal to actuar dztbinom, pztbinom, dztgeom, pztgeom and the zero-modified pairs on 40 draws (163 values added to oracle_actuar, 4839 in all). The count quantiles and generators stay open.
+
+## D7546 — actuar generalised beta limited moments and Gumbel moments
+`gb_lev` is scale^k G(a + b) G(a + k / t) / (G(a) G(a + b + k / t)) pbeta(u, a + k / t, b) + x^k (1 - pbeta(u, a, b)), the raw moment at or beyond the scale; `gu_m` gives the Gumbel raw moments of order 1 and 2 only, since actuar answers NaN above order 2. Equal to actuar levgenbeta and mgumbel on 40 draws each (79 values added to oracle_actuar, 4918 in all).

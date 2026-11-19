@@ -623,3 +623,19 @@ fn ig_m(k: usize, mu: f64, s: f64) -> f64 {
     if k == 2usize { ret mu * mu + mu * mu * mu / s }
     ret mu * mu * mu + 3.0f64 * mu * mu * mu * mu / s + 3.0f64 * mu * mu * mu * mu * mu / (s * s)
 }
+
+// generalised beta limited moment E[min(X, x)^k]
+fn gb_lev(x: f64, k: f64, a: f64, b: f64, t: f64, th: f64) -> f64 {
+    if x >= th { ret gb_m(k, a, b, t, th) }
+    let u = math.pow[f64](x / th, t)
+    ret gb_m(k, a, b, t, th) * nb.pbeta(u, a + k / t, b, true, false) + math.pow[f64](x, k) * nb.pbeta(u, a, b, false, false)
+}
+
+// Gumbel raw moment of order 1 or 2 (actuar answers NaN above 2): X = alpha + scale G
+fn gu_m(k: usize, al: f64, sc: f64) -> f64 {
+    let g = 0.5772156649015329f64
+    let pi2 = 9.869604401089358f64
+    if k == 1usize { ret al + sc * g }
+    if k == 2usize { ret al * al + 2.0f64 * al * sc * g + sc * sc * (g * g + pi2 / 6.0f64) }
+    ret nan()
+}
