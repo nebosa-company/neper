@@ -168,7 +168,7 @@ function render(t, scenes) {
   }
   if (id === 'hello') {
     const cmd = 'neper emit-executable hello.e . wasm32 wasi hello.wasm --release';
-    const run = 'node lib/wasm/run-wasm.mjs hello.wasm';
+    const run = 'node tools/wasm/run-wasm.mjs hello.wasm';
     let out = '<span class="p">$</span> ' + typed(cmd, lt, 1.0, 22);
     if (lt > 4.4) out += '\n<span class="ok">executable written</span>';
     if (lt > 10.6) out += '\n<span class="p">$</span> ' + typed(run, lt, 10.6, 24);

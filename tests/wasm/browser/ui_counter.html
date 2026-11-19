@@ -14,7 +14,7 @@
   // The e.ui program tests/wasm/browser/ui_counter in a window on a canvas (C208, D5680). ?module=URL (default
   // /build/wasm-sweep/ui_counter.wasm), w and h the canvas size in CSS pixels (examples/ui is built as ui_gallery.wasm). The state is
   // window.neperResult = { exitCode, stdout, error, isolated }, live while the program runs.
-  import { run } from '../../../lib/wasm/neper-host.js'
+  import { run } from '../../../tools/wasm/neper-host.js'
   const query = new URLSearchParams(location.search)
   const screen = document.getElementById('screen')
   if (query.get('w')) screen.style.width = query.get('w') + 'px'

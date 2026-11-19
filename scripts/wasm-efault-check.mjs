@@ -1,7 +1,7 @@
 // Minimal raw-wasm regression for neper-host's checked iovec traversal: a module
 // imports fd_write/proc_exit, calls fd_write with iovs = 65535 on a one-page memory
 // (out of bounds), and exits with the returned errno. The host must answer EFAULT (21).
-import { run } from '../lib/wasm/neper-host.js'
+import { run } from '../tools/wasm/neper-host.js'
 
 const u = (...xs) => Uint8Array.from(xs)
 const vec = (xs) => Uint8Array.from(xs.flat())

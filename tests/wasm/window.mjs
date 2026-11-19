@@ -1,4 +1,4 @@
-// The window of lib/wasm/window.js under Node with a canvas shim (C208, D5680):
+// The window of tools/wasm/window.js under Node with a canvas shim (C208, D5680):
 //   node --no-warnings tests/wasm/window.mjs UI_COUNTER.wasm [UI_COUNTER.threads.wasm [UI_GALLERY.wasm]]
 // UI_COUNTER is tests/wasm/browser/ui_counter built for wasm32-wasi (the second one with --threads, the first thread's
 // Worker owning the window). The shim is a canvas that is an EventTarget and keeps the frames the page draws on it
@@ -6,7 +6,7 @@
 // canvas (ResizeObserver and real events).
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { run } from '../../lib/wasm/neper-host.js'
+import { run } from '../../tools/wasm/neper-host.js'
 
 const [counterPath, threadsPath, galleryPath] = process.argv.slice(2)
 // A Worker that never answers would hold the suite for hours: the whole check gets three minutes.
@@ -105,7 +105,7 @@ async function exercise(path, label) {
 // The page and the Worker's imports without a program: only the newest frame is drawn per animation frame, the
 // clipboard's copy crosses the ring both ways, and the virtual keyboard's events become the right records.
 {
-  const { attach, imports } = await import('../../lib/wasm/window.js')
+  const { attach, imports } = await import('../../tools/wasm/window.js')
   const { canvas, frames } = shim(64, 48)
   const queue = []
   globalThis.requestAnimationFrame = (f) => queue.push(f)

@@ -1,7 +1,7 @@
 // Inbound datagrams and paused accepted sockets must have a fixed host-side cap:
 // overload drops the newest datagram and closes the newest TCP connection.
 import assert from 'node:assert/strict'
-import { FUNCTIONS, INBOUND_QUEUE_LIMIT, NetHost } from '../../lib/wasm/run-wasm-host.mjs'
+import { FUNCTIONS, INBOUND_QUEUE_LIMIT, NetHost } from '../../tools/wasm/run-wasm-host.mjs'
 
 const data = new Uint8Array(65536)
 const host = new NetHost(data)

@@ -3,7 +3,7 @@
 //
 //   import { run } from './neper-host.js'
 //   const { exitCode, files } = await run(source, { args, env, files, stdout, stderr })
-//   node lib/wasm/neper-host.js FILE.wasm [ARGS...]      (the file is a command when it is the main module)
+//   node tools/wasm/neper-host.js FILE.wasm [ARGS...]      (the file is a command when it is the main module)
 //
 // `source` is a URL, a Response, bytes or a WebAssembly.Module. The module always runs in a dedicated
 // module Worker made from this file's URL, never on the calling thread; a plain module needs no

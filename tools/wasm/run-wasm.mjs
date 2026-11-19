@@ -1,5 +1,5 @@
 // Run a wasm32-wasi module the way `neper build --target wasm32-wasi` writes one (D5213):
-//   node --no-warnings lib/wasm/run-wasm.mjs FILE.wasm [ARGS...]
+//   node --no-warnings tools/wasm/run-wasm.mjs FILE.wasm [ARGS...]
 // WASI preview 1 over node:wasi and the module's exit status as this process's. A module the engine
 // refuses to compile or link exits 125, which scripts/wasm-sweep.sh counts as invalid.
 //
@@ -13,7 +13,7 @@
 //     the two directories above. `--env=all` (or NEPER_WASM_ENV=all) hands over the whole
 //     environment, as before; the module can read and write the working directory either way.
 // A module that imports `neper_host` (sockets, name resolution and the poller, D5675, D5676) gets
-// them from lib/wasm/run-wasm-host.mjs: each call blocks the module's worker while this process's
+// them from tools/wasm/run-wasm-host.mjs: each call blocks the module's worker while this process's
 // main thread does it over node:net, node:dgram and node:dns. NEPER_HOST_TRACE=1 prints each call.
 // NEPER_WASM_MEMORY=1 and NEPER_WASM_TIME=1 add `wasm memory: N MiB` and `wasm time: N ms`
 // (compile, link and run, as scripts/wasm-bench.sh reads it) to standard error at the end.

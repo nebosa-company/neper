@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { BASE, NetHost, context } from '../../lib/wasm/run-wasm-host.mjs'
+import { BASE, NetHost, context } from '../../tools/wasm/run-wasm-host.mjs'
 
 const EACCES = 2
 const saved = { cwd: context.cwd, tmp: context.tmp, preopens: context.preopens, env: context.env, runner: context.runner }

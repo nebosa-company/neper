@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { NetHost, context } from '../../lib/wasm/run-wasm-host.mjs'
+import { NetHost, context } from '../../tools/wasm/run-wasm-host.mjs'
 
 const savedPreopens = context.preopens
 const data = new Uint8Array(65536)
