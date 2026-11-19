@@ -50878,3 +50878,9 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7471 — MASS fitdistr for the t family
 `fitdistr_t` is fitdistr(x, "t"): optim BFGS (`rbfgs.vmmin`, reltol 1.5e-8) on (m, s, df) from (median, IQR / 2, 10) with the 1e-3 central-difference gradient of the density mydt (dt((x - m) / s, df) / s), optimHess for the covariance, symmetrised and inverted; estimates and log-likelihood equal MASS to 1e-5 and the standard errors to 1e-3 on 36 t samples (252 values in oracle_mass_fdt) -- the Hessian is a difference of gradients and amplifies the 1e-8 stopping slack of the two optimisers to 1e-4 on a few. Open for L306: lqs, cov.rob, the beta, chi-squared and f fitdistr families, isoMDS, sammon.
+
+## D7371 — lavaan: several correlated factors
+
+**Decision.** `lavaanpkg.cfa_factors` fits the simple-structure model in which indicator i loads on factor fac[i], the first indicator of each factor is fixed at 1 and the factor covariance matrix is free: Sigma = Lambda Phi Lambda' + Theta, the factor correlations carried by tanh so that Phi stays positive definite, the same ML discrepancy as the one-factor fit, minimised by Nelder-Mead and BFGS. Each evaluation of the discrepancy releases its working memory (`mem.mark` and `mem.reset`), without which a fit of a dozen parameters exhausts the arena.
+
+**Result.** `oracle_lavaan_cfa` (512 cases; 164 new values on 6 models of two or three factors with 3 or 4 indicators each: loadings, residual variances, factor variances and covariances, chi-square, degrees of freedom and p value) equals lavaan on Windows to 2e-4 relative. Linux pending. L354 stays open at 0.1: standard errors for several factors, regressions between latent variables, cross-loadings and other structures, means and intercepts, other estimators, fit indices, the model syntax.

@@ -14,6 +14,13 @@ type CfaCtx = struct { a: *mem.Arena, s: []const f64, p: usize, logs: f64 }
 
 // Sigma = psi l l' + diag(theta) at par = (l_2 .. l_p, log theta_1 .. log theta_p, log psi); the ML discrepancy log|Sigma| + tr(Sigma^-1 S) - log|S| - p
 fn cfa_f(c: *CfaCtx, par: []const f64) -> f64 {
+    let mk = mem.mark(c.a)
+    let v = cfa_f_inner(c, par)
+    mem.reset(c.a, mk)
+    ret v
+}
+
+fn cfa_f_inner(c: *CfaCtx, par: []const f64) -> f64 {
     let p = c.p
     let (sg, e1) = mem.alloc[f64](c.a, p * p)
     let (inv, e2) = mem.alloc[f64](c.a, p * p)
@@ -258,5 +265,238 @@ fn cfa_se(a: *mem.Arena, est: []const f64, n: usize, p: usize, se: []f64) -> boo
         se[c] = math.sqrt[f64](col[c])
         c += 1usize
     }
+    ret true
+}
+
+// ---- several factors: each indicator loads on one factor (fac[i] in 0 .. nf - 1), the first indicator of every factor fixed at 1, free residual variances, free factor variances and covariances ----
+
+type MfCtx = struct { a: *mem.Arena, s: []const f64, p: usize, nf: usize, fac: []const usize, first: []const usize, logs: f64 }
+
+// the model covariance at par = (free loadings in indicator order, log residual variances, then the factor covariance matrix by its Cholesky-free parametrisation: log variances and the correlations scaled by tanh),
+// written into sg (p by p row-major); false when the factor covariance matrix is not positive definite
+fn mf_sigma(c: *const MfCtx, par: []const f64, sg: []f64) -> bool {
+    let p = c.p
+    let nf = c.nf
+    let nl = p - nf
+    var lam: [32]f64 = zero
+    var k = 0usize
+    var i = 0usize
+    while i < p {
+        if c.first[c.fac[i]] == i {
+            lam[i] = 1.0f64
+        } else {
+            lam[i] = par[k]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    var ph: [64]f64 = zero
+    var u = 0usize
+    while u < nf {
+        ph[u * nf + u] = math.exp[f64](par[nl + p + u])
+        u += 1usize
+    }
+    var q = nl + p + nf
+    u = 1usize
+    while u < nf {
+        var v = 0usize
+        while v < u {
+            var r = 0.0f64
+            let z = par[q]
+            let e2 = math.exp[f64](2.0f64 * z)
+            r = (e2 - 1.0f64) / (e2 + 1.0f64)
+            ph[u * nf + v] = r * math.sqrt[f64](ph[u * nf + u] * ph[v * nf + v])
+            ph[v * nf + u] = ph[u * nf + v]
+            q += 1usize
+            v += 1usize
+        }
+        u += 1usize
+    }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            sg[i * p + j] = lam[i] * lam[j] * ph[c.fac[i] * nf + c.fac[j]]
+            j += 1usize
+        }
+        sg[i * p + i] += math.exp[f64](par[nl + i])
+        i += 1usize
+    }
+    ret true
+}
+
+fn mf_f(c: *MfCtx, par: []const f64) -> f64 {
+    let mk = mem.mark(c.a)
+    let v = mf_f_inner(c, par)
+    mem.reset(c.a, mk)
+    ret v
+}
+
+fn mf_f_inner(c: *MfCtx, par: []const f64) -> f64 {
+    let p = c.p
+    let (sg, e1) = mem.alloc[f64](c.a, p * p)
+    let (inv, e2) = mem.alloc[f64](c.a, p * p)
+    if e1 != ok || e2 != ok { ret 1.0e30f64 }
+    if !mf_sigma(c, par, sg) { ret 1.0e30f64 }
+    if !ps.invert(c.a, sg, p, inv) { ret 1.0e30f64 }
+    let ld = ps.logdet(c.a, sg, p)
+    var tr = 0.0f64
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            tr += inv[i * p + j] * c.s[j * p + i]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let f = ld + tr - c.logs - f64(p)
+    if f != f { ret 1.0e30f64 }
+    ret f
+}
+
+fn mf_g(c: *MfCtx, par: []const f64, g: []f64) {
+    var q: [64]f64 = zero
+    let m = par.len
+    var i = 0usize
+    while i < m {
+        q[i] = par[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        let h = 1.0e-6f64 * (1.0f64 + math.abs[f64](par[i]))
+        q[i] = par[i] + h
+        let fp = mf_f(c, q[0usize..m])
+        q[i] = par[i] - h
+        let fm = mf_f(c, q[0usize..m])
+        q[i] = par[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// cfa with nf factors of simple structure (indicator i on factor fac[i], every factor with at least two indicators) from the sample covariance s (divisor n - 1). out: loadings (p, the first of each factor 1), residual variances (p),
+// the factor variances and covariances (nf (nf + 1) / 2, row-major lower triangle: (0,0), (1,0), (1,1), (2,0), ...), then chi-square, degrees of freedom and p value
+fn cfa_factors(a: *mem.Arena, s: []const f64, n: usize, p: usize, nf: usize, fac: []const usize, out: []f64) -> bool {
+    let nn = f64(n)
+    let (sm, e1) = mem.alloc[f64](a, p * p)
+    let (first, e2) = mem.alloc[usize](a, nf)
+    if e1 != ok || e2 != ok { ret false }
+    var i = 0usize
+    while i < p * p {
+        sm[i] = s[i] * (nn - 1.0f64) / nn
+        i += 1usize
+    }
+    var u = 0usize
+    while u < nf {
+        first[u] = p
+        u += 1usize
+    }
+    i = 0usize
+    while i < p {
+        if first[fac[i]] == p { first[fac[i]] = i }
+        i += 1usize
+    }
+    var c = MfCtx { a: a, s: sm, p: p, nf: nf, fac: fac, first: first, logs: ps.logdet(a, sm, p) }
+    let nl = p - nf
+    let ncor = nf * (nf - 1usize) / 2usize
+    let m = nl + p + nf + ncor
+    let (par, e3) = mem.alloc[f64](a, m)
+    if e3 != ok { ret false }
+    // starts: loadings 1, residual variance half the variance, factor variance the mean covariance of its indicators with each other (at least 0.05), no correlation
+    i = 0usize
+    while i < nl {
+        par[i] = 1.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        par[nl + i] = math.log[f64](math.max[f64](0.5f64 * sm[i * p + i], 0.05f64))
+        i += 1usize
+    }
+    u = 0usize
+    while u < nf {
+        var off = 0.0f64
+        var cnt = 0.0f64
+        i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < p {
+                if i != j && fac[i] == u && fac[j] == u {
+                    off += sm[i * p + j]
+                    cnt += 1.0f64
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        par[nl + p + u] = math.log[f64](math.max[f64](off / cnt, 0.05f64))
+        u += 1usize
+    }
+    i = 0usize
+    while i < ncor {
+        par[nl + p + nf + i] = 0.2f64
+        i += 1usize
+    }
+    let (scr, e4) = mem.alloc[f64](a, (m + 1usize) * (m + 1usize) + 8usize * m + 64usize)
+    if e4 != ok { ret false }
+    var round = 0usize
+    while round < 1usize {
+        let (r1, e5) = opt.nelder_mead[MfCtx](&c, mf_f, par, 0.2f64, 1.0e-10f64, 2500u32, scr)
+        if e5 != ok { ret false }
+        round += 1usize
+    }
+    let (scb, e6) = mem.alloc[f64](a, 4usize * m * m + 16usize * m + 64usize)
+    if e6 != ok { ret false }
+    let (rb, e7) = opt.bfgs[MfCtx](&c, mf_f, mf_g, par, 1.0e-10f64, 500u32, scb)
+    if e7 != ok { ret false }
+    let fmin = mf_f(&c, par)
+    var k = 0usize
+    i = 0usize
+    while i < p {
+        if first[fac[i]] == i {
+            out[i] = 1.0f64
+        } else {
+            out[i] = par[k]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        out[p + i] = math.exp[f64](par[nl + i])
+        i += 1usize
+    }
+    // the factor covariance matrix, lower triangle row-major
+    var vv: [8]f64 = zero
+    u = 0usize
+    while u < nf {
+        vv[u] = math.exp[f64](par[nl + p + u])
+        u += 1usize
+    }
+    var o = 2usize * p
+    var q = nl + p + nf
+    u = 0usize
+    while u < nf {
+        var v = 0usize
+        while v <= u {
+            if v == u {
+                out[o] = vv[u]
+            } else {
+                let ex2 = math.exp[f64](2.0f64 * par[q])
+                out[o] = (ex2 - 1.0f64) / (ex2 + 1.0f64) * math.sqrt[f64](vv[u] * vv[v])
+                q += 1usize
+            }
+            o += 1usize
+            v += 1usize
+        }
+        u += 1usize
+    }
+    let npar = nl + p + nf * (nf + 1usize) / 2usize
+    let df = f64(p * (p + 1usize) / 2usize) - f64(npar)
+    out[o] = nn * fmin
+    out[o + 1usize] = df
+    out[o + 2usize] = nm.pchisq(nn * fmin, df, false, false)
     ret true
 }
