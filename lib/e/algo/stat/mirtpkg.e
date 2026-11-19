@@ -216,22 +216,25 @@ type RasGrad = struct { r: *RasCtx, x: []f64 }
 fn ras_fw(t: *RasGrad, par: []const f64) -> f64 { ret ras_f(t.r, par) }
 
 fn ras_g(t: *RasGrad, par: []const f64, g: []f64) {
-    let m = par.len
-    var i = 0usize
-    while i < m {
-        t.x[i] = par[i]
-        i += 1usize
+    let r = t.r
+    let j = r.c.j
+    let s = math.exp[f64](par[j])
+    var jj = 0usize
+    while jj < j {
+        r.full[2usize * jj] = s
+        r.full[2usize * jj + 1usize] = par[jj]
+        jj += 1usize
     }
-    i = 0usize
-    while i < m {
-        let h = 1.0e-6f64
-        t.x[i] = par[i] + h
-        let fp = ras_f(t.r, t.x[0usize..m])
-        t.x[i] = par[i] - h
-        let fm = ras_f(t.r, t.x[0usize..m])
-        t.x[i] = par[i]
-        g[i] = (fp - fm) / (2.0f64 * h)
-        i += 1usize
+    // the 2PL analytic gradient at (s, d): the intercepts directly, log s through every slope (d s / d log s = s)
+    var tg = TplGrad { c: r.c, x: t.x }
+    var gf: [64]f64 = zero
+    tpl_g(&tg, r.full[0usize..2usize * j], gf[0usize..2usize * j])
+    g[j] = 0.0f64
+    jj = 0usize
+    while jj < j {
+        g[jj] = gf[2usize * jj + 1usize]
+        g[j] += gf[2usize * jj] * s
+        jj += 1usize
     }
 }
 
