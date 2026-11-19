@@ -121,4 +121,25 @@ for (rep in 1:24) {
   a <- c(n, m, q, mi, tl, ks, unlist(lapply(Xl, function(M) as.vector(t(M)))), as.vector(t(cbind(1, Z))), unlist(lapply(1:m, function(e) d[[paste0("y", e)]])), nrow(Rm), as.vector(t(Rm)), qv)
   for (j in 1:kt) { cases[[length(cases) + 1]] <- case("s3r", c(a, j - 1), cf[j], rel = 1e-6, abs = 1e-9); cases[[length(cases) + 1]] <- case("s3r", c(a, kt + j - 1), sev[j], rel = 1e-6, abs = 1e-9) }
 }
+# plain 2SLS with restrictions: "s2r", the layout of "s3r" (its mi and tol slots unused)
+for (rep in 1:24) {
+  n <- sample(40:120, 1); m <- 2; q <- 4 + sample(0:2, 1)
+  Z <- matrix(rnorm(n * (q - 1)), n, q - 1); ks <- sample(2:3, m, TRUE)
+  d <- data.frame(Z); names(d) <- paste0("z", 1:(q - 1)); Xl <- list(); fl <- list()
+  for (e in 1:m) {
+    xe <- matrix(0, n, ks[e] - 1); for (j in seq_len(ks[e] - 1)) xe[, j] <- Z %*% rnorm(q - 1, 0, 0.6) + rnorm(n)
+    d[[paste0("y", e)]] <- as.vector(1 + xe %*% runif(ks[e] - 1, -2, 2) + rnorm(n, 0, e))
+    for (j in seq_len(ks[e] - 1)) d[[paste0("x", e, "_", j)]] <- xe[, j]
+    fl[[paste0("e", e)]] <- as.formula(paste0("y", e, " ~ ", paste(paste0("x", e, "_", seq_len(ks[e] - 1)), collapse = " + ")))
+    Xl[[e]] <- cbind(1, xe)
+  }
+  fi <- as.formula(paste("~", paste(paste0("z", 1:(q - 1)), collapse = " + "))); kt <- sum(ks)
+  r1 <- numeric(kt); r1[2] <- 1; r1[ks[1] + 2] <- -1; Rm <- rbind(r1); qv <- 0
+  if (rep %% 2 == 0) { r2 <- numeric(kt); r2[1] <- 1; Rm <- rbind(Rm, r2); qv <- c(qv, 0.5) }
+  r <- tryCatch(suppressWarnings(systemfit(fl, method = "2SLS", inst = fi, data = d, restrict.matrix = Rm, restrict.rhs = qv)), error = function(e) NULL)
+  if (is.null(r)) next
+  cf <- as.numeric(coef(r)); sev <- sqrt(diag(vcov(r)))
+  a <- c(n, m, q, 0, 0, ks, unlist(lapply(Xl, function(M) as.vector(t(M)))), as.vector(t(cbind(1, Z))), unlist(lapply(1:m, function(e) d[[paste0("y", e)]])), nrow(Rm), as.vector(t(Rm)), qv)
+  for (j in 1:kt) { cases[[length(cases) + 1]] <- case("s3r", c(a, j - 1), cf[j], rel = 1e-8, abs = 1e-7); if (is.finite(sev[j])) cases[[length(cases) + 1]] <- case("s3r", c(a, kt + j - 1), sev[j], rel = 1e-8, abs = 1e-7) }
+}
 emit("systemfit_2sls", "systemfit", list(cases))

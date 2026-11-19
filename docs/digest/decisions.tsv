@@ -4359,4 +4359,5 @@ D7502	614	systemfit 3SLS with per-equation instruments
 D7503	795	systemfit iterated 3SLS
 D7504	724	systemfit linear hypothesis (Wald) tests
 D7505	921	systemfit 3SLS with linear restrictions
-D7374	882	lavaan: a regression between two latent variables
+D7374	883	lavaan: a regression between two latent variables
+D7506	959	systemfit 2SLS with linear restrictions

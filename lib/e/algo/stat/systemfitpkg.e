@@ -666,6 +666,24 @@ fn threesls_it(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f6
             old[ii] = b0[ii]
             ii += 1usize
         }
+        if passes == 0usize {
+            // restricted two-stage least squares alone: sigma^2 = rss / (m n - (kt - nr)) scales the restricted covariance of the Sigma = I fit
+            var rss0 = 0.0f64
+            var q0 = 0usize
+            while q0 < m * n {
+                rss0 += res[q0] * res[q0]
+                q0 += 1usize
+            }
+            let sg2 = rss0 / (f64(m * n) - f64(kt - nr))
+            ii = 0usize
+            while ii < kt {
+                coef[ii] = b0[ii]
+                se[ii] = se0[ii] * math.sqrt[f64](sg2)
+                ii += 1usize
+            }
+            itn[0usize] = 0usize
+            ret ok
+        }
     }
     var pass3 = 0usize
     while pass3 < passes {
