@@ -51196,3 +51196,6 @@ The cross-sectional design reports the cohort.count measures under the prevalenc
 
 ## D7567 — epiR Sato and Greenland-Robins Mantel-Haenszel risk differences
 `strata_mh_rd_var` gives the Mantel-Haenszel risk difference of K cohort tables with the Sato variance ((delta P + Q) / W^2 from the exposed and unexposed margins) or the Greenland-Robins variance (sum of W_k^2 (p1 q1 / n1 + p2 q2 / n2) over W^2), scaled by units, as zMHRD.Sato and zMHRD.GR do. Equal to epi.2by2 ARisk.mh.sato and ARisk.mh.green on 25 stacks (150 values added to oracle_epir, 5215 in all). The Breslow-Day statistic, the crude-table estimates, the boundary tables and the MLE and Cornfield odds-ratio intervals stay open.
+
+## D7568 — epiR Breslow-Day homogeneity statistic
+`breslow_day` computes the Breslow-Day statistic for K tables as epi.2by2 does: the expected exposed-case count A* solves the quadratic built from the Mantel-Haenszel odds ratio (the root inside [0, min(row 1, column 1)]), and the statistic is the sum of (a - A*)^2 over the inverse of the summed reciprocals of the four expected cells. Equal to epiR bOR.homog on 30 stacks (30 values added to oracle_epir, 5245 in all). The crude-table estimates, the boundary tables and the MLE and Cornfield odds-ratio intervals stay open.

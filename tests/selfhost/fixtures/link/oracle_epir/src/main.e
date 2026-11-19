@@ -19,6 +19,10 @@ fn answer(c: *const oracle.Case) -> f64 {
         if wsel % 3usize == 1usize { ret sl1 }
         ret su1
     }
+    if str.eq(c.name, "bd") {
+        let kb = usize(x[0usize])
+        ret ep.breslow_day(x[1usize..1usize + kb], x[1usize + kb..1usize + 2usize * kb], x[1usize + 2usize * kb..1usize + 3usize * kb], x[1usize + 3usize * kb..1usize + 4usize * kb])
+    }
     if str.eq(c.name, "mr") {
         let kr = usize(x[0usize])
         var rv: [8]f64 = zero

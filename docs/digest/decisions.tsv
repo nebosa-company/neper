@@ -4422,4 +4422,5 @@ D7563	424	epiR epi.iv for risk ratios
 D7564	516	epiR epi.dsl for risk ratios
 D7565	715	epiR stratified cohort tables (Mantel-Haenszel)
 D7566	676	epiR Mantel-Haenszel risk difference and NNT
-D7567	617	epiR Sato and Greenland-Robins Mantel-Haenszel risk differences
+D7567	618	epiR Sato and Greenland-Robins Mantel-Haenszel risk differences
+D7568	578	epiR Breslow-Day homogeneity statistic

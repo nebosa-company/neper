@@ -162,4 +162,11 @@ for (rep in 1:25) {
   v <- c(unlist(r$ARisk.mh.sato[1, ]), unlist(r$ARisk.mh.green[1, ]))
   for (w in 0:5) cases[[length(cases) + 1]] <- case("ms", c(K, un, a, b, cc, d, w), unname(v[w + 1]), rel = 1e-8, abs = 1e-10)
 }
+# Breslow-Day: "bd" args (K, a[K], b[K], c[K], d[K])
+for (rep in 1:30) {
+  K <- sample(2:5, 1); a <- sample(8:120, K, TRUE); b <- sample(40:600, K, TRUE); cc <- sample(5:100, K, TRUE); d <- sample(40:700, K, TRUE)
+  arr <- array(0, dim = c(2, 2, K)); for (s in 1:K) arr[, , s] <- matrix(c(a[s], b[s], cc[s], d[s]), 2, byrow = TRUE)
+  r <- suppressWarnings(epi.2by2(as.table(arr), method = "cohort.count", interpret = FALSE, outcome = "as.columns"))$massoc.detail
+  cases[[length(cases) + 1]] <- case("bd", c(K, a, b, cc, d), r$bOR.homog$test.statistic, rel = 1e-8, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))

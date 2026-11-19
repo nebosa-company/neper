@@ -773,3 +773,40 @@ fn strata_mh_rd_var(a: []const f64, b: []const f64, c: []const f64, d: []const f
     let h = z * math.sqrt[f64](v)
     ret (dm * units, (dm - h) * units, (dm + h) * units)
 }
+
+// Breslow-Day homogeneity statistic of the odds ratio over K tables, as epi.2by2 computes it (expected count from the Mantel-Haenszel odds ratio, root chosen inside [0, min(row1, col1)])
+fn breslow_day(a: []const f64, b: []const f64, c: []const f64, d: []const f64) -> f64 {
+    let k = a.len
+    var g = 0.0f64
+    var h = 0.0f64
+    var i = 0usize
+    while i < k {
+        let t = a[i] + b[i] + c[i] + d[i]
+        g += a[i] * d[i] / t
+        h += b[i] * c[i] / t
+        i += 1usize
+    }
+    let so = g / h
+    var s = 0.0f64
+    i = 0usize
+    while i < k {
+        let r1 = a[i] + b[i]
+        let r2 = c[i] + d[i]
+        let c1 = a[i] + c[i]
+        var amax = r1
+        if c1 < amax { amax = c1 }
+        let bb = r2 + r1 * so - c1 * (1.0f64 - so)
+        let det = math.sqrt[f64](bb * bb + 4.0f64 * (1.0f64 - so) * so * r1 * c1)
+        let lo = (0.0f64 - bb - det) / (2.0f64 - 2.0f64 * so)
+        let hi = (0.0f64 - bb + det) / (2.0f64 - 2.0f64 * so)
+        var ast = hi
+        if lo <= amax && lo >= 0.0f64 { ast = lo }
+        let bst = r1 - ast
+        let cst = c1 - ast
+        let dst = r2 - c1 + ast
+        let v = 1.0f64 / (1.0f64 / ast + 1.0f64 / bst + 1.0f64 / cst + 1.0f64 / dst)
+        s += (a[i] - ast) * (a[i] - ast) / v
+        i += 1usize
+    }
+    ret s
+}
