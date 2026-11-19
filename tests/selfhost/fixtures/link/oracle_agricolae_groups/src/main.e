@@ -41,6 +41,44 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tot
     }
+    if kind >= 12usize && kind <= 14usize {
+        var rng2: rr.Rng = zero
+        if x[2usize] > 0.5f64 { rr.seed_super(&rng2, i64(x[1usize])) } else { rr.seed(&rng2, i64(x[1usize])) }
+        if kind == 12usize {
+            let r2 = usize(x[3usize])
+            let (lo, h1) = mem.alloc[usize](a, r2 * r2)
+            if h1 != ok { os.exit(15) }
+            let el = ag.design_lsd(a, &rng2, r2, x[4usize] > 0.5f64, lo)
+            if el != ok { os.exit(16) }
+            ret f64(lo[usize(x[5usize])])
+        }
+        var n1 = usize(x[3usize])
+        var blocks = 0usize
+        var n2 = 0usize
+        var fst = false
+        var pidx = 0usize
+        var applied = 0usize
+        if kind == 13usize {
+            blocks = usize(x[4usize])
+            n2 = usize(x[5usize])
+            fst = x[6usize] > 0.5f64
+            pidx = usize(x[7usize])
+        } else {
+            applied = 1usize
+            blocks = n1
+            n2 = usize(x[4usize])
+            fst = x[5usize] > 0.5f64
+            pidx = usize(x[6usize])
+        }
+        let nplot = n1 * blocks
+        let (plan, h2) = mem.alloc[usize](a, nplot)
+        let (sub, h3) = mem.alloc[usize](a, nplot * n2)
+        if h2 != ok || h3 != ok { os.exit(17) }
+        let es = ag.design_split(a, &rng2, applied, n1, blocks, n2, fst, plan, sub)
+        if es != ok { os.exit(18) }
+        if str.eq(c.name, "s1") || str.eq(c.name, "t1") { ret f64(plan[pidx / n2]) }
+        ret f64(sub[pidx])
+    }
     if kind >= 8usize && kind <= 11usize {
         var rng: rr.Rng = zero
         if kind >= 10usize { rr.seed_super(&rng, i64(x[1usize])) } else { rr.seed(&rng, i64(x[1usize])) }

@@ -49984,3 +49984,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `design_crd` and `design_rcbd` now reproduce agricolae under its default `kinds = "Super-Duper"` as well as the Mersenne-Twister kind.
 
 **Result.** `oracle_agricolae_groups` has 1621 values (adding six design.crd and six design.rcbd draws under the default generator) and equals agricolae on Windows; `oracle_wrs2_boot` and `oracle_sampling_brewer`, which share the generator, still pass. Linux pending. L396 stays partial: design.lsd, bib, split, alpha and lattice and AMMI remain.
+
+## D7322 — agricolae: design.lsd and design.split
+
+`e.algo.stat.agricolae` gains `design_lsd` (the cyclic Latin square, its columns after the first permuted by `sample(2:r, r - 1)` and, with first, its rows by `sample(1:r, r)`; the plot order is the square read column by column, as `trt[a]` does) and `design_split` (a whole-plot plan from the same stream, an rcbd or an lsd, then `sample(trt2, n2)` for every whole plot in plot order; design.split reseeds inside the design it calls, so the stream is one fresh seed through plan and subplots). The streams are the Mersenne-Twister and the default Super-Duper.
+
+**Result.** `oracle_agricolae_groups` has 2627 values (adding eight Latin squares and eight split-plot designs over each of an rcbd and an lsd, both generators, with and without a first randomised block) and equals agricolae on Windows. Linux pending. L396 stays partial: design.bib, design.alpha, design.lattice and AMMI remain.

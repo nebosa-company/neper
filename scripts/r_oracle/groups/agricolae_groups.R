@@ -80,4 +80,24 @@ for (rep in 1:6) {
   b <- design.rcbd(trt, nbk, serie = 2, seed = seed, first = fst)$book
   for (i in seq_len(nrow(b))) cases[[length(cases) + 1]] <- case("bst", c(11, seed, tn, nbk, as.numeric(fst), i - 1), match(as.character(b[[3]][i]), trt) - 1, rel = 0, abs = 0)
 }
+# design.lsd and design.split, Mersenne-Twister (sd 0) and the default Super-Duper (sd 1) streams. op 12 design.lsd (12, seed, sd, r, first, idx) fn "ls" the treatment code at plot idx;
+# op 13 split over an rcbd (13, seed, sd, n1, blocks, n2, first, idx) fn "s1" whole-plot treatment, "s2" subplot treatment at book row idx; op 14 split over an lsd (14, seed, sd, r, n2, first, idx) fn "t1" "t2"
+kk <- function(sd) if (sd == 1) "Super-Duper" else "Mersenne-Twister"
+for (rep in 1:8) {
+  sd <- rep %% 2; seed <- 800 + rep; r <- sample(3:6, 1); trt <- letters[1:r]; fst <- rep %% 4 < 2
+  b <- design.lsd(trt, serie = 2, seed = seed, kinds = kk(sd), first = fst)$book
+  for (i in seq_len(nrow(b))) cases[[length(cases) + 1]] <- case("ls", c(12, seed, sd, r, as.numeric(fst), i - 1), match(as.character(b[[4]][i]), trt) - 1, rel = 0, abs = 0)
+  n1 <- sample(3:4, 1); nb <- sample(2:3, 1); n2 <- sample(2:4, 1)
+  t1 <- letters[1:n1]; t2 <- LETTERS[1:n2]
+  bk <- design.split(t1, t2, r = nb, design = "rcbd", serie = 2, seed = seed, kinds = kk(sd), first = fst)$book
+  for (i in seq_len(nrow(bk))) {
+    cases[[length(cases) + 1]] <- case("s1", c(13, seed, sd, n1, nb, n2, as.numeric(fst), i - 1), match(as.character(bk[[4]][i]), t1) - 1, rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("s2", c(13, seed, sd, n1, nb, n2, as.numeric(fst), i - 1), match(as.character(bk[[5]][i]), t2) - 1, rel = 0, abs = 0)
+  }
+  bl <- design.split(t1, t2, design = "lsd", serie = 2, seed = seed, kinds = kk(sd), first = fst)$book
+  for (i in seq_len(nrow(bl))) {
+    cases[[length(cases) + 1]] <- case("t1", c(14, seed, sd, n1, n2, as.numeric(fst), i - 1), match(as.character(bl[[5]][i]), t1) - 1, rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("t2", c(14, seed, sd, n1, n2, as.numeric(fst), i - 1), match(as.character(bl[[6]][i]), t2) - 1, rel = 0, abs = 0)
+  }
+}
 emit("agricolae_groups", "agricolae", list(cases))

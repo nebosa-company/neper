@@ -458,3 +458,82 @@ fn design_rcbd(a: *mem.Arena, rng: *rr.Rng, ntr: usize, blocks: usize, first: bo
     }
     ret ok
 }
+
+// design.lsd(trt, first): the cyclic r by r Latin square, its columns after the first permuted by sample(2:r, r - 1) and, with first, its rows by sample(1:r, r); out
+// holds the treatment codes in plot order (the square read column by column, as trt[a] does). r at least 3.
+fn design_lsd(a: *mem.Arena, rng: *rr.Rng, r: usize, first: bool, out: []usize) -> err {
+    let (sq, e0) = mem.alloc[usize](a, r * r)
+    let (cols, e1) = mem.alloc[usize](a, r)
+    let (rows, e2) = mem.alloc[usize](a, r)
+    if e0 != ok || e1 != ok || e2 != ok { ret e0 }
+    var i = 0usize
+    while i < r {
+        var j = 0usize
+        while j < r {
+            // 1-based i + j - 1, wrapped into 1..r, stored 0-based
+            sq[i * r + j] = (i + j) % r
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (idx, e3) = rr.sample_int(a, rng, i64(r - 1usize), i64(r - 1usize), false)
+    if e3 != ok { ret e3 }
+    cols[0usize] = 0usize
+    i = 1usize
+    while i < r {
+        // sample(2:r, r - 1) is 2:r indexed by the permutation: the 1-based column idx + 1
+        cols[i] = usize(idx[i - 1usize])
+        i += 1usize
+    }
+    i = 0usize
+    while i < r {
+        rows[i] = i
+        i += 1usize
+    }
+    if first {
+        let (ridx, e4) = rr.sample_int(a, rng, i64(r), i64(r), false)
+        if e4 != ok { ret e4 }
+        i = 0usize
+        while i < r {
+            rows[i] = usize(ridx[i]) - 1usize
+            i += 1usize
+        }
+    }
+    // the square after the column and row permutations, read column by column
+    var c = 0usize
+    while c < r {
+        var q = 0usize
+        while q < r {
+            out[c * r + q] = sq[rows[q] * r + cols[c]]
+            q += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// design.split over an rcbd (applied = 0) or an lsd (applied = 1): the whole-plot plan from the same stream, then sample(trt2, n2) for every whole plot, in plot order;
+// plan holds the whole-plot treatments (nplot entries), sub the subplot treatments (nplot * n2, the plot's subplots together)
+fn design_split(a: *mem.Arena, rng: *rr.Rng, applied: usize, n1: usize, blocks: usize, n2: usize, first: bool, plan: []usize, sub: []usize) -> err {
+    var nplot = n1 * blocks
+    if applied == 1usize { nplot = n1 * n1 }
+    var e = ok
+    if applied == 0usize {
+        e = design_rcbd(a, rng, n1, blocks, first, plan)
+    } else {
+        e = design_lsd(a, rng, n1, first, plan)
+    }
+    if e != ok { ret e }
+    var p = 0usize
+    while p < nplot {
+        let (idx, e5) = rr.sample_int(a, rng, i64(n2), i64(n2), false)
+        if e5 != ok { ret e5 }
+        var s = 0usize
+        while s < n2 {
+            sub[p * n2 + s] = usize(idx[s]) - 1usize
+            s += 1usize
+        }
+        p += 1usize
+    }
+    ret ok
+}
