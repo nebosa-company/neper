@@ -28,5 +28,10 @@ for (rep in 1:6) {
   phv <- c(); for (u in 1:nf) for (v in 1:u) phv <- c(phv, pe$est[pe$op == "~~" & ((pe$lhs == paste0("f", u) & pe$rhs == paste0("f", v)) | (pe$lhs == paste0("f", v) & pe$rhs == paste0("f", u)))][1])
   fm <- fitMeasures(fit, c("chisq", "df", "pvalue", "baseline.chisq", "baseline.df", "cfi", "tli", "rmsea", "srmr", "logl", "aic", "bic")); v <- c(ld, th, phv, as.numeric(fm)); S <- cov(X)
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("cfmf", c(n, p, nf, fac, as.vector(t(S)), q - 1), v[q], rel = 2e-4, abs = 1e-6)
+  sel <- c(); for (j in 1:p) if (j != which(fac == fac[j])[1]) sel <- c(sel, pe$se[pe$op == "=~" & pe$rhs == colnames(X)[j]])
+  sth <- sapply(1:p, function(j) pe$se[pe$op == "~~" & pe$lhs == colnames(X)[j] & pe$rhs == colnames(X)[j]])
+  sph <- c(); for (u in 1:nf) for (vv in 1:u) sph <- c(sph, pe$se[pe$op == "~~" & ((pe$lhs == paste0("f", u) & pe$rhs == paste0("f", vv)) | (pe$lhs == paste0("f", vv) & pe$rhs == paste0("f", u)))][1])
+  sv <- c(sel, sth, sph)
+  for (q in seq_along(sv)) cases[[length(cases) + 1]] <- case("cfmfs", c(n, p, nf, fac, as.vector(t(S)), q - 1), sv[q], rel = 3e-3, abs = 1e-6)
 }
 emit("lavaan_cfa", "lavaan", list(cases))

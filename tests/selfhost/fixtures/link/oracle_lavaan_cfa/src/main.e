@@ -9,6 +9,23 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if c.name.len == 5usize {
+        let mn = usize(z[0usize])
+        let mp = usize(z[1usize])
+        let mf = usize(z[2usize])
+        let (fac, fe) = mem.alloc[usize](a, mp)
+        let (mo, me) = mem.alloc[f64](a, 2usize * mp + mf * (mf + 1usize) / 2usize + 14usize)
+        let (se, se1) = mem.alloc[f64](a, 2usize * mp + mf * (mf + 1usize) / 2usize)
+        if fe != ok || me != ok || se1 != ok { ret 0.0f64 / 0.0f64 }
+        var t = 0usize
+        while t < mp {
+            fac[t] = usize(z[3usize + t])
+            t += 1usize
+        }
+        if !lv.cfa_factors(a, z[3usize + mp..3usize + mp + mp * mp], mn, mp, mf, fac, mo) { ret 0.0f64 / 0.0f64 }
+        if !lv.cfa_factors_se(a, mo, mn, mp, mf, fac, se) { ret 0.0f64 / 0.0f64 }
+        ret se[usize(z[3usize + mp + mp * mp])]
+    }
     if c.name.len == 4usize {
         let mn = usize(z[0usize])
         let mp = usize(z[1usize])

@@ -117,7 +117,7 @@ L496	library	0.42	838	fda: functional data analysis	Partial (D6927): e.algo.stat
 L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
 L515	library	0	241	unmarked: occupancy and abundance models	Open (CRAN rank 905).
 L353	library	0.34	2182	mgcv: generalized additive models	Partial (D7340).
-L354	library	0.1	1105	lavaan: structural equation models	D7372: fit measures of the factor models (baseline chi-square and df, CFI, TLI, RMSEA, SRMR, log-likelihood, AIC, BIC) equal to lavaan.
+L354	library	0.1	1177	lavaan: structural equation models	D7373: standard errors of the correlated-factor models equal to lavaan.
 L381	library	0.42	591	ade4: multivariate analysis of ecological data	Partial (D7148 to D7152, D7158, D7160, D7161: as.dudi, dudi.pca, dudi.coa, dudi.acm with its correlation ratios, bca, wca, coinertia (main branch), procuste with rotations, dudi.fca, rlq and dudi.mix 
 L382	library	0	298	VGAM: vector generalized linear and additive models	Open (CRAN rank 382).
 L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).

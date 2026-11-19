@@ -558,3 +558,168 @@ fn cfa_factors(a: *mem.Arena, s: []const f64, n: usize, p: usize, nf: usize, fac
     out[o + 11usize] = 0.0f64 - 2.0f64 * logl + f64(npar) * math.log[f64](nn)
     ret true
 }
+
+// the standard errors of `cfa_factors` from the expected information (n / 2) tr(Sigma^-1 dSigma_i Sigma^-1 dSigma_j) at its estimates est (the same layout): se receives, in order, the free loadings (indicator order, the first of each
+// factor excluded), the residual variances, then the factor variances and covariances (lower triangle, row-major); false when the information is singular
+fn cfa_factors_se(a: *mem.Arena, est: []const f64, n: usize, p: usize, nf: usize, fac: []const usize, se: []f64) -> bool {
+    let (first, e0) = mem.alloc[usize](a, nf)
+    if e0 != ok { ret false }
+    var u = 0usize
+    while u < nf {
+        first[u] = p
+        u += 1usize
+    }
+    var i = 0usize
+    while i < p {
+        if first[fac[i]] == p { first[fac[i]] = i }
+        i += 1usize
+    }
+    let nl = p - nf
+    let nph = nf * (nf + 1usize) / 2usize
+    let m = nl + p + nph
+    let (sg, e1) = mem.alloc[f64](a, p * p)
+    let (inv, e2) = mem.alloc[f64](a, p * p)
+    let (ds, e3) = mem.alloc[f64](a, m * p * p)
+    let (ms, e4) = mem.alloc[f64](a, m * p * p)
+    let (info, e5) = mem.alloc[f64](a, m * m)
+    let (mat, e6) = mem.alloc[f64](a, m * m)
+    let (col, e7) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret false }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            var hi = fac[i]
+            var lo = fac[j]
+            if fac[j] > fac[i] {
+                hi = fac[j]
+                lo = fac[i]
+            }
+            sg[i * p + j] = est[i] * est[j] * est[2usize * p + hi * (hi + 1usize) / 2usize + lo]
+            j += 1usize
+        }
+        sg[i * p + i] += est[p + i]
+        i += 1usize
+    }
+    if !ps.invert(a, sg, p, inv) { ret false }
+    var z = 0usize
+    while z < m * p * p {
+        ds[z] = 0.0f64
+        z += 1usize
+    }
+    // free loading of indicator k
+    var q = 0usize
+    var k = 0usize
+    while k < p {
+        if first[fac[k]] != k {
+            var j = 0usize
+            while j < p {
+                var hi = fac[k]
+                var lo = fac[j]
+                if fac[j] > fac[k] {
+                    hi = fac[j]
+                    lo = fac[k]
+                }
+                let d = est[j] * est[2usize * p + hi * (hi + 1usize) / 2usize + lo]
+                if j == k {
+                    ds[q * p * p + k * p + k] += 2.0f64 * d
+                } else {
+                    ds[q * p * p + k * p + j] += d
+                    ds[q * p * p + j * p + k] += d
+                }
+                j += 1usize
+            }
+            q += 1usize
+        }
+        k += 1usize
+    }
+    // residual variances
+    i = 0usize
+    while i < p {
+        ds[(nl + i) * p * p + i * p + i] = 1.0f64
+        i += 1usize
+    }
+    // factor variances and covariances: parameter (hi, lo) of the lower triangle
+    var hi2 = 0usize
+    while hi2 < nf {
+        var lo2 = 0usize
+        while lo2 <= hi2 {
+            let qq = nl + p + hi2 * (hi2 + 1usize) / 2usize + lo2
+            i = 0usize
+            while i < p {
+                var j = 0usize
+                while j < p {
+                    var hit = false
+                    if fac[i] == hi2 && fac[j] == lo2 { hit = true }
+                    if fac[i] == lo2 && fac[j] == hi2 { hit = true }
+                    if hit {
+                        var mult = 1.0f64
+                        if hi2 == lo2 && fac[i] == fac[j] { mult = 1.0f64 }
+                        ds[qq * p * p + i * p + j] = est[i] * est[j] * mult
+                    }
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            lo2 += 1usize
+        }
+        hi2 += 1usize
+    }
+    q = 0usize
+    while q < m {
+        i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < p {
+                var t = 0.0f64
+                var l = 0usize
+                while l < p {
+                    t += inv[i * p + l] * ds[q * p * p + l * p + j]
+                    l += 1usize
+                }
+                ms[q * p * p + i * p + j] = t
+                j += 1usize
+            }
+            i += 1usize
+        }
+        q += 1usize
+    }
+    let nn = f64(n)
+    q = 0usize
+    while q < m {
+        var r = 0usize
+        while r < m {
+            var t = 0.0f64
+            i = 0usize
+            while i < p {
+                var j = 0usize
+                while j < p {
+                    t += ms[q * p * p + i * p + j] * ms[r * p * p + j * p + i]
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            info[q * m + r] = nn / 2.0f64 * t
+            r += 1usize
+        }
+        q += 1usize
+    }
+    var c = 0usize
+    while c < m {
+        var r = 0usize
+        while r < m * m {
+            mat[r] = info[r]
+            r += 1usize
+        }
+        r = 0usize
+        while r < m {
+            col[r] = 0.0f64
+            r += 1usize
+        }
+        col[c] = 1.0f64
+        if !qrb.solve_dense(mat, col, m) { ret false }
+        se[c] = math.sqrt[f64](col[c])
+        c += 1usize
+    }
+    ret true
+}
