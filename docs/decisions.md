@@ -50473,3 +50473,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `coxext.coxph_cp` also returns the inverse information, and `coxph_cp_robust` forms the sandwich V S V of a Breslow fit: the score residual of each row (x - xbar(t) at its deaths minus w (x - xbar(t)) d / S0 over the event times of (start, stop]) summed within a cluster index, S the cross product of the cluster sums.
 
 **Result.** `oracle_coxph` (1096 cases, 26 new) equals `coxph(..., robust = TRUE, cluster = row)` on Windows to 1e-6 for counting-process data with strata (survival asks for a cluster or id with start-stop data, so each row is its own cluster). Linux pending. L311 stays partial: robust variance for Efron and exact fits and by shared ids, frailty, tmerge, Schoenfeld and score residuals for counting-process data, survdiff strata, interval and left censoring.
+
+## D7330 — survival: survdiff with strata
+
+**Decision.** `survfitpkg.survdiff_ks` is the stratified G-rho test: inside each stratum the pooled Kaplan-Meier weights, observed-less-expected events and hypergeometric covariance are formed separately and added across strata before the chi-square on k - 1 degrees of freedom.
+
+**Result.** `oracle_survdiff` (140 cases, 30 new with two or three groups and two or three strata) equals survival on Windows to 1e-7. Linux pending. L311 stays partial: robust variance for Efron and exact fits and by shared ids, frailty, tmerge, Schoenfeld and score residuals for counting-process data, interval and left censoring.

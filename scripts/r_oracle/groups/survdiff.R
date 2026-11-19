@@ -20,4 +20,13 @@ for (rep in 1:30) {
   r <- survdiff(Surv(t, e) ~ g, data = d, rho = rho)
   cases[[length(cases) + 1]] <- case("sd_k", c(rho, k, n, t, e, g), as.numeric(r$chisq), rel = 1e-7, abs = 1e-10)
 }
+# stratified: "sd_s" args (rho, k, n, ns, time, event, group 0-based, stratum 0-based), the chi-square
+for (rep in 1:30) {
+  k <- sample(2:3, 1); ns <- sample(2:3, 1); n <- sample(40:90, 1); rho <- sample(c(0, 1), 1)
+  g <- sample(0:(k - 1), n, TRUE); sg <- sample(0:(ns - 1), n, TRUE); t <- round(rexp(n, 0.1 * (1 + 0.3 * g + 0.2 * sg)), 2) + 0.01; e <- rbinom(n, 1, 0.75); if (sum(e) < 8) next
+  d <- data.frame(t = t, e = e, g = g, s = sg)
+  r <- tryCatch(survdiff(Surv(t, e) ~ g + strata(s), data = d, rho = rho), error = function(e) NULL)
+  if (is.null(r) || length(r$n) < k) next
+  cases[[length(cases) + 1]] <- case("sd_s", c(rho, k, n, ns, t, e, g, sg), as.numeric(r$chisq), rel = 1e-7, abs = 1e-10)
+}
 emit("survdiff", "survival", list(cases))

@@ -11,6 +11,24 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "sd_s") {
+        // args (rho, k, n, ns, time, event, group 0-based, stratum 0-based)
+        let kk = usize(x[1usize])
+        let nn = usize(x[2usize])
+        let ns = usize(x[3usize])
+        let (gp, ge) = mem.alloc[usize](a, nn)
+        let (sp2, se) = mem.alloc[usize](a, nn)
+        let (ou, oe2) = mem.alloc[f64](a, 2usize)
+        if ge != ok || se != ok || oe2 != ok { os.exit(6) }
+        var q = 0usize
+        while q < nn {
+            gp[q] = usize(x[4usize + 2usize * nn + q])
+            sp2[q] = usize(x[4usize + 3usize * nn + q])
+            q += 1usize
+        }
+        if sf.survdiff_ks(a, x[4usize..4usize + nn], x[4usize + nn..4usize + 2usize * nn], gp, sp2, ns, kk, x[0usize], ou) != ok { os.exit(7) }
+        ret ou[0usize]
+    }
     if str.eq(c.name, "sd_k") {
         let kk = usize(x[1usize])
         let nn = usize(x[2usize])
