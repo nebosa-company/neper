@@ -12,6 +12,21 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "dv") {
+        let nd = usize(z[0usize])
+        let (xr, exr) = mem.alloc[f64](a, nd * 2usize)
+        if exr != ok { ret nan }
+        var qd = 0usize
+        while qd < nd {
+            xr[qd * 2usize] = 1.0f64
+            xr[qd * 2usize + 1usize] = z[3usize + nd + qd]
+            qd += 1usize
+        }
+        var dout: [3]f64 = zero
+        let de = sc.davies_lm(a, z[3usize..3usize + nd], z[3usize + nd..3usize + 2usize * nd], xr, nd, 2usize, 10usize, usize(z[2usize]), dout[0usize..3usize])
+        if de != ok { ret nan }
+        ret dout[usize(z[3usize + 2usize * nd])]
+    }
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let m = usize(z[2usize])

@@ -6,6 +6,7 @@ use e.algo.stat.gparot as gp
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
+use e.math.nmath_beta as nb
 use e.mem
 use e.algo.stat.strucpkg_tables as tb
 use e.str
@@ -568,4 +569,158 @@ fn rec_mosum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize, 
 fn breakpoints_bic(rss: f64, n: usize, p: usize, m: usize) -> f64 {
     let nf = f64(n)
     ret nf * (math.log[f64](rss) + 1.0f64 - math.log[f64](nf) + math.log[f64](2.0f64 * 3.141592653589793f64)) + math.log[f64](nf) * (f64((m + 1usize) * p + m + 1usize))
+}
+
+// segmented::davies.test for a linear model (the exact daviesLM of the package, n <= 300): the new term pmax(z - psi, 0) is added in front of the n by p design xreg for each of the k
+// values psi = seq(sort(z)[2], sort(z)[n - 1], length = k); the t statistic of its coefficient is kept, the variation V of asin(sqrt(share of the squared coefficient in the deviance))
+// gives Davies' upper bound added to the naive p value of the extreme statistic. alt 0 two-sided, 1 less, 2 greater; out = (the psi of the extreme statistic, the adjusted p value (capped
+// at 1), the number of usable points)
+fn davies_lm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, n: usize, p: usize, k: usize, alt: usize, out: []f64) -> err {
+    let (zs, e0) = mem.alloc[f64](a, n)
+    let (vals, e1) = mem.alloc[f64](a, k)
+    let (tv, e2) = mem.alloc[f64](a, k)
+    let (sh, e3) = mem.alloc[f64](a, k)
+    let (ok_, e4) = mem.alloc[bool](a, k)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret e0 }
+    var i = 0usize
+    while i < n {
+        zs[i] = z[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let v = zs[i]
+        var j = i
+        while j > 0usize && zs[j - 1usize] > v {
+            zs[j] = zs[j - 1usize]
+            j -= 1usize
+        }
+        zs[j] = v
+        i += 1usize
+    }
+    let lo = zs[1usize]
+    let hi = zs[n - 2usize]
+    let q = p + 1usize
+    let dfres = f64(n) - f64(p) - 1.0f64
+    i = 0usize
+    while i < k {
+        vals[i] = lo + (hi - lo) * f64(i) / f64(k - 1usize)
+        let start = mem.mark(a)
+        let (xtx, f1) = mem.alloc[f64](a, q * q)
+        let (xty, f2) = mem.alloc[f64](a, q)
+        let (xr, f3) = mem.alloc[f64](a, q)
+        if f1 != ok || f2 != ok || f3 != ok { ret f1 }
+        var r = 0usize
+        while r < q * q {
+            xtx[r] = 0.0f64
+            r += 1usize
+        }
+        r = 0usize
+        while r < q {
+            xty[r] = 0.0f64
+            r += 1usize
+        }
+        var t = 0usize
+        while t < n {
+            var psi = z[t] - vals[i]
+            if psi < 0.0f64 { psi = 0.0f64 }
+            xr[0usize] = psi
+            var c = 0usize
+            while c < p {
+                xr[1usize + c] = xreg[t * p + c]
+                c += 1usize
+            }
+            var c1 = 0usize
+            while c1 < q {
+                xty[c1] += xr[c1] * y[t]
+                var c2 = 0usize
+                while c2 < q {
+                    xtx[c1 * q + c2] += xr[c1] * xr[c2]
+                    c2 += 1usize
+                }
+                c1 += 1usize
+            }
+            t += 1usize
+        }
+        let (inv, ie) = gp.invert(a, xtx, q)
+        ok_[i] = ie == ok
+        if ie == ok {
+            var b0 = 0.0f64
+            var c = 0usize
+            while c < q {
+                b0 += inv[c] * xty[c]
+                c += 1usize
+            }
+            var bh: [16]f64 = zero
+            r = 0usize
+            while r < q {
+                var v = 0.0f64
+                c = 0usize
+                while c < q {
+                    v += inv[r * q + c] * xty[c]
+                    c += 1usize
+                }
+                bh[r] = v
+                r += 1usize
+            }
+            var dev = 0.0f64
+            t = 0usize
+            while t < n {
+                var psi = z[t] - vals[i]
+                if psi < 0.0f64 { psi = 0.0f64 }
+                var fit = bh[0usize] * psi
+                c = 0usize
+                while c < p {
+                    fit += bh[1usize + c] * xreg[t * p + c]
+                    c += 1usize
+                }
+                dev += (y[t] - fit) * (y[t] - fit)
+                t += 1usize
+            }
+            let sg = math.sqrt[f64](dev / dfres)
+            tv[i] = bh[0usize] / (sg * math.sqrt[f64](inv[0usize]))
+            let zz = bh[0usize] / math.sqrt[f64](inv[0usize])
+            sh[i] = zz * zz / (zz * zz + dev)
+        }
+        mem.reset(a, start)
+        i += 1usize
+    }
+    var m_ = 0.0f64
+    var best = 0.0f64
+    var cnt = 0usize
+    var vsum = 0.0f64
+    var prev = 0.0f64
+    var havep = false
+    var first = true
+    i = 0usize
+    while i < k {
+        if ok_[i] {
+            cnt += 1usize
+            let a_ = math.asin(math.sqrt[f64](sh[i]))
+            if havep { vsum += math.abs[f64](a_ - prev) }
+            prev = a_
+            havep = true
+            var cand = tv[i]
+            if alt == 0usize { cand = math.abs[f64](tv[i]) }
+            var better = false
+            if first { better = true } else if alt == 1usize { better = cand < m_ } else { better = cand > m_ }
+            if better {
+                m_ = cand
+                best = vals[i]
+                first = false
+            }
+        }
+        i += 1usize
+    }
+    var pnaive = nb.pt(m_, dfres, false, false)
+    if alt == 1usize { pnaive = nb.pt(m_, dfres, true, false) }
+    let u = m_ * m_ / ((f64(n) - f64(q)) + m_ * m_)
+    let approxx = vsum * (math.pow[f64](1.0f64 - u, (dfres - 1.0f64) / 2.0f64) * nm.gammafn(dfres / 2.0f64 + 0.5f64)) / (2.0f64 * nm.gammafn(dfres / 2.0f64) * math.sqrt[f64](3.141592653589793f64))
+    var padj = pnaive + approxx
+    if alt == 0usize { padj = 2.0f64 * padj }
+    if padj > 1.0f64 { padj = 1.0f64 }
+    out[0usize] = best
+    out[1usize] = padj
+    out[2usize] = f64(cnt)
+    ret ok
 }

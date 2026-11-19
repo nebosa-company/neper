@@ -31,7 +31,7 @@ L338	library	0.2	500	robustbase: robust regression and scale	Partial (D6192, D64
 L339	library	0.16	1649	bayestestR, performance and parameters: model summary indices	D7357: performance_score of a Poisson regression equal to performance.
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 
-L361	library	0.2	900	segmented and strucchange: breakpoints and structural change	Partial (D6613).
+L361	library	0.2	953	segmented and strucchange: breakpoints and structural change	Partial (D6613).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
 L367	library	0.65	1556	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).

@@ -32,4 +32,17 @@ for (rep in 1:20) {
   add("bic", a, summary(b)$RSS["BIC", m + 1]);
   add("rss", a, summary(b)$RSS["RSS", m + 1]); add("bp", a, sum(bm$breakpoints * seq_along(bm$breakpoints)))
 }
+# segmented::davies.test for lm(y ~ x) with seg.Z = ~x, k = 10: "dv" args (n, p = 2, alt 0 two.sided 1 less 2 greater, y[n], x[n] (the design is cbind(1, x))), which 0 the 'best' psi 1 the p value 2 the number of points
+suppressMessages(library(segmented))
+for (rep in 1:30) {
+  n <- sample(30:120, 1); x <- sort(round(runif(n, 0, 10), 3)); cp <- runif(1, 3, 7); y <- 1 + 0.3 * x + (x > cp) * (x - cp) * runif(1, -1.5, 1.5) + rnorm(n, 0, 0.6)
+  alt <- (rep - 1) %% 3; alts <- c("two.sided", "less", "greater")
+  d <- data.frame(x = x, y = y)
+  r <- tryCatch(suppressWarnings(davies.test(lm(y ~ x, data = d), ~x, k = 10, alternative = alts[alt + 1])), error = function(e) NULL)
+  if (is.null(r)) next
+  a <- c(n, 2, alt, y, x)
+  cases[[length(cases) + 1]] <- case("dv", c(a, 0), unname(r$statistic), rel = 1e-8, abs = 1e-10)
+  cases[[length(cases) + 1]] <- case("dv", c(a, 1), r$p.value, rel = 1e-7, abs = 1e-10)
+  cases[[length(cases) + 1]] <- case("dv", c(a, 2), unname(r$parameter), rel = 0, abs = 0)
+}
 emit("strucchange", "strucchange", list(cases))
