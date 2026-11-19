@@ -379,7 +379,10 @@ fn gig_var(chi: f64, psi: f64, lambda: f64) -> f64 {
 
 // ---- ghypMom: the moments of the generalised hyperbolic distribution about mu (the package's momRecursion table and Bessel ratios), converted to raw (about 0) or
 // central moments by the binomial expansion of momChangeAbout; kind 0 raw, 1 central, 2 about mu
-fn ghyp_mom(a: *mem.Arena, order: usize, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64, kind: usize) -> f64 {
+fn ghyp_mom(a: *mem.Arena, order: usize, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64, kind: usize) -> f64 { ret ghyp_mom_about(a, order, mu, delta, alpha, beta, lambda, kind, 0.0f64) }
+
+// kind 3 takes the moment about the given point (ghypMom's about argument)
+fn ghyp_mom_about(a: *mem.Arena, order: usize, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64, kind: usize, about_in: f64) -> f64 {
     if order == 0usize { ret 1.0f64 }
     let gamma = math.sqrt[f64](alpha * alpha - beta * beta)
     let zeta = delta * gamma
@@ -424,6 +427,7 @@ fn ghyp_mom(a: *mem.Arena, order: usize, mu: f64, delta: f64, alpha: f64, beta: 
     if kind == 2usize { ret mm[order] }
     var about = 0.0f64
     if kind == 1usize { about = ghyp_mean(mu, delta, alpha, beta, lambda) }
+    if kind == 3usize { about = about_in }
     // E[(X - about)^n] = sum_j C(n, j) (mu - about)^(n - j) E[(X - mu)^j]
     var tot = 0.0f64
     var c = 1.0f64
