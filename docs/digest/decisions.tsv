@@ -4528,4 +4528,5 @@ D7704	799	gamlss.dist family moments, second set
 D7640	818	VGAM: adjacent categories model
 D7705	529	gamlss.dist zero-adjusted family moments
 D7641	839	VGAM: continuation-ratio models
-D7706	586	gamlss.dist moments with Bessel and beta terms
+D7706	587	gamlss.dist moments with Bessel and beta terms
+D7707	403	gamlss.dist GG moments

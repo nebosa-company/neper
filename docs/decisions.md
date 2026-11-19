@@ -51517,3 +51517,6 @@ The tree likelihood is split into `gtr_site_lik` (per-site likelihood at a rate 
 
 ## D7706 — gamlss.dist moments with Bessel and beta terms
 `family_moment2` gains ST3C (the skewness expectation EZ from the beta function, NaN mean for tau <= 1 and NaN variance for tau <= 2), and SI and SICHEL (b = K_{nu + 1}(1 / sigma) / K_nu(1 / sigma) from the GSL port of the modified Bessel function of fractional order, g = 2 sigma (nu + 1) / b + 1 / b^2 - 1). Equal to gamlss.dist for 8 parameter sets each (oracle_gamlss_mom, 736 values in all, rel 1e-9) on the first run, so the GSL Bessel K agrees with R's besselK to that order. GG and the multinomial families stay open.
+
+## D7707 — gamlss.dist GG moments
+`family_moment2` gains GG: the mean and variance with the package's conditions (nu > 0, or nu < 0 with sigma^2 |nu| < 1 for the mean and < 0.5 for the variance, Inf otherwise) written with a = 1 / (sigma^2 nu^2). Equal to gamlss.dist for 8 parameter sets (oracle_gamlss_mom, 752 values in all, rel 1e-9) on the first run. The multinomial families stay open for L464.

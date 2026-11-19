@@ -2667,6 +2667,21 @@ fn family_moment2(fam: usize, which: usize, mu: f64, sigma: f64, nu: f64, tau: f
         if which == 0usize { ret mu }
         ret mu + mu * mu * gq
     }
+    if fam == 34usize {
+        let a1 = 1.0f64 / (s2 * nu * nu)
+        if which == 0usize {
+            if nu > 0.0f64 || (nu < 0.0f64 && s2 * math.abs[f64](nu) < 1.0f64) {
+                ret mu * nm.gammafn(a1 + 1.0f64 / nu) / (math.pow[f64](a1, 1.0f64 / nu) * nm.gammafn(a1))
+            }
+            ret 1.0f64 / 0.0f64
+        }
+        if nu > 0.0f64 || (nu < 0.0f64 && s2 * math.abs[f64](nu) < 0.5f64) {
+            let g0 = nm.gammafn(a1)
+            let g1 = nm.gammafn(a1 + 1.0f64 / nu)
+            ret mu * mu / (math.pow[f64](a1, 2.0f64 / nu) * g0 * g0) * (nm.gammafn(a1 + 2.0f64 / nu) * g0 - g1 * g1)
+        }
+        ret 1.0f64 / 0.0f64
+    }
     if which == 0usize { ret mu }
     ret mu + mu * mu * sigma * (1.0f64 - nu) * (1.0f64 - nu)
 }
