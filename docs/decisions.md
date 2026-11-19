@@ -50767,3 +50767,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7434 — RSpectra on sparse input
 `svds_sparse` forms the Gram matrix A'A with the sparse transpose and product of `e.algo.linalg.sparse`, converts it to dense and takes the square roots of its k largest eigenvalues through `eigs_sym`; `eigs_sym_sparse` densifies a symmetric sparse matrix and calls `eigs_sym`. Both agree with RSpectra on Matrix::rsparsematrix inputs to 1e-6 (20 random sparse matrices of 30 to 60 rows, the symmetric case on A'A - 0.1 I). Matrix-free operator inputs are not covered, and squaring A loses accuracy for small singular values, which svds does not return here. L334 at 0.6.
+
+## D7435 — RSpectra eigs for general matrices: eigenvector moduli
+`eigs_general` also returns the moduli of the unit-norm eigenvectors of the selected eigenvalues (n by k), taken from the complex Schur-form vectors of `decomp.eigen`; an eigenvector is only defined up to a complex phase, so R's moduli, not its entries, are the comparable quantity, and they equal the port's to 1e-6 on the same draws as the values (oracle_spectra_gen kind 2: 15 more values weighted by column-major position). The phase convention of ARPACK's output is not reproduced. L334 at 0.65.

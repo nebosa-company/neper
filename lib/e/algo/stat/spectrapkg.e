@@ -107,9 +107,9 @@ fn eigs_sym(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize, sig
     ret ok
 }
 
-// eigs(A, k, which) for a general real n by n matrix (values only): the k eigenvalues selected by which (0 LM largest modulus, 1 LR largest real part, 2 SR smallest real part, 3 LI largest |imaginary|,
+// eigs(A, k, which) for a general real n by n matrix (the values, and the moduli of the unit-norm vectors, which are defined up to phase; vmod is n by k row-major): the k eigenvalues selected by which (0 LM largest modulus, 1 LR largest real part, 2 SR smallest real part, 3 LI largest |imaginary|,
 // 4 SI smallest |imaginary|), listed in decreasing modulus with the positive imaginary part first within a conjugate pair, as RSpectra returns them. x is column-major (R's layout)
-fn eigs_general(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize, re: []f64, im: []f64) -> err {
+fn eigs_general(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize, re: []f64, im: []f64, vmod: []f64) -> err {
     let (ev, e0) = dc.eigen(a, x, n)
     if e0 != ok { ret e0 }
     let (key, e1) = mem.alloc[f64](a, n)
@@ -162,6 +162,13 @@ fn eigs_general(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize,
     while c < k {
         re[c] = ev.re[pick[c]]
         im[c] = ev.im[pick[c]]
+        var rrw = 0usize
+        while rrw < n {
+            let vr0 = ev.vre[pick[c] * n + rrw]
+            let vi0 = ev.vim[pick[c] * n + rrw]
+            vmod[rrw * k + c] = math.sqrt[f64](vr0 * vr0 + vi0 * vi0)
+            rrw += 1usize
+        }
         c += 1usize
     }
     ret ok
