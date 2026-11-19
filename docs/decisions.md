@@ -51768,3 +51768,8 @@ The rest of the D7707 audit, by grep over lib/e for each capability this session
 
 ## D7714 — L312 re-scored
 L312 psych goes from 0.3 to 0.4: alpha, ICC, kappa, KMO, Bartlett, corr.test, mardia, describe and scoreItems from earlier sessions; principal and the principal-axis fa; maximum likelihood, minres, uls and ols factoring with their fit statistics and indices; varimax, Promax and oblimin rotation; tetrachoric, polychoric and the other correlations; fa.parallel; splitHalf with the six Guttman lambdas; omega for one factor. Still without omega for several factors, the confidence intervals of splitHalf, the Kaiser-normalised promax, factor counts above two in the rotation fixtures, wls and gls (which psych itself fits with the wrong gradient) and VSS.
+
+
+## D7715 — gamlss.dist p, q, r, moments and links for every family; L464 closed
+
+The remaining p and q functions (26 quantiles, 9 distribution functions), r for all 116 families under set.seed with the package quirks (cross-parametrisation quantile calls in rBCCGo, rBCPEo and rBCTo, ignored tau in rZINBF, rZISICHEL and rZIBNB, pGU identically 0), mean and variance of the remaining 30 families, and the family link objects. Every item of the L464 acceptance has an oracle case, so L464 moves to docs/work-done.jsonl. The merge was done by checking out the branch files and an index-only update of extra-fixtures.txt because that file has uncommitted edits from other sessions. Linux pending.

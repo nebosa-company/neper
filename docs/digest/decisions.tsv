@@ -4611,4 +4611,5 @@ D7710	637	psych: splitHalf for odd item counts
 D7711	442	psych: Guttman's lambda2
 D7712	914	psych: Guttman's lambda1, lambda3 and lambda5
 D7713	997	psych: omega for one factor
-D7714	683	L312 re-scored
+D7714	685	L312 re-scored
+D7715	696	gamlss.dist p, q, r, moments and links for every family; L464 closed
