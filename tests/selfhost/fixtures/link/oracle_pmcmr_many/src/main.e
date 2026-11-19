@@ -28,8 +28,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e4 != ok { os.exit(5) }
     t = 1usize
     while t < k {
-        let (zz, p) = pm.dunn_many(q, rbar, rn, t)
-        ps[t - 1usize] = p
+        if kind < 3usize {
+            let (zz, p) = pm.dunn_many(q, rbar, rn, t)
+            ps[t - 1usize] = p
+        } else {
+            let (tv, p, pt) = pm.conover(q, rbar, rn, t, 0usize)
+            ps[t - 1usize] = p
+        }
         t += 1usize
     }
     if kind == 0usize {
@@ -37,7 +42,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let _ = pv
         ret zv
     }
-    if kind == 2usize {
+    if kind == 3usize {
+        let (tv, p, pt) = pm.conover(q, rbar, rn, jj, 0usize)
+        ret tv
+    }
+    if kind == 2usize || kind == 5usize {
         if pm.p_adjust(a, ps, 0usize) != ok { os.exit(6) }
     }
     ret ps[jj - 1usize]

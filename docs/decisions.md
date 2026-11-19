@@ -50206,3 +50206,6 @@ For `coxph(Surv(Tstart, Tstop, status) ~ strata(trans), method = "breslow")` the
 
 ## D7359 — PMCMRplus Dunn many-to-one
 `dunn_many` compares each group with group 0: the signed z of the mean rank difference over sqrt((n(n+1)/12 - C) (1/n_0 + 1/n_j)) with the same tie correction as the all-pairs Dunn test, and the two-sided normal p; Holm adjustment runs over the k - 1 comparisons. Equal to R on twelve random data sets. L487 at 0.55; the single-step multivariate-normal form and the other many-to-one families remain.
+
+## D7360 — PMCMRplus Conover many-to-one
+kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and unadjusted p are the all-pairs ones against group 1, and Holm runs over the k - 1 comparisons, so no new library code was needed, only the oracle cases (oracle_pmcmr_many kinds 3 to 5, twelve data sets). L487 at 0.6.
