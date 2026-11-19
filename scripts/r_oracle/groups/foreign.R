@@ -73,4 +73,13 @@ for (i in 1:8) {
   vals <- as.vector(t(sapply(seq_len(nc), function(j) as.numeric(cols[[j]]))))
   add("wr", c(i, nc, n, kinds, nl, vals), 1)
 }
+# write.dbf: "wd" args (i, ncols, nrows, kind[nc] (0 double 1 integer 2 logical 3 character of that many a's, 4 date as yyyymmdd), values col-major, NaN for NA): 1 when the bytes Neper writes equal the file R wrote past the date bytes 1 to 3
+for (i in 1:9) {
+  n <- sample(4:25, 1); nc <- sample(3:6, 1); kinds <- sample(0:4, nc, replace = TRUE)
+  cols <- lapply(seq_len(nc), function(j) { v <- switch(kinds[j] + 1, round(rnorm(n) * 10^sample(0:4, 1), sample(1:4, 1)), as.numeric(sample(-3000:99999, n, replace = TRUE)), as.numeric(sample(0:1, n, replace = TRUE)), as.numeric(sample(1:12, n, replace = TRUE)), as.numeric(format(as.Date("2000-01-01") + sample(0:9000, n, replace = TRUE), "%Y%m%d"))); if (runif(1) < 0.7) v[sample(n, 1)] <- NA; v })
+  df <- as.data.frame(lapply(seq_len(nc), function(j) { v <- cols[[j]]; switch(kinds[j] + 1, v, as.integer(v), as.logical(v), ifelse(is.na(v), NA_character_, vapply(v, function(k) strrep("a", k), "")), as.Date(ifelse(is.na(v), NA, format(v, scientific = FALSE)), "%Y%m%d")) }), stringsAsFactors = FALSE)
+  names(df) <- paste0("V", seq_len(nc))
+  write.dbf(df, file.path(root, sprintf("tests/oracle/data/foreign_dbfw%d.dbf", i)))
+  add("wd", c(i, nc, n, kinds, unlist(cols)), 1)
+}
 emit("foreign", "foreign", list(cases))

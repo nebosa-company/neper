@@ -21,6 +21,14 @@ fn path_of(a: *mem.Arena, stem: str, idx: usize, ext: str) -> str {
     ret str.done(&bb)
 }
 
+fn utxt(a: *mem.Arena, v: usize) -> str {
+    let (b, e) = str.builder(a, 24usize)
+    if e != ok { os.exit(5) }
+    var bb = b
+    let _ = str.push_u64(&bb, u64(v))
+    ret str.done(&bb)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let idx = usize(x[0usize])
@@ -45,6 +53,76 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         if str.eq(k, "dsum") { ret s }
         ret n
+    }
+    if str.eq(k, "wd") {
+        let nc = usize(x[1usize])
+        let nr = usize(x[2usize])
+        let (kinds, e1) = mem.alloc[usize](a, nc)
+        let (names, e2) = mem.alloc[str](a, nc)
+        let (strv, e3) = mem.alloc[str](a, nc * nr)
+        if e1 != ok || e2 != ok || e3 != ok { os.exit(9) }
+        let vals = x[3usize + nc..3usize + nc + nc * nr]
+        var j = 0usize
+        while j < nc {
+            kinds[j] = usize(x[3usize + j])
+            let (nb, ne) = str.builder(a, 16usize)
+            if ne != ok { os.exit(9) }
+            var nbb = nb
+            let _ = str.push(&nbb, "V")
+            let _ = str.push_byte(&nbb, u8(49usize + j))
+            names[j] = str.done(&nbb)
+            var r = 0usize
+            while r < nr {
+                let v = vals[j * nr + r]
+                strv[j * nr + r] = ""
+                if v == v && kinds[j] == 3usize {
+                    let (sb, se) = str.builder(a, 32usize)
+                    if se != ok { os.exit(9) }
+                    var sbb = sb
+                    var q = 0usize
+                    while q < usize(v) {
+                        let _ = str.push_byte(&sbb, 97u8)
+                        q += 1usize
+                    }
+                    strv[j * nr + r] = str.done(&sbb)
+                }
+                if v == v && kinds[j] == 4usize {
+                    let (sb, se) = str.builder(a, 32usize)
+                    if se != ok { os.exit(9) }
+                    var sbb = sb
+                    let _ = str.push_i64(&sbb, i64(v))
+                    strv[j * nr + r] = str.done(&sbb)
+                }
+                r += 1usize
+            }
+            j += 1usize
+        }
+        let (out, we) = dbf.write_dbf(a, nr, nc, kinds, names, vals, strv)
+        if we != ok { os.exit(61) }
+        let (gold, ge) = fs.read_file(a, path_of(a, "dbfw", idx, ".dbf"), 1048576usize)
+        if ge != ok { os.exit(62) }
+        if gold.len != out.len {
+            let _ = io.print("LEN ")
+            let _ = io.print(utxt(a, gold.len))
+            let _ = io.print(" ")
+            let _ = io.print(utxt(a, out.len))
+            let _ = io.print("\n")
+            ret 0.0f64
+        }
+        var bi = 0usize
+        while bi < out.len {
+            if (bi < 1usize || bi > 3usize) && gold[bi] != out[bi] {
+                let _ = io.print(utxt(a, bi))
+                let _ = io.print(" ")
+                let _ = io.print(utxt(a, usize(gold[bi])))
+                let _ = io.print(" ")
+                let _ = io.print(utxt(a, usize(out[bi])))
+                let _ = io.print("\n")
+                ret 0.0f64
+            }
+            bi += 1usize
+        }
+        ret 1.0f64
     }
     if str.eq(k, "wr") {
         let nc = usize(x[1usize])

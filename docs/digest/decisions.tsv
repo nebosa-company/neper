@@ -4508,4 +4508,5 @@ D7687	894	segmented pscore.test for a weighted linear model
 D7637	584	phangorn: invariant sites
 D7638	645	phangorn: Robinson-Foulds distance
 D7688	1030	arm sim for a linear model
-D7689	864	arm sim for a binomial or poisson glm
+D7689	865	arm sim for a binomial or poisson glm
+D7690	1201	foreign write.dbf
