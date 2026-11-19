@@ -2,6 +2,7 @@
 //
 // Not here: shift-invert, general (Arnoldi) and complex eigs, sparse and operator inputs, restarts and augmentation settings.
 
+use e.algo.linalg.decomp as dc
 use e.algo.linalg.matrix as mx
 use e.math
 use e.mem
@@ -99,6 +100,66 @@ fn eigs_sym(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize, sig
             vecs[i * k + c] = vf[i * n + p]
             i += 1usize
         }
+        c += 1usize
+    }
+    ret ok
+}
+
+// eigs(A, k, which) for a general real n by n matrix (values only): the k eigenvalues selected by which (0 LM largest modulus, 1 LR largest real part, 2 SR smallest real part, 3 LI largest |imaginary|,
+// 4 SI smallest |imaginary|), listed in decreasing modulus with the positive imaginary part first within a conjugate pair, as RSpectra returns them. x is column-major (R's layout)
+fn eigs_general(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize, re: []f64, im: []f64) -> err {
+    let (ev, e0) = dc.eigen(a, x, n)
+    if e0 != ok { ret e0 }
+    let (key, e1) = mem.alloc[f64](a, n)
+    let (pick, e2) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        pick[i] = i
+        let r = ev.re[i]
+        let m = ev.im[i]
+        if which == 0usize { key[i] = math.sqrt[f64](r * r + m * m) }
+        if which == 1usize { key[i] = r }
+        if which == 2usize { key[i] = 0.0f64 - r }
+        if which == 3usize { key[i] = math.abs[f64](m) }
+        if which == 4usize { key[i] = 0.0f64 - math.abs[f64](m) }
+        i += 1usize
+    }
+    // selection: decreasing key, positive imaginary part first on a tie
+    i = 1usize
+    while i < n {
+        let t = pick[i]
+        var j = i
+        while j > 0usize && (key[pick[j - 1usize]] < key[t] - 1.0e-10f64 * (1.0f64 + math.abs[f64](key[t])) || (math.abs[f64](key[pick[j - 1usize]] - key[t]) <= 1.0e-10f64 * (1.0f64 + math.abs[f64](key[t])) && ev.im[pick[j - 1usize]] < ev.im[t])) {
+            pick[j] = pick[j - 1usize]
+            j -= 1usize
+        }
+        pick[j] = t
+        i += 1usize
+    }
+    // the chosen k by decreasing modulus, positive imaginary part first on a tie
+    i = 1usize
+    while i < k {
+        let t = pick[i]
+        let mt = math.sqrt[f64](ev.re[t] * ev.re[t] + ev.im[t] * ev.im[t])
+        var j = i
+        while j > 0usize {
+            let q = pick[j - 1usize]
+            let mq = math.sqrt[f64](ev.re[q] * ev.re[q] + ev.im[q] * ev.im[q])
+            if mq < mt - 1.0e-10f64 * (1.0f64 + mt) || (math.abs[f64](mq - mt) <= 1.0e-10f64 * (1.0f64 + mt) && ev.im[q] < ev.im[t]) {
+                pick[j] = pick[j - 1usize]
+                j -= 1usize
+            } else {
+                break
+            }
+        }
+        pick[j] = t
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        re[c] = ev.re[pick[c]]
+        im[c] = ev.im[pick[c]]
         c += 1usize
     }
     ret ok
