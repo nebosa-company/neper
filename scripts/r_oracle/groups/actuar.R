@@ -87,4 +87,11 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("cv", c(m, fx, np, pn, nn, 0), v[nn + 1], rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("cv", c(m, fx, np, pn, nn, 1), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
 }
+# aggregateDist("normal") and ("npower"): "an" (mean, variance, x), "ap" (mean, variance, skewness, x)
+for (rep in 1:40) {
+  mu <- runif(1, 1, 20); v <- runif(1, 0.5, 30); sk <- runif(1, 0.3, 3); xx <- mu + rnorm(1) * sqrt(v) * 1.5
+  Fn <- aggregateDist("normal", moments = c(mu, v)); cases[[length(cases) + 1]] <- case("an", c(mu, v, xx), Fn(xx), rel = 1e-10, abs = 1e-13)
+  Fp <- suppressWarnings(aggregateDist("npower", moments = c(mu, v, sk))); r <- suppressWarnings(Fp(xx))
+  if (is.finite(r)) cases[[length(cases) + 1]] <- case("ap", c(mu, v, sk, xx), r, rel = 1e-10, abs = 1e-13)
+}
 emit("actuar", "actuar", list(cases))

@@ -4387,4 +4387,5 @@ D7528	802	ordinal clm with scale effects
 D7529	754	ordinal clm with nominal effects
 D7530	761	actuar aggregateDist recursive (Panjer)
 D7531	832	actuar discretize (upper, lower, rounding)
-D7532	697	actuar aggregateDist convolution
+D7532	698	actuar aggregateDist convolution
+D7533	683	actuar aggregateDist normal and Normal Power

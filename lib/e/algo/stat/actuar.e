@@ -8,6 +8,7 @@
 
 use e.math
 use e.math.nmath as nm
+use e.math.dist as dsa
 use e.math.nmath_beta as nb
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
@@ -231,4 +232,13 @@ fn aggregate_convolution(pn: []const f64, fx: []const f64, nn: usize, fs: []f64,
         }
         n += 1usize
     }
+}
+
+// actuar aggregateDist("normal", moments = c(mean, variance)): the normal approximation of the aggregate claims
+fn agg_normal(x: f64, mean: f64, variance: f64) -> f64 { ret dsa.pnorm(x, mean, math.sqrt[f64](variance), true, false) }
+
+// aggregateDist("npower", moments = c(mean, variance, skewness)): the Normal Power approximation, undefined (NaN, actuar's NA) at or below the mean
+fn agg_npower(x: f64, mean: f64, variance: f64, skewness: f64) -> f64 {
+    if x <= mean { ret 0.0f64 / 0.0f64 }
+    ret dsa.pnorm(math.sqrt[f64](1.0f64 + 9.0f64 / (skewness * skewness) + 6.0f64 * (x - mean) / (math.sqrt[f64](variance) * skewness)) - 3.0f64 / skewness, 0.0f64, 1.0f64, true, false)
 }
