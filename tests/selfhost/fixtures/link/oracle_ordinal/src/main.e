@@ -66,6 +66,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret se
     }
     let ll = od.clm(a, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], wts, n, p, nk, link, par)
+    if str.eq(c.name, "pr") {
+        let mp = usize(z[4usize + n + n * p])
+        let (po, ep) = mem.alloc[f64](a, mp * nk)
+        if ep != ok { ret nan }
+        od.clm_predict_prob(z[5usize + n + n * p..5usize + n + n * p + mp * p], mp, p, nk, link, par, po)
+        let jc = usize(z[5usize + n + n * p + mp * p])
+        var sp = 0.0f64
+        var ir = 0usize
+        while ir < mp {
+            sp += po[ir * nk + jc] * f64(ir + 1usize)
+            ir += 1usize
+        }
+        ret sp
+    }
     if str.eq(c.name, "ll") || str.eq(c.name, "wll") { ret ll }
     var s = 0.0f64
     var i = 0usize

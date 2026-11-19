@@ -74,4 +74,20 @@ for (rep in 1:18) {
   a <- c(n, p, K, lk, y, as.vector(t(x)), w)
   add("wll", a, as.numeric(logLik(f))); add("wtheta", a, sum(f$alpha * seq_along(f$alpha))); add("wbeta", a, sum(f$beta * seq_along(f$beta)))
 }
+# predict(type = "prob") on new data: "pr" with args (n, p, K, link, y, x, m, xnew[m * p], j): P(y = class j) of the new row, summed over rows weighted by position
+set.seed(20262484)
+for (rep in 1:18) {
+  n <- sample(150:300, 1); p <- sample(1:3, 1); K <- sample(3:5, 1); lk <- (rep - 1) %% 3; m <- sample(5:15, 1)
+  x <- matrix(rnorm(n * p), n); b <- rnorm(p) * 0.7; th <- sort(rnorm(K - 1)) * 1.2
+  eta <- as.vector(x %*% b); u <- if (lk == 0) rlogis(n) else if (lk == 1) rnorm(n) else log(-log(runif(n)))
+  y <- findInterval(eta + u, th)
+  if (length(unique(y)) < K) next
+  d <- as.data.frame(x); names(d) <- paste0("v", seq_len(p)); d$y <- factor(y, ordered = TRUE)
+  f <- tryCatch(clm(y ~ ., data = d, link = links[lk + 1], control = clm.control(gradTol = 1e-10, maxIter = 500)), error = function(e) NULL)
+  if (is.null(f)) next
+  xn <- matrix(rnorm(m * p), m); dn <- as.data.frame(xn); names(dn) <- paste0("v", seq_len(p))
+  pr <- predict(f, newdata = dn, type = "prob")$fit
+  a <- c(n, p, K, lk, y, as.vector(t(x)), m, as.vector(t(xn)))
+  for (j in 1:K) add("pr", c(a, j - 1), sum(pr[, j] * seq_len(m)))
+}
 emit("ordinal", "ordinal", list(cases))

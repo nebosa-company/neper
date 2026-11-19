@@ -51022,3 +51022,6 @@ link 3 is loglog, F(eta) = exp(-exp(-eta)) with f = e^{-eta} F and f' = f (e^{-e
 
 ## D7511 — ordinal clm case weights
 The log-likelihood, gradient and Hessian carry each observation's weight (`loglik`, `clm`, `clm_equi` and `clm_lin` take the weight vector; the start thresholds use the weighted class proportions), so clm(weights = w) is the same Newton fit; the unweighted fixtures pass weights of one. Equal to ordinal on 18 weighted fits with the three links (log-likelihood, thresholds and coefficients at 1e-6; 51 values added to oracle_ordinal, 303 in all). Open for L393: cauchit and the flexible links, nominal and scale effects, predictions, clmm.
+
+## D7512 — ordinal clm predictions
+`clm_predict_prob` is predict(fit, newdata, type = "prob") of a clm: P(y = j) = F(theta_j - eta) - F(theta_(j-1) - eta) at the new rows' linear predictor (the class prediction is the most probable class of these). Equal to ordinal on 18 fits with 5 to 15 new rows each, every class (63 values added to oracle_ordinal, 366 in all). Open for L393: cauchit and the flexible links, nominal and scale effects, clmm, anova and profile.

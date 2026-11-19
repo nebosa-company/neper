@@ -650,3 +650,36 @@ fn thr_map(kind: usize, nt: usize, tm: []f64) -> usize {
     }
     ret na
 }
+
+// predict(fit, newdata, type = "prob") of a clm: out (n by nk, row-major) receives P(y = j) = F(theta_j - eta) - F(theta_(j-1) - eta) for the new design x (n by p) and par = (theta, beta)
+fn clm_predict_prob(x: []const f64, n: usize, p: usize, nk: usize, link: usize, par: []const f64, out: []f64) {
+    var t = 0usize
+    while t < n {
+        var eta = 0.0f64
+        var c = 0usize
+        while c < p {
+            eta += par[nk - 1usize + c] * x[t * p + c]
+            c += 1usize
+        }
+        var j = 0usize
+        while j < nk {
+            var fa = 1.0f64
+            var fb = 0.0f64
+            if j < nk - 1usize {
+                let (u, v, w) = link3(link, par[j] - eta)
+                fa = u
+                let _ = v
+                let _ = w
+            }
+            if j > 0usize {
+                let (u, v, w) = link3(link, par[j - 1usize] - eta)
+                fb = u
+                let _ = v
+                let _ = w
+            }
+            out[t * nk + j] = fa - fb
+            j += 1usize
+        }
+        t += 1usize
+    }
+}
