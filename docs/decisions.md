@@ -51574,3 +51574,6 @@ D7645 left rugarch's recursion start open. Tracing .sgarchLLH shows it is mvar =
 
 ## D7650 — rugarch: iGARCH(1,1)
 `rugarchpkg.igarch11` is the sGARCH likelihood with beta = 1 - alpha, on (mu, log omega, logit alpha), the same recursion start h_1 = mean(e^2). Equal to ugarchfit(iGARCH) on 5 simulated integrated series (alpha 0.06 to 0.2, 250 to 320 points; kept when R's alpha lies in 0.03 to 0.9): parameters to 3 percent and the log-likelihood to 1e-6 relative, 25 values added to oracle_rugarch (99 in all, 4 minutes on Windows).
+
+## D7651 — unmarked: single-season occupancy
+L515 starts. `e.algo.stat.unmarkedpkg.occu` maximises the occupancy likelihood, psi prod p^y (1 - p)^(1 - y) plus (1 - psi) when no visit detects, with logistic occupancy and detection on site covariates, by BFGS on a central-difference gradient from zero. Equal to unmarked::occu(~ z ~ x) on 10 simulated data sets (100 to 200 sites, 3 to 5 visits): occupancy and detection coefficients to 0.3 percent and the log-likelihood to 1e-6 relative, 50 values in oracle_unmarked. R's own optimiser stops short of the optimum (the coefficients agreed only to about 1e-3 at 1e-4), so the coefficient bound is that loose and the log-likelihood, flat at the optimum, is the tight check; the fixture runs in under a minute.
