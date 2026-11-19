@@ -907,3 +907,72 @@ fn zeroinfl_nb_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64,
     }
     ret ok
 }
+
+// the standard errors of a fit by the inverse of the central-difference Hessian of its negative log-likelihood f at par (step 1e-4 (1 + |par|)); se receives par.len values
+fn num_hessian_se[Ctx: type](a: *mem.Arena, ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, par: []const f64, se: []f64) -> err {
+    let m = par.len
+    if m > 32usize { ret mem.Full }
+    let (h, e0) = mem.alloc[f64](a, m * m)
+    if e0 != ok { ret e0 }
+    var w: [32]f64 = zero
+    var step: [32]f64 = zero
+    var i = 0usize
+    while i < m {
+        w[i] = par[i]
+        step[i] = 1.0e-4f64 * (1.0f64 + math.abs[f64](par[i]))
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        var j = i
+        while j < m {
+            var v = 0.0f64
+            if i == j {
+                w[i] = par[i] + step[i]
+                let fp = f(ctx, w[0usize..m])
+                w[i] = par[i] - step[i]
+                let fm = f(ctx, w[0usize..m])
+                w[i] = par[i]
+                let f0 = f(ctx, w[0usize..m])
+                v = (fp - 2.0f64 * f0 + fm) / (step[i] * step[i])
+            } else {
+                w[i] = par[i] + step[i]
+                w[j] = par[j] + step[j]
+                let fpp = f(ctx, w[0usize..m])
+                w[j] = par[j] - step[j]
+                let fpm = f(ctx, w[0usize..m])
+                w[i] = par[i] - step[i]
+                let fmm = f(ctx, w[0usize..m])
+                w[j] = par[j] + step[j]
+                let fmp = f(ctx, w[0usize..m])
+                w[i] = par[i]
+                w[j] = par[j]
+                v = (fpp - fpm - fmp + fmm) / (4.0f64 * step[i] * step[j])
+            }
+            h[i * m + j] = v
+            h[j * m + i] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (inv, ie) = gp.invert(a, h, m)
+    if ie != ok { ret ie }
+    i = 0usize
+    while i < m {
+        se[i] = math.sqrt[f64](inv[i * m + i])
+        i += 1usize
+    }
+    ret ok
+}
+
+// the standard errors of the geometric zeroinfl fit (beta, gamma)
+fn zeroinfl_geom_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []const f64, se: []f64) -> err {
+    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: q, geom: true }
+    ret num_hessian_se[NbCtx](a, &c, nb_neg, par[0usize..p + q], se)
+}
+
+// the standard errors of the zeroinfl fit with a Poisson count and the zero link (beta, gamma), with weights and offsets as in zero_link_fit
+fn zeroinfl_link_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, w: []const f64, off: []const f64, n: usize, p: usize, q: usize, link: usize, par: []const f64, se: []f64) -> err {
+    var c = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: link, part: 0usize, w: w, off: off }
+    ret num_hessian_se[LkCtx](a, &c, lk_neg, par[0usize..p + q], se)
+}

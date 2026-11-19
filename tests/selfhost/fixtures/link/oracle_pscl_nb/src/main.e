@@ -17,6 +17,49 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = usize(z[2usize])
     let (par, e1) = mem.alloc[f64](a, p + q + 1usize)
     if e1 != ok { ret nan }
+    if str.eq(c.name, "gzse") {
+        let yg = z[3usize..3usize + n]
+        let xg = z[3usize + n..3usize + n + n * p]
+        let zg = z[3usize + n + n * p..3usize + n + n * p + n * q]
+        let lg = ps.zeroinfl_geom(a, xg, zg, yg, n, p, q, par)
+        if lg != lg { ret nan }
+        let (se, e6) = mem.alloc[f64](a, p + q)
+        if e6 != ok { ret nan }
+        if ps.zeroinfl_geom_se(a, xg, zg, yg, n, p, q, par, se) != ok { ret nan }
+        var t = 0.0f64
+        var u = 0usize
+        while u < p + q {
+            t += se[u] * f64(u + 1usize)
+            u += 1usize
+        }
+        ret t
+    }
+    if str.eq(c.name, "lkse") {
+        let lnk = usize(z[3usize])
+        let y2 = z[5usize..5usize + n]
+        let x2 = z[5usize + n..5usize + n + n * p]
+        let z2 = z[5usize + n + n * p..5usize + n + n * p + n * q]
+        let (wv, e7) = mem.alloc[f64](a, n)
+        let (ov, e8) = mem.alloc[f64](a, n)
+        let (se, e9) = mem.alloc[f64](a, p + q)
+        if e7 != ok || e8 != ok || e9 != ok { ret nan }
+        var u = 0usize
+        while u < n {
+            wv[u] = 1.0f64
+            ov[u] = 0.0f64
+            u += 1usize
+        }
+        let l2 = ps.zero_link_fit(a, x2, z2, y2, wv, ov, n, p, q, lnk, false, par)
+        if l2 != l2 { ret nan }
+        if ps.zeroinfl_link_se(a, x2, z2, y2, wv, ov, n, p, q, lnk, par, se) != ok { ret nan }
+        var t = 0.0f64
+        u = 0usize
+        while u < p + q {
+            t += se[u] * f64(u + 1usize)
+            u += 1usize
+        }
+        ret t
+    }
     if str.eq(c.name, "lkll") || str.eq(c.name, "lkz") || str.eq(c.name, "wol") || str.eq(c.name, "woc") {
         let weighted = str.eq(c.name, "wol") || str.eq(c.name, "woc")
         let lnk = usize(z[3usize])

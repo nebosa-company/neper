@@ -57,4 +57,14 @@ for (rep in 1:8) {
   a <- c(n, 2, 2, 0, 0, y, as.vector(t(x)), as.vector(t(z)), w, o)
   cases[[length(cases) + 1]] <- case("wol", a, as.numeric(logLik(f)), rel = 2e-3, abs = 2e-3); cases[[length(cases) + 1]] <- case("woc", a, sum(coef(f, "count") * 1:2), rel = 5e-3, abs = 5e-3)
 }
+# standard errors (sqrt of diag(vcov), position-weighted, 1e-2): geometric zeroinfl "gzse", and zeroinfl with a probit/cloglog/cauchit link "lkse".
+for (rep in 1:6) {
+  n <- sample(250:350, 1); x <- cbind(1, rnorm(n)); z <- cbind(1, rnorm(n)); b <- c(0.7, rnorm(1, 0, .3)); g <- c(-0.5, rnorm(1, 0, .5)); lam <- exp(as.vector(x %*% b)); pz <- plogis(as.vector(z %*% g))
+  d <- data.frame(x1 = x[, 2], z1 = z[, 2]); y <- ifelse(runif(n) < pz, 0, rnbinom(n, mu = lam, size = 1)); d$y <- y
+  f <- tryCatch(suppressWarnings(zeroinfl(y ~ x1 | z1, data = d, dist = "geometric", control = zeroinfl.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
+  if (!is.null(f)) { sv <- sqrt(diag(vcov(f))); cases[[length(cases) + 1]] <- case("gzse", c(n, 2, 2, y, as.vector(t(x)), as.vector(t(z))), sum(sv * seq_along(sv)), rel = 1e-2, abs = 1e-3) }
+  link <- 1 + (rep - 1) %% 3; lk <- c("probit", "cloglog", "cauchit")[link]; yp <- ifelse(runif(n) < pz, 0, rpois(n, lam)); d$y <- yp
+  f2 <- tryCatch(suppressWarnings(zeroinfl(y ~ x1 | z1, data = d, link = lk, control = zeroinfl.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
+  if (!is.null(f2)) { sv <- sqrt(diag(vcov(f2))); cases[[length(cases) + 1]] <- case("lkse", c(n, 2, 2, link, 0, yp, as.vector(t(x)), as.vector(t(z))), sum(sv * seq_along(sv)), rel = 2e-2, abs = 2e-3) }
+}
 emit("pscl_nb", "pscl", list(cases))
