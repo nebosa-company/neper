@@ -1,4 +1,4 @@
-// Chebyshev coefficient tables of gsl 2.7.1 (specfunc/dawson, clausen, expint, airy, airy_der, bessel_I0, bessel_I1, bessel_K0, bessel_K1, zeta.c), generated from its source by a script, with gsl's cheb_eval_e and cheb_eval_mode_e.
+// Chebyshev coefficient tables of gsl 2.7.1 (specfunc/dawson, clausen, expint, airy, airy_der, bessel_I0, bessel_I1, bessel_K0, bessel_K1, zeta, bessel_J0, bessel_J1, bessel_Y0, bessel_Y1, bessel_amp_phase, erfc, psi, atanint, expint3, shint, sinint, debye.c), generated from its source by a script, with gsl's cheb_eval_e and cheb_eval_mode_e.
 // cheb_eval(id, order, a, b, x) returns (value, error): error = eps * sum |terms| + |c[order]|; cheb_eval_mode(id, order, order_sp, a, b, x, mode) is the mode form: error = eps |value| + |c[order used]|.
 
 use e.math
@@ -263,6 +263,156 @@ fn tord_zeta_zetam1_inter() -> usize { ret 22usize }
 fn tsp_zeta_zetam1_inter() -> usize { ret 12usize }
 fn ta_zeta_zetam1_inter() -> f64 { ret -1.0f64 }
 fn tb_zeta_zetam1_inter() -> f64 { ret 1.0f64 }
+fn tid_bessel_J0_bj0() -> usize { ret 52usize }
+fn tord_bessel_J0_bj0() -> usize { ret 12usize }
+fn tsp_bessel_J0_bj0() -> usize { ret 9usize }
+fn ta_bessel_J0_bj0() -> f64 { ret -1.0f64 }
+fn tb_bessel_J0_bj0() -> f64 { ret 1.0f64 }
+fn tid_bessel_J1_bj1() -> usize { ret 53usize }
+fn tord_bessel_J1_bj1() -> usize { ret 11usize }
+fn tsp_bessel_J1_bj1() -> usize { ret 8usize }
+fn ta_bessel_J1_bj1() -> f64 { ret -1.0f64 }
+fn tb_bessel_J1_bj1() -> f64 { ret 1.0f64 }
+fn tid_bessel_Y0_by0() -> usize { ret 54usize }
+fn tord_bessel_Y0_by0() -> usize { ret 12usize }
+fn tsp_bessel_Y0_by0() -> usize { ret 8usize }
+fn ta_bessel_Y0_by0() -> f64 { ret -1.0f64 }
+fn tb_bessel_Y0_by0() -> f64 { ret 1.0f64 }
+fn tid_bessel_Y1_by1() -> usize { ret 55usize }
+fn tord_bessel_Y1_by1() -> usize { ret 13usize }
+fn tsp_bessel_Y1_by1() -> usize { ret 10usize }
+fn ta_bessel_Y1_by1() -> f64 { ret -1.0f64 }
+fn tb_bessel_Y1_by1() -> f64 { ret 1.0f64 }
+fn tid_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm0() -> usize { ret 56usize }
+fn tord_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm0() -> usize { ret 20usize }
+fn tsp_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm0() -> usize { ret 10usize }
+fn ta_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm0() -> f64 { ret -1.0f64 }
+fn tb_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm0() -> f64 { ret 1.0f64 }
+fn tid_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth0() -> usize { ret 57usize }
+fn tord_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth0() -> usize { ret 23usize }
+fn tsp_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth0() -> usize { ret 12usize }
+fn ta_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth0() -> f64 { ret -1.0f64 }
+fn tb_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth0() -> f64 { ret 1.0f64 }
+fn tid_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm1() -> usize { ret 58usize }
+fn tord_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm1() -> usize { ret 20usize }
+fn tsp_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm1() -> usize { ret 10usize }
+fn ta_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm1() -> f64 { ret -1.0f64 }
+fn tb_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm1() -> f64 { ret 1.0f64 }
+fn tid_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth1() -> usize { ret 59usize }
+fn tord_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth1() -> usize { ret 23usize }
+fn tsp_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth1() -> usize { ret 12usize }
+fn ta_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth1() -> f64 { ret -1.0f64 }
+fn tb_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth1() -> f64 { ret 1.0f64 }
+fn tid_erfc_erfc_xlt1() -> usize { ret 60usize }
+fn tord_erfc_erfc_xlt1() -> usize { ret 19usize }
+fn tsp_erfc_erfc_xlt1() -> usize { ret 12usize }
+fn ta_erfc_erfc_xlt1() -> f64 { ret -1.0f64 }
+fn tb_erfc_erfc_xlt1() -> f64 { ret 1.0f64 }
+fn tid_erfc_erfc_x15() -> usize { ret 61usize }
+fn tord_erfc_erfc_x15() -> usize { ret 24usize }
+fn tsp_erfc_erfc_x15() -> usize { ret 16usize }
+fn ta_erfc_erfc_x15() -> f64 { ret -1.0f64 }
+fn tb_erfc_erfc_x15() -> f64 { ret 1.0f64 }
+fn tid_erfc_erfc_x510() -> usize { ret 62usize }
+fn tord_erfc_erfc_x510() -> usize { ret 19usize }
+fn tsp_erfc_erfc_x510() -> usize { ret 12usize }
+fn ta_erfc_erfc_x510() -> f64 { ret -1.0f64 }
+fn tb_erfc_erfc_x510() -> f64 { ret 1.0f64 }
+fn tid_psi_r1py() -> usize { ret 63usize }
+fn tord_psi_r1py() -> usize { ret 29usize }
+fn tsp_psi_r1py() -> usize { ret 18usize }
+fn ta_psi_r1py() -> f64 { ret -1.0f64 }
+fn tb_psi_r1py() -> f64 { ret 1.0f64 }
+fn tid_psi_psi() -> usize { ret 64usize }
+fn tord_psi_psi() -> usize { ret 22usize }
+fn tsp_psi_psi() -> usize { ret 17usize }
+fn ta_psi_psi() -> f64 { ret -1.0f64 }
+fn tb_psi_psi() -> f64 { ret 1.0f64 }
+fn tid_psi_apsi() -> usize { ret 65usize }
+fn tord_psi_apsi() -> usize { ret 15usize }
+fn tsp_psi_apsi() -> usize { ret 9usize }
+fn ta_psi_apsi() -> f64 { ret -1.0f64 }
+fn tb_psi_apsi() -> f64 { ret 1.0f64 }
+fn tid_atanint_atanint() -> usize { ret 66usize }
+fn tord_atanint_atanint() -> usize { ret 20usize }
+fn tsp_atanint_atanint() -> usize { ret 10usize }
+fn ta_atanint_atanint() -> f64 { ret -1.0f64 }
+fn tb_atanint_atanint() -> f64 { ret 1.0f64 }
+fn tid_expint3_expint3() -> usize { ret 67usize }
+fn tord_expint3_expint3() -> usize { ret 23usize }
+fn tsp_expint3_expint3() -> usize { ret 15usize }
+fn ta_expint3_expint3() -> f64 { ret -1.0f64 }
+fn tb_expint3_expint3() -> f64 { ret 1.0f64 }
+fn tid_expint3_expint3a() -> usize { ret 68usize }
+fn tord_expint3_expint3a() -> usize { ret 22usize }
+fn tsp_expint3_expint3a() -> usize { ret 10usize }
+fn ta_expint3_expint3a() -> f64 { ret -1.0f64 }
+fn tb_expint3_expint3a() -> f64 { ret 1.0f64 }
+fn tid_shint_shi() -> usize { ret 69usize }
+fn tord_shint_shi() -> usize { ret 6usize }
+fn tsp_shint_shi() -> usize { ret 6usize }
+fn ta_shint_shi() -> f64 { ret -1.0f64 }
+fn tb_shint_shi() -> f64 { ret 1.0f64 }
+fn tid_sinint_f1() -> usize { ret 70usize }
+fn tord_sinint_f1() -> usize { ret 19usize }
+fn tsp_sinint_f1() -> usize { ret 10usize }
+fn ta_sinint_f1() -> f64 { ret -1.0f64 }
+fn tb_sinint_f1() -> f64 { ret 1.0f64 }
+fn tid_sinint_f2() -> usize { ret 71usize }
+fn tord_sinint_f2() -> usize { ret 28usize }
+fn tsp_sinint_f2() -> usize { ret 14usize }
+fn ta_sinint_f2() -> f64 { ret -1.0f64 }
+fn tb_sinint_f2() -> f64 { ret 1.0f64 }
+fn tid_sinint_g1() -> usize { ret 72usize }
+fn tord_sinint_g1() -> usize { ret 20usize }
+fn tsp_sinint_g1() -> usize { ret 13usize }
+fn ta_sinint_g1() -> f64 { ret -1.0f64 }
+fn tb_sinint_g1() -> f64 { ret 1.0f64 }
+fn tid_sinint_g2() -> usize { ret 73usize }
+fn tord_sinint_g2() -> usize { ret 33usize }
+fn tsp_sinint_g2() -> usize { ret 20usize }
+fn ta_sinint_g2() -> f64 { ret -1.0f64 }
+fn tb_sinint_g2() -> f64 { ret 1.0f64 }
+fn tid_sinint_si() -> usize { ret 74usize }
+fn tord_sinint_si() -> usize { ret 11usize }
+fn tsp_sinint_si() -> usize { ret 9usize }
+fn ta_sinint_si() -> f64 { ret -1.0f64 }
+fn tb_sinint_si() -> f64 { ret 1.0f64 }
+fn tid_sinint_ci() -> usize { ret 75usize }
+fn tord_sinint_ci() -> usize { ret 12usize }
+fn tsp_sinint_ci() -> usize { ret 9usize }
+fn ta_sinint_ci() -> f64 { ret -1.0f64 }
+fn tb_sinint_ci() -> f64 { ret 1.0f64 }
+fn tid_debye_adeb1() -> usize { ret 76usize }
+fn tord_debye_adeb1() -> usize { ret 16usize }
+fn tsp_debye_adeb1() -> usize { ret 9usize }
+fn ta_debye_adeb1() -> f64 { ret -1.0f64 }
+fn tb_debye_adeb1() -> f64 { ret 1.0f64 }
+fn tid_debye_adeb2() -> usize { ret 77usize }
+fn tord_debye_adeb2() -> usize { ret 17usize }
+fn tsp_debye_adeb2() -> usize { ret 10usize }
+fn ta_debye_adeb2() -> f64 { ret -1.0f64 }
+fn tb_debye_adeb2() -> f64 { ret 1.0f64 }
+fn tid_debye_adeb3() -> usize { ret 78usize }
+fn tord_debye_adeb3() -> usize { ret 16usize }
+fn tsp_debye_adeb3() -> usize { ret 10usize }
+fn ta_debye_adeb3() -> f64 { ret -1.0f64 }
+fn tb_debye_adeb3() -> f64 { ret 1.0f64 }
+fn tid_debye_adeb4() -> usize { ret 79usize }
+fn tord_debye_adeb4() -> usize { ret 16usize }
+fn tsp_debye_adeb4() -> usize { ret 10usize }
+fn ta_debye_adeb4() -> f64 { ret -1.0f64 }
+fn tb_debye_adeb4() -> f64 { ret 1.0f64 }
+fn tid_debye_adeb5() -> usize { ret 80usize }
+fn tord_debye_adeb5() -> usize { ret 16usize }
+fn tsp_debye_adeb5() -> usize { ret 10usize }
+fn ta_debye_adeb5() -> f64 { ret -1.0f64 }
+fn tb_debye_adeb5() -> f64 { ret 1.0f64 }
+fn tid_debye_adeb6() -> usize { ret 81usize }
+fn tord_debye_adeb6() -> usize { ret 16usize }
+fn tsp_debye_adeb6() -> usize { ret 10usize }
+fn ta_debye_adeb6() -> f64 { ret -1.0f64 }
+fn tb_debye_adeb6() -> f64 { ret 1.0f64 }
 
 fn ctab(id: usize, k: usize) -> f64 {
     if id == 0usize {
@@ -1499,6 +1649,649 @@ fn ctab(id: usize, k: usize) -> f64 {
         if k == 22usize { ret 3.61280740072222650030134104162e-13f64 }
         if k == 23usize { ret -9.66437239205745207188920348801e-14f64 }
     }
+    if id == 52usize {
+        if k == 0usize { ret 0.100254161968939137f64 }
+        if k == 1usize { ret -0.665223007764405132f64 }
+        if k == 2usize { ret 0.248983703498281314f64 }
+        if k == 3usize { ret -0.0332527231700357697f64 }
+        if k == 4usize { ret 0.0023114179304694015f64 }
+        if k == 5usize { ret -0.0000991127741995080f64 }
+        if k == 6usize { ret 0.0000028916708643998f64 }
+        if k == 7usize { ret -0.0000000612108586630f64 }
+        if k == 8usize { ret 0.0000000009838650793f64 }
+        if k == 9usize { ret -0.0000000000124235515f64 }
+        if k == 10usize { ret 0.0000000000001265433f64 }
+        if k == 11usize { ret -0.0000000000000010619f64 }
+        if k == 12usize { ret 0.0000000000000000074f64 }
+    }
+    if id == 53usize {
+        if k == 0usize { ret -0.11726141513332787f64 }
+        if k == 1usize { ret -0.25361521830790640f64 }
+        if k == 2usize { ret 0.050127080984469569f64 }
+        if k == 3usize { ret -0.004631514809625081f64 }
+        if k == 4usize { ret 0.000247996229415914f64 }
+        if k == 5usize { ret -0.000008678948686278f64 }
+        if k == 6usize { ret 0.000000214293917143f64 }
+        if k == 7usize { ret -0.000000003936093079f64 }
+        if k == 8usize { ret 0.000000000055911823f64 }
+        if k == 9usize { ret -0.000000000000632761f64 }
+        if k == 10usize { ret 0.000000000000005840f64 }
+        if k == 11usize { ret -0.000000000000000044f64 }
+    }
+    if id == 54usize {
+        if k == 0usize { ret -0.011277839392865573f64 }
+        if k == 1usize { ret -0.128345237560420350f64 }
+        if k == 2usize { ret -0.104378847997942490f64 }
+        if k == 3usize { ret 0.023662749183969695f64 }
+        if k == 4usize { ret -0.002090391647700486f64 }
+        if k == 5usize { ret 0.000103975453939057f64 }
+        if k == 6usize { ret -0.000003369747162423f64 }
+        if k == 7usize { ret 0.000000077293842676f64 }
+        if k == 8usize { ret -0.000000001324976772f64 }
+        if k == 9usize { ret 0.000000000017648232f64 }
+        if k == 10usize { ret -0.000000000000188105f64 }
+        if k == 11usize { ret 0.000000000000001641f64 }
+        if k == 12usize { ret -0.000000000000000011f64 }
+    }
+    if id == 55usize {
+        if k == 0usize { ret 0.03208047100611908629f64 }
+        if k == 1usize { ret 1.262707897433500450f64 }
+        if k == 2usize { ret 0.00649996189992317500f64 }
+        if k == 3usize { ret -0.08936164528860504117f64 }
+        if k == 4usize { ret 0.01325088122175709545f64 }
+        if k == 5usize { ret -0.00089790591196483523f64 }
+        if k == 6usize { ret 0.00003647361487958306f64 }
+        if k == 7usize { ret -0.00000100137438166600f64 }
+        if k == 8usize { ret 0.00000001994539657390f64 }
+        if k == 9usize { ret -0.00000000030230656018f64 }
+        if k == 10usize { ret 0.00000000000360987815f64 }
+        if k == 11usize { ret -0.00000000000003487488f64 }
+        if k == 12usize { ret 0.00000000000000027838f64 }
+        if k == 13usize { ret -0.00000000000000000186f64 }
+    }
+    if id == 56usize {
+        if k == 0usize { ret 0.09284961637381644f64 }
+        if k == 1usize { ret -0.00142987707403484f64 }
+        if k == 2usize { ret 0.00002830579271257f64 }
+        if k == 3usize { ret -0.00000143300611424f64 }
+        if k == 4usize { ret 0.00000012028628046f64 }
+        if k == 5usize { ret -0.00000001397113013f64 }
+        if k == 6usize { ret 0.00000000204076188f64 }
+        if k == 7usize { ret -0.00000000035399669f64 }
+        if k == 8usize { ret 0.00000000007024759f64 }
+        if k == 9usize { ret -0.00000000001554107f64 }
+        if k == 10usize { ret 0.00000000000376226f64 }
+        if k == 11usize { ret -0.00000000000098282f64 }
+        if k == 12usize { ret 0.00000000000027408f64 }
+        if k == 13usize { ret -0.00000000000008091f64 }
+        if k == 14usize { ret 0.00000000000002511f64 }
+        if k == 15usize { ret -0.00000000000000814f64 }
+        if k == 16usize { ret 0.00000000000000275f64 }
+        if k == 17usize { ret -0.00000000000000096f64 }
+        if k == 18usize { ret 0.00000000000000034f64 }
+        if k == 19usize { ret -0.00000000000000012f64 }
+        if k == 20usize { ret 0.00000000000000004f64 }
+    }
+    if id == 57usize {
+        if k == 0usize { ret -0.24639163774300119f64 }
+        if k == 1usize { ret 0.001737098307508963f64 }
+        if k == 2usize { ret -0.000062183633402968f64 }
+        if k == 3usize { ret 0.000004368050165742f64 }
+        if k == 4usize { ret -0.000000456093019869f64 }
+        if k == 5usize { ret 0.000000062197400101f64 }
+        if k == 6usize { ret -0.000000010300442889f64 }
+        if k == 7usize { ret 0.000000001979526776f64 }
+        if k == 8usize { ret -0.000000000428198396f64 }
+        if k == 9usize { ret 0.000000000102035840f64 }
+        if k == 10usize { ret -0.000000000026363898f64 }
+        if k == 11usize { ret 0.000000000007297935f64 }
+        if k == 12usize { ret -0.000000000002144188f64 }
+        if k == 13usize { ret 0.000000000000663693f64 }
+        if k == 14usize { ret -0.000000000000215126f64 }
+        if k == 15usize { ret 0.000000000000072659f64 }
+        if k == 16usize { ret -0.000000000000025465f64 }
+        if k == 17usize { ret 0.000000000000009229f64 }
+        if k == 18usize { ret -0.000000000000003448f64 }
+        if k == 19usize { ret 0.000000000000001325f64 }
+        if k == 20usize { ret -0.000000000000000522f64 }
+        if k == 21usize { ret 0.000000000000000210f64 }
+        if k == 22usize { ret -0.000000000000000087f64 }
+        if k == 23usize { ret 0.000000000000000036f64 }
+    }
+    if id == 58usize {
+        if k == 0usize { ret 0.1047362510931285f64 }
+        if k == 1usize { ret 0.00442443893702345f64 }
+        if k == 2usize { ret -0.00005661639504035f64 }
+        if k == 3usize { ret 0.00000231349417339f64 }
+        if k == 4usize { ret -0.00000017377182007f64 }
+        if k == 5usize { ret 0.00000001893209930f64 }
+        if k == 6usize { ret -0.00000000265416023f64 }
+        if k == 7usize { ret 0.00000000044740209f64 }
+        if k == 8usize { ret -0.00000000008691795f64 }
+        if k == 9usize { ret 0.00000000001891492f64 }
+        if k == 10usize { ret -0.00000000000451884f64 }
+        if k == 11usize { ret 0.00000000000116765f64 }
+        if k == 12usize { ret -0.00000000000032265f64 }
+        if k == 13usize { ret 0.00000000000009450f64 }
+        if k == 14usize { ret -0.00000000000002913f64 }
+        if k == 15usize { ret 0.00000000000000939f64 }
+        if k == 16usize { ret -0.00000000000000315f64 }
+        if k == 17usize { ret 0.00000000000000109f64 }
+        if k == 18usize { ret -0.00000000000000039f64 }
+        if k == 19usize { ret 0.00000000000000014f64 }
+        if k == 20usize { ret -0.00000000000000005f64 }
+    }
+    if id == 59usize {
+        if k == 0usize { ret 0.74060141026313850f64 }
+        if k == 1usize { ret -0.004571755659637690f64 }
+        if k == 2usize { ret 0.000119818510964326f64 }
+        if k == 3usize { ret -0.000006964561891648f64 }
+        if k == 4usize { ret 0.000000655495621447f64 }
+        if k == 5usize { ret -0.000000084066228945f64 }
+        if k == 6usize { ret 0.000000013376886564f64 }
+        if k == 7usize { ret -0.000000002499565654f64 }
+        if k == 8usize { ret 0.000000000529495100f64 }
+        if k == 9usize { ret -0.000000000124135944f64 }
+        if k == 10usize { ret 0.000000000031656485f64 }
+        if k == 11usize { ret -0.000000000008668640f64 }
+        if k == 12usize { ret 0.000000000002523758f64 }
+        if k == 13usize { ret -0.000000000000775085f64 }
+        if k == 14usize { ret 0.000000000000249527f64 }
+        if k == 15usize { ret -0.000000000000083773f64 }
+        if k == 16usize { ret 0.000000000000029205f64 }
+        if k == 17usize { ret -0.000000000000010534f64 }
+        if k == 18usize { ret 0.000000000000003919f64 }
+        if k == 19usize { ret -0.000000000000001500f64 }
+        if k == 20usize { ret 0.000000000000000589f64 }
+        if k == 21usize { ret -0.000000000000000237f64 }
+        if k == 22usize { ret 0.000000000000000097f64 }
+        if k == 23usize { ret -0.000000000000000040f64 }
+    }
+    if id == 60usize {
+        if k == 0usize { ret 1.06073416421769980345174155056f64 }
+        if k == 1usize { ret -0.42582445804381043569204735291f64 }
+        if k == 2usize { ret 0.04955262679620434040357683080f64 }
+        if k == 3usize { ret 0.00449293488768382749558001242f64 }
+        if k == 4usize { ret -0.00129194104658496953494224761f64 }
+        if k == 5usize { ret -0.00001836389292149396270416979f64 }
+        if k == 6usize { ret 0.00002211114704099526291538556f64 }
+        if k == 7usize { ret -5.23337485234257134673693179020e-7f64 }
+        if k == 8usize { ret -2.78184788833537885382530989578e-7f64 }
+        if k == 9usize { ret 1.41158092748813114560316684249e-8f64 }
+        if k == 10usize { ret 2.72571296330561699984539141865e-9f64 }
+        if k == 11usize { ret -2.06343904872070629406401492476e-10f64 }
+        if k == 12usize { ret -2.14273991996785367924201401812e-11f64 }
+        if k == 13usize { ret 2.22990255539358204580285098119e-12f64 }
+        if k == 14usize { ret 1.36250074650698280575807934155e-13f64 }
+        if k == 15usize { ret -1.95144010922293091898995913038e-14f64 }
+        if k == 16usize { ret -6.85627169231704599442806370690e-16f64 }
+        if k == 17usize { ret 1.44506492869699938239521607493e-16f64 }
+        if k == 18usize { ret 2.45935306460536488037576200030e-18f64 }
+        if k == 19usize { ret -9.29599561220523396007359328540e-19f64 }
+    }
+    if id == 61usize {
+        if k == 0usize { ret 0.44045832024338111077637466616f64 }
+        if k == 1usize { ret -0.143958836762168335790826895326f64 }
+        if k == 2usize { ret 0.044786499817939267247056666937f64 }
+        if k == 3usize { ret -0.013343124200271211203618353102f64 }
+        if k == 4usize { ret 0.003824682739750469767692372556f64 }
+        if k == 5usize { ret -0.001058699227195126547306482530f64 }
+        if k == 6usize { ret 0.000283859419210073742736310108f64 }
+        if k == 7usize { ret -0.000073906170662206760483959432f64 }
+        if k == 8usize { ret 0.000018725312521489179015872934f64 }
+        if k == 9usize { ret -4.62530981164919445131297264430e-6f64 }
+        if k == 10usize { ret 1.11558657244432857487884006422e-6f64 }
+        if k == 11usize { ret -2.63098662650834130067808832725e-7f64 }
+        if k == 12usize { ret 6.07462122724551777372119408710e-8f64 }
+        if k == 13usize { ret -1.37460865539865444777251011793e-8f64 }
+        if k == 14usize { ret 3.05157051905475145520096717210e-9f64 }
+        if k == 15usize { ret -6.65174789720310713757307724790e-10f64 }
+        if k == 16usize { ret 1.42483346273207784489792999706e-10f64 }
+        if k == 17usize { ret -3.00141127395323902092018744545e-11f64 }
+        if k == 18usize { ret 6.22171792645348091472914001250e-12f64 }
+        if k == 19usize { ret -1.26994639225668496876152836555e-12f64 }
+        if k == 20usize { ret 2.55385883033257575402681845385e-13f64 }
+        if k == 21usize { ret -5.06258237507038698392265499770e-14f64 }
+        if k == 22usize { ret 9.89705409478327321641264227110e-15f64 }
+        if k == 23usize { ret -1.90685978789192181051961024995e-15f64 }
+        if k == 24usize { ret 3.50826648032737849245113757340e-16f64 }
+    }
+    if id == 62usize {
+        if k == 0usize { ret 1.11684990123545698684297865808f64 }
+        if k == 1usize { ret 0.003736240359381998520654927536f64 }
+        if k == 2usize { ret -0.000916623948045470238763619870f64 }
+        if k == 3usize { ret 0.000199094325044940833965078819f64 }
+        if k == 4usize { ret -0.000040276384918650072591781859f64 }
+        if k == 5usize { ret 7.76515264697061049477127605790e-6f64 }
+        if k == 6usize { ret -1.44464794206689070402099225301e-6f64 }
+        if k == 7usize { ret 2.61311930343463958393485241947e-7f64 }
+        if k == 8usize { ret -4.61833026634844152345304095560e-8f64 }
+        if k == 9usize { ret 8.00253111512943601598732144340e-9f64 }
+        if k == 10usize { ret -1.36291114862793031395712122089e-9f64 }
+        if k == 11usize { ret 2.28570483090160869607683087722e-10f64 }
+        if k == 12usize { ret -3.78022521563251805044056974560e-11f64 }
+        if k == 13usize { ret 6.17253683874528285729910462130e-12f64 }
+        if k == 14usize { ret -9.96019290955316888445830597430e-13f64 }
+        if k == 15usize { ret 1.58953143706980770269506726000e-13f64 }
+        if k == 16usize { ret -2.51045971047162509999527428316e-14f64 }
+        if k == 17usize { ret 3.92607828989125810013581287560e-15f64 }
+        if k == 18usize { ret -6.07970619384160374392535453420e-16f64 }
+        if k == 19usize { ret 9.12600607264794717315507477670e-17f64 }
+    }
+    if id == 63usize {
+        if k == 0usize { ret 1.59888328244976954803168395603f64 }
+        if k == 1usize { ret 0.67905625353213463845115658455f64 }
+        if k == 2usize { ret -0.068485802980122530009506482524f64 }
+        if k == 3usize { ret -0.005788184183095866792008831182f64 }
+        if k == 4usize { ret 0.008511258167108615980419855648f64 }
+        if k == 5usize { ret -0.004042656134699693434334556409f64 }
+        if k == 6usize { ret 0.001352328406159402601778462956f64 }
+        if k == 7usize { ret -0.000311646563930660566674525382f64 }
+        if k == 8usize { ret 0.000018507563785249135437219139f64 }
+        if k == 9usize { ret 0.000028348705427529850296492146f64 }
+        if k == 10usize { ret -0.000019487536014574535567541960f64 }
+        if k == 11usize { ret 8.0709788710834469408621587335e-06f64 }
+        if k == 12usize { ret -2.2983564321340518037060346561e-06f64 }
+        if k == 13usize { ret 3.0506629599604749843855962658e-07f64 }
+        if k == 14usize { ret 1.3042238632418364610774284846e-07f64 }
+        if k == 15usize { ret -1.2308657181048950589464690208e-07f64 }
+        if k == 16usize { ret 5.7710855710682427240667414345e-08f64 }
+        if k == 17usize { ret -1.8275559342450963966092636354e-08f64 }
+        if k == 18usize { ret 3.1020471300626589420759518930e-09f64 }
+        if k == 19usize { ret 6.8989327480593812470039430640e-10f64 }
+        if k == 20usize { ret -8.7182290258923059852334818997e-10f64 }
+        if k == 21usize { ret 4.4069147710243611798213548777e-10f64 }
+        if k == 22usize { ret -1.4727311099198535963467200277e-10f64 }
+        if k == 23usize { ret 2.7589682523262644748825844248e-11f64 }
+        if k == 24usize { ret 4.1871826756975856411554363568e-12f64 }
+        if k == 25usize { ret -6.5673460487260087541400767340e-12f64 }
+        if k == 26usize { ret 3.4487900886723214020103638000e-12f64 }
+        if k == 27usize { ret -1.1807251417448690607973794078e-12f64 }
+        if k == 28usize { ret 2.3798314343969589258709315574e-13f64 }
+        if k == 29usize { ret 2.1663630410818831824259465821e-15f64 }
+    }
+    if id == 64usize {
+        if k == 0usize { ret -0.038057080835217922f64 }
+        if k == 1usize { ret 0.491415393029387130f64 }
+        if k == 2usize { ret -0.056815747821244730f64 }
+        if k == 3usize { ret 0.008357821225914313f64 }
+        if k == 4usize { ret -0.001333232857994342f64 }
+        if k == 5usize { ret 0.000220313287069308f64 }
+        if k == 6usize { ret -0.000037040238178456f64 }
+        if k == 7usize { ret 0.000006283793654854f64 }
+        if k == 8usize { ret -0.000001071263908506f64 }
+        if k == 9usize { ret 0.000000183128394654f64 }
+        if k == 10usize { ret -0.000000031353509361f64 }
+        if k == 11usize { ret 0.000000005372808776f64 }
+        if k == 12usize { ret -0.000000000921168141f64 }
+        if k == 13usize { ret 0.000000000157981265f64 }
+        if k == 14usize { ret -0.000000000027098646f64 }
+        if k == 15usize { ret 0.000000000004648722f64 }
+        if k == 16usize { ret -0.000000000000797527f64 }
+        if k == 17usize { ret 0.000000000000136827f64 }
+        if k == 18usize { ret -0.000000000000023475f64 }
+        if k == 19usize { ret 0.000000000000004027f64 }
+        if k == 20usize { ret -0.000000000000000691f64 }
+        if k == 21usize { ret 0.000000000000000118f64 }
+        if k == 22usize { ret -0.000000000000000020f64 }
+    }
+    if id == 65usize {
+        if k == 0usize { ret -0.0204749044678185f64 }
+        if k == 1usize { ret -0.0101801271534859f64 }
+        if k == 2usize { ret 0.0000559718725387f64 }
+        if k == 3usize { ret -0.0000012917176570f64 }
+        if k == 4usize { ret 0.0000000572858606f64 }
+        if k == 5usize { ret -0.0000000038213539f64 }
+        if k == 6usize { ret 0.0000000003397434f64 }
+        if k == 7usize { ret -0.0000000000374838f64 }
+        if k == 8usize { ret 0.0000000000048990f64 }
+        if k == 9usize { ret -0.0000000000007344f64 }
+        if k == 10usize { ret 0.0000000000001233f64 }
+        if k == 11usize { ret -0.0000000000000228f64 }
+        if k == 12usize { ret 0.0000000000000045f64 }
+        if k == 13usize { ret -0.0000000000000009f64 }
+        if k == 14usize { ret 0.0000000000000002f64 }
+        if k == 15usize { ret -0.0000000000000000f64 }
+    }
+    if id == 66usize {
+        if k == 0usize { ret 1.91040361296235937512f64 }
+        if k == 1usize { ret -0.4176351437656746940e-01f64 }
+        if k == 2usize { ret 0.275392550786367434e-02f64 }
+        if k == 3usize { ret -0.25051809526248881e-03f64 }
+        if k == 4usize { ret 0.2666981285121171e-04f64 }
+        if k == 5usize { ret -0.311890514107001e-05f64 }
+        if k == 6usize { ret 0.38833853132249e-06f64 }
+        if k == 7usize { ret -0.5057274584964e-07f64 }
+        if k == 8usize { ret 0.681225282949e-08f64 }
+        if k == 9usize { ret -0.94212561654e-09f64 }
+        if k == 10usize { ret 0.13307878816e-09f64 }
+        if k == 11usize { ret -0.1912678075e-10f64 }
+        if k == 12usize { ret 0.278912620e-11f64 }
+        if k == 13usize { ret -0.41174820e-12f64 }
+        if k == 14usize { ret 0.6142987e-13f64 }
+        if k == 15usize { ret -0.924929e-14f64 }
+        if k == 16usize { ret 0.140387e-14f64 }
+        if k == 17usize { ret -0.21460e-15f64 }
+        if k == 18usize { ret 0.3301e-16f64 }
+        if k == 19usize { ret -0.511e-17f64 }
+        if k == 20usize { ret 0.79e-18f64 }
+    }
+    if id == 67usize {
+        if k == 0usize { ret 1.269198414221126014f64 }
+        if k == 1usize { ret -0.248846446384140982f64 }
+        if k == 2usize { ret 0.80526220717231041e-01f64 }
+        if k == 3usize { ret -0.25772733251968330e-01f64 }
+        if k == 4usize { ret 0.7599878873073774e-02f64 }
+        if k == 5usize { ret -0.2030695581940405e-02f64 }
+        if k == 6usize { ret 0.490834586699330e-03f64 }
+        if k == 7usize { ret -0.107682239142021e-03f64 }
+        if k == 8usize { ret 0.21551726264290e-04f64 }
+        if k == 9usize { ret -0.3956705137384e-05f64 }
+        if k == 10usize { ret 0.6699240933896e-06f64 }
+        if k == 11usize { ret -0.105132180807e-06f64 }
+        if k == 12usize { ret 0.15362580199e-07f64 }
+        if k == 13usize { ret -0.20990960364e-08f64 }
+        if k == 14usize { ret 0.2692109538e-09f64 }
+        if k == 15usize { ret -0.325195242e-10f64 }
+        if k == 16usize { ret 0.37114816e-11f64 }
+        if k == 17usize { ret -0.4013652e-12f64 }
+        if k == 18usize { ret 0.412334e-13f64 }
+        if k == 19usize { ret -0.40338e-14f64 }
+        if k == 20usize { ret 0.3766e-15f64 }
+        if k == 21usize { ret -0.336e-16f64 }
+        if k == 22usize { ret 0.29e-17f64 }
+        if k == 23usize { ret -0.2e-18f64 }
+    }
+    if id == 68usize {
+        if k == 0usize { ret 1.9270464955068273729f64 }
+        if k == 1usize { ret -0.349293565204813805e-01f64 }
+        if k == 2usize { ret 0.14503383718983009e-02f64 }
+        if k == 3usize { ret -0.8925336718327903e-04f64 }
+        if k == 4usize { ret 0.70542392191184e-05f64 }
+        if k == 5usize { ret -0.6671727454761e-06f64 }
+        if k == 6usize { ret 0.724267589982e-07f64 }
+        if k == 7usize { ret -0.87825825606e-08f64 }
+        if k == 8usize { ret 0.11672234428e-08f64 }
+        if k == 9usize { ret -0.1676631281e-09f64 }
+        if k == 10usize { ret 0.257550158e-10f64 }
+        if k == 11usize { ret -0.41957888e-11f64 }
+        if k == 12usize { ret 0.7201041e-12f64 }
+        if k == 13usize { ret -0.1294906e-12f64 }
+        if k == 14usize { ret 0.24287e-13f64 }
+        if k == 15usize { ret -0.47331e-14f64 }
+        if k == 16usize { ret 0.95531e-15f64 }
+        if k == 17usize { ret -0.1991e-15f64 }
+        if k == 18usize { ret 0.428e-16f64 }
+        if k == 19usize { ret -0.94e-17f64 }
+        if k == 20usize { ret 0.21e-17f64 }
+        if k == 21usize { ret -0.5e-18f64 }
+        if k == 22usize { ret 0.1e-18f64 }
+    }
+    if id == 69usize {
+        if k == 0usize { ret 0.0078372685688900950695f64 }
+        if k == 1usize { ret 0.0039227664934234563973f64 }
+        if k == 2usize { ret 0.0000041346787887617267f64 }
+        if k == 3usize { ret 0.0000000024707480372883f64 }
+        if k == 4usize { ret 0.0000000000009379295591f64 }
+        if k == 5usize { ret 0.0000000000000002451817f64 }
+        if k == 6usize { ret 0.0000000000000000000467f64 }
+    }
+    if id == 70usize {
+        if k == 0usize { ret -0.1191081969051363610f64 }
+        if k == 1usize { ret -0.0247823144996236248f64 }
+        if k == 2usize { ret 0.0011910281453357821f64 }
+        if k == 3usize { ret -0.0000927027714388562f64 }
+        if k == 4usize { ret 0.0000093373141568271f64 }
+        if k == 5usize { ret -0.0000011058287820557f64 }
+        if k == 6usize { ret 0.0000001464772071460f64 }
+        if k == 7usize { ret -0.0000000210694496288f64 }
+        if k == 8usize { ret 0.0000000032293492367f64 }
+        if k == 9usize { ret -0.0000000005206529618f64 }
+        if k == 10usize { ret 0.0000000000874878885f64 }
+        if k == 11usize { ret -0.0000000000152176187f64 }
+        if k == 12usize { ret 0.0000000000027257192f64 }
+        if k == 13usize { ret -0.0000000000005007053f64 }
+        if k == 14usize { ret 0.0000000000000940241f64 }
+        if k == 15usize { ret -0.0000000000000180014f64 }
+        if k == 16usize { ret 0.0000000000000035063f64 }
+        if k == 17usize { ret -0.0000000000000006935f64 }
+        if k == 18usize { ret 0.0000000000000001391f64 }
+        if k == 19usize { ret -0.0000000000000000282f64 }
+    }
+    if id == 71usize {
+        if k == 0usize { ret -0.0348409253897013234f64 }
+        if k == 1usize { ret -0.0166842205677959686f64 }
+        if k == 2usize { ret 0.0006752901241237738f64 }
+        if k == 3usize { ret -0.0000535066622544701f64 }
+        if k == 4usize { ret 0.0000062693421779007f64 }
+        if k == 5usize { ret -0.0000009526638801991f64 }
+        if k == 6usize { ret 0.0000001745629224251f64 }
+        if k == 7usize { ret -0.0000000368795403065f64 }
+        if k == 8usize { ret 0.0000000087202677705f64 }
+        if k == 9usize { ret -0.0000000022601970392f64 }
+        if k == 10usize { ret 0.0000000006324624977f64 }
+        if k == 11usize { ret -0.0000000001888911889f64 }
+        if k == 12usize { ret 0.0000000000596774674f64 }
+        if k == 13usize { ret -0.0000000000198044313f64 }
+        if k == 14usize { ret 0.0000000000068641396f64 }
+        if k == 15usize { ret -0.0000000000024731020f64 }
+        if k == 16usize { ret 0.0000000000009226360f64 }
+        if k == 17usize { ret -0.0000000000003552364f64 }
+        if k == 18usize { ret 0.0000000000001407606f64 }
+        if k == 19usize { ret -0.0000000000000572623f64 }
+        if k == 20usize { ret 0.0000000000000238654f64 }
+        if k == 21usize { ret -0.0000000000000101714f64 }
+        if k == 22usize { ret 0.0000000000000044259f64 }
+        if k == 23usize { ret -0.0000000000000019634f64 }
+        if k == 24usize { ret 0.0000000000000008868f64 }
+        if k == 25usize { ret -0.0000000000000004074f64 }
+        if k == 26usize { ret 0.0000000000000001901f64 }
+        if k == 27usize { ret -0.0000000000000000900f64 }
+        if k == 28usize { ret 0.0000000000000000432f64 }
+    }
+    if id == 72usize {
+        if k == 0usize { ret -0.3040578798253495954f64 }
+        if k == 1usize { ret -0.0566890984597120588f64 }
+        if k == 2usize { ret 0.0039046158173275644f64 }
+        if k == 3usize { ret -0.0003746075959202261f64 }
+        if k == 4usize { ret 0.0000435431556559844f64 }
+        if k == 5usize { ret -0.0000057417294453025f64 }
+        if k == 6usize { ret 0.0000008282552104503f64 }
+        if k == 7usize { ret -0.0000001278245892595f64 }
+        if k == 8usize { ret 0.0000000207978352949f64 }
+        if k == 9usize { ret -0.0000000035313205922f64 }
+        if k == 10usize { ret 0.0000000006210824236f64 }
+        if k == 11usize { ret -0.0000000001125215474f64 }
+        if k == 12usize { ret 0.0000000000209088918f64 }
+        if k == 13usize { ret -0.0000000000039715832f64 }
+        if k == 14usize { ret 0.0000000000007690431f64 }
+        if k == 15usize { ret -0.0000000000001514697f64 }
+        if k == 16usize { ret 0.0000000000000302892f64 }
+        if k == 17usize { ret -0.0000000000000061400f64 }
+        if k == 18usize { ret 0.0000000000000012601f64 }
+        if k == 19usize { ret -0.0000000000000002615f64 }
+        if k == 20usize { ret 0.0000000000000000548f64 }
+    }
+    if id == 73usize {
+        if k == 0usize { ret -0.0967329367532432218f64 }
+        if k == 1usize { ret -0.0452077907957459871f64 }
+        if k == 2usize { ret 0.0028190005352706523f64 }
+        if k == 3usize { ret -0.0002899167740759160f64 }
+        if k == 4usize { ret 0.0000407444664601121f64 }
+        if k == 5usize { ret -0.0000071056382192354f64 }
+        if k == 6usize { ret 0.0000014534723163019f64 }
+        if k == 7usize { ret -0.0000003364116512503f64 }
+        if k == 8usize { ret 0.0000000859774367886f64 }
+        if k == 9usize { ret -0.0000000238437656302f64 }
+        if k == 10usize { ret 0.0000000070831906340f64 }
+        if k == 11usize { ret -0.0000000022318068154f64 }
+        if k == 12usize { ret 0.0000000007401087359f64 }
+        if k == 13usize { ret -0.0000000002567171162f64 }
+        if k == 14usize { ret 0.0000000000926707021f64 }
+        if k == 15usize { ret -0.0000000000346693311f64 }
+        if k == 16usize { ret 0.0000000000133950573f64 }
+        if k == 17usize { ret -0.0000000000053290754f64 }
+        if k == 18usize { ret 0.0000000000021775312f64 }
+        if k == 19usize { ret -0.0000000000009118621f64 }
+        if k == 20usize { ret 0.0000000000003905864f64 }
+        if k == 21usize { ret -0.0000000000001708459f64 }
+        if k == 22usize { ret 0.0000000000000762015f64 }
+        if k == 23usize { ret -0.0000000000000346151f64 }
+        if k == 24usize { ret 0.0000000000000159996f64 }
+        if k == 25usize { ret -0.0000000000000075213f64 }
+        if k == 26usize { ret 0.0000000000000035970f64 }
+        if k == 27usize { ret -0.0000000000000017530f64 }
+        if k == 28usize { ret 0.0000000000000008738f64 }
+        if k == 29usize { ret -0.0000000000000004487f64 }
+        if k == 30usize { ret 0.0000000000000002397f64 }
+        if k == 31usize { ret -0.0000000000000001347f64 }
+        if k == 32usize { ret 0.0000000000000000801f64 }
+        if k == 33usize { ret -0.0000000000000000501f64 }
+    }
+    if id == 74usize {
+        if k == 0usize { ret -0.1315646598184841929f64 }
+        if k == 1usize { ret -0.2776578526973601892f64 }
+        if k == 2usize { ret 0.0354414054866659180f64 }
+        if k == 3usize { ret -0.0025631631447933978f64 }
+        if k == 4usize { ret 0.0001162365390497009f64 }
+        if k == 5usize { ret -0.0000035904327241606f64 }
+        if k == 6usize { ret 0.0000000802342123706f64 }
+        if k == 7usize { ret -0.0000000013562997693f64 }
+        if k == 8usize { ret 0.0000000000179440722f64 }
+        if k == 9usize { ret -0.0000000000001908387f64 }
+        if k == 10usize { ret 0.0000000000000016670f64 }
+        if k == 11usize { ret -0.0000000000000000122f64 }
+    }
+    if id == 75usize {
+        if k == 0usize { ret -0.34004281856055363156f64 }
+        if k == 1usize { ret -1.03302166401177456807f64 }
+        if k == 2usize { ret 0.19388222659917082877f64 }
+        if k == 3usize { ret -0.01918260436019865894f64 }
+        if k == 4usize { ret 0.00110789252584784967f64 }
+        if k == 5usize { ret -0.00004157234558247209f64 }
+        if k == 6usize { ret 0.00000109278524300229f64 }
+        if k == 7usize { ret -0.00000002123285954183f64 }
+        if k == 8usize { ret 0.00000000031733482164f64 }
+        if k == 9usize { ret -0.00000000000376141548f64 }
+        if k == 10usize { ret 0.00000000000003622653f64 }
+        if k == 11usize { ret -0.00000000000000028912f64 }
+        if k == 12usize { ret 0.00000000000000000194f64 }
+    }
+    if id == 76usize {
+        if k == 0usize { ret 2.4006597190381410194f64 }
+        if k == 1usize { ret 0.1937213042189360089f64 }
+        if k == 2usize { ret -0.62329124554895770e-02f64 }
+        if k == 3usize { ret 0.3511174770206480e-03f64 }
+        if k == 4usize { ret -0.228222466701231e-04f64 }
+        if k == 5usize { ret 0.15805467875030e-05f64 }
+        if k == 6usize { ret -0.1135378197072e-06f64 }
+        if k == 7usize { ret 0.83583361188e-08f64 }
+        if k == 8usize { ret -0.6264424787e-09f64 }
+        if k == 9usize { ret 0.476033489e-10f64 }
+        if k == 10usize { ret -0.36574154e-11f64 }
+        if k == 11usize { ret 0.2835431e-12f64 }
+        if k == 12usize { ret -0.221473e-13f64 }
+        if k == 13usize { ret 0.17409e-14f64 }
+        if k == 14usize { ret -0.1376e-15f64 }
+        if k == 15usize { ret 0.109e-16f64 }
+        if k == 16usize { ret -0.9e-18f64 }
+    }
+    if id == 77usize {
+        if k == 0usize { ret 2.5943810232570770282f64 }
+        if k == 1usize { ret 0.2863357204530719834f64 }
+        if k == 2usize { ret -0.102062656158046713e-01f64 }
+        if k == 3usize { ret 0.6049109775346844e-03f64 }
+        if k == 4usize { ret -0.405257658950210e-04f64 }
+        if k == 5usize { ret 0.28633826328811e-05f64 }
+        if k == 6usize { ret -0.2086394303065e-06f64 }
+        if k == 7usize { ret 0.155237875826e-07f64 }
+        if k == 8usize { ret -0.11731280087e-08f64 }
+        if k == 9usize { ret 0.897358589e-10f64 }
+        if k == 10usize { ret -0.69317614e-11f64 }
+        if k == 11usize { ret 0.5398057e-12f64 }
+        if k == 12usize { ret -0.423241e-13f64 }
+        if k == 13usize { ret 0.33378e-14f64 }
+        if k == 14usize { ret -0.2645e-15f64 }
+        if k == 15usize { ret 0.211e-16f64 }
+        if k == 16usize { ret -0.17e-17f64 }
+        if k == 17usize { ret 0.1e-18f64 }
+    }
+    if id == 78usize {
+        if k == 0usize { ret 2.707737068327440945f64 }
+        if k == 1usize { ret 0.340068135211091751f64 }
+        if k == 2usize { ret -0.12945150184440869e-01f64 }
+        if k == 3usize { ret 0.7963755380173816e-03f64 }
+        if k == 4usize { ret -0.546360009590824e-04f64 }
+        if k == 5usize { ret 0.39243019598805e-05f64 }
+        if k == 6usize { ret -0.2894032823539e-06f64 }
+        if k == 7usize { ret 0.217317613962e-07f64 }
+        if k == 8usize { ret -0.16542099950e-08f64 }
+        if k == 9usize { ret 0.1272796189e-09f64 }
+        if k == 10usize { ret -0.987963460e-11f64 }
+        if k == 11usize { ret 0.7725074e-12f64 }
+        if k == 12usize { ret -0.607797e-13f64 }
+        if k == 13usize { ret 0.48076e-14f64 }
+        if k == 14usize { ret -0.3820e-15f64 }
+        if k == 15usize { ret 0.305e-16f64 }
+        if k == 16usize { ret -0.24e-17f64 }
+    }
+    if id == 79usize {
+        if k == 0usize { ret 2.781869415020523460f64 }
+        if k == 1usize { ret 0.374976783526892863f64 }
+        if k == 2usize { ret -0.14940907399031583e-01f64 }
+        if k == 3usize { ret 0.945679811437042e-03f64 }
+        if k == 4usize { ret -0.66132916138933e-04f64 }
+        if k == 5usize { ret 0.4815632982144e-05f64 }
+        if k == 6usize { ret -0.3588083958759e-06f64 }
+        if k == 7usize { ret 0.271601187416e-07f64 }
+        if k == 8usize { ret -0.20807099122e-08f64 }
+        if k == 9usize { ret 0.1609383869e-09f64 }
+        if k == 10usize { ret -0.125470979e-10f64 }
+        if k == 11usize { ret 0.9847265e-12f64 }
+        if k == 12usize { ret -0.777237e-13f64 }
+        if k == 13usize { ret 0.61648e-14f64 }
+        if k == 14usize { ret -0.4911e-15f64 }
+        if k == 15usize { ret 0.393e-16f64 }
+        if k == 16usize { ret -0.32e-17f64 }
+    }
+    if id == 80usize {
+        if k == 0usize { ret 2.8340269546834530149f64 }
+        if k == 1usize { ret 0.3994098857106266445f64 }
+        if k == 2usize { ret -0.164566764773099646e-1f64 }
+        if k == 3usize { ret 0.10652138340664541e-2f64 }
+        if k == 4usize { ret -0.756730374875418e-4f64 }
+        if k == 5usize { ret 0.55745985240273e-5f64 }
+        if k == 6usize { ret -0.4190692330918e-6f64 }
+        if k == 7usize { ret 0.319456143678e-7f64 }
+        if k == 8usize { ret -0.24613318171e-8f64 }
+        if k == 9usize { ret 0.1912801633e-9f64 }
+        if k == 10usize { ret -0.149720049e-10f64 }
+        if k == 11usize { ret 0.11790312e-11f64 }
+        if k == 12usize { ret -0.933329e-13f64 }
+        if k == 13usize { ret 0.74218e-14f64 }
+        if k == 14usize { ret -0.5925e-15f64 }
+        if k == 15usize { ret 0.475e-16f64 }
+        if k == 16usize { ret -0.39e-17f64 }
+    }
+    if id == 81usize {
+        if k == 0usize { ret 2.8726727134130122113f64 }
+        if k == 1usize { ret 0.4174375352339027746f64 }
+        if k == 2usize { ret -0.176453849354067873e-1f64 }
+        if k == 3usize { ret 0.11629852733494556e-2f64 }
+        if k == 4usize { ret -0.837118027357117e-4f64 }
+        if k == 5usize { ret 0.62283611596189e-5f64 }
+        if k == 6usize { ret -0.4718644465636e-6f64 }
+        if k == 7usize { ret 0.361950397806e-7f64 }
+        if k == 8usize { ret -0.28030368010e-8f64 }
+        if k == 9usize { ret 0.2187681983e-9f64 }
+        if k == 10usize { ret -0.171857387e-10f64 }
+        if k == 11usize { ret 0.13575809e-11f64 }
+        if k == 12usize { ret -0.1077580e-12f64 }
+        if k == 13usize { ret 0.85893e-14f64 }
+        if k == 14usize { ret -0.6872e-15f64 }
+        if k == 15usize { ret 0.552e-16f64 }
+        if k == 16usize { ret -0.44e-17f64 }
+    }
     ret 0.0f64
 }
 
@@ -2062,6 +2855,306 @@ fn cvv_zeta_zetam1_inter(x: f64) -> (f64, f64) {
     ret (v, e)
 }
 
+fn cev_bessel_J0_bj0(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(52usize, 12usize, 9usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_bessel_J0_bj0(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(52usize, 12usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_bessel_J1_bj1(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(53usize, 11usize, 8usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_bessel_J1_bj1(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(53usize, 11usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_bessel_Y0_by0(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(54usize, 12usize, 8usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_bessel_Y0_by0(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(54usize, 12usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_bessel_Y1_by1(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(55usize, 13usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_bessel_Y1_by1(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(55usize, 13usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm0(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(56usize, 20usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm0(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(56usize, 20usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth0(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(57usize, 23usize, 12usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth0(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(57usize, 23usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm1(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(58usize, 20usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_bessel_amp_phase__gsl_sf_bessel_amp_phase_bm1(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(58usize, 20usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth1(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(59usize, 23usize, 12usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_bessel_amp_phase__gsl_sf_bessel_amp_phase_bth1(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(59usize, 23usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_erfc_erfc_xlt1(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(60usize, 19usize, 12usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_erfc_erfc_xlt1(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(60usize, 19usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_erfc_erfc_x15(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(61usize, 24usize, 16usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_erfc_erfc_x15(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(61usize, 24usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_erfc_erfc_x510(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(62usize, 19usize, 12usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_erfc_erfc_x510(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(62usize, 19usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_psi_r1py(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(63usize, 29usize, 18usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_psi_r1py(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(63usize, 29usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_psi_psi(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(64usize, 22usize, 17usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_psi_psi(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(64usize, 22usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_psi_apsi(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(65usize, 15usize, 9usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_psi_apsi(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(65usize, 15usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_atanint_atanint(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(66usize, 20usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_atanint_atanint(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(66usize, 20usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_expint3_expint3(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(67usize, 23usize, 15usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_expint3_expint3(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(67usize, 23usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_expint3_expint3a(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(68usize, 22usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_expint3_expint3a(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(68usize, 22usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_shint_shi(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(69usize, 6usize, 6usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_shint_shi(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(69usize, 6usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_sinint_f1(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(70usize, 19usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_sinint_f1(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(70usize, 19usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_sinint_f2(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(71usize, 28usize, 14usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_sinint_f2(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(71usize, 28usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_sinint_g1(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(72usize, 20usize, 13usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_sinint_g1(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(72usize, 20usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_sinint_g2(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(73usize, 33usize, 20usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_sinint_g2(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(73usize, 33usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_sinint_si(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(74usize, 11usize, 9usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_sinint_si(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(74usize, 11usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_sinint_ci(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(75usize, 12usize, 9usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_sinint_ci(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(75usize, 12usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_debye_adeb1(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(76usize, 16usize, 9usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_debye_adeb1(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(76usize, 16usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_debye_adeb2(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(77usize, 17usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_debye_adeb2(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(77usize, 17usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_debye_adeb3(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(78usize, 16usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_debye_adeb3(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(78usize, 16usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_debye_adeb4(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(79usize, 16usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_debye_adeb4(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(79usize, 16usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_debye_adeb5(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(80usize, 16usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_debye_adeb5(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(80usize, 16usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
+fn cev_debye_adeb6(x: f64, mode: usize) -> (f64, f64) {
+    let (v, e) = cheb_eval_mode(81usize, 16usize, 10usize, -1.0f64, 1.0f64, x, mode)
+    ret (v, e)
+}
+
+fn cvv_debye_adeb6(x: f64) -> (f64, f64) {
+    let (v, e) = cheb_eval(81usize, 16usize, -1.0f64, 1.0f64, x)
+    ret (v, e)
+}
+
 // gsl_poly_eval of bessel_K0_k0_poly
 fn pv_bessel_K0_k0_poly(x: f64) -> f64 {
     ret 1.1593151565841244842077226e-01f64 + x * (2.7898287891460317300886539e-01f64 + x * (2.5248929932161220559969776e-02f64 + x * (8.4603509072136578707676406e-04f64 + x * (1.4914719243067801775856150e-05f64 + x * (1.6271068931224552553548933e-07f64 + x * (1.2082660336282566759313543e-09f64 + x * (6.6117104672254184399933971e-12f64)))))))
@@ -2085,5 +3178,15 @@ fn pv_bessel_K1_i1_poly(x: f64) -> f64 {
 // gsl_poly_eval of zeta_hzeta_c
 fn pv_zeta_hzeta_c(x: f64) -> f64 {
     ret 1.00000000000000000000000000000f64 + x * (0.083333333333333333333333333333f64 + x * (-0.00138888888888888888888888888889f64 + x * (0.000033068783068783068783068783069f64 + x * (-8.2671957671957671957671957672e-07f64 + x * (2.0876756987868098979210090321e-08f64 + x * (-5.2841901386874931848476822022e-10f64 + x * (1.3382536530684678832826980975e-11f64 + x * (-3.3896802963225828668301953912e-13f64 + x * (8.5860620562778445641359054504e-15f64 + x * (-2.1748686985580618730415164239e-16f64 + x * (5.5090028283602295152026526089e-18f64 + x * (-1.3954464685812523340707686264e-19f64 + x * (3.5347070396294674716932299778e-21f64 + x * (-8.9535174270375468504026113181e-23f64))))))))))))))
+}
+
+// gsl_poly_eval of erfc_P
+fn pv_erfc_P(x: f64) -> f64 {
+    ret 2.97886562639399288862f64 + x * (7.409740605964741794425f64 + x * (6.1602098531096305440906f64 + x * (5.019049726784267463450058f64 + x * (1.275366644729965952479585264f64 + x * (0.5641895835477550741253201704f64)))))
+}
+
+// gsl_poly_eval of erfc_Q
+fn pv_erfc_Q(x: f64) -> f64 {
+    ret 3.3690752069827527677f64 + x * (9.608965327192787870698f64 + x * (17.08144074746600431571095f64 + x * (12.0489519278551290360340491f64 + x * (9.396034016235054150430579648f64 + x * (2.260528520767326969591866945f64 + x * (1.0f64))))))
 }
 
