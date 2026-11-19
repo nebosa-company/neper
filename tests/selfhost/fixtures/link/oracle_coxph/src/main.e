@@ -46,15 +46,29 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (ccf, cce) = mem.alloc[f64](a, cpp)
         let (cse, cse_e) = mem.alloc[f64](a, cpp)
         let (cll, cle) = mem.alloc[f64](a, 2usize)
-        if cge != ok || cce != ok || cse_e != ok || cle != ok { ret 0.0f64 / 0.0f64 }
+        let (cvo, cve) = mem.alloc[f64](a, cpp * cpp)
+        let (crs, cre) = mem.alloc[f64](a, cpp)
+        let (ccl, ccle) = mem.alloc[usize](a, cn)
+        if cge != ok || cce != ok || cse_e != ok || cle != ok || cve != ok || cre != ok || ccle != ok { ret 0.0f64 / 0.0f64 }
         var cq = 0usize
         while cq < cn {
             cg[cq] = usize(x[3usize + 3usize * cn + cq])
             cq += 1usize
         }
-        let cfe = cs.coxph_cp(a, x[3usize..3usize + cn], x[3usize + cn..3usize + 2usize * cn], x[3usize + 2usize * cn..3usize + 3usize * cn], cg, x[3usize + 4usize * cn..3usize + 4usize * cn + cn * cpp], cn, cpp, usize(x[2usize]), ccf, cse, cll)
+        let cfe = cs.coxph_cp(a, x[3usize..3usize + cn], x[3usize + cn..3usize + 2usize * cn], x[3usize + 2usize * cn..3usize + 3usize * cn], cg, x[3usize + 4usize * cn..3usize + 4usize * cn + cn * cpp], cn, cpp, usize(x[2usize]), ccf, cse, cll, cvo)
         if cfe != ok { ret 0.0f64 / 0.0f64 }
         let cqq = usize(x[3usize + 4usize * cn + cn * cpp])
+        if cqq >= 100usize {
+            // robust variance (Breslow): q 100 + j standard error j, every row its own cluster
+            var ri = 0usize
+            while ri < cn {
+                ccl[ri] = ri
+                ri += 1usize
+            }
+            let rfe = cs.coxph_cp_robust(a, x[3usize..3usize + cn], x[3usize + cn..3usize + 2usize * cn], x[3usize + 2usize * cn..3usize + 3usize * cn], cg, x[3usize + 4usize * cn..3usize + 4usize * cn + cn * cpp], cn, cpp, ccf, cvo, ccl, cn, crs)
+            if rfe != ok { ret 0.0f64 / 0.0f64 }
+            ret crs[cqq - 100usize]
+        }
         if cqq < cpp { ret ccf[cqq] }
         if cqq < 2usize * cpp { ret cse[cqq - cpp] }
         ret cll[cqq - 2usize * cpp]

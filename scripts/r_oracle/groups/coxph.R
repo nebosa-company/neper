@@ -67,6 +67,11 @@ for (rep in 1:16) {
     a <- c(n, p, ef, st0, stp, ev, sg, X)
     out <- c(as.numeric(f$coefficients), sqrt(diag(as.matrix(f$var))), f$loglik)
     for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("coxcp", c(a, q - 1), out[q], rel = 1e-6, abs = 1e-8)
+    if (ef == 0) {
+      fr <- coxph(Surv(st0, stp, ev) ~ X + strata(sg) + cluster(seq_len(n)), ties = "breslow", robust = TRUE, control = coxph.control(eps = 1e-12, iter.max = 50))
+      rse <- sqrt(diag(as.matrix(fr$var)))
+      for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("coxcp", c(a, 100 + j - 1), rse[j], rel = 1e-6, abs = 1e-8)
+    }
   }
 }
 emit("coxph", "survival", list(cases))

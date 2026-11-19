@@ -587,7 +587,7 @@ fn cox_resid(a: *mem.Arena, time: []const f64, status: []const f64, strat: []con
 
 // survival::coxph(Surv(start, stop, status) ~ x + strata) with counting-process data: the risk set at an event time t of a stratum is {i : start_i < t <= stop_i}; Breslow or Efron ties. Newton-Raphson on the exact
 // partial likelihood from beta = 0 until the log-likelihood moves by less than 1e-13 relatively; coef and se (the inverse information) of length p; ll receives the log-likelihoods at beta = 0 and at the fit
-fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []const f64, strat: []const usize, x: []const f64, n: usize, p: usize, tiemode: usize, coef: []f64, se: []f64, ll: []f64) -> err {
+fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []const f64, strat: []const usize, x: []const f64, n: usize, p: usize, tiemode: usize, coef: []f64, se: []f64, ll: []f64, vout: []f64) -> err {
     let (u, e1) = mem.alloc[f64](a, p)
     let (info, e2) = mem.alloc[f64](a, p * p)
     let (s1, e3) = mem.alloc[f64](a, p)
@@ -807,6 +807,11 @@ fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []cons
                 col[c] = 1.0f64
                 if !qr.solve_dense(mat, col, p) { ret Singular }
                 se[c] = math.sqrt[f64](col[c])
+                var vr = 0usize
+                while vr < p {
+                    vout[vr * p + c] = col[vr]
+                    vr += 1usize
+                }
                 c += 1usize
             }
             ret ok
@@ -831,4 +836,113 @@ fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []cons
         iter += 1usize
     }
     ret Singular
+}
+
+// the robust (sandwich) variance of a Breslow `coxph_cp` fit, survival's robust = TRUE: the score residual of each row at the fitted beta (its deaths' x - xbar(t) minus w (x - xbar(t)) dLambda over the event times of
+// (start, stop]) is summed within the clusters clus (0-based, nclus of them; one per row when each row is its own cluster), and the variance is V S V with V the inverse information vin (p by p) and
+// S the cross product of the cluster sums. se receives the square roots of the diagonal
+fn coxph_cp_robust(a: *mem.Arena, start: []const f64, stop: []const f64, status: []const f64, strat: []const usize, x: []const f64, n: usize, p: usize, coef: []const f64, vin: []const f64, clus: []const usize, nclus: usize, se: []f64) -> err {
+    let (rs, e1) = mem.alloc[f64](a, n * p)
+    let (cs, e2) = mem.alloc[f64](a, nclus * p)
+    let (w, e3) = mem.alloc[f64](a, n)
+    let (s1, e4) = mem.alloc[f64](a, p)
+    let (seen, e5) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    var i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        var j = 0usize
+        while j < p {
+            eta += x[j * n + i] * coef[j]
+            rs[i * p + j] = 0.0f64
+            j += 1usize
+        }
+        w[i] = math.exp[f64](eta)
+        seen[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if status[i] > 0.5f64 && seen[i] == 0.0f64 && start[i] < stop[i] {
+            let t = stop[i]
+            let sg = strat[i]
+            var d = 0.0f64
+            var s0 = 0.0f64
+            var j = 0usize
+            while j < p {
+                s1[j] = 0.0f64
+                j += 1usize
+            }
+            var k = 0usize
+            while k < n {
+                if strat[k] == sg && start[k] < t && stop[k] >= t {
+                    s0 += w[k]
+                    j = 0usize
+                    while j < p {
+                        s1[j] += w[k] * x[j * n + k]
+                        j += 1usize
+                    }
+                    if stop[k] == t && status[k] > 0.5f64 {
+                        seen[k] = 1.0f64
+                        d += 1.0f64
+                    }
+                }
+                k += 1usize
+            }
+            k = 0usize
+            while k < n {
+                if strat[k] == sg && start[k] < t && stop[k] >= t {
+                    j = 0usize
+                    while j < p {
+                        let dev = x[j * n + k] - s1[j] / s0
+                        if stop[k] == t && status[k] > 0.5f64 { rs[k * p + j] += dev }
+                        rs[k * p + j] -= w[k] * dev * d / s0
+                        j += 1usize
+                    }
+                }
+                k += 1usize
+            }
+        }
+        i += 1usize
+    }
+    var c0 = 0usize
+    while c0 < nclus * p {
+        cs[c0] = 0.0f64
+        c0 += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < p {
+            cs[clus[i] * p + j] += rs[i * p + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var a1 = 0usize
+    while a1 < p {
+        var sum = 0.0f64
+        var b1 = 0usize
+        while b1 < p {
+            var c1 = 0usize
+            while c1 < p {
+                var mid = 0.0f64
+                var g = 0usize
+                while g < nclus {
+                    mid += cs[g * p + b1] * cs[g * p + c1]
+                    g += 1usize
+                }
+                sum += vin[a1 * p + b1] * mid * vin[c1 * p + a1]
+                c1 += 1usize
+            }
+            b1 += 1usize
+        }
+        se[a1] = math.sqrt[f64](sum)
+        a1 += 1usize
+    }
+    ret ok
 }

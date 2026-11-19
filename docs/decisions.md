@@ -50467,3 +50467,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `coxext.coxph_cp` takes `tiemode` (0 Breslow, 1 Efron, 2 exact). The exact partial likelihood of a time with d deaths is exp(sum of the deaths' linear predictors) over e_d(w), the degree-d elementary symmetric polynomial of the risk-set weights; the score and information come from dynamic programming that carries e_k and its first and second derivatives in beta through each risk-set member.
 
 **Result.** `oracle_coxph` (1070 cases, 84 new) equals survival `ties = "exact"` on Windows to 1e-6 for counting-process data with strata (survival returns a bare list for that fit, so the oracle reads `$coefficients`, `$var` and `$loglik`). Linux pending. L311 stays partial: robust and cluster variance for counting-process and Efron fits, frailty, tmerge, Schoenfeld and score residuals for counting-process data, survdiff strata, interval and left censoring.
+
+## D7329 — survival: robust variance for counting-process Breslow fits
+
+**Decision.** `coxext.coxph_cp` also returns the inverse information, and `coxph_cp_robust` forms the sandwich V S V of a Breslow fit: the score residual of each row (x - xbar(t) at its deaths minus w (x - xbar(t)) d / S0 over the event times of (start, stop]) summed within a cluster index, S the cross product of the cluster sums.
+
+**Result.** `oracle_coxph` (1096 cases, 26 new) equals `coxph(..., robust = TRUE, cluster = row)` on Windows to 1e-6 for counting-process data with strata (survival asks for a cluster or id with start-stop data, so each row is its own cluster). Linux pending. L311 stays partial: robust variance for Efron and exact fits and by shared ids, frailty, tmerge, Schoenfeld and score residuals for counting-process data, survdiff strata, interval and left censoring.
