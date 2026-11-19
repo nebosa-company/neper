@@ -1,5 +1,5 @@
 # nnet::multinom (no decay), fitted tightly (reltol 1e-14) so the likelihood optimum is what is compared.
-#   args: (n, p, K, y[n] 0-based class, x[n*p] row-major with the constant first)
+#   args: (n, p, K, decay, y[n] 0-based class, x[n*p] row-major with the constant first)
 #   fn "dev" (deviance), "coef" (coefficient matrix of classes 2..K, row-major, weighted by position)
 suppressMessages(library(nnet))
 cases <- list()
@@ -16,7 +16,12 @@ for (rep in 1:20) {
   f <- multinom(y ~ ., data = d, trace = FALSE, maxit = 5000, reltol = 1e-14, abstol = 1e-14)
   cf <- coef(f)
   if (is.null(dim(cf))) cf <- matrix(cf, 1)
-  a <- c(n, p, K, y, as.vector(t(x)))
+  a <- c(n, p, K, 0, y, as.vector(t(x)))
   add("dev", a, deviance(f)); add("coef", a, sum(as.vector(t(cf)) * seq_along(cf)))
+  dc <- c(0.01, 0.1, 1)[rep %% 3 + 1]
+  fd <- multinom(y ~ ., data = d, decay = dc, trace = FALSE, maxit = 5000, reltol = 1e-14, abstol = 1e-14)
+  cd <- coef(fd); if (is.null(dim(cd))) cd <- matrix(cd, 1)
+  ad <- c(n, p, K, dc, y, as.vector(t(x)))
+  add("dev", ad, deviance(fd)); add("coef", ad, sum(as.vector(t(cd)) * seq_along(cd)))
 }
 emit("nnet", "nnet", list(cases))

@@ -1,13 +1,13 @@
-// R nnet::multinom without weight decay: the multinomial logit by Newton's method (R runs BFGS on the same likelihood, so the two agree to R's reltol). Class 0 is the reference; the coefficients are the K - 1 rows for classes 1 .. K - 1, p columns each (row-major).
+// R nnet::multinom with weight decay (the penalty decay * sum of squared coefficients added to the negative log-likelihood; the deviance returned is twice that objective, as multinom reports): the multinomial logit by Newton's method (R runs BFGS on the same likelihood, so the two agree to R's reltol). Class 0 is the reference; the coefficients are the K - 1 rows for classes 1 .. K - 1, p columns each (row-major).
 //
-// Not here: weight decay, case weights, the hidden-layer networks of nnet, softmax and censored responses.
+// Not here: case weights, the hidden-layer networks of nnet, softmax and censored responses.
 
 use e.algo.stat.gparot as gp
 use e.math
 use e.mem
 
 // returns the deviance, -2 log-likelihood (NaN if the Hessian is singular); iterations in it
-fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, coef: []f64) -> f64 {
+fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, decay: f64, coef: []f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let q = (nk - 1usize) * p
     let (gr, e1) = mem.alloc[f64](a, q)
@@ -88,6 +88,12 @@ fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
             }
             t += 1usize
         }
+        i = 0usize
+        while i < q {
+            gr[i] -= 2.0f64 * decay * coef[i]
+            h[i * q + i] += 2.0f64 * decay
+            i += 1usize
+        }
         let (inv, ie) = gp.invert(a, h, q)
         if ie != ok { ret nan }
         var step = 0.0f64
@@ -135,5 +141,11 @@ fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
         dev -= 2.0f64 * math.log[f64](pr[usize(cls[t])] / s)
         t += 1usize
     }
-    ret dev
+    var pen = 0.0f64
+    i = 0usize
+    while i < q {
+        pen += coef[i] * coef[i]
+        i += 1usize
+    }
+    ret dev + 2.0f64 * decay * pen
 }
