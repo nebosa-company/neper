@@ -539,3 +539,4 @@ oracle_envstats_gamma
 oracle_envstats_wl
 oracle_envstats_q
 oracle_envstats_int
+oracle_pmcmr_welch

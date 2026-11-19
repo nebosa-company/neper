@@ -50329,3 +50329,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7398 — PMCMRplus tukeyTest and scheffeTest
 `oneway_pair` forms the pooled within-group variance s2 = sum((n_g - 1) var_g) / (n - k) and, for the table cell (row group, column group) with dif the signed mean difference, Tukey's q = dif / sqrt(s2 (1/n_i + 1/n_j) / 2) with the upper Tukey probability of |q| at (k, n - k), and Scheffe's F = dif^2 / (s2 (1/n_i + 1/n_j)(k - 1)) with the upper F probability. Equal to R on 14 data sets, statistics and p values. L487 stays at 0.75.
+
+## D7399 — PMCMRplus welchManyOneTTest
+`welch_pair` is t.test(x = group j, y = group 1, var.equal = FALSE): t = (mean_j - mean_1) / sqrt(v_j/n_j + v_1/n_1) with the Welch-Satterthwaite df and the two-sided p; the comparison across groups is Holm-adjusted by the existing `p_adjust`. Equal to R on twelve unequal-variance data sets. L487 at 0.8.

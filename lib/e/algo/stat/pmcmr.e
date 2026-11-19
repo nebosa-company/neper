@@ -646,3 +646,41 @@ fn oneway_pair(x: []const f64, grp: []const usize, k: usize, ri: usize, cj: usiz
     let fv = dif * dif / (s2 * b * (kf - 1.0f64))
     ret (fv, nb.pf(fv, kf - 1.0f64, nf - kf, false, false))
 }
+
+// welchManyOneTTest: Welch's t of group j (1-based label j + 1) against group 1, t.test(x = group j, y = group 1): t = (mean_j - mean_1) / sqrt(v_j / n_j + v_1 / n_1) with the
+// Welch-Satterthwaite degrees of freedom; answers (t, unadjusted two-sided p)
+fn welch_pair(x: []const f64, grp: []const usize, j: usize) -> (f64, f64) {
+    var n1 = 0.0f64
+    var n2 = 0.0f64
+    var m1 = 0.0f64
+    var m2 = 0.0f64
+    var t = 0usize
+    while t < x.len {
+        if grp[t] == 1usize {
+            n1 += 1.0f64
+            m1 += x[t]
+        }
+        if grp[t] == j + 1usize {
+            n2 += 1.0f64
+            m2 += x[t]
+        }
+        t += 1usize
+    }
+    m1 = m1 / n1
+    m2 = m2 / n2
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    t = 0usize
+    while t < x.len {
+        if grp[t] == 1usize { s1 += (x[t] - m1) * (x[t] - m1) }
+        if grp[t] == j + 1usize { s2 += (x[t] - m2) * (x[t] - m2) }
+        t += 1usize
+    }
+    let v1 = s1 / (n1 - 1.0f64) / n1
+    let v2 = s2 / (n2 - 1.0f64) / n2
+    let tv = (m2 - m1) / math.sqrt[f64](v1 + v2)
+    let df = (v1 + v2) * (v1 + v2) / (v1 * v1 / (n1 - 1.0f64) + v2 * v2 / (n2 - 1.0f64))
+    var at = tv
+    if at < 0.0f64 { at = 0.0f64 - at }
+    ret (tv, 2.0f64 * nb.pt(0.0f64 - at, df, true, false))
+}
