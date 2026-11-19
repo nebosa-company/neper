@@ -50362,3 +50362,6 @@ vanWaerdenManyOneTest(p.adjust.method = "single-step") takes its p from the same
 
 ## D7409 — PMCMRplus tamhaneDunnettTest
 `tamhane_dunnett` forms the Welch-type t of each group against the control (separate variances) and the p from the same multivariate-t integral with an identity correlation matrix, i.e. independent normal components sharing one chi scale (lam = 0), at n_1 + n_j - 2 degrees of freedom: p = 1 - P(|T_i| < |t_j| for all i). Equal to R on twelve unequal-variance data sets (statistics exact, p within 4e-3). L487 at 0.96; steelsKSampleTest is the one piece left that needs R's compiled Steel code.
+
+## D7410 — PMCMRplus frdAllPairsSiegelTest
+`frd_pair` kind 5 is the Siegel-Castellan all-pairs test on a complete block design: the mean rank difference over sqrt(k (k + 1) / (6 n)) and the two-sided normal p; Holm adjustment runs over the k (k - 1) / 2 pairs through `p_adjust`, in R's column-by-column order of the lower triangle. Equal to R on twelve block designs (statistic, unadjusted and Holm p). L487 at 0.97; frdAllPairsExactTest and steelsKSampleTest remain of its acceptance list.

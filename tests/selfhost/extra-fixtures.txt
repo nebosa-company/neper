@@ -545,3 +545,4 @@ oracle_pmcmr_nemy
 oracle_pmcmr_steel
 oracle_pmcmr_dunnett
 oracle_pmcmr_tamhane
+oracle_pmcmr_siegel

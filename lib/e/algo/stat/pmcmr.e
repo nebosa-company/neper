@@ -365,6 +365,13 @@ fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: u
     }
     let nf = f64(n)
     let kf = f64(k)
+    if kind == 5usize {
+        // frdAllPairsSiegelTest: the mean rank difference over sqrt(k (k + 1) / (6 n)) and its two-sided normal p (unadjusted)
+        var dsg = (rs[i] - rs[j]) / nf
+        if dsg < 0.0f64 { dsg = 0.0f64 - dsg }
+        let zsg = dsg / math.sqrt[f64](kf * (kf + 1.0f64) / (6.0f64 * nf))
+        ret (zsg, 2.0f64 * dist.pnorm(0.0f64 - zsg, 0.0f64, 1.0f64, true, false), ok)
+    }
     if kind == 4usize {
         // frdManyOneNemenyiTest: the rank-sum difference over sqrt(n k (k + 1) / 6) and its single-step p, 1 - P(all |Z| < |stat|) for k - 1 equicorrelated (1/2) normals
         let zn = (rs[i] - rs[j]) / math.sqrt[f64](nf * kf * (kf + 1.0f64) / 6.0f64)
