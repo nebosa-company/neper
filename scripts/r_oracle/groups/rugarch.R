@@ -11,6 +11,6 @@ for (rep in 1:8) {
   if (is.null(f) || convergence(f) != 0) next
   cf <- coef(f); if (cf[["alpha1"]] < 0.03 || cf[["alpha1"]] + cf[["beta1"]] > 0.97) next
   v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], likelihood(f))
-  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("garch", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 5) 5e-5 else 5e-2, abs = if (k == 5) 2e-2 else 5e-3)
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("garch", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 5) 1e-6 else 1e-2, abs = if (k == 5) 1e-4 else 1e-3)
 }
 emit("rugarch", "rugarch", list(cases))

@@ -1,5 +1,5 @@
-// rugarch::ugarchfit(ugarchspec(sGARCH(1,1), constant mean, "norm")): the Gaussian quasi-maximum likelihood of r_t = mu + e_t, h_t = omega + alpha e_{t-1}^2 + beta h_{t-1} with the start of the recursion h_1 = omega + (alpha + beta) mean(e^2) (e at the current mu); rugarch's own backcast
-// is an exponentially smoothed mean (lambda 0.7), which moved the log-likelihood by up to 0.01 in 459 and is not reproduced, maximised by BFGS on an unconstrained parameterisation that keeps omega > 0, alpha, beta >= 0 and alpha + beta < 1.
+// rugarch::ugarchfit(ugarchspec(sGARCH(1,1), constant mean, "norm")): the Gaussian quasi-maximum likelihood of r_t = mu + e_t, h_t = omega + alpha e_{t-1}^2 + beta h_{t-1} with rugarch's start of the recursion, h_1 = mean(e^2) (e at the current mu), maximised by BFGS and Nelder-Mead polishing on an unconstrained parameterisation that keeps
+// omega > 0, alpha, beta >= 0 and alpha + beta < 1.
 //
 // Not here: other variance models and orders, ARMA means, other distributions, standard errors, forecasts, simulation, bootstrap.
 
@@ -20,7 +20,7 @@ fn garch_ll(y: []const f64, n: usize, mu: f64, om: f64, al: f64, be: f64) -> f64
         i += 1usize
     }
     m2 = m2 / f64(n)
-    var h = om + (al + be) * m2
+    var h = m2
     var ll = 0.0f64
     i = 0usize
     while i < n {
