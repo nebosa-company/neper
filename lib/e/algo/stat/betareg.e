@@ -332,3 +332,66 @@ fn lrtest(ll1: f64, npar1: usize, ll0: f64, npar0: usize, out: []f64) {
     out[1usize] = df
     out[2usize] = nm.pchisq(stat, df, false, false)
 }
+
+type VData = struct { x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize }
+
+fn negll_var(d: *VData, a: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < d.n {
+        var t = 0.0f64
+        var j = 0usize
+        while j < d.p {
+            t += d.x[i * d.p + j] * a[j]
+            j += 1usize
+        }
+        var u = 0.0f64
+        j = 0usize
+        while j < d.q {
+            u += d.z[i * d.q + j] * a[d.p + j]
+            j += 1usize
+        }
+        let phi = math.exp[f64](u)
+        let mu = linkinv(t, d.link)
+        let yi = d.y[i]
+        s += nm.lgammafn(phi) - nm.lgammafn(mu * phi) - nm.lgammafn((1.0f64 - mu) * phi) + (mu * phi - 1.0f64) * math.log[f64](yi) + ((1.0f64 - mu) * phi - 1.0f64) * math.log[f64](1.0f64 - yi)
+        i += 1usize
+    }
+    if s != s { ret 1.0e30f64 }
+    ret 0.0f64 - s
+}
+
+// betareg(y ~ x | z, link.phi = "log"): the precision phi_i = exp(z_i' gamma), z n by q row-major with an intercept first. par holds beta (p) then gamma (q); started from the constant-precision fit
+fn fit_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize) -> (Fit, err) {
+    let (f0, e0) = fit_link(a, x, y, n, p, link)
+    if e0 != ok { ret (zero, e0) }
+    var d = VData { x: x, z: z, y: y, n: n, p: p, q: q, link: link }
+    let m = p + q
+    let (par, e1) = mem.alloc[f64](a, m)
+    if e1 != ok { ret (zero, e1) }
+    var i = 0usize
+    while i < m {
+        par[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        par[i] = f0.par[i]
+        i += 1usize
+    }
+    par[p] = f0.par[p]
+    let (scr, e2) = mem.alloc[f64](a, (m + 1usize) * (m + 1usize) + 4usize * m)
+    if e2 != ok { ret (zero, e2) }
+    var round = 0usize
+    var last = 1.0e30f64
+    var best = 1.0e30f64
+    while round < 12usize {
+        let (r, e3) = opt.nelder_mead[VData](&d, negll_var, par, 0.2f64, 1.0e-15f64, 4000u32, scr)
+        if e3 != ok { ret (zero, e3) }
+        best = r.value
+        if math.abs[f64](last - r.value) < 1.0e-13f64 * (1.0f64 + math.abs[f64](r.value)) && round > 3usize { break }
+        last = r.value
+        round += 1usize
+    }
+    ret (Fit { par: par, phi: math.exp[f64](par[p]), ll: 0.0f64 - best }, ok)
+}

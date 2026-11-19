@@ -49952,3 +49952,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.agricolae` gains `group_letters` (orderPvalue: the treatments in decreasing order of mean, ties by position, and the letters assigned by walking the p-value matrix; a label is a bit mask over the letters a, b, c, ...) and `kruskal` with `kruskal_pair` (the Kruskal-Wallis statistic and chi-square p value over the average-tie ranks, the rank error mean square MSE = S (N - 1 - H) / (N - k), and the pairwise t comparisons of the mean ranks). The package rounds every pairwise p value to four decimals before the letters are assigned, so the port does too (`round4`).
 
 **Result.** `oracle_agricolae_groups` equals agricolae on 716 values (letters and order for LSD, HSD, SNK and Duncan, and the Kruskal statistic, p value and comparisons, over 14 balanced designs with 4 to 7 treatments) on Windows. Linux pending. L396 stays partial: Waller, the design functions and AMMI remain.
+
+## D7311 — betareg: variable dispersion
+
+**Decision.** `betareg.fit_var` fits `betareg(y ~ x | z)` with the default log precision link, phi_i = exp(z_i' gamma), by Nelder-Mead on the joint likelihood from the constant-precision fit; the fixture caches the fit across the cases of one data set.
+
+**Result.** `oracle_betareg` (620 cases, 70 new) equals betareg on Windows: mean and precision coefficients to 3e-3, log-likelihood to 1e-6. Linux pending. L451 stays partial: standard errors of the variable-dispersion fit, other precision links, bias correction, sweighted2.

@@ -62,6 +62,15 @@ fn fitl_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret se[which - 40usize]
 }
 
+fn same_but(a: []const f64, b: []const f64, skip: usize) -> bool {
+    var i = 0usize
+    while i < a.len {
+        if i != skip && a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // the fit of consecutive cases on the same data is reused
 fn same_bres(a: []const f64, b: []const f64) -> bool {
     if a.len != b.len { ret false }
@@ -99,6 +108,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var have = false
     var bcache: BCache = zero
     var cur: br.Fit = zero
+    var vcur: br.Fit = zero
+    var vhave = false
+    var vprev: []const f64 = golden.cases[0usize].args
     var prev: []const f64 = golden.cases[0usize].args
     while at < golden.cases.len {
         let c = &golden.cases[at]
@@ -109,6 +121,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 failures += 1usize
                 if failures <= 12usize {
                     let _ = io.print(oracle.describe(a, c, got3))
+                    let _ = io.print("\n")
+                }
+            }
+            at += 1usize
+            continue
+        }
+        if str.eq(c.name, "fitv") {
+            let vn = usize(x[0usize])
+            let vp = usize(x[1usize])
+            let vq = usize(x[2usize])
+            let vrefit = !vhave || vprev.len != x.len || !same_but(vprev, x, 4usize)
+            if vrefit {
+                let (vf, ve) = br.fit_var(a, x[5usize + vn..5usize + vn + vn * vp], x[5usize + vn + vn * vp..5usize + vn + vn * vp + vn * vq], x[5usize..5usize + vn], vn, vp, vq, usize(x[3usize]))
+                if ve != ok { os.exit(11) }
+                vcur = vf
+                vprev = x
+                vhave = true
+            }
+            let vw = usize(x[4usize])
+            var vgot = vcur.ll
+            if vw < 10usize { vgot = vcur.par[vw] }
+            if vw >= 10usize && vw < 30usize { vgot = vcur.par[vp + vw - 10usize] }
+            if !oracle.agrees(vgot, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, vgot))
                     let _ = io.print("\n")
                 }
             }

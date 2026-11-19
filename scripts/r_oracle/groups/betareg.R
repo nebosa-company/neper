@@ -52,4 +52,17 @@ for (rep in 1:10) {
     for (kd in 6:9) cases[[length(cases) + 1]] <- case("bres", c(n, p, lc, kd, i - 1, y, as.vector(t(design))), as.numeric(pr[[kd - 5]][i]), rel = 5e-3, abs = 1e-4)
   }
 }
+# variable dispersion: "fitv" args (n, p, q, link, which, y, X row-major n*p, Z row-major n*q): which 0..p-1 mean coefficient, 10 + j precision coefficient j, 30 log-likelihood
+for (rep in 1:10) {
+  n <- sample(80:160, 1); k <- sample(1:2, 1); X <- matrix(rnorm(n * k), n, k); zz <- rnorm(n); lk <- sample(c("logit", "probit", "cloglog"), 1); lc <- match(lk, c("logit", "probit", "cloglog")) - 1
+  eta <- 0.2 + X %*% c(0.6, -0.5)[1:k]; mu <- switch(lk, logit = plogis(eta), probit = pnorm(eta), cloglog = 1 - exp(-exp(eta))); phi <- exp(3 + 0.5 * zz)
+  y <- rbeta(n, mu * phi, (1 - mu) * phi); y <- pmin(pmax(y, 1e-4), 1 - 1e-4)
+  d <- data.frame(y = y, X, zz = zz); names(d) <- c("y", paste0("x", seq_len(k)), "zz")
+  f <- betareg(as.formula(paste("y ~", paste0("x", seq_len(k), collapse = " + "), "| zz")), data = d, link = lk); p <- k + 1; design <- cbind(1, X); zm <- cbind(1, zz)
+  mk <- function(w) c(n, p, 2, lc, w, y, as.vector(t(design)), as.vector(t(zm)))
+  cf <- coef(f, model = "mean"); cp <- coef(f, model = "precision")
+  for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("fitv", mk(j - 1), cf[[j]], rel = 3e-3, abs = 1e-4)
+  for (j in 1:2) cases[[length(cases) + 1]] <- case("fitv", mk(10 + j - 1), cp[[j]], rel = 3e-3, abs = 1e-4)
+  cases[[length(cases) + 1]] <- case("fitv", mk(30), as.numeric(logLik(f)), rel = 1e-6, abs = 1e-6)
+}
 emit("betareg", "betareg", list(cases))

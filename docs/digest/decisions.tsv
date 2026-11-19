@@ -4107,4 +4107,5 @@ D7313	772	WRS2: mcp2atm contrast tests
 D7314	1014	WRS2: ancova
 D7315	1178	WRS2: smmcrit confidence limits; L503 closed
 D7316	974	agricolae: SNK.test and duncan.test comparisons
-D7317	960	agricolae: grouping letters and the Kruskal post-hoc
+D7317	961	agricolae: grouping letters and the Kruskal post-hoc
+D7311	573	betareg: variable dispersion
