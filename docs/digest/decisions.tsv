@@ -4109,4 +4109,5 @@ D7315	1178	WRS2: smmcrit confidence limits; L503 closed
 D7316	974	agricolae: SNK.test and duncan.test comparisons
 D7317	961	agricolae: grouping letters and the Kruskal post-hoc
 D7311	574	betareg: variable dispersion
-D7318	766	agricolae: friedman
+D7318	767	agricolae: friedman
+D7319	1008	agricolae: waller.test

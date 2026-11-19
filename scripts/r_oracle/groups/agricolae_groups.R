@@ -37,4 +37,20 @@ for (rep in 1:10) {
   add("fd", sum(cmp[[1]] * w)); add("fq", sum(cmp[[2]] * w), abs = 1e-4 * nrow(cmp) * (nrow(cmp) + 1) / 2)
   add("fl", sum(cmp$LCL * w), abs = 0.01 * nrow(cmp) * (nrow(cmp) + 1) / 2 + 1e-9); add("fu", sum(cmp$UCL * w), abs = 0.01 * nrow(cmp) * (nrow(cmp) + 1) / 2 + 1e-9)
 }
+# waller.test (kind 7, K = 100, any sizes): args (7, n, k, y[n], group labels [n], idx); fn "wt" the critical value, "wf" the F value, "wm" the sum over pairs of MSD weighted by pair
+# position, "wg" the group letter mask at sorted position idx, "wo" the treatment at that position
+for (rep in 1:8) {
+  k <- sample(3:6, 1); sz <- if (rep %% 2 == 0) rep(sample(4:7, 1), k) else sample(3:8, k, replace = TRUE); n <- sum(sz)
+  g <- factor(rep(1:k, sz)); y <- round(rnorm(n) + as.numeric(g) * runif(1, 0.1, 0.9), 4)
+  m <- aov(y ~ g)
+  wt <- tryCatch(waller.test(m, "g", group = TRUE), error = function(e) NULL)
+  if (is.null(wt)) next
+  cmp <- waller.test(m, "g", group = FALSE)$comparison
+  a <- c(7, n, k, y, as.numeric(g))
+  add <- function(fn, extra, want, rel = 1e-9, abs = 1e-12) cases[[length(cases) + 1]] <<- case(fn, c(a, extra), want, rel = rel, abs = abs)
+  tw <- if ("Waller" %in% names(wt$statistics)) wt$statistics$Waller else cmp$MSD[1] / sqrt(wt$statistics$MSerror * (1 / sz[1] + 1 / sz[2])); add("wt", 0, tw, rel = 0, abs = 1e-9); add("wf", 0, wt$statistics$F.Value)
+  if ("MSD" %in% names(cmp)) add("wm", 0, sum(cmp$MSD * seq_len(nrow(cmp)))) else add("wm", 0, wt$statistics$CriticalDifference * sum(seq_len(nrow(cmp))))
+  r <- wt$groups
+  for (i in seq_len(nrow(r))) { add("wg", i - 1, mask(as.character(r$groups[i])), rel = 0, abs = 0); add("wo", i - 1, as.numeric(rownames(r)[i]), rel = 0, abs = 0) }
+}
 emit("agricolae_groups", "agricolae", list(cases))

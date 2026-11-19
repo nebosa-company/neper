@@ -40,6 +40,58 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tot
     }
+    if kind == 7usize {
+        let wy = x[3usize..3usize + n]
+        let (wg, f1) = mem.alloc[usize](a, n)
+        let (wmn, f2) = mem.alloc[f64](a, k)
+        let (wsz, f3) = mem.alloc[f64](a, k)
+        if f1 != ok || f2 != ok || f3 != ok { os.exit(8) }
+        var wi = 0usize
+        while wi < n {
+            wg[wi] = usize(x[3usize + n + wi])
+            wi += 1usize
+        }
+        let ww = ag.one_way(wy, wg, k, wmn, wsz)
+        let fc = ag.waller_fc(ww, wy, wmn, wsz)
+        let tw = ag.waller(a, 100.0f64, f64(k) - 1.0f64, ww.df, fc)
+        if str.eq(c.name, "wt") { ret tw }
+        if str.eq(c.name, "wf") { ret fc }
+        var tot = 0.0f64
+        var pos = 1usize
+        var p1 = 0usize
+        while p1 < k {
+            var q1 = p1 + 1usize
+            while q1 < k {
+                tot += ag.waller_msd(ww, tw, wsz, p1, q1) * f64(pos)
+                pos += 1usize
+                q1 += 1usize
+            }
+            p1 += 1usize
+        }
+        if str.eq(c.name, "wm") { ret tot }
+        let (wp, f4) = mem.alloc[f64](a, k * k)
+        let (wq, f5) = mem.alloc[usize](a, k)
+        let (wk, f6) = mem.alloc[u64](a, k)
+        if f4 != ok || f5 != ok || f6 != ok { os.exit(9) }
+        var u = 0usize
+        while u < k {
+            var v = 0usize
+            while v < k {
+                wp[u * k + v] = 1.0f64
+                if u != v {
+                    var d = wmn[u] - wmn[v]
+                    if d < 0.0f64 { d = 0.0f64 - d }
+                    if d > ag.waller_msd(ww, tw, wsz, u, v) { wp[u * k + v] = 0.0f64 }
+                }
+                v += 1usize
+            }
+            u += 1usize
+        }
+        ag.group_letters(wmn, wp, k, 0.0f64, wq, wk)
+        let widx = usize(x[3usize + 2usize * n])
+        if str.eq(c.name, "wo") { ret f64(wq[widx] + 1usize) }
+        ret f64(wk[widx])
+    }
     let y = x[3usize..3usize + n]
     let (grp, e1) = mem.alloc[usize](a, n)
     let (mean, e2) = mem.alloc[f64](a, k)

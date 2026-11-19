@@ -7,6 +7,7 @@
 use e.math
 use e.math.nmath_beta as nb
 use e.math.nmath as nm
+use e.math.quadpack as qp
 use e.mem
 
 type OneWay = struct { mse: f64, df: f64, k: usize }
@@ -322,3 +323,71 @@ fn friedman_pair(fr: Friedman, s: []const f64, blocks: usize, i: usize, j: usize
 fn nb2pt(x: f64, df: f64) -> f64 { ret nb.pt(x, df, true, false) }
 
 fn nb2qt(p: f64, df: f64) -> f64 { ret nb.qt(p, df, true, false) }
+
+// ---- waller.test: the Waller-Duncan K-ratio t test. The critical value is agricolae's bisection of t on (1, 20) (50 steps, stopping when the interval is under
+// 5e-4) over four integrals on (1, Inf), each by the same QUADPACK routine R's integrate uses (qagi, tolerance eps^0.25, 100 subdivisions), rounded to three decimals.
+type WCtx = struct { m: f64, q: f64, f: f64, fc: f64 }
+
+fn wal_g(c: *WCtx, x: f64) -> f64 {
+    ret math.pow[f64](x, 0.0f64 - (c.q + 3.0f64) / 2.0f64) * math.pow[f64](c.f + c.q * c.fc / x, 0.0f64 - (c.f + c.q - 1.0f64) / 2.0f64)
+}
+
+fn wal_b(c: *WCtx, x: f64) -> f64 { ret math.sqrt[f64]((c.f + c.q) * (x - 1.0f64) / (c.f * x + c.q * c.fc)) }
+
+fn wal_h(c: *WCtx, z: f64) -> f64 {
+    ret ((c.f + c.q + z * z) / (c.f + c.q - 1.0f64)) * nb.dt(z, c.q + c.f, false) + z * nb.pt(z, c.q + c.f, true, false)
+}
+
+fn wal_int(c: *WCtx, x: f64) -> f64 { ret math.sqrt[f64](x - 1.0f64) * wal_g(c, x) * wal_h(c, c.m * wal_b(c, x)) }
+
+fn wal_integral(a: *mem.Arena, c: *WCtx, m: f64) -> f64 {
+    c.m = m
+    let eps = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    let (r, e) = qp.qagi[WCtx](a, c, wal_int, 1.0f64, 1i64, eps, eps, 100usize)
+    if e != ok { ret 0.0f64 }
+    ret r.result
+}
+
+fn waller(a: *mem.Arena, k: f64, q: f64, f: f64, fc: f64) -> f64 {
+    var c = WCtx { m: 0.0f64, q: q, f: f, fc: fc }
+    var a0 = 1.0f64
+    var b0 = 20.0f64
+    var t = 0.0f64
+    var i = 0usize
+    while i < 50usize {
+        t = (b0 + a0) / 2.0f64
+        let in0 = wal_integral(a, &c, t)
+        let id0 = wal_integral(a, &c, 0.0f64 - t)
+        let in1 = wal_integral(a, &c, a0)
+        let id1 = wal_integral(a, &c, 0.0f64 - a0)
+        let prod = (k - in0 / id0) * (k - in1 / id1)
+        if prod <= 0.0f64 { b0 = t }
+        if prod > 0.0f64 { a0 = t }
+        var gap = b0 - a0
+        if gap < 0.0f64 { gap = 0.0f64 - gap }
+        if gap <= 0.0005f64 { break }
+        i += 1usize
+    }
+    ret math.floor[f64](t * 1000.0f64 + 0.5f64) / 1000.0f64
+}
+
+// the F value of the treatment effect of a one-way layout (the between mean square over the error mean square); mean and size as filled by one_way
+fn waller_fc(w: OneWay, y: []const f64, mean: []const f64, size: []const f64) -> f64 {
+    var tot = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        tot += y[i]
+        i += 1usize
+    }
+    let gm = tot / f64(y.len)
+    var ssb = 0.0f64
+    var g = 0usize
+    while g < w.k {
+        ssb += size[g] * (mean[g] - gm) * (mean[g] - gm)
+        g += 1usize
+    }
+    ret (ssb / (f64(w.k) - 1.0f64)) / w.mse
+}
+
+// the pairwise verdicts of the Waller-Duncan test: the minimum significant difference of the pair (i, j) is tw sqrt(mse (1 / n_i + 1 / n_j))
+fn waller_msd(w: OneWay, tw: f64, size: []const f64, i: usize, j: usize) -> f64 { ret tw * math.sqrt[f64](w.mse * (1.0f64 / size[i] + 1.0f64 / size[j])) }

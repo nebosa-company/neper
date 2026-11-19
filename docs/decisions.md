@@ -49964,3 +49964,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.agricolae` gains `friedman` and `friedman_pair`: the Friedman test of a blocks by treatments table (within-block average-tie ranks, the rank sums, the tie-adjusted chi-square statistic and its p value, the F statistic and its p value) and the post-hoc comparisons of the rank sums (the difference, the p value rounded to four decimals, and limits using the least significant difference rounded to two decimals, as the package does).
 
 **Result.** `oracle_agricolae_groups` has 796 values (adding ten Friedman designs with 5 to 12 blocks and 3 to 6 treatments, half of them with ties from one-decimal data) and equals agricolae on Windows. Linux pending. L396 stays partial: Waller, the design functions and AMMI remain.
+
+## D7319 — agricolae: waller.test
+
+`e.algo.stat.agricolae` gains `waller`, the critical value of the Waller-Duncan K-ratio t test: agricolae's bisection of t on (1, 20) (at most 50 steps, stopping once the bracket is under 5e-4) over four integrals on (1, Inf) of sqrt(x - 1) g(x) h(+/- t b(x)), each by the QUADPACK routine R's `integrate` calls (`e.math.quadpack.qagi`, tolerance eps^0.25, 100 subdivisions), the result rounded to three decimals; `waller_fc` (the F value of the treatment effect) and `waller_msd` (the minimum significant difference of a pair, valid for unequal sizes). The groups follow from the verdicts with `group_letters` at alpha 0 (a pair is either significant or not).
+
+**Result.** `oracle_agricolae_groups` has 890 values (adding eight Waller designs, half of them unbalanced: the critical value, the F value, the minimum significant differences and the grouping letters) and equals agricolae on Windows. Linux pending. L396 stays partial: the design functions and AMMI remain.
