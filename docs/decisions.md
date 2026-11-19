@@ -50479,3 +50479,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `survfitpkg.survdiff_ks` is the stratified G-rho test: inside each stratum the pooled Kaplan-Meier weights, observed-less-expected events and hypergeometric covariance are formed separately and added across strata before the chi-square on k - 1 degrees of freedom.
 
 **Result.** `oracle_survdiff` (140 cases, 30 new with two or three groups and two or three strata) equals survival on Windows to 1e-7. Linux pending. L311 stays partial: robust variance for Efron and exact fits and by shared ids, frailty, tmerge, Schoenfeld and score residuals for counting-process data, interval and left censoring.
+
+## D7331 — parameters: standardize_parameters of an lm
+
+**Decision.** `performancepkg.std_params_lm` z-scores the response and the numeric predictors and fits least squares, returning the slopes and their t intervals at the asked level; for an lm with numeric predictors the refit, basic and posthoc methods all give these slopes.
+
+**Result.** `oracle_performancepkg` (1188 cases, 183 new on 15 models) equals `parameters::standardize_parameters` on Windows to 1e-8. Linux pending. L339 stays partial: factor predictors and the interaction-aware methods, bayestestR map_estimate, si and bayesfactor_savagedickey (they need R's density()), Nakagawa R2 and icc (mixed models), other outlier methods.

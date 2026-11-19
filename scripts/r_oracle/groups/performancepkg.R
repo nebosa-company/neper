@@ -78,4 +78,12 @@ for (rep in 1:25) {
   v <- c(od$dispersion_ratio, od$chisq_statistic, od$p_value, zi$observed.zeros, zi$predicted.zeros, zi$ratio)
   for (w in 0:5) cases[[length(cases) + 1]] <- case("pchk", c(w, n, p, y, as.vector(t(X))), as.numeric(v[w + 1]), rel = 1e-7, abs = 1e-10)
 }
+# standardize_parameters of an lm (numeric predictors): "stdp" (n, p, level, j, which 0 slope 1 lower 2 upper, y[n], x row-major n by p)
+suppressMessages(library(parameters)); suppressMessages(library(effectsize))
+for (rep in 1:15) {
+  n <- sample(25:100, 1); p <- sample(1:4, 1); X <- matrix(round(rnorm(n * p), 3), n, p); colnames(X) <- paste0("x", 1:p)
+  y <- round(as.vector(X %*% runif(p, -1, 1)) + rnorm(n), 3); d <- data.frame(y = y, X); lev <- sample(c(0.9, 0.95, 0.99), 1)
+  r <- as.data.frame(suppressMessages(standardize_parameters(lm(y ~ ., d), method = "refit", ci = lev)))
+  for (j in 1:p) for (w in 0:2) cases[[length(cases) + 1]] <- case("stdp", c(n, p, lev, j - 1, w, y, as.vector(t(X))), r[j + 1, c("Std_Coefficient", "CI_low", "CI_high")[w + 1]], rel = 1e-8, abs = 1e-10)
+}
 emit("performancepkg", "performance", list(cases))

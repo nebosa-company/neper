@@ -19,7 +19,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let x = c.args
         var got = 0.0f64
-        if str.eq(c.name, "het") {
+        if str.eq(c.name, "stdp") {
+            // args (n, p, level, j, which 0 slope 1 lower 2 upper, y[n], x row-major n by p)
+            let sn = usize(x[0usize])
+            let sp = usize(x[1usize])
+            let (so, se) = mem.alloc[f64](a, 3usize * sp)
+            if se != ok { os.exit(9) }
+            if pf.std_params_lm(a, x[5usize + sn..5usize + sn + sn * sp], x[5usize..5usize + sn], sn, sp, x[2usize], so) != ok { os.exit(10) }
+            got = so[usize(x[4usize]) * sp + usize(x[3usize])]
+        } else if str.eq(c.name, "het") {
             let hn = usize(x[0usize])
             let hp = usize(x[1usize])
             got = pf.heteroscedasticity_p(a, x[2usize + hn..2usize + hn + hn * hp], x[2usize..2usize + hn], hn, hp)

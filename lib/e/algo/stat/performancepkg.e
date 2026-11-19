@@ -9,6 +9,8 @@ use e.algo.stat.desctools as dt
 use e.algo.stat.test as tst
 use e.algo.stat.flexmixpkg as fx
 use e.mem
+use e.algo.stat.olsfit as of
+use e.math.nmath_beta as nbq
 
 // the index `which` of the lm of y on x (n by p, intercept column included): 0 r2, 1 r2_adjusted, 2 rmse, 3 mae, 4 mse, 5 sigma, 6 loglik, 7 aic, 8 aicc, 9 bic
 fn lm_index(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, which: usize) -> f64 {
@@ -518,4 +520,72 @@ fn poisson_checks(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: us
     let pr0 = math.round[f64](pred0)
     if which == 4usize { ret pr0 }
     ret pr0 / obs0
+}
+
+// parameters::standardize_parameters of an lm with numeric predictors (every method gives the same slopes): the slopes of the least-squares fit of the z-scored response on the z-scored predictors, with their
+// t intervals at `level`. x is n by p row-major without the intercept. out[0 .. p] slopes, then p lower limits, then p upper limits
+fn std_params_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, level: f64, out: []f64) -> err {
+    let (des, e1) = mem.alloc[f64](a, n * (p + 1usize))
+    let (zy, e2) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    let nn = f64(n)
+    var i = 0usize
+    while i < n {
+        des[i] = 1.0f64
+        i += 1usize
+    }
+    var j = 0usize
+    while j < p {
+        var m = 0.0f64
+        i = 0usize
+        while i < n {
+            m += x[i * p + j]
+            i += 1usize
+        }
+        m = m / nn
+        var ss = 0.0f64
+        i = 0usize
+        while i < n {
+            ss += (x[i * p + j] - m) * (x[i * p + j] - m)
+            i += 1usize
+        }
+        let sd = math.sqrt[f64](ss / (nn - 1.0f64))
+        i = 0usize
+        while i < n {
+            des[(j + 1usize) * n + i] = (x[i * p + j] - m) / sd
+            i += 1usize
+        }
+        j += 1usize
+    }
+    var my = 0.0f64
+    i = 0usize
+    while i < n {
+        my += y[i]
+        i += 1usize
+    }
+    my = my / nn
+    var sy = 0.0f64
+    i = 0usize
+    while i < n {
+        sy += (y[i] - my) * (y[i] - my)
+        i += 1usize
+    }
+    let sdy = math.sqrt[f64](sy / (nn - 1.0f64))
+    i = 0usize
+    while i < n {
+        zy[i] = (y[i] - my) / sdy
+        i += 1usize
+    }
+    let (o, e3) = of.fit(a, des, n, p + 1usize, zy)
+    if e3 != ok { ret e3 }
+    let tq = nbq.qt(1.0f64 - (1.0f64 - level) / 2.0f64, nn - f64(p) - 1.0f64, true, false)
+    j = 0usize
+    while j < p {
+        out[j] = o.coef[j + 1usize]
+        out[p + j] = o.coef[j + 1usize] - tq * o.se[j + 1usize]
+        out[2usize * p + j] = o.coef[j + 1usize] + tq * o.se[j + 1usize]
+        j += 1usize
+    }
+    ret ok
 }
