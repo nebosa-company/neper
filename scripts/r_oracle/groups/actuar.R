@@ -182,6 +182,11 @@ for (rep in 1:60) {
   cases[[length(cases) + 1]] <- case("zq", c(kd, a, b, p0, pp, 0), zt, rel = 0, abs = 0)
   if (is.finite(zm)) cases[[length(cases) + 1]] <- case("zq", c(kd, a, b, p0, pp, 1), zm, rel = 0, abs = 0)
 }
+# inverse Gaussian quantile: "iq" args (mean, shape, p)
+for (rep in 1:40) {
+  mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); pp <- runif(1, 0.02, 0.98)
+  cases[[length(cases) + 1]] <- case("iq", c(mu, s, pp), qinvgauss(pp, mu, s), rel = 1e-7, abs = 1e-10)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

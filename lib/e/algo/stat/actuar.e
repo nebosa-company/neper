@@ -658,3 +658,17 @@ fn zm_q(kind: usize, p: f64, a: f64, b: f64, p0: f64) -> f64 {
     if p <= p0 { ret 0.0f64 }
     ret zt_q(kind, (p - p0) / (1.0f64 - p0), a, b)
 }
+
+// inverse Gaussian quantile by bisection on the cdf
+fn ig_q(p: f64, mu: f64, s: f64) -> f64 {
+    var lo = 0.0f64
+    var hi = mu
+    while ig_p(hi, mu, s) < p && hi < 1.0e300f64 { hi *= 2.0f64 }
+    var i = 0usize
+    while i < 200usize {
+        let mid = 0.5f64 * (lo + hi)
+        if ig_p(mid, mu, s) < p { lo = mid } else { hi = mid }
+        i += 1usize
+    }
+    ret 0.5f64 * (lo + hi)
+}

@@ -51136,3 +51136,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7547 — actuar zero-truncated and zero-modified count quantiles
 `zt_q` and `zm_q` find the quantile by searching the base cdf (R's 1 - 64 eps fuzz): the zero-truncated quantile is the base quantile at p + (1 - p) f(0), the zero-modified one is 0 up to p0 and the zero-truncated quantile of (p - p0) / (1 - p0) above it. Equal to actuar qzt* and qzm* for Poisson, negative binomial, binomial and geometric bases on 60 draws (109 values added to oracle_actuar, 5017 in all); actuar answers NaN for qzmbinom at p <= p0, which is not compared.
+
+## D7548 — actuar inverse Gaussian quantile
+`ig_q` inverts `ig_p` by bisection (200 halvings from an upper bound found by doubling the mean). Equal to actuar qinvgauss at 1e-7 relative on 40 draws (47 values added to oracle_actuar, 5064 in all).

@@ -150,6 +150,7 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         if usize(x[5usize]) == 0usize { ret ac.zt_q(kq, x[4usize], x[1usize], x[2usize]) }
         ret ac.zm_q(kq, x[4usize], x[1usize], x[2usize], x[3usize])
     }
+    if str.eq(c.name, "iq") { ret ac.ig_q(x[2usize], x[0usize], x[1usize]) }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])
