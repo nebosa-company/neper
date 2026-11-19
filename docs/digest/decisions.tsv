@@ -4320,4 +4320,5 @@ D7466	581	sm h.select for two covariates, common and separate structures
 D7467	845	energy.hclust
 D7468	493	MASS negative.binomial family terms
 D7469	579	MASS gamma.shape
-D7470	712	MASS stepAIC for lm
+D7470	713	MASS stepAIC for lm
+D7471	648	MASS fitdistr for the t family

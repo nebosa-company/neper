@@ -567,3 +567,4 @@ oracle_energy_hc
 oracle_mass_nbfam
 oracle_mass_gshape
 oracle_mass_step
+oracle_mass_fdt
