@@ -4600,4 +4600,5 @@ D7699	936	unmarked: visit-level detection covariates and missing visits
 D7700	685	unmarked: standard errors for the visit-level occupancy fit; L515 re-scored
 D7701	1025	unmarked: Royle-Nichols occupancy
 D7702	467	unmarked: standard errors for occuRN
-D7703	930	bayestestR: p_map and p_significance
+D7703	931	bayestestR: p_map and p_significance
+D7704	682	bayestestR: the bias-corrected and accelerated interval

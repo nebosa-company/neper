@@ -28,7 +28,7 @@ L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanH
 L334	library	0.75	1455	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
 L394	library	0.05	448	ipred: bagging and error estimation	Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred;
 L338	library	0.2	756	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
-L339	library	0.16	1752	bayestestR, performance and parameters: model summary indices	D7703: bayestestR p_map and p_significance equal to bayestestR (50 values added to oracle_bayestestr).
+L339	library	0.16	1809	bayestestR, performance and parameters: model summary indices	D7703, D7704: bayestestR p_map, p_significance and the bias-corrected and accelerated interval bci equal to bayestestR (100 values added to oracle_bayestestr).
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 
 L361	library	0.2	1406	segmented and strucchange: breakpoints and structural change	Partial (D6613).

@@ -35,4 +35,11 @@ for (rep in 1:25) {
   cases[[length(cases) + 1]] <- case("pmap", c(nl, 0, n, x), as.numeric(suppressWarnings(p_map(x, null = nl))), rel = 1e-6, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("psig", c(th, 0, n, x), as.numeric(suppressWarnings(p_significance(x, threshold = th))), rel = 1e-9, abs = 1e-12)
 }
+# bci (bias-corrected and accelerated): "bci" (ci, part 0 low 1 high, n, x...)
+for (rep in 1:25) {
+  n <- sample(80:500, 1); x <- round(if (rep %% 3 == 0) rgamma(n, 2, 1) else rnorm(n, runif(1, -1, 1), runif(1, 0.5, 2)), 5); ci <- sample(c(0.5, 0.8, 0.9, 0.95), 1)
+  b <- bci(x, ci = ci)
+  cases[[length(cases) + 1]] <- case("bci", c(ci, 0, n, x), b$CI_low, rel = 1e-9, abs = 1e-11)
+  cases[[length(cases) + 1]] <- case("bci", c(ci, 1, n, x), b$CI_high, rel = 1e-9, abs = 1e-11)
+}
 emit("bayestestr", "bayestestR", list(cases))

@@ -5,6 +5,7 @@
 
 use e.algo.stat.desctools as dt
 use e.math
+use e.math.dist as dst
 use e.mem
 use e.algo.stat.bwsel as bws
 use e.algo.stat.rdensity as rdn
@@ -192,4 +193,43 @@ fn p_significance(x: []const f64, threshold: f64) -> f64 {
     }
     if pos > neg { ret pos / n }
     ret neg / n
+}
+
+// bayestestR::bci(x, ci): the bias-corrected and accelerated interval: z the normal quantile of the share of draws below the mean, a the skewness-based acceleration mean(d^3) / (6 mean(d^2)^1.5) of the deviations from the mean,
+// and the limits the type-7 quantiles of the sample at pnorm(z + (z + q) / (1 - a (z + q))) for q the normal quantile of each tail; part 0 low, 1 high
+fn bci(a: *mem.Arena, x: []const f64, ci: f64, part: usize) -> f64 {
+    let (s, e) = dt.sorted_copy(a, x)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let n = f64(s.len)
+    var mean = 0.0f64
+    var i = 0usize
+    while i < s.len {
+        mean += s[i]
+        i += 1usize
+    }
+    mean = mean / n
+    var below = 0.0f64
+    var d2 = 0.0f64
+    var d3 = 0.0f64
+    i = 0usize
+    while i < s.len {
+        if s[i] < mean { below += 1.0f64 }
+        let d = s[i] - mean
+        d2 += d * d
+        d3 += d * d * d
+        i += 1usize
+    }
+    let zinv = below / n
+    let z = dst.qnorm(zinv, 0.0f64, 1.0f64, true, false)
+    if z != z || math.abs[f64](z) > 1.0e300f64 {
+        if part == 0usize { ret s[0usize] }
+        ret s[s.len - 1usize]
+    }
+    var acc = (d3 / n) / (6.0f64 * math.pow[f64](d2 / n, 1.5f64))
+    if acc != acc { acc = 0.0f64 }
+    var prob = (1.0f64 - ci) / 2.0f64
+    if part == 1usize { prob = 1.0f64 - (1.0f64 - ci) / 2.0f64 }
+    let q = dst.qnorm(prob, 0.0f64, 1.0f64, true, false)
+    let inv = dst.pnorm(z + (z + q) / (1.0f64 - acc * (z + q)), 0.0f64, 1.0f64, true, false)
+    ret dt.quant7(s, inv)
 }
