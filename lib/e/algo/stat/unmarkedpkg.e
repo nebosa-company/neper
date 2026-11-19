@@ -368,3 +368,18 @@ fn occurn(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: usiz
     out[k] = 0.0f64 - rn_f(&c, par)
     ret true
 }
+
+// the standard errors of the `occurn` fit at est, for the same K
+fn occurn_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: usize, j: usize, p1: usize, p2: usize, kk: usize, est: []const f64, out: []f64) -> bool {
+    let (qq, e1) = mem.alloc[f64](a, p1 + p2)
+    let (lf, e5) = mem.alloc[f64](a, kk + 2usize)
+    if e1 != ok || e5 != ok { ret false }
+    lf[0usize] = 0.0f64
+    var i = 1usize
+    while i <= kk + 1usize {
+        lf[i] = lf[i - 1usize] + math.log[f64](f64(i))
+        i += 1usize
+    }
+    var c = RnCtx { x: x, z: z, y: y, m: m, j: j, p1: p1, p2: p2, kk: kk, lf: lf, q: qq }
+    ret nh.hessian_se[RnCtx](a, &c, rn_f, est, p1 + p2, out)
+}

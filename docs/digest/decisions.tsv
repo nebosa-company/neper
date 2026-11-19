@@ -4598,4 +4598,5 @@ D7697	1328	rugarch: AR(1) and AR(2) means; D7696 solved
 D7698	1346	rugarch: MA(1) and ARMA(1,1) means; L398 re-scored
 D7699	936	unmarked: visit-level detection covariates and missing visits
 D7700	685	unmarked: standard errors for the visit-level occupancy fit; L515 re-scored
-D7701	1024	unmarked: Royle-Nichols occupancy
+D7701	1025	unmarked: Royle-Nichols occupancy
+D7702	466	unmarked: standard errors for occuRN
