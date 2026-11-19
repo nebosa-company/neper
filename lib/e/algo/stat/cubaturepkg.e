@@ -446,3 +446,47 @@ fn hcubature_gm(a: *mem.Arena, id: usize, d: usize, lo: []const f64, hi: []const
     out[2usize] = f64(neval)
     ret ok
 }
+
+// the Clenshaw-Curtis estimate of the fixed integrand id over lo..hi with n = 2^k + 1 points (the nodes cos(pi j / (n - 1)))
+fn cc_estimate(id: usize, lo: f64, hi: f64, n: usize) -> f64 {
+    let nn = n - 1usize
+    let pi = 3.141592653589793f64
+    var total = 0.0f64
+    var j = 0usize
+    while j <= nn {
+        let th = pi * f64(j) / f64(nn)
+        var s = 0.0f64
+        var k = 0usize
+        while k <= nn / 2usize {
+            var b0 = 2.0f64
+            if k == 0usize || k == nn / 2usize { b0 = 1.0f64 }
+            s += b0 / (1.0f64 - 4.0f64 * f64(k) * f64(k)) * math.cos[f64](2.0f64 * f64(k) * th)
+            k += 1usize
+        }
+        var wj = 2.0f64 * s / f64(nn)
+        if j == 0usize || j == nn { wj = s / f64(nn) }
+        var p: [1]f64 = zero
+        p[0usize] = (lo + hi) / 2.0f64 + (hi - lo) / 2.0f64 * math.cos[f64](th)
+        total += wj * integrand(id, 1usize, p[0usize..1usize])
+        j += 1usize
+    }
+    ret total * (hi - lo) / 2.0f64
+}
+
+// pcubature in one dimension: Clenshaw-Curtis rules of 5, 9, 17, ... points (nested, so the evaluations are the points of the last rule), the error the distance to the previous rule, stopping
+// when it is within tol * |integral| or the next rule would pass max_eval; out = (integral, error, evaluations)
+fn pcubature_1d(id: usize, lo: f64, hi: f64, tol: f64, max_eval: usize, out: []f64) {
+    var prev = cc_estimate(id, lo, hi, 3usize)
+    var n = 5usize
+    var cur = cc_estimate(id, lo, hi, n)
+    var er = math.abs[f64](cur - prev)
+    while er > tol * math.abs[f64](cur) && n * 2usize - 1usize <= max_eval && n < 4097usize {
+        prev = cur
+        n = n * 2usize - 1usize
+        cur = cc_estimate(id, lo, hi, n)
+        er = math.abs[f64](cur - prev)
+    }
+    out[0usize] = cur
+    out[1usize] = er
+    out[2usize] = f64(n)
+}

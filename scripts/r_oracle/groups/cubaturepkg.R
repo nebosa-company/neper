@@ -27,4 +27,14 @@ for (rep in 1:36) {
   cases[[length(cases) + 1]] <- case("hg", c(a, 1), r$error, rel = 1e-6, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("hg", c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
 }
+# pcubature in one dimension (Clenshaw-Curtis): "pc" args (id, 1, lo, hi, tol, maxEval, which) with which 0 the integral, 1 the error estimate, 2 the evaluation count
+for (rep in 1:24) {
+  id <- (rep - 1) %% 4; lo <- round(runif(1, 0, 0.5), 3); hi <- lo + round(runif(1, 0.4, 1.5), 3); tl <- c(1e-3, 1e-6, 1e-9)[1 + rep %% 3]
+  r <- pcubature(fs[[id + 1]], lo, hi, tol = tl, maxEval = 20000)
+  if (r$functionEvaluations >= 4000) next
+  a <- c(id, 1, lo, hi, tl, 20000)
+  cases[[length(cases) + 1]] <- case("pc", c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("pc", c(a, 1), r$error, rel = 1e-5, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("pc", c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
+}
 emit("cubaturepkg", "cubature", list(cases))
