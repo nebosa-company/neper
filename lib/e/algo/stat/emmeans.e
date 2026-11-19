@@ -551,7 +551,7 @@ fn contrast_coefs(kind: usize, k: usize, out: []f64) -> usize {
 // returns the number of contrasts, 0 when the fit fails
 fn contrast_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, xc: []const f64, n: usize, k: usize, kind: usize, out: []f64) -> usize {
     var q = k
-    if xc.len > 0usize { q = k + 1usize }
+    if xc.len > 0usize { q = k + xc.len / n }
     let (x, e1) = mem.alloc[f64](a, n * q)
     let (cf, e2) = mem.alloc[f64](a, k * k * k)
     let (l, e3) = mem.alloc[f64](a, q)
@@ -564,8 +564,16 @@ fn contrast_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, xc: []const 
     var i = 0usize
     while i < n {
         x[usize(grp[i]) * n + i] = 1.0f64
-        if xc.len > 0usize { x[k * n + i] = xc[i] }
         i += 1usize
+    }
+    var cx = 0usize
+    while cx * n < xc.len {
+        i = 0usize
+        while i < n {
+            x[(k + cx) * n + i] = xc[cx * n + i]
+            i += 1usize
+        }
+        cx += 1usize
     }
     let (fm, fe) = fit(a, x, y, n, q)
     if fe != ok { ret 0usize }
