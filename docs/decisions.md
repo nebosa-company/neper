@@ -50170,3 +50170,9 @@ New `e.algo.stat.mgcvpkg` starts the mgcv item with the `bs = "cr"` smooth: `pla
 `e.algo.stat.mgcvpkg` gains `gam_gcv_select2`: for an additive model of two smooths, the two smoothing parameters minimising the GCV score n rss / (n - edf)^2, by a 25 by 25 grid over (log sp1, log sp2) in [-12, 12]^2 followed by restarted Nelder-Mead (`e.math.opt`). The GCV surface of a two-smooth model has a long flat valley and mgcv's Newton iteration sometimes stops short of the best point: in one of the eight oracle data sets gam's score was 0.1474 where a direct search found 0.1460 (the port's value). The oracle therefore expects the best score found by gam or by a grid search over gam(..., sp = ) fits in R, and compares the effective degrees of freedom and fitted values (loosely) only where gam itself reached that score.
 
 **Result.** `oracle_mgcv_gcv2` passes on 91 values (eight data sets of 80 to 130 points, a cubic regression smooth and a P-spline, the best GCV score to 1e-5 in all, the edf and fits for the seven where gam found it) on Windows. Linux pending. L353 stays partial: ML and multi-smooth REML selection, the smooth-term test, the thin-plate and tensor smooths, non-Gaussian families, linear extrapolation and anova remain.
+
+## D7314 — betareg: hat values and sweighted2 residuals
+
+**Decision.** `betareg.hat_value` gives h_i = w_i x_i' (X' W X)^-1 x_i with w = phi (psi'(mu phi) + psi'((1 - mu) phi)) (d mu / d eta)^2, and `sweighted2` divides the sweighted residual by sqrt(1 - h).
+
+**Result.** `oracle_betareg` (781 cases, 40 new sweighted2 values) equals betareg on Windows. Linux pending. L451 stays partial: bias correction and bias reduction.

@@ -96,6 +96,7 @@ fn bres_answer(a: *mem.Arena, c: *const oracle.Case, bc: *BCache) -> f64 {
         bc.prev = x
         bc.set = true
     }
+    if usize(x[3usize]) == 10usize { ret br.sweighted2(a, x[5usize + n..5usize + n + n * p], x[5usize..5usize + n], n, p, link, &bc.fit, usize(x[4usize])) }
     ret br.fit_value(x[5usize + n..5usize + n + n * p], x[5usize..5usize + n], p, link, &bc.fit, usize(x[4usize]), usize(x[3usize]))
 }
 

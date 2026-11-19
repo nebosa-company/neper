@@ -508,3 +508,59 @@ fn fit_se_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: 
     }
     ret true
 }
+
+// betareg hatvalues (constant precision): h_i = w_i x_i' (X' W X)^-1 x_i with w = phi (psi'(mu phi) + psi'((1 - mu) phi)) (d mu / d eta)^2; negative when singular
+fn hat_value(a: *mem.Arena, x: []const f64, n: usize, p: usize, link: usize, f: *const Fit, at: usize) -> f64 {
+    let (xwx, e1) = mem.alloc[f64](a, p * p)
+    let (col, e2) = mem.alloc[f64](a, p)
+    let (wi, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret -1.0f64 }
+    var i = 0usize
+    while i < p * p {
+        xwx[i] = 0.0f64
+        i += 1usize
+    }
+    let phi = f.phi
+    i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var j = 0usize
+        while j < p {
+            t += x[i * p + j] * f.par[j]
+            j += 1usize
+        }
+        let mu = linkinv(t, link)
+        let gp = gprime(mu, link)
+        let w = phi * (gsl.psi_n(1usize, mu * phi) + gsl.psi_n(1usize, (1.0f64 - mu) * phi)) / (gp * gp)
+        wi[i] = w
+        j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                xwx[j * p + k] += w * x[i * p + j] * x[i * p + k]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < p {
+        col[j] = x[at * p + j]
+        j += 1usize
+    }
+    if !qrb.solve_dense(xwx, col, p) { ret -1.0f64 }
+    var q = 0.0f64
+    j = 0usize
+    while j < p {
+        q += x[at * p + j] * col[j]
+        j += 1usize
+    }
+    ret wi[at] * q
+}
+
+// residuals(f, type = "sweighted2") of observation at: the sweighted residual divided by sqrt(1 - hat value)
+fn sweighted2(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, link: usize, f: *const Fit, at: usize) -> f64 {
+    let h = hat_value(a, x, n, p, link, f, at)
+    ret fit_value(x, y, p, link, f, at, 4usize) / math.sqrt[f64](1.0f64 - h)
+}
