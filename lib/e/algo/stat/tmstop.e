@@ -266,3 +266,66 @@ fn remove_punctuation_opts(a: *mem.Arena, s: str, keep_contractions: bool, keep_
     }
     ret (str.done(&bd), ok)
 }
+
+fn is_letter_byte(b: u8) -> bool { ret (b >= 65u8 && b <= 90u8) || (b >= 97u8 && b <= 122u8) }
+
+fn is_digit_byte(b: u8) -> bool { ret b >= 48u8 && b <= 57u8 }
+
+// whether the punctuation byte at j joins the word around it: a full stop or apostrophe between two letters or two digits, a comma between two digits
+fn joins_at(s: str, j: usize) -> bool {
+    if j == 0usize || j + 1usize >= s.len { ret false }
+    let c = s[j]
+    let pv = s[j - 1usize]
+    let nx = s[j + 1usize]
+    if (c == 46u8 || c == 39u8) && ((is_letter_byte(pv) && is_letter_byte(nx)) || (is_digit_byte(pv) && is_digit_byte(nx))) { ret true }
+    if c == 44u8 && is_digit_byte(pv) && is_digit_byte(nx) { ret true }
+    ret false
+}
+
+// tokenizers::tokenize_words / tidytext unnest_tokens(token = "words") on ASCII text, lower-cased: runs of letters, digits and underscores (ICU ExtendNumLet) with a single full stop or apostrophe keeping letters or digits together (a.b, don't, 3.14) and a comma keeping digits
+// together (1,000), a lone underscore dropped (ICU skip_word_none; two or more are kept as a word), everything else a break; the tokens come back separated by newlines
+fn tokenize_words(a: *mem.Arena, s: str) -> (str, err) {
+    let (bld, eb) = str.builder(a, s.len + 2usize)
+    if eb != ok { ret ("", eb) }
+    var bd = bld
+    var first = true
+    var i = 0usize
+    while i < s.len {
+        let c = s[i]
+        if !(is_letter_byte(c) || is_digit_byte(c) || c == 95u8) {
+            i += 1usize
+            continue
+        }
+        var j = i
+        var has = false
+        var going = true
+        while going && j < s.len {
+            let d = s[j]
+            if is_letter_byte(d) || is_digit_byte(d) {
+                has = true
+                j += 1usize
+            } else if d == 95u8 {
+                j += 1usize
+            } else if joins_at(s, j) {
+                j += 1usize
+            } else {
+                going = false
+            }
+        }
+        if has || j - i >= 2usize {
+            if !first {
+                if str.push_byte(&bd, 10u8) != ok { ret ("", mem.Full) }
+            }
+            first = false
+            var k = i
+            while k < j {
+                var o = s[k]
+                if o >= 65u8 && o <= 90u8 { o = o + 32u8 }
+                if str.push_byte(&bd, o) != ok { ret ("", mem.Full) }
+                k += 1usize
+            }
+        }
+        i = j
+    }
+    ret (str.done(&bd), ok)
+}

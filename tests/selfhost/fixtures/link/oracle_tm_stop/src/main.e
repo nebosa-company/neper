@@ -39,6 +39,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret sm2
     }
     let w = str.done(&bd)
+    if str.eq(c.name, "twn") || str.eq(c.name, "tws") {
+        let (r3, er3) = ts.tokenize_words(a, w)
+        if er3 != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(c.name, "twn") { ret f64(r3.len) }
+        var sm3 = 0.0f64
+        var k3 = 0usize
+        while k3 < r3.len {
+            sm3 += f64(r3[k3]) * f64(k3 + 1usize)
+            k3 += 1usize
+        }
+        ret sm3
+    }
     if str.eq(c.name, "rpn") || str.eq(c.name, "rps") {
         let (r, er) = ts.remove_punctuation(a, w)
         if er != ok { ret 0.0f64 / 0.0f64 }

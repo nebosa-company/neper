@@ -20,4 +20,13 @@ for (rep in 1:80) {
   cases[[length(cases) + 1]] <- case("rqn", c(fl, utf8ToInt(txt)), length(cc), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("rqs", c(fl, utf8ToInt(txt)), sum(cc * seq_along(cc)), rel = 0, abs = 0)
 }
+# tokenizers::tokenize_words (tidytext unnest_tokens words): "tw" the text codes; the tokens joined by newlines, as length ("twn") and position-weighted code sum ("tws")
+suppressMessages(library(tokenizers))
+for (rep in 1:100) {
+  txt <- paste(sample(c(letters[1:5], LETTERS[1:3], "0", "1", "7", " ", " ", ".", "'", ",", "-", "_", "!", "?", "a", "b"), sample(3:40, 1), TRUE), collapse = "")
+  tk <- tokenize_words(txt)[[1]]; r <- paste(tk, collapse = "
+"); cc <- utf8ToInt(r)
+  cases[[length(cases) + 1]] <- case("twn", utf8ToInt(txt), length(cc), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("tws", utf8ToInt(txt), sum(cc * seq_along(cc)), rel = 0, abs = 0)
+}
 emit("tm_stop", "tm", list(cases))
