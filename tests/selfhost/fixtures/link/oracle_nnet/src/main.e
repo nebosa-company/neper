@@ -1,6 +1,7 @@
 // e.algo.stat.nnetpkg against nnet multinom. tests/oracle/nnet.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R nnet`; the layout is at the top of scripts/r_oracle/groups/nnet.R.
 
+use e.algo.rand.r as rr
 use e.algo.stat.nnetpkg as nn
 use e.io
 use e.mem
@@ -11,6 +12,45 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "sdv") || str.eq(c.name, "sds") || str.eq(c.name, "sdw") {
+        let nn_ = usize(z[0usize])
+        let pp = usize(z[1usize])
+        let hh = usize(z[2usize])
+        let kk = usize(z[3usize])
+        let md = usize(z[4usize])
+        let skp = z[7usize] > 0.5f64
+        var nw = hh * (pp + 1usize) + kk * (1usize + hh)
+        if skp { nw += kk * pp }
+        let (wv, ew) = mem.alloc[f64](a, nw)
+        let (fit, ef) = mem.alloc[f64](a, nn_ * kk)
+        if ew != ok || ef != ok { ret nan }
+        var g: rr.Rng = zero
+        rr.seed(&g, i64(z[8usize]))
+        var q = 0usize
+        while q < nw {
+            wv[q] = rr.runif(&g, 0.0f64 - z[9usize], z[9usize])
+            q += 1usize
+        }
+        let xo = 10usize
+        let yo = xo + nn_ * pp
+        let wo = yo + nn_ * kk
+        let val = nn.nnet_fit(a, z[xo..yo], z[yo..wo], z[wo..wo + nn_], nn_, pp, hh, kk, md, skp, z[5usize], usize(z[6usize]), 1.0e-8f64, 1.0e-4f64, wv, fit)
+        if str.eq(c.name, "sdv") { ret val }
+        var sm = 0.0f64
+        q = 0usize
+        if str.eq(c.name, "sds") {
+            while q < nn_ * kk {
+                sm += fit[q]
+                q += 1usize
+            }
+            ret sm
+        }
+        while q < nw {
+            sm += wv[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret sm
+    }
     if str.eq(c.name, "netv") || str.eq(c.name, "nets") || str.eq(c.name, "netw") {
         let nn_ = usize(z[0usize])
         let pp = usize(z[1usize])

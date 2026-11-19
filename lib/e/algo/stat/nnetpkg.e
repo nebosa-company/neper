@@ -227,6 +227,12 @@ fn net_forward(c: *NetCtx, wts: []const f64, t: usize, hid: []f64, out: []f64) {
     }
 }
 
+// the logarithm nnet uses in its entropy terms: the argument is floored at 1e-80
+fn net_log(v: f64) -> f64 {
+    if v < 1.0e-80f64 { ret math.log[f64](1.0e-80f64) }
+    ret math.log[f64](v)
+}
+
 fn net_f(c: *NetCtx, wts: []const f64) -> f64 {
     var hid: [64]f64 = zero
     var out: [16]f64 = zero
@@ -240,9 +246,9 @@ fn net_f(c: *NetCtx, wts: []const f64) -> f64 {
             if c.mode <= 1usize {
                 e += c.w[t] * (out[o] - tg) * (out[o] - tg)
             } else if c.mode == 2usize {
-                e -= c.w[t] * (tg * math.log[f64](out[o]) + (1.0f64 - tg) * math.log[f64](1.0f64 - out[o]))
+                e -= c.w[t] * (tg * net_log(out[o]) + (1.0f64 - tg) * net_log(1.0f64 - out[o]))
             } else {
-                e -= c.w[t] * tg * math.log[f64](out[o])
+                e -= c.w[t] * tg * net_log(out[o])
             }
             o += 1usize
         }

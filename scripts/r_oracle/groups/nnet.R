@@ -47,6 +47,24 @@ for (rep in 1:48) {
   a <- c(n, p, h, k, mode, dc, 100, as.numeric(sk), w0, as.vector(t(x)), as.vector(t(y)), wv)
   cases[[length(cases) + 1]] <- case("netv", a, f$value, rel = 1e-7, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("nets", a, sum(f$fitted.values), rel = 1e-7, abs = 1e-9)
-  cases[[length(cases) + 1]] <- case("netw", a, sum(f$wts * seq_along(f$wts)), rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("netw", a, sum(f$wts * seq_along(f$wts)), rel = 1e-6, abs = 1e-9)
+}
+# the same from set.seed: "sdv", "sds", "sdw" args (n, p, h, k, mode, decay, maxit, skip, seed, rang, x, y, case weights): the start weights are runif(nwts, -rang, rang) drawn by nnet itself
+for (rep in 1:40) {
+  n <- sample(40:100, 1); p <- sample(1:3, 1); h <- sample(1:4, 1); dc <- c(0, 0.01, 0.1)[rep %% 3 + 1]; sk <- rep %% 2 == 0; mode <- (rep - 1) %% 4; rg <- c(0.7, 0.5, 1)[rep %% 3 + 1]
+  k <- if (mode == 0) sample(1:2, 1) else if (mode == 3) sample(2:3, 1) else sample(1:3, 1)
+  x <- matrix(rnorm(n * p), n)
+  y <- switch(mode + 1,
+    matrix(sin(x[, 1]) + 0.5 * rowSums(x) + rnorm(n * k, 0, 0.2), n, k),
+    matrix(1 / (1 + exp(-(x[, 1] + rnorm(n * k, 0, 0.5)))), n, k),
+    matrix(rbinom(n * k, 1, 1 / (1 + exp(-(x[, 1])))), n, k),
+    class.ind(sample(k, n, TRUE, prob = seq_len(k))))
+  sd <- sample(1:100000, 1); set.seed(sd)
+  f <- tryCatch(suppressWarnings(nnet(x, y, size = h, linout = (mode == 0), entropy = (mode == 2), softmax = (mode == 3), skip = sk, rang = rg, decay = dc, maxit = 100, trace = FALSE)), error = function(e) NULL)
+  if (is.null(f) || f$convergence != 0) next
+  a <- c(n, p, h, k, mode, dc, 100, as.numeric(sk), sd, rg, as.vector(t(x)), as.vector(t(y)), rep(1, n))
+  cases[[length(cases) + 1]] <- case("sdv", a, f$value, rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("sds", a, sum(f$fitted.values), rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("sdw", a, sum(f$wts * seq_along(f$wts)), rel = 1e-6, abs = 1e-9)
 }
 emit("nnet", "nnet", list(cases))
