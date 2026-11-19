@@ -130,3 +130,47 @@ fn par_risk_ci(t: Table2, level: f64, units: f64, kind: usize) -> (f64, f64, f64
     let z = z_of(level)
     ret (est, est - z * se, est + z * se)
 }
+
+// epiR zRRscore, the interior case (0 < a < a + b and 0 < c < c + d): the score (Miettinen-Nurminen) risk-ratio interval from the roots of the
+// score cubic; (est, lower, upper)
+fn rr_score(t: Table2, level: f64) -> (f64, f64, f64) {
+    let z = z_of(level)
+    let a = t.a
+    let b = t.b
+    let c = t.c
+    let n1 = t.a + t.b
+    let n0 = t.c + t.d
+    let est = (a / n1) / (c / n0)
+    let z2 = z * z
+    let a1 = n0 * (n0 * (n0 + n1) * a + n1 * (n0 + a) * z2)
+    let a2 = 0.0f64 - n0 * (n0 * n1 * (c + a) + 2.0f64 * (n0 + n1) * c * a + n1 * (n0 + c + 2.0f64 * a) * z2)
+    let a3 = 2.0f64 * n0 * n1 * c * (c + a) + (n0 + n1) * c * c * a + n0 * n1 * (c + a) * z2
+    let a4 = 0.0f64 - n1 * c * c * (c + a)
+    let b1 = a2 / a1
+    let b2 = a3 / a1
+    let b3 = a4 / a1
+    let c1 = b2 - b1 * b1 / 3.0f64
+    let c2 = b3 - b1 * b2 / 3.0f64 + 2.0f64 * b1 * b1 * b1 / 27.0f64
+    var ax = math.sqrt[f64](27.0f64) * c2 / (2.0f64 * c1 * math.sqrt[f64](0.0f64 - c1))
+    if ax <= -1.0f64 || ax >= 1.0f64 { ax = 0.0f64 }
+    let ceta = math.acos[f64](ax)
+    let pi = 3.141592653589793f64
+    let s = 2.0f64 * math.sqrt[f64](0.0f64 - c1 / 3.0f64)
+    let p01 = 0.0f64 - s * math.cos[f64](pi / 3.0f64 - ceta / 3.0f64) - b1 / 3.0f64
+    let p02 = 0.0f64 - s * math.cos[f64](pi / 3.0f64 + ceta / 3.0f64) - b1 / 3.0f64
+    let p03 = s * math.cos[f64](ceta / 3.0f64) - b1 / 3.0f64
+    let p0sum = p01 + p02 + p03
+    let p0up = math.min[f64](p01, math.min[f64](p02, p03))
+    let p0low = p0sum - p0up - math.max[f64](p01, math.max[f64](p02, p03))
+    let lo = (1.0f64 - (n1 - a) * (1.0f64 - p0low) / (c + n1 - (n0 + n1) * p0low)) / p0low
+    let hi = (1.0f64 - (n1 - a) * (1.0f64 - p0up) / (c + n1 - (n0 + n1) * p0up)) / p0up
+    ret (est, lo, hi)
+}
+
+// attributable fraction in the exposed from the score interval of the risk ratio: (RR - 1) / RR, the bounds the min and max of the two limit maps
+fn af_risk(t: Table2, level: f64) -> (f64, f64, f64) {
+    let (rr, lo, hi) = rr_score(t, level)
+    let f1 = (lo - 1.0f64) / lo
+    let f2 = (hi - 1.0f64) / hi
+    ret ((rr - 1.0f64) / rr, math.min[f64](f1, f2), math.max[f64](f1, f2))
+}

@@ -4406,4 +4406,5 @@ D7547	546	actuar zero-truncated and zero-modified count quantiles
 D7548	249	actuar inverse Gaussian quantile
 D7549	589	actuar random generators under set.seed
 D7550	527	actuar transformed beta generators under set.seed
-D7551	754	epiR population attributable fraction and risk
+D7551	755	epiR population attributable fraction and risk
+D7552	645	epiR score risk-ratio interval and attributable fraction in the exposed

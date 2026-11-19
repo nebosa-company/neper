@@ -12,6 +12,26 @@ fn answer(c: *const oracle.Case) -> f64 {
     let t = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
     let units = x[4usize]
     let w = usize(x[5usize])
+    if w >= 33usize || (w >= 21usize && w < 24usize) {
+        var xe = 0.0f64
+        var xl = 0.0f64
+        var xh = 0.0f64
+        if w >= 33usize {
+            let (e5, l5, h5) = ep.af_risk(t, 0.95f64)
+            xe = e5
+            xl = l5
+            xh = h5
+        } else {
+            let (e6, l6, h6) = ep.rr_score(t, 0.95f64)
+            xe = e6
+            xl = l6
+            xh = h6
+        }
+        let r5 = (w - 21usize) % 3usize
+        if r5 == 0usize { ret xe }
+        if r5 == 1usize { ret xl }
+        ret xh
+    }
     if w >= 24usize {
         var re = 0.0f64
         var rl = 0.0f64
