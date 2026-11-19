@@ -129,3 +129,39 @@ fn p1_m(k: f64, a: f64, m: f64) -> f64 { ret a * math.pow[f64](m, k) / (a - k) }
 fn p1_lev(x: f64, k: f64, a: f64, m: f64) -> f64 {
     ret a * math.pow[f64](m, k) / (a - k) - k * math.pow[f64](m, a) / ((a - k) * math.pow[f64](x, a - k))
 }
+
+// actuar aggregateDist("recursive"): Panjer's recursion for the aggregate claim probabilities fs[0 .. nn] from the discretised severity fx (fx[0] the mass at zero) and a frequency of the (a, b, 0) class: kind 0 Poisson(p1 = lambda),
+// 1 binomial(p1 = size, p2 = prob), 2 negative binomial(p1 = size, p2 = prob), 3 geometric(p1 = prob); fs[x] = (1 / (1 - a fx[0])) sum_{y = 1..x} (a + b y / x) fx[y] fs[x - y]
+fn panjer(kind: usize, p1: f64, p2: f64, fx: []const f64, nn: usize, fs: []f64) {
+    let f0 = fx[0usize]
+    var a = 0.0f64
+    var b = 0.0f64
+    var s0 = 0.0f64
+    if kind == 0usize {
+        b = p1
+        s0 = math.exp[f64](p1 * (f0 - 1.0f64))
+    } else if kind == 1usize {
+        a = 0.0f64 - p2 / (1.0f64 - p2)
+        b = (p1 + 1.0f64) * p2 / (1.0f64 - p2)
+        s0 = math.pow[f64](1.0f64 - p2 + p2 * f0, p1)
+    } else if kind == 2usize {
+        a = 1.0f64 - p2
+        b = (p1 - 1.0f64) * (1.0f64 - p2)
+        s0 = math.pow[f64](p2 / (1.0f64 - (1.0f64 - p2) * f0), p1)
+    } else {
+        a = 1.0f64 - p1
+        s0 = p1 / (1.0f64 - (1.0f64 - p1) * f0)
+    }
+    fs[0usize] = s0
+    var x = 1usize
+    while x <= nn {
+        var s = 0.0f64
+        var y = 1usize
+        while y <= x && y < fx.len {
+            s += (a + b * f64(y) / f64(x)) * fx[y] * fs[x - y]
+            y += 1usize
+        }
+        fs[x] = s / (1.0f64 - a * f0)
+        x += 1usize
+    }
+}

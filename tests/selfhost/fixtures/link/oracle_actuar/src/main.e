@@ -10,6 +10,30 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "pj") {
+        let m = usize(x[3usize])
+        let nn = usize(x[4usize + m])
+        var fs: [64]f64 = zero
+        ac.panjer(usize(x[0usize]), x[1usize], x[2usize], x[4usize..4usize + m], nn, fs[0usize..64usize])
+        if usize(x[5usize + m]) == 0usize {
+            var tot = 0.0f64
+            var i = 0usize
+            while i <= nn {
+                tot += fs[i]
+                i += 1usize
+            }
+            ret tot
+        }
+        var run = 0.0f64
+        var sm = 0.0f64
+        var j = 0usize
+        while j <= nn {
+            run += fs[j]
+            sm += run * f64(j + 1usize)
+            j += 1usize
+        }
+        ret sm
+    }
     let fam = u8(x[0usize])
     let kind = u8(x[1usize])
     let s1 = x[2usize]

@@ -54,4 +54,18 @@ for (rep in 1:6) {
   }
   for (pp in c(0.05, 0.4, 0.9)) add("q", c(3, 0, al, 0, 0, mn, pp, 0), qpareto1(pp, al, mn))
 }
+# aggregateDist("recursive") (Panjer): "pj" args (kind, p1, p2, m, fx[m], nn): the cdf at nn and the pmf-weighted sum of the first nn + 1 cdf values
+suppressMessages(library(actuar))
+set.seed(20262500)
+for (rep in 1:40) {
+  kd <- rep %% 4; m <- sample(3:8, 1); fx <- c(runif(1, 0, 0.5), runif(m - 1)); fx <- fx / sum(fx); nn <- sample(8:25, 1)
+  F <- switch(kd + 1, { l <- runif(1, 0.5, 4); p1 <- l; p2 <- 0; aggregateDist("recursive", model.freq = "poisson", model.sev = fx, lambda = l, x.scale = 1) },
+    { s <- sample(2:10, 1); pr <- runif(1, 0.1, 0.7); p1 <- s; p2 <- pr; aggregateDist("recursive", model.freq = "binomial", model.sev = fx, size = s, prob = pr, x.scale = 1) },
+    { s <- runif(1, 0.5, 5); pr <- runif(1, 0.2, 0.8); p1 <- s; p2 <- pr; aggregateDist("recursive", model.freq = "negative binomial", model.sev = fx, size = s, prob = pr, x.scale = 1) },
+    { pr <- runif(1, 0.2, 0.8); p1 <- pr; p2 <- 0; aggregateDist("recursive", model.freq = "geometric", model.sev = fx, prob = pr, x.scale = 1) })
+  v <- F(0:nn)
+  if (any(!is.finite(v)) || max(knots(F)) < nn) next
+  cases[[length(cases) + 1]] <- case("pj", c(kd, p1, p2, m, fx, nn, 0), v[nn + 1], rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("pj", c(kd, p1, p2, m, fx, nn, 1), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
+}
 emit("actuar", "actuar", list(cases))
