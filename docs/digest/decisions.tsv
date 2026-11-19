@@ -4590,4 +4590,5 @@ D7689	692	unmarked: standard errors of the occupancy fit
 D7690	672	unmarked: pcount standard errors, one Hessian routine
 D7691	869	rugarch: sGARCH standard errors; the Hessian routine in its own module
 D7692	929	rugarch: standard errors of gjrGARCH, eGARCH and the Student t fit
-D7693	976	rugarch: robust standard errors tried, not matched
+D7693	977	rugarch: robust standard errors tried, not matched
+D7694	1048	rugarch robust errors: the source read, still not matched
