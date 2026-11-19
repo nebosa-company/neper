@@ -14,4 +14,13 @@ for (rep in 1:20) {
   vr <- vartaylor_ratio(yy, xx, pk2)
   add(c(2, n, 0, 0, yy, xx, as.vector(t(pk2))), vr$ratio); add(c(2, n, 0, 1, yy, xx, as.vector(t(pk2))), vr$estvar)
 }
+# regest: args (3, n, p, i, y[n], pikl[n * n], x[n * p] row-major with the constant first, Tx[p - 1]): i 0 the estimate, 1 + j beta_j, 1 + p + j the standard error of beta_j.
+for (rep in 1:15) {
+  n <- sample(8:14, 1); p <- sample(2:3, 1); y <- round(rnorm(n, 20, 5), 3)
+  X <- cbind(1, matrix(round(runif(n * (p - 1), 1, 9), 3), n)); Tx <- round(colSums(X)[-1] * 3, 3)
+  pk <- UPtillepi2(inclusionprobabilities(round(runif(n, 1, 3), 3), 3)); if (any(diag(pk) <= 0) || any(pk[row(pk) != col(pk)] <= 0)) next
+  r <- tryCatch(regest(y ~ X - 1, Tx, 1 / diag(pk), pk, n), error = function(e) NULL); if (is.null(r)) next
+  base <- function(i) c(3, n, p, i, y, as.vector(t(pk)), as.vector(t(X)), Tx)
+  add(base(0), r$regest); for (j in 0:(p - 1)) { add(base(1 + j), unname(r$coefficients)[j + 1]); add(base(1 + p + j), unname(r$std_error)[j + 1]) }
+}
 emit("sampling_var", "sampling", list(cases))

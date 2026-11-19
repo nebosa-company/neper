@@ -1403,3 +1403,128 @@ fn var_taylor_ratio(y: []const f64, x: []const f64, pikl: []const f64, out: []f6
     out[0usize] = r
     out[1usize] = s
 }
+
+// regest(y ~ x, Tx, weights = 1 / pik, pikl): the regression estimator of the total with its weighted-least-squares coefficients and sandwich standard errors. x is n by p row-major with the
+// constant in column 0 and Tx the p - 1 known totals of the other columns; pikl is the n by n joint inclusion matrix (diagonal pik). out = (estimate, beta[p], std_error[p]).
+fn regest(a: *mem.Arena, y: []const f64, x: []const f64, p: usize, w: []const f64, pikl: []const f64, tx: []const f64, out: []f64) -> err {
+    let n = y.len
+    let (am, e0) = mem.alloc[f64](a, p * p)
+    let (rhs, e1) = mem.alloc[f64](a, p)
+    let (beta, e2) = mem.alloc[f64](a, p)
+    let (res, e3) = mem.alloc[f64](a, n)
+    let (v, e4) = mem.alloc[f64](a, p * p)
+    let (u, e5) = mem.alloc[f64](a, n * p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    var r = 0usize
+    var i = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            i = 0usize
+            while i < n {
+                s += x[i * p + r] * w[i] * x[i * p + c]
+                i += 1usize
+            }
+            am[r * p + c] = s
+            c += 1usize
+        }
+        var t = 0.0f64
+        i = 0usize
+        while i < n {
+            t += x[i * p + r] * w[i] * y[i]
+            i += 1usize
+        }
+        rhs[r] = t
+        r += 1usize
+    }
+    let (inv, ie) = gp.invert(a, am, p)
+    if ie != ok { ret ie }
+    r = 0usize
+    while r < p {
+        var b = 0.0f64
+        var c = 0usize
+        while c < p {
+            b += inv[r * p + c] * rhs[c]
+            c += 1usize
+        }
+        beta[r] = b
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var fit = 0.0f64
+        r = 0usize
+        while r < p {
+            fit += x[i * p + r] * beta[r]
+            r += 1usize
+        }
+        res[i] = y[i] - fit
+        r = 0usize
+        while r < p {
+            u[i * p + r] = x[i * p + r] * w[i] * res[i]
+            r += 1usize
+        }
+        i += 1usize
+    }
+    // V = u' delta u with delta_kl = 1 - pik_k pik_l / pikl_kl and delta_kk = 1 - pik_k
+    r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            var k = 0usize
+            while k < n {
+                var l = 0usize
+                while l < n {
+                    var dl = 1.0f64 - pikl[k * n + k]
+                    if k != l { dl = 1.0f64 - pikl[k * n + k] * pikl[l * n + l] / pikl[k * n + l] }
+                    s += u[k * p + r] * dl * u[l * p + c]
+                    l += 1usize
+                }
+                k += 1usize
+            }
+            v[r * p + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    // the Horvitz-Thompson estimate of y and the correction with the known totals of the other columns
+    var est = 0.0f64
+    i = 0usize
+    while i < n {
+        est += y[i] / pikl[i * n + i]
+        i += 1usize
+    }
+    var j = 1usize
+    while j < p {
+        var ht = 0.0f64
+        i = 0usize
+        while i < n {
+            ht += x[i * p + j] / pikl[i * n + i]
+            i += 1usize
+        }
+        est += beta[j] * (tx[j - 1usize] - ht)
+        j += 1usize
+    }
+    out[0usize] = est
+    r = 0usize
+    while r < p {
+        out[1usize + r] = beta[r]
+        var s = 0.0f64
+        var c = 0usize
+        while c < p {
+            var vc = 0.0f64
+            var d = 0usize
+            while d < p {
+                vc += v[c * p + d] * inv[d * p + r]
+                d += 1usize
+            }
+            s += inv[r * p + c] * vc
+            c += 1usize
+        }
+        out[1usize + p + r] = math.sqrt[f64](s)
+        r += 1usize
+    }
+    ret ok
+}

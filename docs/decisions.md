@@ -50275,3 +50275,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7382 — sampling varest and vartaylor_ratio
 `var_est` is varest on y or, with covariates, on the residuals of the weighted regression (X' W X)^-1 X' W y, with a_i = (1 - pik_i)/sum(1 - pik) and the divisor 1 - sum(a^2); `var_taylor_ratio` is vartaylor_ratio: the ratio of the Horvitz-Thompson totals and the linearised variance from the joint inclusion matrix. Equal to sampling to 1e-9 on twenty samples (the matrix from UPtillepi2). L508 at 0.9.
+
+## D7383 — sampling regest
+`regest` fits the weighted regression with weights 1/pik, forms the Horvitz-Thompson estimate plus sum(beta_j (Tx_j - HT(x_j))) over the non-constant columns, and the sandwich covariance (X'WX)^-1 V (X'WX)^-1 with V = u' delta u, u = x w e, delta_kl = 1 - pik_k pik_l / pikl_kl and delta_kk = 1 - pik_k; the standard errors are the square roots of its diagonal. Equal to sampling to 1e-9 on fifteen Tille designs (the joint matrix from UPtillepi2, skipping designs with a non-positive cell). L508 at 0.92.

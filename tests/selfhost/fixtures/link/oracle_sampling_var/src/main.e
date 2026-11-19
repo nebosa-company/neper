@@ -14,6 +14,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let p = usize(x[2usize])
     let which = usize(x[3usize])
     let y = x[4usize..4usize + n]
+    if kind == 3usize {
+        let pk3 = x[4usize + n..4usize + n + n * n]
+        let x3 = x[4usize + n + n * n..4usize + n + n * n + n * p]
+        let tx3 = x[4usize + n + n * n + n * p..4usize + n + n * n + n * p + p - 1usize]
+        let (w3, e6) = mem.alloc[f64](a, n)
+        let (o3, e7) = mem.alloc[f64](a, 2usize * p + 1usize)
+        if e6 != ok || e7 != ok { os.exit(7) }
+        var t3 = 0usize
+        while t3 < n {
+            w3[t3] = 1.0f64 / pk3[t3 * n + t3]
+            t3 += 1usize
+        }
+        if sp.regest(a, y, x3, p, w3, pk3, tx3, o3) != ok { os.exit(8) }
+        ret o3[which]
+    }
     if kind == 2usize {
         let xx = x[4usize + n..4usize + 2usize * n]
         let pk = x[4usize + 2usize * n..4usize + 2usize * n + n * n]
