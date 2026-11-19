@@ -369,3 +369,35 @@ fn nnet_fit(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: us
     }
     ret v
 }
+
+// nnet::class.ind: the n by k indicator matrix (row-major) of the class codes cl (0-based, k classes)
+fn class_ind(cl: []const usize, k: usize, out: []f64) {
+    var i = 0usize
+    while i < cl.len {
+        var j = 0usize
+        while j < k {
+            out[i * k + j] = 0.0f64
+            if cl[i] == j { out[i * k + j] = 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// predict.nnet for the fitted weights wts on new inputs x (m by p, row-major): the m by k outputs, with the same layout, mode and skip flag the fit used
+fn nnet_predict(x: []const f64, m: usize, p: usize, h: usize, k: usize, mode: usize, skip: bool, wts: []const f64, out: []f64) {
+    var dummy: [1]f64 = zero
+    var c = NetCtx { x: x, y: dummy[0usize..1usize], w: dummy[0usize..1usize], n: m, p: p, h: h, k: k, mode: mode, decay: 0.0f64, skip: skip }
+    var hid: [64]f64 = zero
+    var o: [16]f64 = zero
+    var t = 0usize
+    while t < m {
+        net_forward(&c, wts, t, hid[0usize..64usize], o[0usize..16usize])
+        var q = 0usize
+        while q < k {
+            out[t * k + q] = o[q]
+            q += 1usize
+        }
+        t += 1usize
+    }
+}

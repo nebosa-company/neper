@@ -69,4 +69,20 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("sds", a, sum(f$fitted.values), rel = 1e-7, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("sdw", a, sum(f$wts * seq_along(f$wts)), rel = 1e-6, abs = 1e-9)
 }
+# class.ind and predict: "ci" args (n, k, cl[n] 1-based, which index into the matrix by column-major position + 1), "pd" args (the seeded fit as "sdv" followed by m, xnew[m p]) -> the sum of the position-weighted predictions
+for (rep in 1:20) {
+  n <- sample(5:40, 1); k0 <- sample(2:5, 1); cl <- sample(k0, n, TRUE); ci <- class.ind(cl); k <- ncol(ci); cl <- match(cl, sort(unique(cl)))
+  cases[[length(cases) + 1]] <- case("ci", c(n, k, cl - 1), sum(as.vector(t(ci)) * seq_along(ci)), rel = 0, abs = 0)
+}
+for (rep in 1:20) {
+  n <- sample(40:100, 1); p <- sample(1:3, 1); h <- sample(1:4, 1); mode <- (rep - 1) %% 4; sk <- rep %% 2 == 0; dc <- 0.01
+  k <- if (mode == 0) sample(1:2, 1) else if (mode == 3) sample(2:3, 1) else sample(1:3, 1)
+  x <- matrix(rnorm(n * p), n)
+  y <- switch(mode + 1, matrix(sin(x[, 1]) + 0.5 * rowSums(x) + rnorm(n * k, 0, 0.2), n, k), matrix(1 / (1 + exp(-(x[, 1] + rnorm(n * k, 0, 0.5)))), n, k), matrix(rbinom(n * k, 1, 1 / (1 + exp(-(x[, 1])))), n, k), class.ind(sample(k, n, TRUE, prob = seq_len(k))))
+  sd <- sample(1:100000, 1); set.seed(sd)
+  f <- tryCatch(suppressWarnings(nnet(x, y, size = h, linout = (mode == 0), entropy = (mode == 2), softmax = (mode == 3), skip = sk, decay = dc, maxit = 100, trace = FALSE)), error = function(e) NULL)
+  if (is.null(f) || f$convergence != 0) next
+  m <- sample(3:10, 1); xn <- matrix(rnorm(m * p), m); pr <- predict(f, xn)
+  cases[[length(cases) + 1]] <- case("pd", c(n, p, h, k, mode, dc, 100, as.numeric(sk), sd, 0.7, as.vector(t(x)), as.vector(t(y)), rep(1, n), m, as.vector(t(xn))), sum(as.vector(t(pr)) * seq_along(pr)), rel = 1e-6, abs = 1e-9)
+}
 emit("nnet", "nnet", list(cases))

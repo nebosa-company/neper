@@ -12,6 +12,62 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "ci") {
+        let nc = usize(z[0usize])
+        let kc = usize(z[1usize])
+        let (cl, ec) = mem.alloc[usize](a, nc)
+        let (mt, em) = mem.alloc[f64](a, nc * kc)
+        if ec != ok || em != ok { ret nan }
+        var qi = 0usize
+        while qi < nc {
+            cl[qi] = usize(z[2usize + qi])
+            qi += 1usize
+        }
+        nn.class_ind(cl, kc, mt)
+        var s2 = 0.0f64
+        qi = 0usize
+        while qi < nc * kc {
+            s2 += mt[qi] * f64(qi + 1usize)
+            qi += 1usize
+        }
+        ret s2
+    }
+    if str.eq(c.name, "pd") {
+        let nn_ = usize(z[0usize])
+        let pp = usize(z[1usize])
+        let hh = usize(z[2usize])
+        let kk = usize(z[3usize])
+        let md = usize(z[4usize])
+        let skp = z[7usize] > 0.5f64
+        var nw = hh * (pp + 1usize) + kk * (1usize + hh)
+        if skp { nw += kk * pp }
+        let (wv, ew) = mem.alloc[f64](a, nw)
+        let (fit, ef) = mem.alloc[f64](a, nn_ * kk)
+        if ew != ok || ef != ok { ret nan }
+        var g: rr.Rng = zero
+        rr.seed(&g, i64(z[8usize]))
+        var q = 0usize
+        while q < nw {
+            wv[q] = rr.runif(&g, 0.0f64 - z[9usize], z[9usize])
+            q += 1usize
+        }
+        let xo = 10usize
+        let yo = xo + nn_ * pp
+        let wo = yo + nn_ * kk
+        let mo = wo + nn_
+        let mm = usize(z[mo])
+        let _ = nn.nnet_fit(a, z[xo..yo], z[yo..wo], z[wo..wo + nn_], nn_, pp, hh, kk, md, skp, z[5usize], usize(z[6usize]), 1.0e-8f64, 1.0e-4f64, wv, fit)
+        let (pr, ep) = mem.alloc[f64](a, mm * kk)
+        if ep != ok { ret nan }
+        nn.nnet_predict(z[mo + 1usize..mo + 1usize + mm * pp], mm, pp, hh, kk, md, skp, wv, pr)
+        var s3 = 0.0f64
+        q = 0usize
+        while q < mm * kk {
+            s3 += pr[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret s3
+    }
     if str.eq(c.name, "sdv") || str.eq(c.name, "sds") || str.eq(c.name, "sdw") {
         let nn_ = usize(z[0usize])
         let pp = usize(z[1usize])

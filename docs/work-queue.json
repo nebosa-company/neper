@@ -301,17 +301,6 @@
       "evidence": "Partial (D6612). e.algo.stat.spectrapkg svds (RSpectra, irlba) and eigs_sym (LM, LA, SA, SM; RSpectra lists the selected values decreasing) equal R on Windows to 1e-6 through full Jacobi decompositions, vectors up to sign (oracle_spectra, 90 values; Linux pending). eigs_sym shift-invert (the eigenvalues nearest sigma, listed decreasing) equals RSpectra too (six cases in oracle_spectra). eigs_sym, svds and general eigs with a function operator (oracle_spectra_op, _opsvd, _opgen), svds and eigs_sym on sparse (compressed-column) inputs (leading values; oracle_spectra_sparse), irlba's prcomp_irlba (sdev, totalvar and the rotation up to sign, with centring and scaling; oracle_spectra_prcomp, 1e-4) and svdr (the randomised power iteration on R's rnorm start: the k singular values equal R's iterate after the same number of passes; oracle_spectra_svdr), eigs for general real matrices (values and the moduli of the unit-norm vectors, all five which options, listed as RSpectra lists them; oracle_spectra_gen) equals RSpectra too. Open: the phases of general eigenvectors, complex and complex eigs, sparse and operator inputs, restarts, svdr. Was: Open (CRAN ranks 207, 289). Mid. Acceptance, equal to R within the per-function tolerance: eigs_sym and eigs for the largest, smallest and shift-invert eigenpairs (Lanczos and Arnoldi, symmetric and general, real and complex), svds, irlba with restarts and augmentation, svdr, on dense and sparse inputs."
     },
     {
-      "id": "L336",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 686,
-      "title": "nnet: single-hidden-layer networks and multinom",
-      "score": 0.25,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6615). e.algo.stat.nnetpkg.multinom (no decay) equals nnet multinom fitted at reltol 1e-14: deviance and coefficients to 1e-5, by Newton on the same likelihood (oracle_nnet, 40 values; Linux pending). Weight decay (D7580), case weights (D7581) and the one-hidden-layer network with several outputs, linear, logistic, entropy and softmax objectives and optional skip-layer and the R-stream start weights (nnet, D7622 to D7624, D7680) and the multinom standard errors (D7681) equal nnet. Open: the hidden-layer network nnet(), predictions, BFGS path equality. Was: Open (CRAN rank 258). Mid. Acceptance, equal to nnet under set.seed: nnet for regression, classification and softmax with decay, skip-layer and entropy, from the R RNG initial weights through the BFGS of optim; multinom and its summary, class.ind."
-    },
-    {
       "id": "L394",
       "category": "library",
       "group": "CRAN parity",
