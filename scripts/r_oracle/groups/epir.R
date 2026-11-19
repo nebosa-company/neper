@@ -54,4 +54,11 @@ for (rep in 1:25) {
   for (i in 1:3) cases[[length(cases) + 1]] <- case("cc", c(a, b, cc, d, i - 1), unlist(r$OR.strata.score[1, ])[i], rel = 1e-8, abs = 1e-12)
   for (i in 1:3) cases[[length(cases) + 1]] <- case("cc", c(a, b, cc, d, 2 + i), unlist(r$AFest.strata.wald[1, ])[i], rel = 1e-8, abs = 1e-12)
 }
+# epi.ccc: "ccc" args (n, x[n], y[n], which 0 rho_c, 1 2 asymptotic lower upper, 3 4 z-transform lower upper, 5 s.shift, 6 l.shift, 7 C.b, 8 mean difference, 9 sd of differences)
+for (rep in 1:30) {
+  n <- sample(8:60, 1); x <- rnorm(n, 5, 2); y <- x * runif(1, 0.7, 1.2) + rnorm(n, runif(1, -0.5, 0.8), runif(1, 0.3, 1.5))
+  ra <- epi.ccc(x, y, ci = "asymptotic", conf.level = 0.95); rz <- epi.ccc(x, y, ci = "z-transform", conf.level = 0.95)
+  v <- c(ra$rho.c$est, ra$rho.c$lower, ra$rho.c$upper, rz$rho.c$lower, rz$rho.c$upper, ra$s.shift, ra$l.shift, ra$C.b, ra$sblalt$est, ra$sblalt$delta.sd)
+  for (w in 0:9) cases[[length(cases) + 1]] <- case("ccc", c(n, x, y, w), v[w + 1], rel = 1e-8, abs = 1e-12)
+}
 emit("epir", "epiR", list(cases))

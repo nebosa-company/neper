@@ -315,3 +315,65 @@ fn af_est(t: Table2, level: f64) -> (f64, f64, f64) {
     let f2 = (hi - 1.0f64) / hi
     ret ((o - 1.0f64) / o, math.min[f64](f1, f2), math.max[f64](f1, f2))
 }
+
+// epi.ccc, Lin's concordance correlation of x and y with the interval answers; out = (rho_c, asymptotic lower, asymptotic upper, z-transform lower,
+// z-transform upper, scale shift v, location shift u, bias correction C_b, mean difference x - y, sd of the differences)
+fn epi_ccc(x: []const f64, y: []const f64, level: f64, out: []f64) {
+    let k = f64(x.len)
+    let zv = z_of(level)
+    var xb = 0.0f64
+    var yb = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        xb += x[i]
+        yb += y[i]
+        i += 1usize
+    }
+    xb = xb / k
+    yb = yb / k
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    var sxy0 = 0.0f64
+    var sdd = 0.0f64
+    var dm = 0.0f64
+    i = 0usize
+    while i < x.len {
+        sxx += (x[i] - xb) * (x[i] - xb)
+        syy += (y[i] - yb) * (y[i] - yb)
+        sxy0 += (x[i] - xb) * (y[i] - yb)
+        dm += x[i] - y[i]
+        i += 1usize
+    }
+    dm = dm / k
+    i = 0usize
+    while i < x.len {
+        let dd = x[i] - y[i] - dm
+        sdd += dd * dd
+        i += 1usize
+    }
+    let sx2 = sxx / k
+    let sy2 = syy / k
+    let sd1 = math.sqrt[f64](syy / (k - 1.0f64))
+    let sd2 = math.sqrt[f64](sxx / (k - 1.0f64))
+    let r = sxy0 / math.sqrt[f64](sxx * syy)
+    let sxy = r * math.sqrt[f64](sx2 * sy2)
+    let p = 2.0f64 * sxy / (sx2 + sy2 + (yb - xb) * (yb - xb))
+    let v = sd1 / sd2
+    let u = (yb - xb) / math.pow[f64](sx2 * sy2, 0.25f64)
+    let cb = p / r
+    let sep = math.sqrt[f64](((1.0f64 - r * r) * p * p * (1.0f64 - p * p) / (r * r) + 2.0f64 * p * p * p * (1.0f64 - p) * u * u / r - 0.5f64 * p * p * p * p * u * u * u * u / (r * r)) / (k - 2.0f64))
+    let tt = math.log[f64]((1.0f64 + p) / (1.0f64 - p)) / 2.0f64
+    let set = sep / (1.0f64 - p * p)
+    let llt = tt - zv * set
+    let ult = tt + zv * set
+    out[0usize] = p
+    out[1usize] = p - zv * sep
+    out[2usize] = p + zv * sep
+    out[3usize] = (math.exp[f64](2.0f64 * llt) - 1.0f64) / (math.exp[f64](2.0f64 * llt) + 1.0f64)
+    out[4usize] = (math.exp[f64](2.0f64 * ult) - 1.0f64) / (math.exp[f64](2.0f64 * ult) + 1.0f64)
+    out[5usize] = v
+    out[6usize] = u
+    out[7usize] = cb
+    out[8usize] = dm
+    out[9usize] = math.sqrt[f64](sdd / (k - 1.0f64))
+}

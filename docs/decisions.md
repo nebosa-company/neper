@@ -51160,3 +51160,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7555 — epiR case-control score odds ratio and attributable fraction
 `or_score` ports zORscore for interior tables, walking theta by factors of 1.001 through `or_zlimit` (epiR's zlimit) until the score statistic passes the chi-squared quantile, so the limits are the same grid points as epiR's; `af_est` is the case-control attributable fraction (OR - 1) / OR with the min and max of the two limit maps, taken from the score interval because epi.2by2 reports its crude path. Equal to epiR on 25 tables (150 values added to oracle_epir, 2310 in all). The population attributable fraction (qbinom-based intervals), the boundary tables, the MLE and Cornfield odds-ratio intervals stay open.
+
+## D7556 — epiR epi.ccc
+`epi_ccc` is Lin's concordance correlation as epi.ccc computes it (population variances, r from the sample moments): rho_c with the asymptotic and the z-transform intervals, the scale and location shifts, the bias-correction factor and the Bland-Altman mean and standard deviation of the differences. Equal to epiR on 30 data sets (300 values added to oracle_epir, 2610 in all). The repeated-measures variant (rep.measure with subject ids) stays open.

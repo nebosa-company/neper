@@ -10,6 +10,12 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "ccc") {
+        let nc = usize(x[0usize])
+        var ov: [10]f64 = zero
+        ep.epi_ccc(x[1usize..1usize + nc], x[1usize + nc..1usize + 2usize * nc], 0.95f64, ov[0usize..10usize])
+        ret ov[usize(x[1usize + 2usize * nc])]
+    }
     if str.eq(c.name, "cc") {
         let tc = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
         let wc = usize(x[4usize])
