@@ -4908,6 +4908,116 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-19 from the STEM gap sweep (D7717). Acceptance: Gray-mapped BPSK, QPSK, 8-PSK and 16/64/256-QAM modulators with hard and soft (log-likelihood) demodulators equal to CommPy; raised-cosine and root-raised-cosine filters equal to scipy and commpy taps; OFDM with a cyclic prefix over e.math.fft; seeded AWGN and Rayleigh channels whose bit-error rates match the closed forms within the Monte Carlo interval; composition with the e.algo.ecc codes. Size M. Checked open: no qpsk, modulator, raised_cosine or ofdm in lib beyond unrelated tables."
+    },
+    {
+      "id": "T101",
+      "category": "tooling",
+      "group": "Validation",
+      "order": 854,
+      "title": "Python oracle harness beside scripts/r_oracle",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: a generator under scripts/ runs a pinned Python environment, with one group file per reference package as scripts/r_oracle/groups has, and writes tests/oracle files in the schema the R oracles use, so the fixture runner and check-fixture.sh need no change; each file records the package versions that produced it and an unpinned environment is refused; a NumPy group and one fixture prove the path end to end. Size M. Checked open: r_oracle is the only oracle generator under scripts/, and L521-L542 each name a Python package as the thing to equal."
+    },
+    {
+      "id": "T102",
+      "category": "tooling",
+      "group": "Validation",
+      "order": 855,
+      "title": "Python-side gap table generated from the public function lists of NumPy, SciPy, SymPy and scikit-learn",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: a script reads the public names of each pinned package by submodule and writes one row per function with a status (delivered with an oracle, queued under a row id, skipped with a reason, open), in the shape of docs/cran-gaps.tsv; the progress page shows coverage per submodule; a rerun with nothing changed is byte-identical. Size M. Needs T101. Checked open: docs/cran-gaps.tsv covers CRAN only; the 2026-11-19 gap list came from a keyword search that cannot be rerun as a measure."
+    },
+    {
+      "id": "L543",
+      "category": "library",
+      "group": "Library",
+      "order": 856,
+      "title": "One kernel per numerical primitive: Cholesky, eigen, SVD, inverse and Kalman defined once",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: dense Cholesky, LU, QR, SVD, symmetric and general eigen, matrix inverse and the Kalman predict and update steps each have one implementation, in e.algo.linalg or e.math.filter, that the other modules call; the sparse Cholesky stays separate; a check lists functions named for a primitive outside its home module and fails on a new one; every oracle fixture of a changed caller still passes with its values unchanged. Size L. Checked open: a function named cholesky* is defined in 6 modules (algo/linalg/matrix, algo/linalg/sparse, algo/rand/dist, math/filter, ml/multivariate, robot/map), eigen in 3, kalman* in 3 and svd in 2; these are floors, since generic functions were not matched."
+    },
+    {
+      "id": "L544",
+      "category": "library",
+      "group": "Library",
+      "order": 857,
+      "title": "Capability-named index over the package-named statistics modules",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: every module under e.algo.stat declares its topics (mixed models, survival, time series and the rest, after the CRAN Task View names) and the package it ports in its module metadata; a generated page and the index command list modules and functions by topic; a module without a topic fails the check. Size M. Checked open: 361 modules under lib/e/algo/stat, 106 of them with suffix names such as metaformore3 or gslmore2; L263 and L248 make the catalogue generated and complete but add no topic axis."
+    },
+    {
+      "id": "T103",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 858,
+      "title": "A needs field on queue rows: dependencies checked and shown, not written in prose",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: a queue row may carry a needs list of row ids; render_tasks.py marks a row blocked while a needed row is open and render_digest.py emits the list as a column; a needed id that is neither open nor in work-done.jsonl fails the render; the dependencies now stated in evidence prose move into the field. Size S. Checked open: 37 rows mention a dependency or a blocker in prose (for example L530 and L533 need L521); the schema has no such field."
+    },
+    {
+      "id": "T104",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 859,
+      "title": "Decision ids are unique: repair the duplicated headings and fail the digest on a new one",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: every heading of the form D<n> in docs/decisions.md names one entry; each duplicated id is resolved by one rule chosen and recorded first (a suffix or a renumber), and every citation of it in work-queue.json, work-done.jsonl and source comments points at the entry it meant; render_digest.py exits non-zero on a duplicate id. Size M. Checked open: 142 decision numbers head two entries each (D7714 is both a pcubature entry and the L312 re-score); T077 allocates new numbers under a lock but repairs none."
+    },
+    {
+      "id": "T105",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 860,
+      "title": "Generated task files stop churning: untracked on purpose, or free of the queue position",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: either docs/tasks leaves version control and is regenerated on demand, or the files lose the fields that change with every queue edit; after one row is added, git status under docs/tasks shows at most that row's file, and no task file is left untracked. Size S. Checked open: one render_tasks.py run on 2026-11-19 modified 311 tracked files and deleted 14 for an append of 22 rows, and 144 task files sit untracked."
+    },
+    {
+      "id": "T106",
+      "category": "tooling",
+      "group": "Validation",
+      "order": 861,
+      "title": "Linux verification batch: the rows marked Linux pending are run and carry their platforms as a field",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: a script lists the fixtures named by every row whose evidence says Linux pending; they run on Linux (WSL or the linux-suite workflow); each row replaces the phrase with a platforms field holding the verified set; a closed row whose fixture fails on Linux is reopened. Size M. Checked open: the phrase appears in 105 open rows and in 101 rows of work-done.jsonl; T074 covers the full suites from a clean worktree, not this per-row debt."
+    },
+    {
+      "id": "T107",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 862,
+      "title": "Reconcile local master with origin and restore a push cadence",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Blocked on the owner's choice between a force push with lease and a merge; on 2026-11-19 the owner chose to keep the work local. Acceptance: origin/master equals local master after both suites pass; the remote-only commit 916705ec2 (shell.windows associations unregister) is accounted for; a check reports when master runs ahead of origin beyond a stated number of commits or days. Size S. Checked open: local master was 2012 commits ahead and 74 behind, split on 2026-11-11, with 73 of the 74 remote commits duplicating local ones by subject."
+    },
+    {
+      "id": "L545",
+      "category": "library",
+      "group": "Library",
+      "order": 863,
+      "title": "Scope decision: a PDE and finite-element kernel and a quantum state-vector simulator",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: one decision row for each of the two; if in scope, rows are opened (finite-element assembly for Poisson and linear elasticity on triangle and tetrahedral meshes equal to scikit-fem, finite differences for heat and wave equations; a state-vector simulator with a gate set and measurement equal to Qiskit Aer, running the algorithms docs/algos.md section 16 skips), and if out of scope the reason is recorded and docs/algos.md keeps its skips. Size S for the decision. Checked open: docs/algos.md marks FEM, FDTD and lattice Boltzmann as domain simulation outside a general library and 24 quantum entries as needing hardware or a simulator; D7717 left both undecided."
     }
   ]
 }

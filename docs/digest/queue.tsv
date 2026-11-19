@@ -445,3 +445,13 @@ L539	library	0	679	Geoscience formats: Shapefile, GeoPackage, GeoJSON, GRIB2, SE
 L540	library	0	533	Medical imaging formats: DICOM and NIfTI	Opened 2026-11-19 from the STEM gap sweep (D7717).
 L541	library	0	479	Circuit simulation by modified nodal analysis and RF network parameters	Opened 2026-11-19 from the STEM gap sweep (D7717).
 L542	library	0	554	Digital modulation: PSK and QAM mapping, pulse shaping, OFDM and error-rate curves	Opened 2026-11-19 from the STEM gap sweep (D7717).
+T101	tooling	0	616	Python oracle harness beside scripts/r_oracle	Opened 2026-11-19 from the improvement review (D7718).
+T102	tooling	0	549	Python-side gap table generated from the public function lists of NumPy, SciPy, SymPy and scikit-learn	Opened 2026-11-19 from the improvement review (D7718).
+L543	library	0	755	One kernel per numerical primitive: Cholesky, eigen, SVD, inverse and Kalman defined once	Opened 2026-11-19 from the improvement review (D7718).
+L544	library	0	567	Capability-named index over the package-named statistics modules	Opened 2026-11-19 from the improvement review (D7718).
+T103	tooling	0	508	A needs field on queue rows: dependencies checked and shown, not written in prose	Opened 2026-11-19 from the improvement review (D7718).
+T104	tooling	0	572	Decision ids are unique: repair the duplicated headings and fail the digest on a new one	Opened 2026-11-19 from the improvement review (D7718).
+T105	tooling	0	482	Generated task files stop churning: untracked on purpose, or free of the queue position	Opened 2026-11-19 from the improvement review (D7718).
+T106	tooling	0	502	Linux verification batch: the rows marked Linux pending are run and carry their platforms as a field	Opened 2026-11-19 from the improvement review (D7718).
+T107	tooling	0	598	Reconcile local master with origin and restore a push cadence	Opened 2026-11-19 from the improvement review (D7718).
+L545	library	0	732	Scope decision: a PDE and finite-element kernel and a quantum state-vector simulator	Opened 2026-11-19 from the improvement review (D7718).
