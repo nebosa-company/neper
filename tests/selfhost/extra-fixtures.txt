@@ -521,3 +521,4 @@ oracle_pmcmr_quade
 oracle_pmcmr_many
 oracle_pmcmr_u
 oracle_pmcmr_vdwmany
+oracle_pmcmr_demsar

@@ -331,7 +331,7 @@ fn p_adjust(a: *mem.Arena, p: []f64, kind: usize) -> err {
 
 // Friedman all-pairs tests on a complete block design (y is n blocks by k treatments, row-major): the ranks within each block are averaged for ties. kind 0 Nemenyi (the statistic
 // sqrt(2) |mean rank difference| / sqrt(k (k + 1) / (6 n)) and its single-step Tukey p with infinite df), kind 1 Conover with the Tukey p, kind 2 Conover's t and its unadjusted p.
-// The pair is (row i, column j) of the result table, so i > j; the Conover statistic is the signed rank sum difference R_j - R_i over sqrt(A B).
+// Kind 3 is Demsar's many-to-one z (the signed mean rank difference over sqrt(k (k + 1) / (6 n)), normal p). The pair is (row i, column j) of the result table, so i > j; the Conover statistic is the signed rank sum difference R_j - R_i over sqrt(A B).
 fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: usize, j: usize) -> (f64, f64, err) {
     let (r, e0) = mem.alloc[f64](a, n * k)
     let (row, e1) = mem.alloc[f64](a, k)
@@ -363,6 +363,12 @@ fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: u
     }
     let nf = f64(n)
     let kf = f64(k)
+    if kind == 3usize {
+        let zd = (rs[i] - rs[j]) / nf / math.sqrt[f64](kf * (kf + 1.0f64) / (6.0f64 * nf))
+        var az = zd
+        if az < 0.0f64 { az = 0.0f64 - az }
+        ret (zd, 2.0f64 * dist.pnorm(0.0f64 - az, 0.0f64, 1.0f64, true, false), ok)
+    }
     if kind == 0usize {
         var dif = (rs[i] - rs[j]) / nf
         if dif < 0.0f64 { dif = 0.0f64 - dif }
