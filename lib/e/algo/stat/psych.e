@@ -1136,7 +1136,7 @@ fn fa_ml_g(t: *FaMlGrad, u: []const f64, g: []f64) {
 }
 
 // psych::fa(r, nfactors = q, fm = "ml", rotate = "none"): the maximum likelihood uniquenesses of the p by p correlation matrix r (factanal's objective, uniquenesses kept within [0.005, 1], start (1 - q / (2 p)) / diag(r^-1)),
-// by BFGS on a logistic map of them; out = the p uniquenesses, then the objective at the optimum
+// by BFGS on a logistic map of them; out = the p uniquenesses, the objective at the optimum, then the p q loadings (item i of factor k at p + 1 + i + k p)
 fn fa_ml(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool {
     let (w, e1) = mem.alloc[f64](a, p)
     let (z, e2) = mem.alloc[f64](a, p * p)
@@ -1171,5 +1171,29 @@ fn fa_ml(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool 
         i += 1usize
     }
     out[p] = fa_ml_f(&c, u)
+    // the loadings Psi^(1/2) V sqrt(max(lambda - 1, 0)) of the q largest eigenpairs of Psi^(-1/2) R Psi^(-1/2), each column signed to a positive sum (psych::fa), item i of factor k at p + 1 + i + k p
+    var k = 0usize
+    while k < q {
+        let col = p - 1usize - k
+        var lam = c.w[col] - 1.0f64
+        if lam < 0.0f64 { lam = 0.0f64 }
+        let f = math.sqrt[f64](lam)
+        var sum = 0.0f64
+        i = 0usize
+        while i < p {
+            let ld = math.sqrt[f64](out[i]) * c.z[col * p + i] * f
+            out[p + 1usize + i + k * p] = ld
+            sum += ld
+            i += 1usize
+        }
+        if sum < 0.0f64 {
+            i = 0usize
+            while i < p {
+                out[p + 1usize + i + k * p] = 0.0f64 - out[p + 1usize + i + k * p]
+                i += 1usize
+            }
+        }
+        k += 1usize
+    }
     ret true
 }

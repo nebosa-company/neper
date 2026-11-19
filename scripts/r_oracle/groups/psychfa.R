@@ -1,4 +1,4 @@
-# psych::fa(r, nfactors = q, n.obs, fm = "ml", rotate = "none"): "faml" args (p, q, r[p * p] row-major, k) k 0 .. p - 1 the uniquenesses, p the factanal objective at the optimum
+# psych::fa(r, nfactors = q, n.obs, fm = "ml", rotate = "none"): "faml" args (p, q, r[p * p] row-major, k) k 0 .. p - 1 the uniquenesses, p + 1 + i + k p the loading of item i on factor k (signed to a positive column sum)
 suppressMessages(library(psych))
 cases <- list()
 set.seed(20271221)
@@ -10,5 +10,7 @@ for (rep in 1:12) {
   if (is.null(f)) next
   u <- f$uniquenesses; if (any(u < 0.02)) next
   for (k in 1:p) cases[[length(cases) + 1]] <- case("faml", c(p, q, as.vector(t(R)), k - 1), as.numeric(u[k]), rel = 1e-3, abs = 1e-4)
+  Ld <- unclass(f$loadings)
+  for (kk in 1:q) for (ii in 1:p) cases[[length(cases) + 1]] <- case("faml", c(p, q, as.vector(t(R)), p + 1 + (ii - 1) + (kk - 1) * p), as.numeric(Ld[ii, kk]), rel = 2e-3, abs = 5e-4)
 }
 emit("psychfa", "psych", list(cases))
