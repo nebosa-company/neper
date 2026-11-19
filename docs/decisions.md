@@ -51226,3 +51226,6 @@ Probed rzmpois, rzmnbinom and rzmgeom against the quantile at the uniform stream
 
 ## D7577 — robustbase adjboxStats
 `adjbox_stats` ports adjboxStats for the default coef, a and b: Tukey five numbers (`fivenum_sorted`), the fences Q1 - 1.5 exp(-4 mc) IQR and Q3 + 1.5 exp(3 mc) IQR (mirrored for a negative medcouple), the whiskers moved to the extreme values inside the fences when any point is outside, the notch Q2 +- 1.58 IQR / sqrt(n) and the outlier count. Equal to robustbase on 30 samples of even size (150 values added to oracle_robustbase, 526 in all); the medcouple port is the existing tie-free one, so samples with ties are not covered. lmrob, covMcd, ltsReg, glmrob, nlrob stay open.
+
+## D7578 — robustbase medcouple for odd sample sizes
+With an odd n the median is an observation, and the pair (median, median) enters the medcouple kernel with h = sign(i + j - 1 - n) over the sorted positions (zero at the centre); `mc` now adds it, and its oracle covers odd n as well (14 values added to oracle_robustbase, 540 in all). Samples with several ties at the median are not reproduced: a probe with the Brys tie rule gave 1 and 0.333 where robustbase returns 0.75 and 0, so the tie handling of mc.c differs from the published kernel and stays open.

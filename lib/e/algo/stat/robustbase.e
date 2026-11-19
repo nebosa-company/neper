@@ -237,6 +237,14 @@ fn mc(a: *mem.Arena, x: []const f64) -> f64 {
                 if s[j] >= med && s[j] > s[i] {
                     h[cnt] = ((s[j] - med) - (med - s[i])) / (s[j] - s[i])
                     cnt += 1usize
+                } else if s[j] == med && s[i] == med {
+                    // two observations at the median: the sign of i + j - 1 - n over the sorted positions (Brys et al.)
+                    let pos = i + j + 1usize
+                    var kv = 0.0f64
+                    if pos < n { kv = 0.0f64 - 1.0f64 }
+                    if pos > n { kv = 1.0f64 }
+                    h[cnt] = kv
+                    cnt += 1usize
                 }
                 j += 1usize
             }

@@ -4432,4 +4432,5 @@ D7573	649	actuar rtrbeta and rgenpareto under set.seed
 D7574	570	actuar zero-truncated and logarithmic generators
 D7575	564	actuar ruin with phase-type claims
 D7576	560	actuar zero-modified generators are not an inversion
-D7577	617	robustbase adjboxStats
+D7577	618	robustbase adjboxStats
+D7578	563	robustbase medcouple for odd sample sizes
