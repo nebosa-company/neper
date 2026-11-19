@@ -632,6 +632,8 @@ fn logit_pcp(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     if which == 3usize { ret full + z * math.sqrt[f64](full * (1.0f64 - full) / nn) }
     if which == 4usize { ret nul - z * math.sqrt[f64](nul * (1.0f64 - nul) / nn) }
     if which == 5usize { ret nul + z * math.sqrt[f64](nul * (1.0f64 - nul) / nn) }
+    if which == 9usize { ret 1.0f64 - (ll / ll0) * (nn - 1.0f64) / (nn - f64(p)) }
+    if which == 10usize { ret 1.0f64 - ll / ll0 }
     let chisq = 2.0f64 * (ll - ll0)
     if which == 6usize { ret chisq }
     if which == 7usize { ret nm.pchisq(chisq, f64(p) - 1.0f64, false, false) }

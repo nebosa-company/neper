@@ -50644,3 +50644,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `performancepkg.logit_pcp` gives, for a logistic regression, the Herron percentage correctly predicted of the model (the mean of p for y = 1 and 1 - p for y = 0) and of the null (ybar^2 + (1 - ybar)^2) with their Wald 95% limits est +- 1.96 sqrt(est (1 - est) / n), the likelihood-ratio chi-square against the null and its p value, and McKelvey-Zavoina R2 = var(eta) / (var(eta) + pi^2/3), the variance divided by n.
 
 **Result.** `oracle_performancepkg` (1368 cases, 180 new on 20 models) equals performance on Windows to 1e-6. Linux pending. L339 stays partial: bayesfactor_savagedickey and si (they need the uninstalled logspline package), factor predictors in standardize_parameters, Nakagawa R2 and icc (mixed models), other outlier methods.
+
+## D7355 — performance: r2_kullback
+
+**Decision.** `logit_pcp` also returns `r2_kullback`: 1 - (deviance / null deviance) times df.null / df.residual for the default `adjust = TRUE`, and without the factor otherwise; for a logistic regression the deviance ratio is the ratio of the log-likelihoods.
+
+**Result.** `oracle_performancepkg` (1408 cases, 40 new) equals performance on Windows to 1e-6. Linux pending. L339 stays partial: performance_score, bayesfactor_savagedickey and si (they need the uninstalled logspline package), factor predictors in standardize_parameters, Nakagawa R2 and icc (mixed models), other outlier methods.
