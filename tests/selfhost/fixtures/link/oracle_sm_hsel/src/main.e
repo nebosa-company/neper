@@ -62,6 +62,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "hr2o") {
+            let hv6 = sm.hselect_reg_2d_other(a, c.args[4usize..4usize + n], c.args[4usize + n..4usize + 2usize * n], c.args[4usize + 2usize * n..4usize + 3usize * n], usize(c.args[1usize]), 12.0f64, usize(c.args[3usize]), usize(c.args[2usize]))
+            if !oracle.agrees(hv6, c) {
+                failures += 1usize
+                let _ = io.print(oracle.describe(a, c, hv6))
+                let _ = io.print("\n")
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "hr2") {
             let hv5 = sm.hselect_reg_2d(c.args[3usize..3usize + n], c.args[3usize + n..3usize + 2usize * n], c.args[3usize + 2usize * n..3usize + 3usize * n], usize(c.args[1usize]), 12.0f64, usize(c.args[2usize]))
             if !oracle.agrees(hv5, c) {

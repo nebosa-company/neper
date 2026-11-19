@@ -1338,16 +1338,15 @@ fn smooth_row_2d(x1: []const f64, x2: []const f64, y: []const f64, i: usize, h1:
 
 type Crit2Ctx = struct { x1: []const f64, x2: []const f64, y: []const f64, kind: usize, df: f64, s1: f64, s2: f64 }
 
-// the 2-d regression criteria of h.select (scaled structure): kind 0 cv, 1 df, 2 aicc, as functions of the log factor
-fn crit2_log(c: *Crit2Ctx, lh: f64) -> f64 {
+// the 2-d regression criteria of h.select at bandwidths (h1, h2): kind 0 cv, 1 df, 2 aicc
+fn crit2_val(c: *Crit2Ctx, h1: f64, h2: f64) -> f64 {
     let n = c.x1.len
-    let h = math.exp[f64](lh)
     var tr = 0.0f64
     var rss = 0.0f64
     var i = 0usize
     while i < n {
         var sii = 0.0f64
-        let fit = smooth_row_2d(c.x1, c.x2, c.y, i, h * c.s1, h * c.s2, c.kind == 0usize, &sii)
+        let fit = smooth_row_2d(c.x1, c.x2, c.y, i, h1, h2, c.kind == 0usize, &sii)
         tr += sii
         rss += (c.y[i] - fit) * (c.y[i] - fit)
         i += 1usize
@@ -1362,6 +1361,36 @@ fn crit2_log(c: *Crit2Ctx, lh: f64) -> f64 {
     let v = math.log[f64](rss / nn) + 1.0f64 + 2.0f64 * (tr + 1.0f64) / (nn - tr - 2.0f64)
     if v != v { ret 1.0e10f64 }
     ret v
+}
+
+fn crit2_log(c: *Crit2Ctx, lh: f64) -> f64 {
+    let h = math.exp[f64](lh)
+    ret crit2_val(c, h * c.s1, h * c.s2)
+}
+
+fn crit2_common(c: *Crit2Ctx, lh: f64) -> f64 {
+    let h = math.exp[f64](lh)
+    ret crit2_val(c, h, h)
+}
+
+fn crit2_sep(c: *Crit2Ctx, lh: []const f64) -> f64 { ret crit2_val(c, math.exp[f64](lh[0usize]), math.exp[f64](lh[1usize])) }
+
+// h.select(cbind(x1, x2), y, method, structure.2d = "common" (structure 1) or "separate" (2); df is not allowed for separate): the bandwidth for variable which
+fn hselect_reg_2d_other(a: *mem.Arena, x1: []const f64, x2: []const f64, y: []const f64, kind: usize, df: f64, structure: usize, which: usize) -> f64 {
+    var c = Crit2Ctx { x1: x1, x2: x2, y: y, kind: kind, df: df, s1: sd_of(x1), s2: sd_of(x2) }
+    if structure == 1usize {
+        let start = (c.s1 / 2.0f64 + c.s2 / 2.0f64) / 2.0f64
+        ret math.exp[f64](fd.brent_min[Crit2Ctx](&c, crit2_common, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+    }
+    var st: [2]f64 = zero
+    st[0usize] = math.log[f64](c.s1 / 2.0f64)
+    st[1usize] = math.log[f64](c.s2 / 2.0f64)
+    var xo: [2]f64 = zero
+    let (fv, cnt, fail) = rnm.nmmin[Crit2Ctx](a, &c, crit2_sep, st[0usize..2usize], 0.0f64 - 1.0e308f64, 1.0e-6f64, 1.0f64, 0.5f64, 2.0f64, 500usize, 1.0f64, xo[0usize..2usize])
+    let _ = fv
+    let _ = cnt
+    let _ = fail
+    ret math.exp[f64](xo[which])
 }
 
 // h.select(cbind(x1, x2), y, method = "cv" / "df" / "aicc") with the default scaled structure (start 0.5, df 12), unbinned: the bandwidth for variable which

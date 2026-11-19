@@ -50860,3 +50860,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7465 — sm h.select for two covariates (regression)
 `hselect_reg_2d` is h.select(cbind(x1, x2), y, method = "cv" / "df" / "aicc") with the default scaled structure (start 0.5, df 12), unbinned: `smooth_row_2d` is sm.weight2's 2-d local-linear row (the three-by-three solution written as sm writes it, cross dropping the point itself), the criteria are the 1-d ones over its rows, and the factor from the same optimise is multiplied by the two standard deviations; equal to sm on 30 samples per method, both bandwidths, in oracle_sm_hsel (717 cases in all). Open for L505: the common and separate structures for regression, 2-d and binned ancova, band curves, sm.options.
+
+## D7466 — sm h.select for two covariates, common and separate structures
+`hselect_reg_2d_other` covers structure.2d = "common" (one bandwidth, start mean(sd / 2), the same optimise) and "separate" (R optim Nelder-Mead on the two log bandwidths from log(sd / 2), no standard-deviation scaling) for the cv, df and aicc criteria (df is refused by sm for separate, so not tested); the criterion is factored into `crit2_val` over the two bandwidths. Equal to sm on 20 samples each in oracle_sm_hsel (917 cases in all). Open for L505: 2-d and binned ancova, band curves, sm.options.
