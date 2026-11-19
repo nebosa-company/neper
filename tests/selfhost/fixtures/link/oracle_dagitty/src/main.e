@@ -27,6 +27,29 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret 0.0f64
     }
     if str.eq(k, "anc") { ret f64(dg.ancestors(adj, n, dg.bit(yi))) }
+    if str.eq(k, "canon") {
+        let (cm, cv) = dg.canonical_adjustment_set(a, adj, n, xi, yi)
+        if !cv { ret 0.0f64 - 1.0f64 }
+        ret f64(cm)
+    }
+    if str.eq(k, "npaths") || str.eq(k, "nopen") {
+        let (tp, op) = dg.count_paths(adj, n, xi, yi, z)
+        if str.eq(k, "npaths") { ret f64(tp) }
+        ret f64(op)
+    }
+    if str.eq(k, "nall") || str.eq(k, "sall") {
+        let (allsets, e3) = mem.alloc[u32](a, usize(1u32 << u32(n)))
+        if e3 != ok { os.exit(7) }
+        let ca = dg.all_adjustment_sets(a, adj, n, xi, yi, allsets)
+        if str.eq(k, "nall") { ret f64(ca) }
+        var sa = 0.0f64
+        var q = 0usize
+        while q < ca {
+            sa += f64(allsets[q])
+            q += 1usize
+        }
+        ret sa
+    }
     let (sets, e2) = mem.alloc[u32](a, usize(1u32 << u32(n)))
     if e2 != ok { os.exit(6) }
     let cnt = dg.minimal_adjustment_sets(a, adj, n, xi, yi, sets)

@@ -166,3 +166,98 @@ fn minimal_adjustment_sets(a: *mem.Arena, adj: []const bool, n: usize, x: usize,
     }
     ret found
 }
+
+// every valid adjustment set for the total effect of x on y, as masks (sets needs room for 2^n entries); returns how many
+fn all_adjustment_sets(a: *mem.Arena, adj: []const bool, n: usize, x: usize, y: usize, sets: []u32) -> usize {
+    let total = 1u32 << u32(n)
+    var found = 0usize
+    var z = 0u32
+    while z < total {
+        if valid_adjustment(a, adj, n, x, y, z) {
+            sets[found] = z
+            found += 1usize
+        }
+        z += 1u32
+    }
+    ret found
+}
+
+// the canonical adjustment set: the ancestors of x and y without x, y and the descendants of the nodes on proper causal paths; (mask, true) when it is a valid
+// adjustment set, (0, false) when none (dagitty answers an empty list)
+fn canonical_adjustment_set(a: *mem.Arena, adj: []const bool, n: usize, x: usize, y: usize) -> (u32, bool) {
+    let anc_xy = ancestors(adj, n, bit(x) | bit(y))
+    let anc_y = ancestors(adj, n, bit(y))
+    let de_x = descendants(adj, n, bit(x))
+    let pcp = de_x & anc_y & ~bit(x)
+    let forb = descendants(adj, n, pcp)
+    let cand = anc_xy & ~(bit(x) | bit(y)) & ~forb
+    if valid_adjustment(a, adj, n, x, y, cand) { ret (cand, true) }
+    ret (0u32, false)
+}
+
+// the simple paths of the skeleton between x and y (every edge usable in either direction) and how many are open given z; paths is the count of all, open of the open ones
+fn count_paths(adj: []const bool, n: usize, x: usize, y: usize, z: u32) -> (usize, usize) {
+    // the nodes with a descendant (or themselves) in z: the colliders that z opens
+    var opens = 0u32
+    var v = 0usize
+    while v < n {
+        if (descendants(adj, n, bit(v)) & z) != 0u32 { opens = opens | bit(v) }
+        v += 1usize
+    }
+    var stack: [16]usize = zero
+    var next: [16]usize = zero
+    var total = 0usize
+    var open = 0usize
+    var depth = 0usize
+    stack[0usize] = x
+    next[0usize] = 0usize
+    var used = bit(x)
+    var go = true
+    while go {
+        let cur = stack[depth]
+        var moved = false
+        var w = next[depth]
+        while w < n && !moved {
+            if w != cur && (has(adj, n, cur, w) || has(adj, n, w, cur)) && (used & bit(w)) == 0u32 {
+                next[depth] = w + 1usize
+                if w == y {
+                    // a complete path: stack[0..depth] then y
+                    total += 1usize
+                    var isopen = true
+                    var t = 1usize
+                    while t <= depth {
+                        let node = stack[t]
+                        let prev = stack[t - 1usize]
+                        var nxt = y
+                        if t < depth { nxt = stack[t + 1usize] }
+                        let coll = has(adj, n, prev, node) && has(adj, n, nxt, node)
+                        if coll {
+                            if (opens & bit(node)) == 0u32 { isopen = false }
+                        } else {
+                            if (z & bit(node)) != 0u32 { isopen = false }
+                        }
+                        t += 1usize
+                    }
+                    // the last interior node's next is y: handled above (nxt = y when t == depth)
+                    if isopen { open += 1usize }
+                } else {
+                    depth += 1usize
+                    stack[depth] = w
+                    next[depth] = 0usize
+                    used = used | bit(w)
+                    moved = true
+                }
+            }
+            if !moved { w += 1usize }
+        }
+        if !moved {
+            if depth == 0usize {
+                go = false
+            } else {
+                used = used & ~bit(stack[depth])
+                depth -= 1usize
+            }
+        }
+    }
+    ret (total, open)
+}

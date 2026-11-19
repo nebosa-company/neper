@@ -50054,3 +50054,9 @@ R's `solve()` is LAPACK's dgesv, and the first port inverted the sphering factor
 The sign of an eigenvector still flips on a few data sets even with R's inverse (the `dstemr` path picks its sign from rounding that neither summation order nor the inverse reaches), so the oracle normalises each axis to a positive largest-magnitude entry, compares only the first k - 1 axes (B has rank at most k - 1; the rest are arbitrary null directions), and the evidence says so.
 
 **Result.** `oracle_fpc_ncoord` equals fpc on 758 sign-normalised values (eight data sets with 2 to 4 variables, 2 or 3 classes, sphered and not, weighted and not, nn 10 to 20) on Windows; `oracle_fpc_discr`, `oracle_fpc` and `oracle_wrs2_t2way` still pass. Linux pending. L468 stays partial: noise clusters in cluster.stats, clusterboot, nselectboot, mergenormals, cluster.varstats and the axis signs remain.
+
+## D7332 — dagitty: every adjustment set, the canonical set and path enumeration
+
+`e.algo.stat.dagitty` gains `all_adjustment_sets` (every subset that is a valid adjustment set for the total effect, `adjustmentSets(type = "all")`), `canonical_adjustment_set` (the ancestors of x and y without x, y and the descendants of the nodes on proper causal paths; (0, false) when that is not valid, where dagitty answers an empty list) and `count_paths` (the simple paths of the skeleton between two nodes and how many are open given a conditioning set: a non-collider is open unless conditioned on, a collider only when it or one of its descendants is conditioned on, as `paths()` reports them).
+
+**Result.** `oracle_dagitty` has 640 values (adding, over 40 random DAGs, the number and the mask sum of all adjustment sets, the canonical set, and for three conditioning sets the path and open-path counts) and equals dagitty on Windows. Linux pending. L478 stays partial: impliedConditionalIndependencies, instrumentalVariables, equivalentDAGs and localTests remain.
