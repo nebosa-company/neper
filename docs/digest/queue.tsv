@@ -40,7 +40,7 @@ L367	library	0.65	1556	lpSolve, lpSolveAPI and clue: linear programming and clus
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
 L376	library	0	240	gam: backfitting generalized additive models	Open (CRAN rank 388).
 L378	library	0	318	uwot and Rtsne: embeddings equal to R	Open (CRAN ranks 311, 315).
-L393	library	0.3	928	ordinal: cumulative link models	Partial (D6616).
+L393	library	0.3	926	ordinal: cumulative link models	Partial (D6616).
 L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
 L413	library	0.55	760	flexmix: finite mixture regression	Partial (D7197, D7198 (the random start under set.seed), D7199 (the Poisson family), D7200 (stepFlexmix for the Gaussian family), D7201 (AIC, BIC, ICL), D7202 (the binomial family), D7203 (the Gamma f
 L415	library	0.3	1063	marginaleffects: predictions, slopes and comparisons	Partial (D6942, D6943): e.algo.stat.margeff.glm_avg, avg_slopes, avg_predictions and the avg_comparisons of a 0 / 1 variable for gaussian, logistic and Poisson (identity, logit, log link) glms from th

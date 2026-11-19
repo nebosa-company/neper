@@ -4383,4 +4383,5 @@ D7524	586	marginaleffects unit-change comparisons
 D7525	809	marginaleffects ratio, lnratio and lift comparisons
 D7526	708	dbscan extractDBSCAN
 D7527	551	TSA tsdiag Ljung-Box statistics
-D7528	801	ordinal clm with scale effects
+D7528	802	ordinal clm with scale effects
+D7529	753	ordinal clm with nominal effects

@@ -883,3 +883,200 @@ fn clm_scale(a: *mem.Arena, x: []const f64, zs: []const f64, cls: []const f64, w
     }
     ret ll
 }
+
+// clm(nominal = ~ w): every threshold carries its own covariate effects, P(y <= j) = F(theta_j + sgn * w tau_j - x beta) (sgn 1 or -1); par = (theta[K - 1], beta[p], tau[(K - 1) * pn] stored threshold after threshold); returns the log-likelihood and, when want, the analytic gradient
+fn loglik_nominal(x: []const f64, ws: []const f64, cls: []const f64, wts: []const f64, n: usize, p: usize, pn: usize, nk: usize, link: usize, sgn: f64, par: []const f64, gr: []f64, want: bool) -> f64 {
+    let nt = nk - 1usize
+    let q = nt + p + nt * pn
+    var i = 0usize
+    if want {
+        while i < q {
+            gr[i] = 0.0f64
+            i += 1usize
+        }
+    }
+    var ll = 0.0f64
+    var t = 0usize
+    while t < n {
+        var eta = 0.0f64
+        var c = 0usize
+        while c < p {
+            eta += par[nt + c] * x[t * p + c]
+            c += 1usize
+        }
+        let y = usize(cls[t])
+        var fhi = 1.0f64
+        var dhi = 0.0f64
+        var flo = 0.0f64
+        var dlo = 0.0f64
+        if y < nt {
+            var wt = 0.0f64
+            c = 0usize
+            while c < pn {
+                wt += par[nt + p + y * pn + c] * ws[t * pn + c]
+                c += 1usize
+            }
+            let (u, v, w) = link3(link, par[y] + sgn * wt - eta)
+            fhi = u
+            dhi = v
+            let _ = w
+        }
+        if y > 0usize {
+            var wt = 0.0f64
+            c = 0usize
+            while c < pn {
+                wt += par[nt + p + (y - 1usize) * pn + c] * ws[t * pn + c]
+                c += 1usize
+            }
+            let (u, v, w) = link3(link, par[y - 1usize] + sgn * wt - eta)
+            flo = u
+            dlo = v
+            let _ = w
+        }
+        let pr = fhi - flo
+        if !(pr > 0.0f64) { ret 0.0f64 / 0.0f64 }
+        ll += wts[t] * math.log[f64](pr)
+        if want {
+            let wq = wts[t] / pr
+            if y < nt {
+                gr[y] += wq * dhi
+                c = 0usize
+                while c < pn {
+                    gr[nt + p + y * pn + c] += wq * dhi * sgn * ws[t * pn + c]
+                    c += 1usize
+                }
+            }
+            if y > 0usize {
+                gr[y - 1usize] -= wq * dlo
+                c = 0usize
+                while c < pn {
+                    gr[nt + p + (y - 1usize) * pn + c] -= wq * dlo * sgn * ws[t * pn + c]
+                    c += 1usize
+                }
+            }
+            c = 0usize
+            while c < p {
+                gr[nt + c] -= wq * (dhi - dlo) * x[t * p + c]
+                c += 1usize
+            }
+        }
+        t += 1usize
+    }
+    ret ll
+}
+
+// Newton fit of the nominal-effects clm by the same central-difference Hessian scheme; par receives (theta, beta, tau); the answer is the log-likelihood
+fn clm_nominal(a: *mem.Arena, x: []const f64, ws: []const f64, cls: []const f64, wts: []const f64, n: usize, p: usize, pn: usize, nk: usize, link: usize, sgn: f64, par: []f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let nt = nk - 1usize
+    let q = nt + p + nt * pn
+    let (gr, e1) = mem.alloc[f64](a, q)
+    let (g1, e2) = mem.alloc[f64](a, q)
+    let (g2, e3) = mem.alloc[f64](a, q)
+    let (h, e4) = mem.alloc[f64](a, q * q)
+    let (trial, e5) = mem.alloc[f64](a, q)
+    let (w, e6) = mem.alloc[f64](a, q)
+    let (cum, e7) = mem.alloc[f64](a, nk)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret nan }
+    var k = 0usize
+    while k < nk {
+        cum[k] = 0.0f64
+        k += 1usize
+    }
+    var tt = 0usize
+    var wsum = 0.0f64
+    while tt < n {
+        cum[usize(cls[tt])] += wts[tt]
+        wsum += wts[tt]
+        tt += 1usize
+    }
+    var run = 0.0f64
+    k = 0usize
+    while k < nt {
+        run += cum[k]
+        let pq = run / wsum
+        var v = 0.0f64
+        if link == 0usize { v = math.log[f64](pq / (1.0f64 - pq)) }
+        if link == 1usize { v = dist.qnorm(pq, 0.0f64, 1.0f64, true, false) }
+        if link == 2usize { v = math.log[f64](0.0f64 - math.log[f64](1.0f64 - pq)) }
+        if link == 3usize { v = 0.0f64 - math.log[f64](0.0f64 - math.log[f64](pq)) }
+        par[k] = v
+        k += 1usize
+    }
+    k = nt
+    while k < q {
+        par[k] = 0.0f64
+        k += 1usize
+    }
+    var ll = loglik_nominal(x, ws, cls, wts, n, p, pn, nk, link, sgn, par, gr, true)
+    if ll != ll { ret nan }
+    var it = 0usize
+    while it < 300usize {
+        var c = 0usize
+        while c < q {
+            let hstep = 1.0e-5f64 * (1.0f64 + math.abs[f64](par[c]))
+            var d = 0usize
+            while d < q {
+                w[d] = par[d]
+                d += 1usize
+            }
+            w[c] = par[c] + hstep
+            let _a = loglik_nominal(x, ws, cls, wts, n, p, pn, nk, link, sgn, w, g1, true)
+            w[c] = par[c] - hstep
+            let _b = loglik_nominal(x, ws, cls, wts, n, p, pn, nk, link, sgn, w, g2, true)
+            d = 0usize
+            while d < q {
+                h[c * q + d] = (g1[d] - g2[d]) / (2.0f64 * hstep)
+                d += 1usize
+            }
+            c += 1usize
+        }
+        c = 0usize
+        while c < q {
+            var d = c + 1usize
+            while d < q {
+                let m2 = 0.5f64 * (h[c * q + d] + h[d * q + c])
+                h[c * q + d] = m2
+                h[d * q + c] = m2
+                d += 1usize
+            }
+            c += 1usize
+        }
+        let (inv, ie) = gp.invert(a, h, q)
+        if ie != ok { ret nan }
+        var scale = 1.0f64
+        var moved = false
+        var tries = 0usize
+        while tries < 40usize {
+            var i = 0usize
+            while i < q {
+                var dd = 0.0f64
+                var l = 0usize
+                while l < q {
+                    dd += inv[i * q + l] * gr[l]
+                    l += 1usize
+                }
+                trial[i] = par[i] - scale * dd
+                i += 1usize
+            }
+            let ll2 = loglik_nominal(x, ws, cls, wts, n, p, pn, nk, link, sgn, trial, g1, false)
+            if ll2 == ll2 && ll2 >= ll - 1.0e-14f64 {
+                i = 0usize
+                while i < q {
+                    par[i] = trial[i]
+                    i += 1usize
+                }
+                let step = math.abs[f64](ll2 - ll)
+                ll = loglik_nominal(x, ws, cls, wts, n, p, pn, nk, link, sgn, par, gr, true)
+                moved = true
+                if step < 1.0e-13f64 { ret ll }
+                break
+            }
+            scale = scale / 2.0f64
+            tries += 1usize
+        }
+        if !moved { break }
+        it += 1usize
+    }
+    ret ll
+}

@@ -31,6 +31,40 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             iw += 1usize
         }
     }
+    if c.name.len >= 4usize && c.name[0usize] == 110u8 && c.name[1usize] == 109u8 {
+        let pn = usize(z[4usize])
+        let (parn, en) = mem.alloc[f64](a, nk - 1usize + p + (nk - 1usize) * pn)
+        if en != ok { ret nan }
+        let yo = 5usize
+        let xo = yo + n
+        let wo = xo + n * p
+        let llm = od.clm_nominal(a, z[xo..wo], z[wo..wo + n * pn], z[yo..yo + n], wts, n, p, pn, nk, link, 1.0f64, parn)
+        if str.eq(c.name, "nmll") { ret llm }
+        var sn = 0.0f64
+        var im = 0usize
+        if str.eq(c.name, "nmth") {
+            while im < nk - 1usize {
+                sn += parn[im] * f64(im + 1usize)
+                im += 1usize
+            }
+            ret sn
+        }
+        if str.eq(c.name, "nmbeta") {
+            while im < p {
+                sn += parn[nk - 1usize + im] * f64(im + 1usize)
+                im += 1usize
+            }
+            ret sn
+        }
+        var sq2 = 0.0f64
+        im = 0usize
+        while im < (nk - 1usize) * pn {
+            let tv = parn[nk - 1usize + p + im]
+            sq2 += tv * tv
+            im += 1usize
+        }
+        ret sq2
+    }
     if c.name.len >= 4usize && c.name[0usize] == 115u8 && c.name[1usize] == 99u8 {
         let ps = usize(z[4usize])
         let (parz, ez) = mem.alloc[f64](a, nk - 1usize + p + ps)

@@ -119,4 +119,20 @@ for (rep in 1:18) {
   a <- c(n, p, K, lk, ps, y, as.vector(t(x)), as.vector(t(z)))
   add("scll", a, as.numeric(logLik(f))); add("scth", a, sum(f$alpha * seq_along(f$alpha))); add("scbeta", a, sum(f$beta * seq_along(f$beta))); add("sczeta", a, sum(f$zeta * seq_along(f$zeta)))
 }
+# nominal effects: clm(y ~ x, nominal = ~ w): "nmll", "nmth" (thresholds weighted), "nmbeta", "nmtau" (the sum of squares of the nominal effects, which does not depend on their sign convention); args (n, p, K, link, pn, y, x[n p], w[n pn])
+set.seed(20262487)
+for (rep in 1:18) {
+  n <- sample(300:500, 1); p <- sample(1:2, 1); pn <- 1; K <- sample(3:4, 1); lk <- (rep - 1) %% 3
+  x <- matrix(rnorm(n * p), n); w <- matrix(rnorm(n * pn), n); b <- rnorm(p) * 0.7; th <- sort(rnorm(K - 1)) * 1.2
+  eta <- as.vector(x %*% b); u <- if (lk == 0) rlogis(n) else if (lk == 1) rnorm(n) else log(-log(runif(n)))
+  y <- findInterval(eta + u, th)
+  if (length(unique(y)) < K) next
+  d <- as.data.frame(x); names(d) <- paste0("v", seq_len(p)); wd <- as.data.frame(w); names(wd) <- paste0("w", seq_len(pn)); d <- cbind(d, wd); d$y <- factor(y, ordered = TRUE)
+  f <- tryCatch(suppressWarnings(clm(as.formula(paste("y ~", paste0("v", seq_len(p), collapse = " + "))), nominal = as.formula(paste("~", paste0("w", seq_len(pn), collapse = " + "))), data = d, link = links[lk + 1], control = clm.control(gradTol = 1e-9, maxIter = 500))), error = function(e) NULL)
+  if (is.null(f) || is.null(f$alpha)) next
+  nm <- f$alpha[grepl("[.]w[0-9]+$", names(f$alpha))]; thr <- f$alpha[grepl("[(]Intercept[)]$", names(f$alpha))]
+  if (length(nm) == 0) next
+  a <- c(n, p, K, lk, pn, y, as.vector(t(x)), as.vector(t(w)))
+  add("nmll", a, as.numeric(logLik(f))); add("nmbeta", a, sum(f$beta * seq_along(f$beta))); add("nmtau", a, sum(nm^2)); add("nmth", a, sum(thr * seq_along(thr)))
+}
 emit("ordinal", "ordinal", list(cases))
