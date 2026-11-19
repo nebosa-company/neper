@@ -51211,3 +51211,6 @@ epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude
 
 ## D7572 — actuar rgenbeta under set.seed
 `rand_draw` kind 9 is rgenbeta, scale rbeta(shape1, shape2)^(1/shape3) through the R beta sampler of e.algo.rand.rdist; the function takes the third shape as a new argument (p3) and the oracle layout adds it. Equal to actuar on 100 seeded runs over the ten kinds (5230 cases in all). rgenpareto and rtrbeta stay open: they are not the plain gamma ratio or beta transform of one draw.
+
+## D7573 — actuar rtrbeta and rgenpareto under set.seed
+`rand_draw` kinds 10 and 11 draw one beta each: rtrbeta is scale (b / (1 - b))^(1/shape2) with b ~ Beta(shape3, shape1), rgenpareto is scale b / (1 - b) with b ~ Beta(shape2, shape1). A single-draw probe had suggested Beta(shape1, shape3) for rtrbeta, which only agreed at the probe parameters; the random-parameter oracle caught it. Equal to actuar on 120 seeded runs over the twelve kinds (5252 cases in all). This completes the generators of the transformed beta, transformed gamma and inverse families; the other distribution generators, rphtype and the aggregate generators stay open.

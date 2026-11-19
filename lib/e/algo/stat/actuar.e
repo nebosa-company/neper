@@ -676,7 +676,7 @@ fn ig_q(p: f64, mu: f64, s: f64) -> f64 {
 }
 
 // one actuar random draw under the R streams: kind 0 rburr (shape1 p1, shape2 p2, scale sc; the inversion runs on 1 - u), 1 rtrgamma (p1, p2, sc),
-// 2 rinvgamma (p1, sc), 3 rgumbel (alpha p1, scale p2), 4 rlgamma (shapelog p1, ratelog p2), 5 rpareto1 (shape p1, min p2), 6 rinvtrgamma (p1, p2, sc), 7 rinvweibull (shape p1, scale sc), 8 rinvexp (scale sc), 9 rgenbeta (shape1 p1, shape2 p2, shape3 p3, scale sc)
+// 2 rinvgamma (p1, sc), 3 rgumbel (alpha p1, scale p2), 4 rlgamma (shapelog p1, ratelog p2), 5 rpareto1 (shape p1, min p2), 6 rinvtrgamma (p1, p2, sc), 7 rinvweibull (shape p1, scale sc), 8 rinvexp (scale sc), 9 rgenbeta (shape1 p1, shape2 p2, shape3 p3, scale sc), 10 rtrbeta (shape1 p1, shape2 p2, shape3 p3, scale sc), 11 rgenpareto (shape1 p1, shape2 p2, scale sc)
 fn rand_draw(g: *rr.Rng, kind: usize, p1: f64, p2: f64, p3: f64, sc: f64) -> f64 {
     if kind == 0usize { ret tb_q(1.0f64 - rr.unif(g), p1, p2, 1.0f64, sc) }
     if kind == 1usize { ret sc * math.pow[f64](rr.rgamma(g, p1, 1.0f64), 1.0f64 / p2) }
@@ -687,7 +687,13 @@ fn rand_draw(g: *rr.Rng, kind: usize, p1: f64, p2: f64, p3: f64, sc: f64) -> f64
     if kind == 6usize { ret sc * math.pow[f64](rr.rgamma(g, p1, 1.0f64), 0.0f64 - 1.0f64 / p2) }
     if kind == 7usize { ret sc * math.pow[f64](rr.rexp(g, 1.0f64), 0.0f64 - 1.0f64 / p1) }
     if kind == 8usize { ret sc / rr.rexp(g, 1.0f64) }
-    ret sc * math.pow[f64](rd.rbeta(g, p1, p2), 1.0f64 / p3)
+    if kind == 9usize { ret sc * math.pow[f64](rd.rbeta(g, p1, p2), 1.0f64 / p3) }
+    if kind == 10usize {
+        let bt = rd.rbeta(g, p3, p1)
+        ret sc * math.pow[f64](bt / (1.0f64 - bt), 1.0f64 / p2)
+    }
+    let bg = rd.rbeta(g, p2, p1)
+    ret sc * bg / (1.0f64 - bg)
 }
 
 // actuar random draw for the transformed beta maps (tb_params kinds 0 burr .. 6 invparalogis): the inversion runs on 1 - u for burr, pareto, llogis and paralogis and on u for the inverse families
