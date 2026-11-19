@@ -102,7 +102,7 @@ L373	library	0.15	662	bnlearn: Bayesian network learning	Partial (D6630).
 L374	library	0.2	759	rms: regression modelling strategies	Partial (D6629).
 L375	library	0	219	partykit: conditional inference trees and MOB	Open (CRAN rank 386).
 L377	library	0.15	912	xgboost: gradient-boosted trees	Partial (D6632).
-L398	library	0.03	912	rugarch: the GARCH family	Started (D7645, D7646: sGARCH(1,1) with a constant mean and normal innovations, parameters to 1 percent and the log-likelihood to 1e-6 of ugarchfit on Windows;
+L398	library	0.03	974	rugarch: the GARCH family	Started (D7645 to D7647: sGARCH(1,1) and gjrGARCH(1,1) with a constant mean and normal innovations, parameters to 1 percent and the log-likelihood to 1e-6 of ugarchfit on Windows;
 L441	library	0.35	1116	msm and mstate: multi-state models	Partial (D7352).
 L442	library	0.2	1006	phangorn: phylogenetic inference	Started (D7630 to D7639: the Robinson-Foulds distance of two trees, optimised edge lengths under Jukes-Cantor (optim.pml optEdge), the Jukes-Cantor and general time-reversible (with discrete gamma rat
 L466	library	0.3	2928	EnvStats: environmental statistics	D6723: e.algo.stat.envstats has rosnerTest, tolIntNormK (one-sided content, Wald-Wolfowitz, expectation) and predIntNormK (one future mean, Bonferroni), equal to EnvStats on 1852 values on Windows (or

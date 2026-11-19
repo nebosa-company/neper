@@ -4543,4 +4543,5 @@ D7716	1383	segmented() for one breakpoint
 D7643	769	VGAM: Tobit regression
 D7644	839	VGAM: beta-binomial regression
 D7645	1046	rugarch: sGARCH(1,1) fit
-D7646	800	rugarch: the variance start is the mean of the squared residuals
+D7646	801	rugarch: the variance start is the mean of the squared residuals
+D7647	772	rugarch: gjrGARCH(1,1)

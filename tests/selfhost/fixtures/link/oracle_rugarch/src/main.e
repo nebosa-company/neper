@@ -10,6 +10,11 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[0usize])
+    if c.name.len == 3usize {
+        var o6: [6]f64 = zero
+        if !rg.gjrgarch11(a, z[1usize..1usize + n], n, o6[0usize..6usize]) { ret 0.0f64 / 0.0f64 }
+        ret o6[usize(z[1usize + n])]
+    }
     var out: [5]f64 = zero
     if !rg.garch11(a, z[1usize..1usize + n], n, out[0usize..5usize]) { ret 0.0f64 / 0.0f64 }
     ret out[usize(z[1usize + n])]
