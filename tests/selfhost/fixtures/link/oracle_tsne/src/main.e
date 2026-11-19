@@ -19,7 +19,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         y[i] = x[11usize + n * d + i]
         i += 1usize
     }
-    if ts.tsne_exact(a, x[11usize..11usize + n * d], n, d, dims, x[3usize], y, usize(x[4usize]), usize(x[5usize]), usize(x[6usize]), x[7usize], x[8usize], x[9usize], x[10usize], x[11usize + n * d + n * dims + 1usize] != 0.0f64) != ok { os.exit(6) }
+    if ts.tsne_exact(a, x[11usize..11usize + n * d], n, d, dims, x[3usize], y, usize(x[4usize]), usize(x[5usize]), usize(x[6usize]), x[7usize], x[8usize], x[9usize], x[10usize], usize(x[11usize + n * d + n * dims + 1usize])) != ok { os.exit(6) }
     ret y[usize(x[11usize + n * d + n * dims])]
 }
 

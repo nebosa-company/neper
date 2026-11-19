@@ -1,8 +1,8 @@
 // R Rtsne with theta = 0 (the exact t-SNE of van der Maaten's bhtsne): the Gaussian affinities by binary search on the precision (tolerance 1e-5, 200 steps), symmetrized and normalized to
 // sum 1, then gradient descent with momentum and the gains rule from the given start Y. x is n by d row-major; y is n by dims row-major and is the start on entry and the embedding on exit.
-// normalize centers each column and divides by the largest absolute value (Rtsne's normalize_input).
+// mode 0 plain, 1 normalize (Rtsne's default), 2 x is an n by n distance matrix (is_distance, squared as Rtsne does for theta = 0). Normalize centers each column and divides by the largest absolute value (Rtsne's normalize_input).
 //
-// Not here: the Barnes-Hut tree (theta > 0), distance-matrix input, the random start from R's generator and the PCA step.
+// Not here: the Barnes-Hut tree (theta > 0), the random start from R's generator and the PCA step.
 
 use e.math
 use e.mem
@@ -54,7 +54,7 @@ fn sqdist(x: []const f64, n: usize, d: usize, out: []f64) {
     }
 }
 
-fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, perplexity: f64, y: []f64, max_iter: usize, stop_lying: usize, mom_switch: usize, momentum0: f64, final_momentum: f64, eta: f64, exaggeration: f64, normalize: bool) -> err {
+fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, perplexity: f64, y: []f64, max_iter: usize, stop_lying: usize, mom_switch: usize, momentum0: f64, final_momentum: f64, eta: f64, exaggeration: f64, mode: usize) -> err {
     let (xs, e0) = mem.alloc[f64](a, n * d)
     let (dd, e1) = mem.alloc[f64](a, n * n)
     let (p, e2) = mem.alloc[f64](a, n * n)
@@ -68,7 +68,7 @@ fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, pe
         xs[i] = x[i]
         i += 1usize
     }
-    if normalize {
+    if mode == 1usize {
         zero_mean(xs, n, d)
         var mx = 0.0f64
         i = 0usize
@@ -83,7 +83,15 @@ fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, pe
             i += 1usize
         }
     }
-    sqdist(xs, n, d, dd)
+    if mode == 2usize {
+        i = 0usize
+        while i < n * n {
+            dd[i] = xs[i] * xs[i]
+            i += 1usize
+        }
+    } else {
+        sqdist(xs, n, d, dd)
+    }
     let lp = math.log[f64](perplexity)
     var r = 0usize
     while r < n {

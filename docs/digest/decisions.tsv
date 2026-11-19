@@ -4510,4 +4510,5 @@ D7638	645	phangorn: Robinson-Foulds distance
 D7688	1030	arm sim for a linear model
 D7689	865	arm sim for a binomial or poisson glm
 D7690	1202	foreign write.dbf
-D7691	1430	Rtsne with theta = 0
+D7691	1431	Rtsne with theta = 0
+D7692	526	Rtsne distance-matrix input

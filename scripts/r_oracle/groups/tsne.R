@@ -12,4 +12,11 @@ for (rep in 1:10) {
   r <- Rtsne(X, dims = dims, perplexity = perp, theta = 0, pca = FALSE, normalize = norm, max_iter = mi, Y_init = Y0, stop_lying_iter = sl, mom_switch_iter = ms, check_duplicates = FALSE)
   for (j in seq_len(n * dims)) add(c(n, d, dims, perp, mi, sl, ms, 0.5, 0.8, 200, 12, as.vector(t(X)), as.vector(t(Y0)), j - 1, as.numeric(norm)), as.vector(t(r$Y))[j])
 }
+# is_distance = TRUE: the same call with x the n by n distance matrix (d = n), mode 2
+for (rep in 1:4) {
+  n <- sample(15:30, 1); dims <- 2; perp <- sample(3:min(8, floor((n - 1) / 3)), 1)
+  X <- matrix(round(rnorm(n * 3) * 3, 3), n, 3); Dm <- as.matrix(dist(X)); Y0 <- matrix(round(rnorm(n * dims) * 1e-2, 6), n, dims)
+  r <- Rtsne(Dm, is_distance = TRUE, dims = dims, perplexity = perp, theta = 0, max_iter = 40, Y_init = Y0, check_duplicates = FALSE)
+  for (j in seq_len(n * dims)) add(c(n, n, dims, perp, 40, 0, 0, 0.5, 0.8, 200, 12, as.vector(t(Dm)), as.vector(t(Y0)), j - 1, 2), as.vector(t(r$Y))[j])
+}
 emit("tsne", "Rtsne", list(cases))
