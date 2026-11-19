@@ -351,3 +351,72 @@ fn predict(kind: usize, x: []const f64, z: []const f64, n: usize, p: usize, q: u
         r += 1usize
     }
 }
+
+// vuong(zeroinfl, glm Poisson): the three statistics (raw, AIC-corrected, BIC-corrected) of the non-nested comparison of the zero-inflated Poisson fit with par against the plain Poisson
+// fit (k2 = p). The per-row log probability ratios m, the corrections (k1 - k2) / n and (k1 - k2) log(n) / (2 n), v = sum(m - c) / (sd(m - c) sqrt(n)).
+fn vuong_zip_poisson(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []const f64, out: []f64) -> err {
+    let (b0, e1) = mem.alloc[f64](a, p)
+    let (m, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < p {
+        b0[i] = 0.0f64
+        i += 1usize
+    }
+    let r = maximise(a, 1usize, x, z, y, n, p, q, b0)
+    if r != r { ret mem.Full }
+    var r0 = 0usize
+    while r0 < n {
+        var eta = 0.0f64
+        var j = 0usize
+        while j < p {
+            eta += x[r0 * p + j] * par[j]
+            j += 1usize
+        }
+        var eta2 = 0.0f64
+        j = 0usize
+        while j < p {
+            eta2 += x[r0 * p + j] * b0[j]
+            j += 1usize
+        }
+        var zeta = 0.0f64
+        j = 0usize
+        while j < q {
+            zeta += z[r0 * q + j] * par[p + j]
+            j += 1usize
+        }
+        let mu = math.exp[f64](eta)
+        let pi = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - zeta))
+        let d1 = nm.dpois_raw(y[r0], mu, false)
+        var p1 = (1.0f64 - pi) * d1
+        if y[r0] == 0.0f64 { p1 = pi + (1.0f64 - pi) * d1 }
+        let p2 = nm.dpois_raw(y[r0], math.exp[f64](eta2), false)
+        m[r0] = math.log[f64](p1) - math.log[f64](p2)
+        r0 += 1usize
+    }
+    let nf = f64(n)
+    let dk = f64(p + q) - f64(p)
+    var c = 0usize
+    while c < 3usize {
+        var corr = 0.0f64
+        if c == 1usize { corr = dk / nf }
+        if c == 2usize { corr = dk / (2.0f64 * nf) * math.log[f64](nf) }
+        var s = 0.0f64
+        i = 0usize
+        while i < n {
+            s += m[i] - corr
+            i += 1usize
+        }
+        let mean = s / nf
+        var ss = 0.0f64
+        i = 0usize
+        while i < n {
+            let d = m[i] - corr - mean
+            ss += d * d
+            i += 1usize
+        }
+        out[c] = s / (math.sqrt[f64](ss / (nf - 1.0f64)) * math.sqrt[f64](nf))
+        c += 1usize
+    }
+    ret ok
+}

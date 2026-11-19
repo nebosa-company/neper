@@ -38,6 +38,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "vuong0") || str.eq(c.name, "vuong1") || str.eq(c.name, "vuong2") {
+        let (vs, e4) = mem.alloc[f64](a, 3usize)
+        if e4 != ok { ret nan }
+        if ps.vuong_zip_poisson(a, x, zz, y, n, p, q, par, vs) != ok { ret nan }
+        var which = 0usize
+        if str.eq(c.name, "vuong1") { which = 1usize }
+        if str.eq(c.name, "vuong2") { which = 2usize }
+        ret vs[which]
+    }
     if str.eq(c.name, "secount") || str.eq(c.name, "sezero") {
         let (se, e2) = mem.alloc[f64](a, p + q)
         if e2 != ok { ret nan }

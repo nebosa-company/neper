@@ -50230,3 +50230,6 @@ kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and una
 
 ## D7367 — pscl predict types
 `predict` answers the fitted-row predictions: zeroinfl response (1 - pi) mu, count mu, zero pi; hurdle response pi mu / (1 - exp(-mu)), count mu, and zero pi / (1 - exp(-mu)), which is not the raw logistic probability (the first run disagreed until the factor was found by comparing against predict(type = "zero")). Position-weighted sums equal pscl on 24 fits. L412 at 0.4.
+
+## D7368 — pscl vuong (zeroinfl against Poisson)
+`vuong_zip_poisson` forms the per-row log ratio of the zero-inflated probability (pi + (1 - pi) e^-mu at zero, (1 - pi) dpois otherwise) to the plain Poisson fit's, subtracts the AIC factor (k1 - k2)/n and BIC factor (k1 - k2) log(n)/(2n) with k1 - k2 = q, and returns sum / (sd sqrt(n)) for the three corrections, as pscl does. R only prints the statistics (vuong returns NULL), so the oracle parses the printed table to seven digits. Equal on 12 fits. L412 at 0.45; other model pairs, hurdle comparisons and negative binomial remain.
