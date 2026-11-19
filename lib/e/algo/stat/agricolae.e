@@ -6,6 +6,7 @@
 
 use e.math
 use e.math.nmath_beta as nb
+use e.math.nmath as nm
 use e.mem
 
 type OneWay = struct { mse: f64, df: f64, k: usize }
@@ -114,3 +115,141 @@ fn ordered_pair(w: OneWay, mean: []const f64, size: []const f64, i: usize, j: us
     let crit = nb.qtukey(level, 1.0f64, f64(span), w.df, true, false) * sd
     ret (d, p, d - crit, d + crit)
 }
+
+// ---- the grouping letters of agricolae's orderPvalue: the treatments in decreasing order of mean (ties by position), q holding the original indices; letter k of
+// position i is bit k of mask[i] (letters a, b, c, ... in R's order). pv is the k by k matrix of the pairwise p values (the package's, rounded to four decimals).
+fn group_letters(means: []const f64, pv: []const f64, n: usize, alpha: f64, q: []usize, mask: []u64) {
+    var i = 0usize
+    while i < n {
+        var rank = 0usize
+        var t = 0usize
+        while t < n {
+            if means[t] > means[i] || (means[t] == means[i] && t < i) { rank += 1usize }
+            t += 1usize
+        }
+        q[rank] = i
+        mask[i] = 0u64
+        i += 1usize
+    }
+    var k = 0usize
+    mask[0usize] = 1u64
+    var j = 1usize
+    var chequeo = 0usize
+    while j < n {
+        chequeo += 1usize
+        if chequeo > n { break }
+        var cambio1 = false
+        var ii = j
+        while ii <= n {
+            let s = pv[q[ii - 1usize] * n + q[j - 1usize]] > alpha
+            if s {
+                // append letter k unless it is already the last letter of the label
+                var hi = 0usize
+                var any = false
+                var b = 0usize
+                while b < 64usize {
+                    if (mask[ii - 1usize] >> u64(b)) & 1u64 == 1u64 {
+                        hi = b
+                        any = true
+                    }
+                    b += 1usize
+                }
+                if !any || hi != k { mask[ii - 1usize] = mask[ii - 1usize] | (1u64 << u64(k)) }
+            } else {
+                k += 1usize
+                let cambio = ii
+                cambio1 = false
+                let ja = j
+                mask[cambio - 1usize] = mask[cambio - 1usize] | (1u64 << u64(k))
+                var v = ja
+                while v <= cambio {
+                    if pv[q[v - 1usize] * n + q[cambio - 1usize]] <= alpha {
+                        j += 1usize
+                        cambio1 = true
+                    } else {
+                        break
+                    }
+                    v += 1usize
+                }
+                break
+            }
+            ii += 1usize
+        }
+        if !cambio1 { j += 1usize }
+    }
+}
+
+// ---- kruskal: agricolae's Kruskal-Wallis test with the post-hoc comparisons of the mean ranks (p.adj "none"): the statistic H, its chi-square p value, the error
+// mean square of the ranks and the pairwise t comparisons. rmean and size are filled per group (the mean rank, the count).
+type Kruskal = struct { h: f64, pchisq: f64, mse: f64, df: f64 }
+
+fn kruskal(a: *mem.Arena, y: []const f64, grp: []const usize, k: usize, rmean: []f64, size: []f64) -> Kruskal {
+    let n = y.len
+    var r: Kruskal = zero
+    let (rk, e) = mem.alloc[f64](a, n)
+    if e != ok { ret r }
+    var i = 0usize
+    while i < n {
+        var less = 0usize
+        var eq = 0usize
+        var t = 0usize
+        while t < n {
+            if y[t] < y[i] { less += 1usize }
+            if y[t] == y[i] { eq += 1usize }
+            t += 1usize
+        }
+        rk[i] = f64(less) + (f64(eq) + 1.0f64) / 2.0f64
+        i += 1usize
+    }
+    var g = 0usize
+    while g < k {
+        rmean[g] = 0.0f64
+        size[g] = 0.0f64
+        g += 1usize
+    }
+    i = 0usize
+    while i < n {
+        rmean[grp[i] - 1usize] += rk[i]
+        size[grp[i] - 1usize] += 1.0f64
+        i += 1usize
+    }
+    var rs = 0.0f64
+    g = 0usize
+    while g < k {
+        rs += rmean[g] * rmean[g] / size[g]
+        g += 1usize
+    }
+    var ss = 0.0f64
+    i = 0usize
+    while i < n {
+        ss += rk[i] * rk[i]
+        i += 1usize
+    }
+    let nn = f64(n)
+    let sdev = (ss - (nn * (nn + 1.0f64) * (nn + 1.0f64)) / 4.0f64) / (nn - 1.0f64)
+    let h = (rs - (nn * (nn + 1.0f64) * (nn + 1.0f64)) / 4.0f64) / sdev
+    g = 0usize
+    while g < k {
+        rmean[g] = rmean[g] / size[g]
+        g += 1usize
+    }
+    r.h = h
+    r.pchisq = 1.0f64 - nm.pchisq(h, f64(k) - 1.0f64, true, false)
+    r.df = nn - f64(k)
+    r.mse = sdev * ((nn - 1.0f64 - h) / (nn - f64(k)))
+    ret r
+}
+
+// the pair (i, j) of the Kruskal post-hoc: difference of the mean ranks, the rounded p value and the limits
+fn kruskal_pair(w: Kruskal, rmean: []const f64, size: []const f64, i: usize, j: usize, alpha: f64) -> (f64, f64, f64, f64) {
+    let d = rmean[i] - rmean[j]
+    let sd = math.sqrt[f64](w.mse * (1.0f64 / size[i] + 1.0f64 / size[j]))
+    var ad = d
+    if ad < 0.0f64 { ad = 0.0f64 - ad }
+    let p0 = 2.0f64 * (1.0f64 - nb.pt(ad / sd, w.df, true, false))
+    let p = math.floor[f64](p0 * 10000.0f64 + 0.5f64) / 10000.0f64
+    let t = nb.qt(1.0f64 - alpha / 2.0f64, w.df, true, false)
+    ret (d, p, d - t * sd, d + t * sd)
+}
+
+fn round4(p: f64) -> f64 { ret math.floor[f64](p * 10000.0f64 + 0.5f64) / 10000.0f64 }

@@ -4106,4 +4106,5 @@ D7312	835	WRS2: yuenbt and pb2gen
 D7313	772	WRS2: mcp2atm contrast tests
 D7314	1014	WRS2: ancova
 D7315	1178	WRS2: smmcrit confidence limits; L503 closed
-D7316	973	agricolae: SNK.test and duncan.test comparisons
+D7316	974	agricolae: SNK.test and duncan.test comparisons
+D7317	960	agricolae: grouping letters and the Kruskal post-hoc

@@ -49946,3 +49946,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.agricolae` gains the Student-Newman-Keuls (kind 3) and Duncan (kind 4) pairwise comparisons in `pairwise`: the treatment means ranked in decreasing order (ties by position), a pair compared over the number of ranks it spans, the standard error sqrt(MSE / n) (the common size, or the harmonic mean of the sizes), the studentised-range critical value of that span (the level 1 - alpha for SNK and (1 - alpha)^(span - 1) for Duncan), the p value 1 - ptukey(...)^(1 / (span - 1)) for Duncan and 1 - ptukey(...) for SNK rounded to four decimals as the package does, and the limits dif -/+ critical value.
 
 **Result.** `oracle_agricolae` has 280 cases (LSD, HSD, Scheffe, SNK and Duncan over 14 designs with 3 to 6 treatments) and equals agricolae on Windows. Linux pending. L396 stays partial: Waller, the grouping letters, the kruskal and friedman post-hoc tests, the design functions and AMMI remain.
+
+## D7317 — agricolae: grouping letters and the Kruskal post-hoc
+
+`e.algo.stat.agricolae` gains `group_letters` (orderPvalue: the treatments in decreasing order of mean, ties by position, and the letters assigned by walking the p-value matrix; a label is a bit mask over the letters a, b, c, ...) and `kruskal` with `kruskal_pair` (the Kruskal-Wallis statistic and chi-square p value over the average-tie ranks, the rank error mean square MSE = S (N - 1 - H) / (N - k), and the pairwise t comparisons of the mean ranks). The package rounds every pairwise p value to four decimals before the letters are assigned, so the port does too (`round4`).
+
+**Result.** `oracle_agricolae_groups` equals agricolae on 716 values (letters and order for LSD, HSD, SNK and Duncan, and the Kruskal statistic, p value and comparisons, over 14 balanced designs with 4 to 7 treatments) on Windows. Linux pending. L396 stays partial: Waller, the design functions and AMMI remain.
