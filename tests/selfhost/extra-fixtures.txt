@@ -604,3 +604,4 @@ oracle_psychfa
 oracle_emmeanscontr
 oracle_emmeansdunnett
 oracle_gslcoulomb
+oracle_gslmore
