@@ -78,8 +78,10 @@ fams <- list(
   list(id = 6, f = function(n, m, s, v, t) rJSU(n, mu = m, sigma = s, nu = v, tau = t), ok = function(m, s, v, t) TRUE),
   list(id = 7, f = function(n, m, s, v, t) rGAF(n, mu = m, sigma = s, nu = v), ok = function(m, s, v, t) TRUE),
   list(id = 8, f = function(n, m, s, v, t) rSICHEL(n, mu = m, sigma = s, nu = v), ok = function(m, s, v, t) TRUE),
-  list(id = 9, f = function(n, m, s, v, t) rNBII(n, mu = m, sigma = s), ok = function(m, s, v, t) TRUE))
-for (rep in 1:40) {
+  list(id = 9, f = function(n, m, s, v, t) rNBII(n, mu = m, sigma = s), ok = function(m, s, v, t) TRUE),
+  list(id = 10, f = function(n, m, s, v, t) rWEI(n, mu = m, sigma = s), ok = function(m, s, v, t) TRUE),
+  list(id = 11, f = function(n, m, s, v, t) rEXP(n, mu = m), ok = function(m, s, v, t) TRUE))
+for (rep in 1:48) {
   fm <- fams[[(rep - 1) %% length(fams) + 1]]
   m <- runif(1, 0.8, 4); s <- runif(1, 0.3, 1.2); v <- if (fm$id %in% c(8)) runif(1, -1, 1) else runif(1, 0.3, 2); t <- runif(1, 1.5, 6); sd0 <- sample(1000:99999, 1); nn <- 6
   if (fm$id %in% c(5, 6)) v <- rnorm(1, 0, 1)

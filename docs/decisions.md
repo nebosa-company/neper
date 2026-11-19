@@ -50632,3 +50632,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** For the families whose `r` function is `q(runif(n), ...)` the fixture draws the uniforms with the R generator (`set.seed`, Mersenne twister) and applies the quantile function already ported: GG, BCCG, IG, BCT, BCPE, LNO, JSU, GAF, SICHEL (integer) and NBII.
 
 **Result.** `oracle_gamlss_dpo` (878 cases, 38 new random-number checks, the position-weighted sum of six draws) equals gamlss.dist on Windows to 1e-6. Linux pending. L464 stays partial: random numbers for the families that draw differently (WEI and EXP use rweibull and rexp), SI, MN3-5, ST3C, moments.
+
+## D7353 — gamlss.dist: WEI and EXP random numbers
+
+**Decision.** `rWEI(n, mu, sigma)` is R's `rweibull(n, shape = sigma, scale = mu)`, mu (-log(U))^(1/sigma) for one uniform U per draw, and `rEXP(n, mu)` is `rexp(n, rate = 1/mu)`, which uses R's exponential generator (`exp_rand`), not the inversion of a uniform.
+
+**Result.** `oracle_gamlss_dpo` (884 cases, 6 new random-number checks) equals gamlss.dist on Windows to 1e-6. Linux pending. L464 stays partial: SI, MN3-5, ST3C, moments, random numbers for the families not yet drawn.

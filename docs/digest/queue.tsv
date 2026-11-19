@@ -84,7 +84,7 @@ L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
 L439	library	0.05	714	MCMCpack: Bayesian MCMC for common models	Partial (D6648).
 L455	library	0.1	742	geometry: Qhull in n dimensions	Partial (D6645).
 L463	library	0.25	784	actuar: actuarial science	Partial (D6143).
-L464	library	0.84	2652	gamlss.dist: GAMLSS distribution families	D7352: random numbers for GG, BCCG, IG, BCT, BCPE, LNO, JSU, GAF, SICHEL and NBII under set.seed equal to gamlss.dist.
+L464	library	0.84	2745	gamlss.dist: GAMLSS distribution families	D7353: random numbers for WEI (rweibull) and EXP (rexp) under set.seed equal to gamlss.dist.
 L467	library	0.1	846	hetGP: heteroskedastic Gaussian processes	Partial (D6647).
 L494	library	0.35	987	bayesm: Bayesian econometrics	Partial (D6817: e.algo.stat.bayesmpkg has lndMvn, lndMvst, lndIWishart, lndIChisq, llmnl, condMom, rdirichlet, rtrun, rwishart and breg equal to bayesm under set.seed on 1484 values;
 L514	library	0.1	641	copula: dependence models	Partial (D6637).
