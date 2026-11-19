@@ -473,14 +473,16 @@ fn cc_estimate(id: usize, lo: f64, hi: f64, n: usize) -> f64 {
     ret total * (hi - lo) / 2.0f64
 }
 
-// pcubature in one dimension: Clenshaw-Curtis rules of 5, 9, 17, ... points (nested, so the evaluations are the points of the last rule), the error the distance to the previous rule, stopping
-// when it is within tol * |integral| or the next rule would pass max_eval; out = (integral, error, evaluations)
+// pcubature in one dimension: Clenshaw-Curtis rules of 3, 5, 9, 17, ... points (nested, so the evaluations are the points of the last rule), the error the distance to the previous rule (the
+// 3 point rule to the midpoint rule); a rule is refined while the error is above tol * |integral| and its points beyond the first 3 do not pass max_eval; out = (integral, error, evaluations)
 fn pcubature_1d(id: usize, lo: f64, hi: f64, tol: f64, max_eval: usize, out: []f64) {
-    var prev = cc_estimate(id, lo, hi, 3usize)
-    var n = 5usize
+    var n = 3usize
+    var p1: [1]f64 = zero
+    p1[0usize] = (lo + hi) / 2.0f64
+    var prev = (hi - lo) * integrand(id, 1usize, p1[0usize..1usize])
     var cur = cc_estimate(id, lo, hi, n)
     var er = math.abs[f64](cur - prev)
-    while er > tol * math.abs[f64](cur) && n * 2usize - 1usize <= max_eval && n < 4097usize {
+    while er > tol * math.abs[f64](cur) && n - 3usize <= max_eval && n < 4097usize {
         prev = cur
         n = n * 2usize - 1usize
         cur = cc_estimate(id, lo, hi, n)
@@ -490,6 +492,7 @@ fn pcubature_1d(id: usize, lo: f64, hi: f64, tol: f64, max_eval: usize, out: []f
     out[1usize] = er
     out[2usize] = f64(n)
 }
+
 
 // a vector integrand of nc components: id 0 (exp(-sum x^2), prod cos x), id 1 (1 / (1 + sum x), (sum x)^2 exp(-prod x), exp(-sum x^2)); answers the number of components
 fn integrand_vec(id: usize, d: usize, p: []const f64, out: []f64) -> usize {
@@ -771,6 +774,12 @@ fn cc_tensor(id: usize, d: usize, lo: []const f64, hi: []const f64, sz: []const 
     i = 0usize
     while i < d {
         let nn = sz[i] - 1usize
+        if nn == 0usize {
+            wts[i][0usize] = hi[i] - lo[i]
+            nds[i][0usize] = (lo[i] + hi[i]) / 2.0f64
+            i += 1usize
+            continue
+        }
         var j = 0usize
         while j <= nn {
             let th = pi * f64(j) / f64(nn)
@@ -810,18 +819,20 @@ fn cc_tensor(id: usize, d: usize, lo: []const f64, hi: []const f64, sz: []const 
     ret sum
 }
 
-// pcubature for d >= 2 dimensions without box splitting: tensor Clenshaw-Curtis rules whose per-dimension sizes start at 5 points; the error is the largest over the dimensions of the distance to
-// the rule with that dimension one level (2^k + 1 -> 2^(k-1) + 1) lower, and the dimension with the largest one grows to the next size until the error is within tol * |integral|;
-// out = (integral, error, evaluations = the product of the sizes)
-fn pcubature_nd(id: usize, d: usize, lo: []const f64, hi: []const f64, tol: f64, out: []f64) {
+// pcubature for d >= 2 dimensions without box splitting: tensor Clenshaw-Curtis rules whose per-dimension sizes start at 3 points; the error is the largest over the dimensions of the distance to
+// the rule with that dimension one level lower (3 to the midpoint, 5 to 3, 9 to 5, ...), the dimension with the largest one grows to the next size, until the error is within tol * |integral|
+// or the points beyond the first 3^d would pass max_eval; out = (integral, error, evaluations = the product of the sizes)
+fn pcubature_nd(id: usize, d: usize, lo: []const f64, hi: []const f64, tol: f64, max_eval: usize, out: []f64) {
     var sz: [8]usize = zero
+    var base = 1usize
     var i = 0usize
     while i < d {
-        sz[i] = 5usize
+        sz[i] = 3usize
+        base *= 3usize
         i += 1usize
     }
     var it = 0usize
-    while it < 40usize {
+    while it < 60usize {
         let val = cc_tensor(id, d, lo, hi, sz[0usize..d])
         var best = 0.0f64 - 1.0f64
         var bi = 0usize
@@ -834,6 +845,7 @@ fn pcubature_nd(id: usize, d: usize, lo: []const f64, hi: []const f64, tol: f64,
                 c += 1usize
             }
             lower[i] = (sz[i] - 1usize) / 2usize + 1usize
+            if sz[i] == 3usize { lower[i] = 1usize }
             let e = math.abs[f64](val - cc_tensor(id, d, lo, hi, lower[0usize..d]))
             if e > best {
                 best = e
@@ -847,7 +859,7 @@ fn pcubature_nd(id: usize, d: usize, lo: []const f64, hi: []const f64, tol: f64,
             ev *= sz[i]
             i += 1usize
         }
-        if best <= tol * math.abs[f64](val) || ev > 300000usize {
+        if best <= tol * math.abs[f64](val) || ev - base > max_eval || ev > 300000usize {
             out[0usize] = val
             out[1usize] = best
             out[2usize] = f64(ev)

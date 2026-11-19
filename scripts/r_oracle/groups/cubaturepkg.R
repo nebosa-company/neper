@@ -53,9 +53,18 @@ for (rep in 1:24) {
   id <- (rep - 1) %% 4; d <- 2 + rep %% 2; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); tl <- c(1e-3, 1e-5, 1e-7)[1 + rep %% 3]
   r <- pcubature(fs[[id + 1]], lo, hi, tol = tl, maxEval = 1e6)
   if (r$functionEvaluations > 20000) next
-  a <- c(id, d, lo, hi, tl)
+  a <- c(id, d, lo, hi, tl, 1e6)
   cases[[length(cases) + 1]] <- case("pn", c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("pn", c(a, 1), r$error, rel = 1e-5, abs = 1e-13)
   cases[[length(cases) + 1]] <- case("pn", c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
+}
+# pcubature with a maxEval that stops the run: "pn" with the maxEval in place of 1e6, and "pc" likewise in one dimension (args as above)
+for (rep in 1:24) {
+  id <- (rep - 1) %% 4; d <- 1 + rep %% 3; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); me <- sample(c(1, 5, 10, 20, 40, 70, 120, 250), 1)
+  r <- pcubature(fs[[id + 1]], lo, hi, tol = 1e-12, maxEval = me)
+  a <- c(id, d, lo, hi, 1e-12, me); nm <- if (d == 1) "pc" else "pn"
+  cases[[length(cases) + 1]] <- case(nm, c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case(nm, c(a, 1), r$error, rel = 1e-5, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case(nm, c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
 }
 emit("cubaturepkg", "cubature", list(cases))
