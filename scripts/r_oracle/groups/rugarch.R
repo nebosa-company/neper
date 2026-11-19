@@ -61,4 +61,16 @@ for (rep in 1:10) {
   v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], likelihood(f))
   for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("igarchm", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 5) 1e-6 else 3e-2, abs = if (k == 5) 1e-4 else 5e-3)
 }
+# sGARCH(P, Q) with P or Q 2, constant mean, normal: "garchpq" args (n, P, Q, y[n], k) k 0 mu, 1 omega, 2 .. 1 + P alpha_i, 2 + P .. 1 + P + Q beta_j, 2 + P + Q the log-likelihood
+for (rep in 1:30) {
+  n <- sample(400:600, 1); P <- sample(1:2, 1); Q <- if (P == 2) sample(1:2, 1) else 2
+  al <- c(0.14, 0.10)[1:P]; be <- c(0.35, 0.25)[1:Q]; om <- 0.1; mu <- runif(1, -0.1, 0.1); e <- rnorm(n); h <- rep(1, n); y <- rep(0, n); y[1:2] <- mu + e[1:2]
+  for (t in 3:n) { h[t] <- om + sum(al * (y[t - 1:P] - mu)^2) + sum(be * h[t - 1:Q]); y[t] <- mu + sqrt(h[t]) * e[t] }
+  spec <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(P, Q)), mean.model = list(armaOrder = c(0, 0), include.mean = TRUE), distribution.model = "norm")
+  f <- tryCatch(ugarchfit(spec, y, solver = "hybrid"), error = function(e) NULL)
+  if (is.null(f) || convergence(f) != 0) next
+  cf <- coef(f); if (any(cf[-1] < 0.02) || sum(cf[grep("alpha|beta", names(cf))]) > 0.97) next
+  v <- c(cf[["mu"]], cf[["omega"]], cf[grep("alpha", names(cf))], cf[grep("beta", names(cf))], likelihood(f))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("garchorder", c(n, P, Q, y, k - 1), as.numeric(v[k]), rel = if (k == length(v)) 1e-6 else 3e-2, abs = if (k == length(v)) 1e-4 else 5e-3)
+}
 emit("rugarch", "rugarch", list(cases))

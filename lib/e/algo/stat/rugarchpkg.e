@@ -479,3 +479,133 @@ fn garch5_se(a: *mem.Arena, y: []const f64, n: usize, model: usize, est: []const
     var c = GSe5Ctx { y: y, n: n, model: model }
     ret nh.hessian_se[GSe5Ctx](a, &c, garch5_f, est, 5usize, out)
 }
+
+type PqCtx = struct { y: []const f64, n: usize, p: usize, q: usize, h: []f64, e2: []f64, qq: []f64 }
+
+// the log-likelihood of sGARCH(P, Q), h_t = omega + sum_i alpha_i e_{t-i}^2 + sum_j beta_j h_{t-j}, with the first max(P, Q) conditional variances set to mean(e^2) as rugarch does (checked at its own coefficients for (2, 1) and (1, 2)); par = mu, omega, alpha_1 .. alpha_P, beta_1 .. beta_Q
+fn pq_ll(c: *PqCtx, par: []const f64) -> f64 {
+    let n = c.n
+    var m2 = 0.0f64
+    var i = 0usize
+    while i < n {
+        let e = c.y[i] - par[0usize]
+        c.e2[i] = e * e
+        m2 += e * e
+        i += 1usize
+    }
+    m2 = m2 / f64(n)
+    var start = c.p
+    if c.q > start { start = c.q }
+    var ll = 0.0f64
+    i = 0usize
+    while i < n {
+        var hv = m2
+        if i >= start {
+            hv = par[1usize]
+            var a1 = 0usize
+            while a1 < c.p {
+                hv += par[2usize + a1] * c.e2[i - 1usize - a1]
+                a1 += 1usize
+            }
+            var b1 = 0usize
+            while b1 < c.q {
+                hv += par[2usize + c.p + b1] * c.h[i - 1usize - b1]
+                b1 += 1usize
+            }
+        }
+        c.h[i] = hv
+        ll += 0.0f64 - 0.5f64 * (math.log[f64](2.0f64 * 3.141592653589793238462643383279f64) + math.log[f64](hv) + c.e2[i] / hv)
+        i += 1usize
+    }
+    ret ll
+}
+
+// minus the log-likelihood at x = (mu, log omega, log alpha_i, log beta_j); persistence at or above one costs a large constant
+fn pq_f(c: *PqCtx, x: []const f64) -> f64 {
+    let m = 2usize + c.p + c.q
+    var par: [8]f64 = zero
+    par[0usize] = x[0usize]
+    var k = 1usize
+    var pers = 0.0f64
+    while k < m {
+        par[k] = math.exp[f64](x[k])
+        if k >= 2usize { pers += par[k] }
+        k += 1usize
+    }
+    if pers >= 0.9999f64 { ret 1.0e8f64 }
+    ret 0.0f64 - pq_ll(c, par[0usize..m])
+}
+
+fn pq_g(c: *PqCtx, x: []const f64, g: []f64) {
+    let m = 2usize + c.p + c.q
+    var i = 0usize
+    while i < m {
+        c.qq[i] = x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        let h = 1.0e-6f64
+        c.qq[i] = x[i] + h
+        let fp = pq_f(c, c.qq[0usize..m])
+        c.qq[i] = x[i] - h
+        let fm = pq_f(c, c.qq[0usize..m])
+        c.qq[i] = x[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// the sGARCH(P, Q) fit (P and Q at most 3) with a constant mean and normal innovations: out = mu, omega, alpha_1 .. alpha_P, beta_1 .. beta_Q, the log-likelihood
+fn sgarch_pq(a: *mem.Arena, y: []const f64, n: usize, p: usize, q: usize, out: []f64) -> bool {
+    let m = 2usize + p + q
+    let (hh, e1) = mem.alloc[f64](a, n)
+    let (e2a, e2) = mem.alloc[f64](a, n)
+    let (qq, e3) = mem.alloc[f64](a, m)
+    let (scr, e4) = mem.alloc[f64](a, 256usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret false }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += y[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    var v = 0.0f64
+    i = 0usize
+    while i < n {
+        v += (y[i] - mean) * (y[i] - mean)
+        i += 1usize
+    }
+    v = v / f64(n)
+    var x: [8]f64 = zero
+    x[0usize] = mean
+    x[1usize] = math.log[f64](v * 0.05f64)
+    var k = 0usize
+    while k < p {
+        x[2usize + k] = math.log[f64](0.1f64 / f64(p))
+        k += 1usize
+    }
+    k = 0usize
+    while k < q {
+        x[2usize + p + k] = math.log[f64](0.7f64 / f64(q))
+        k += 1usize
+    }
+    var c = PqCtx { y: y, n: n, p: p, q: q, h: hh, e2: e2a, qq: qq }
+    var round = 0usize
+    while round < 3usize {
+        let (r2, e5) = opt.nelder_mead[PqCtx](&c, pq_f, x[0usize..m], 0.05f64, 1.0e-16f64, 4000u32, scr)
+        if e5 != ok { ret false }
+        let (r3, e6) = opt.bfgs[PqCtx](&c, pq_f, pq_g, x[0usize..m], 1.0e-12f64, 400u32, scr)
+        if e6 != ok { ret false }
+        round += 1usize
+    }
+    out[0usize] = x[0usize]
+    k = 1usize
+    while k < m {
+        out[k] = math.exp[f64](x[k])
+        k += 1usize
+    }
+    out[m] = 0.0f64 - pq_f(&c, x[0usize..m])
+    ret true
+}

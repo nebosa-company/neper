@@ -11,6 +11,7 @@ use e.test.oracle as oracle
 fn fit_case(a: *mem.Arena, c: *const oracle.Case, out: []f64) -> bool {
     let z = c.args
     let n = usize(z[0usize])
+    if c.name.len == 10usize { ret rg.sgarch_pq(a, z[3usize..3usize + n], n, usize(z[1usize]), usize(z[2usize]), out) }
     if c.name.len == 7usize { ret rg.igarch11(a, z[1usize..1usize + n], n, out) }
     if c.name.len == 6usize {
         if !rg.egarch11(a, z[1usize..1usize + n], n, out[0usize..6usize]) { ret false }
