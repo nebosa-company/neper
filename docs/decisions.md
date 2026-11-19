@@ -50698,3 +50698,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** The pairwise comparisons of a logistic regression on the response scale (`pairs(e, type = "response")`) are exp of the link-scale difference, the delta-method standard error OR times the link standard error, the z ratio of the link difference and its normal two-sided p value.
 
 **Result.** `oracle_emmeans` (1696 cases, 168 new odds-ratio values on 42 pairs of 8 models) equals emmeans with `adjust = "none"` on Windows to 1e-4 relative (p values to 1e-3), the tolerance of R's glm convergence. Linux pending. L313 stays partial: adjusted p values for the response-scale contrasts, rate ratios for Poisson, model-frame grid, mixed models, mvt and dunnett, other links, regrid, joint_tests with interactions.
+
+## D7364 — emmeans: Tukey-adjusted odds ratios and rate ratios
+
+**Decision.** The Tukey p value of a response-scale pair of a glm is the studentised-range probability of the z ratio with infinite degrees of freedom (`p_tukey` with df = 1e300); the pairwise comparisons of a Poisson regression on the response scale are rate ratios exp(difference) with delta-method standard error and z ratio, as for the odds ratios of D7363.
+
+**Result.** `oracle_emmeans` (1846 cases, 150 new: Tukey p values of the odds ratios and the ratio, SE and z ratio of the Poisson rate ratios on 8 models) equals emmeans on Windows to 1e-4 relative (p values to 1e-3). Linux pending. L313 stays partial: model-frame grid, mixed models, mvt and dunnett adjustments, other links, regrid, joint_tests with interactions.

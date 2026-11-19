@@ -186,7 +186,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (gm, ge) = em.logit_glm(a, d, y, n, p)
         m = gm
         fe = ge
-    } else if str.starts_with(c.name, "gp_") {
+    } else if str.starts_with(c.name, "gp_") || str.starts_with(c.name, "gq_") {
         let (pm, pe) = em.pois_glm_lm(a, d, y, n, p)
         m = pm
         fe = pe
@@ -313,7 +313,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "go_or") { ret orv }
         if str.eq(c.name, "go_se") { ret orv * se }
         if str.eq(c.name, "go_z") { ret t }
+        if str.eq(c.name, "go_pt") { ret em.p_tukey(t, f64(na), 1.0e300f64) }
         ret em.p_t(t, 1.0e300f64)
+    }
+    if str.starts_with(c.name, "gq_") {
+        let rtv = math.exp[f64](est)
+        if str.eq(c.name, "gq_ratio") { ret rtv }
+        if str.eq(c.name, "gq_se") { ret rtv * se }
+        ret t
     }
     if str.eq(c.name, "pair_est") { ret est }
     if str.eq(c.name, "pair_se") { ret se }
