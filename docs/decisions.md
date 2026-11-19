@@ -50320,3 +50320,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7395 — EnvStats tolIntNorm and predIntNorm on data
 `e_tol_int` and `e_pred_int` wrap the existing factors (`tol_k` for content one- and two-sided and expectation one- and two-sided, `pred_k` for one future mean or the Bonferroni k means) into mean -/+ K sd intervals for two-sided, lower and upper types. Equal to EnvStats to 1e-7 on 50 samples. L466 stays at 0.3.
+
+## D7396 — PMCMRplus Nemenyi all-pairs with the chi-square approximation
+`nemenyi_chisq` is kwAllPairsNemenyiTest(dist = "Chisquare"): dif^2 / (n (n + 1)/12 (1/n_i + 1/n_j)) divided by the Kruskal tie correction C, with the upper chi-square p at k - 1 degrees of freedom. Fourteen data sets (with and without ties) are added to oracle_pmcmr (statistics and p values as position-weighted sums). L487 stays at 0.75.

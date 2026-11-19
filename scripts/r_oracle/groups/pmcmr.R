@@ -22,4 +22,12 @@ for (rep in 1:30) {
   m <- sample(2:25, 1); p <- round(runif(m)^2, 4) + 1e-4; p <- pmin(p, 1); meth <- c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY")
   for (mi in 0:5) { adj <- p.adjust(p, meth[mi + 1]); add("padj", c(mi, m, 0, p), sum(adj * seq_along(adj))) }
 }
+# kwAllPairsNemenyiTest(dist = "Chisquare"): "nc" (statistic) and "ncp" (p value), summed over the pairs with position weights like the other kinds.
+for (rep in 1:14) {
+  k <- sample(3:5, 1); sz <- sample(4:9, k, replace = TRUE); n <- sum(sz); g <- factor(rep(1:k, sz))
+  x <- round(rnorm(n) + as.numeric(g) * runif(1, 0, 0.6), if (rep %% 3 == 0) 0 else 4)
+  a <- c(n, k, x, as.numeric(g)); nc <- suppressWarnings(kwAllPairsNemenyiTest(x, g, dist = "Chisquare"))
+  sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
+  add("nc", a, sw2(nc$statistic)); add("ncp", a, sw2(nc$p.value))
+}
 emit("pmcmr", "PMCMRplus", list(cases))

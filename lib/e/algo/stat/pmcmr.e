@@ -6,6 +6,7 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
 
@@ -586,4 +587,12 @@ fn manyone_u(a: *mem.Arena, x: []const f64, grp: []const usize, j: usize) -> (f6
     var z = (umn - n1 * n2 / 2.0f64) / math.sqrt[f64](v)
     if r1 < r2 { z = 0.0f64 - z }
     ret (z, ok)
+}
+
+// kwAllPairsNemenyiTest(dist = "Chisquare"): the statistic dif^2 / (n (n + 1) / 12 (1 / n_i + 1 / n_j)) divided by the tie correction C and its upper chi-square p with k - 1 degrees of freedom
+fn nemenyi_chisq(q: Ranks, rbar: []const f64, rn: []const f64, i: usize, j: usize) -> (f64, f64) {
+    var dif = rbar[i] - rbar[j]
+    if dif < 0.0f64 { dif = 0.0f64 - dif }
+    let st = dif * dif / (q.n * (q.n + 1.0f64) / 12.0f64 * (1.0f64 / rn[i] + 1.0f64 / rn[j])) / q.ties_kw
+    ret (st, 1.0f64 - nm.pchisq(st, f64(q.k - 1usize), true, false))
 }
