@@ -585,3 +585,4 @@ oracle_energy_kgroups
 oracle_sampling_cube
 oracle_mediation
 oracle_vgam_cum
+oracle_vgam_multinom

@@ -51385,3 +51385,6 @@ e.fmt.octave reads list, the old "# type: struct" and cell items recursively (a 
 
 ## D7626 — VGAM: cumulative probit and cloglog links
 `cum_logit` takes a link code (0 logit, 1 probit, 2 cloglog), the inverse link and its density replacing the logistic in the score and the expected information. Equal to vglm(cumulative(link = logitlink, probitlink, clogloglink, parallel = TRUE)) on 30 random problems, 300 values in oracle_vgam_cum, to 5e-4 relative and 1e-5 absolute (VGAM stops short of the optimum; one slope differed by 1.5e-4 relative at the first tolerance).
+
+## D7627 — VGAM: multinomial logit
+`vgampkg.multinom` fits vglm(multinomial) with the last level as reference by Newton on the exact log-likelihood (information sum of (diag p - p p') times z z'), returning coefficients class by class, the log-likelihood and standard errors. Equal to vglm on 20 random problems (150 to 400 cases, 1 to 3 covariates, 3 to 5 levels): 354 values in oracle_vgam_multinom to 5e-4 relative and 1e-5 absolute, on the first run.

@@ -215,3 +215,150 @@ fn cum_logit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     out[q] = ll
     ret true
 }
+
+// vglm(y ~ x, multinomial) with the last level as the reference: class k (0 .. jn - 2) has an intercept and p slopes, laid out class by class (k * (p + 1) + 0 is its intercept). Newton on the exact (concave) log-likelihood; out: the
+// q = (jn - 1)(p + 1) coefficients, the log-likelihood, then the q standard errors from the information; false when singular
+fn multinom(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, jn: usize, out: []f64) -> bool {
+    let na = jn - 1usize
+    let p1 = p + 1usize
+    let q = na * p1
+    let (par, e1) = mem.alloc[f64](a, q)
+    let (gr, e2) = mem.alloc[f64](a, q)
+    let (info, e3) = mem.alloc[f64](a, q * q)
+    let (mat, e4) = mem.alloc[f64](a, q * q)
+    let (step, e5) = mem.alloc[f64](a, q)
+    let (pr, e6) = mem.alloc[f64](a, jn)
+    let (zv, e7) = mem.alloc[f64](a, p1)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret false }
+    var t = 0usize
+    while t < q {
+        par[t] = 0.0f64
+        t += 1usize
+    }
+    var ll = 0.0f64 - 1.0e300f64
+    var it = 0usize
+    while it < 100usize {
+        t = 0usize
+        while t < q * q {
+            info[t] = 0.0f64
+            t += 1usize
+        }
+        t = 0usize
+        while t < q {
+            gr[t] = 0.0f64
+            t += 1usize
+        }
+        var cur = 0.0f64
+        var i = 0usize
+        while i < n {
+            zv[0usize] = 1.0f64
+            t = 0usize
+            while t < p {
+                zv[1usize + t] = x[i * p + t]
+                t += 1usize
+            }
+            var mx = 0.0f64
+            var k = 0usize
+            while k < na {
+                var e = 0.0f64
+                t = 0usize
+                while t < p1 {
+                    e += zv[t] * par[k * p1 + t]
+                    t += 1usize
+                }
+                pr[k] = e
+                if e > mx { mx = e }
+                k += 1usize
+            }
+            pr[na] = 0.0f64
+            var sm = math.exp[f64](0.0f64 - mx)
+            k = 0usize
+            while k < na {
+                pr[k] = math.exp[f64](pr[k] - mx)
+                sm += pr[k]
+                k += 1usize
+            }
+            pr[na] = math.exp[f64](0.0f64 - mx)
+            k = 0usize
+            while k < jn {
+                pr[k] = pr[k] / sm
+                k += 1usize
+            }
+            let yc = usize(y[i])
+            cur += math.log[f64](pr[yc])
+            k = 0usize
+            while k < na {
+                var ind = 0.0f64
+                if yc == k { ind = 1.0f64 }
+                t = 0usize
+                while t < p1 {
+                    gr[k * p1 + t] += (ind - pr[k]) * zv[t]
+                    t += 1usize
+                }
+                var l = 0usize
+                while l < na {
+                    var w = 0.0f64 - pr[k] * pr[l]
+                    if l == k { w += pr[k] }
+                    var u = 0usize
+                    while u < p1 {
+                        var v = 0usize
+                        while v < p1 {
+                            info[(k * p1 + u) * q + l * p1 + v] += w * zv[u] * zv[v]
+                            v += 1usize
+                        }
+                        u += 1usize
+                    }
+                    l += 1usize
+                }
+                k += 1usize
+            }
+            i += 1usize
+        }
+        if it > 0usize && math.abs[f64](cur - ll) < 1.0e-13f64 * (1.0f64 + math.abs[f64](cur)) {
+            ll = cur
+            break
+        }
+        ll = cur
+        t = 0usize
+        while t < q * q {
+            mat[t] = info[t]
+            t += 1usize
+        }
+        t = 0usize
+        while t < q {
+            step[t] = gr[t]
+            t += 1usize
+        }
+        if !qrb.solve_dense(mat, step, q) { ret false }
+        t = 0usize
+        while t < q {
+            par[t] += step[t]
+            t += 1usize
+        }
+        it += 1usize
+    }
+    var c = 0usize
+    while c < q {
+        t = 0usize
+        while t < q * q {
+            mat[t] = info[t]
+            t += 1usize
+        }
+        t = 0usize
+        while t < q {
+            step[t] = 0.0f64
+            t += 1usize
+        }
+        step[c] = 1.0f64
+        if !qrb.solve_dense(mat, step, q) { ret false }
+        out[q + 1usize + c] = math.sqrt[f64](step[c])
+        c += 1usize
+    }
+    t = 0usize
+    while t < q {
+        out[t] = par[t]
+        t += 1usize
+    }
+    out[q] = ll
+    ret true
+}
