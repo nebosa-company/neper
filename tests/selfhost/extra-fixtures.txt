@@ -605,3 +605,4 @@ oracle_emmeanscontr
 oracle_emmeansdunnett
 oracle_gslcoulomb
 oracle_gslmore
+oracle_gslmore2
