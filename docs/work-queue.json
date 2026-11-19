@@ -4743,17 +4743,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Open. Split from L328, which met its acceptance list (D6087, D6812-D6816, D6822, D6834, D6835, D6962-D6964). Acceptance, equal to caret: createFolds and createMultiFolds for a numeric response (the quantile cuts ordered by their label strings, locale dependent), preProcess method ica (fastICA with its seeded start), varImp for glm families beyond binomial and for tree and neural models."
-    },
-    {
-      "id": "L520",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 832,
-      "title": "isotone remainder: list responses, the Chebyshev and Poisson activeSet solvers",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open. Split from L473, which met its acceptance list (D6095, D6518-D6520, D6567, D6809). D7448-D7449: activeSet Poisson and Chebyshev equal isotone (oracle_isotone). D7450: gpava with a list response (primary ties) equals isotone. Open: list-response secondary and tertiary ties, user-supplied solver functions."
     }
   ]
 }

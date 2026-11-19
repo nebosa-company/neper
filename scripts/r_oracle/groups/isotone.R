@@ -115,4 +115,20 @@ for (rep in 1:40) {
     for (j in 0:4) cases[[length(cases) + 1]] <- case("rowl", c(a, j), st[j + 1], rel = 1e-10, abs = 1e-12)
   }
 }
+# gpava list response with secondary and tertiary ties: rows sharing an x share a length; ("rowl", args as above with ties after p)
+set.seed(20262343)
+for (rep in 1:40) {
+  n <- sample(6:20, 1); x <- sample(1:round(n * 0.6), n, TRUE)
+  lx <- sample(1:4, max(x), TRUE); len <- lx[x]
+  Y <- Map(function(l, xx) round(rnorm(l), 3) + 0.1 * xx, len, x); W <- lapply(len, function(l) round(runif(l, 0.5, 3), 2))
+  for (sv in 0:2) for (tie in 1:2) {
+    p <- c(0, 0.5, 0.25)[sv + 1]; if (sv == 2) p <- c(0.25, 0.75)[rep %% 2 + 1]
+    solver <- switch(sv + 1, weighted.mean, weighted.median, function(y, w) weighted.fractile(y, w, p))
+    r <- tryCatch(gpava(x, Y, W, solver = solver, ties = c("primary", "secondary", "tertiary")[tie + 1])$x, error = function(e) NULL)
+    if (is.null(r)) next
+    v <- as.numeric(r); a <- c(sv, p + 10 * tie, n, len, x, unlist(Y), unlist(W))
+    st <- c(length(v), sum(v), sum(seq_along(v) * v), v[1], v[length(v)])
+    for (j in 0:4) cases[[length(cases) + 1]] <- case("rowl", c(a, j), st[j + 1], rel = 1e-10, abs = 1e-12)
+  }
+}
 emit("isotone", "isotone", list(cases))

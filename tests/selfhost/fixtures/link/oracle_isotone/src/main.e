@@ -82,7 +82,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (ol, ole) = mem.alloc[f64](a, nl)
         if ole != ok { ret nan }
         let xl = z[3usize + nl..3usize + 2usize * nl]
-        if iso.gpava_list(a, xl, z[3usize + 2usize * nl..3usize + 2usize * nl + tl], z[3usize + 2usize * nl + tl..3usize + 2usize * nl + 2usize * tl], lens, svl, z[1usize], ol) != ok { ret nan }
+        var pl = z[1usize]
+        var tiel = 0u8
+        if pl >= 20.0f64 {
+            tiel = 2u8
+            pl = pl - 20.0f64
+        } else if pl >= 10.0f64 {
+            tiel = 1u8
+            pl = pl - 10.0f64
+        }
+        if iso.gpava_list2(a, xl, z[3usize + 2usize * nl..3usize + 2usize * nl + tl], z[3usize + 2usize * nl + tl..3usize + 2usize * nl + 2usize * tl], lens, svl, pl, tiel, ol) != ok { ret nan }
         let stl = usize(z[3usize + 2usize * nl + 2usize * tl])
         if stl == 0usize { ret f64(nl) }
         if stl == 3usize { ret ol[0usize] }

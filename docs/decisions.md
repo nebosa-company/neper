@@ -50815,3 +50815,6 @@ activeSet(isomat, "Chebyshev") is kind 9: each block takes the weighted mid-rang
 
 ## D7450 — isotone gpava with a list response
 `gpava_list` is gpava(x, y = list, weights = list) with ties = "primary": the rows have their own lengths (flattened with a length vector), ordered by x then by the row's solver value, pooled over the slices of the reordered flat arrays; mean, median and fractile solvers equal isotone on 40 random lists (up to 20 rows of 1 to 4 replicates, tied and untied x) in oracle_isotone. The secondary and tertiary ties for lists stay with the matrix form. Open for L520: user-supplied solver functions (not representable in a golden).
+
+## D7451 — isotone gpava list response with secondary and tertiary ties; L520 closed
+`gpava_list2` adds ties = "secondary" (the rows of one x averaged, weights summed, then pooled in x order) and "tertiary" (each row's own solver value plus the group fit minus the group solver value) to the list response; rows sharing an x must share a length, as R's rbind requires. Equal to isotone on up to 40 lists in oracle_isotone. User-supplied solver functions are not a golden-file input and are descoped: every built-in solver (mean, median, fractile, and the activeSet LS, L1, quantile, asymmetric LS, L1 eps, Huber, SILF, Lp, Poisson and Chebyshev kinds) is covered. L520 closed.

@@ -4300,4 +4300,5 @@ D7446	441	sm h.select cv on binned data
 D7447	700	sm h.select df and aicc on binned regression data
 D7448	499	isotone activeSet Poisson solver
 D7449	841	isotone activeSet Chebyshev solver
-D7450	576	isotone gpava with a list response
+D7450	577	isotone gpava with a list response
+D7451	679	isotone gpava list response with secondary and tertiary ties; L520 closed

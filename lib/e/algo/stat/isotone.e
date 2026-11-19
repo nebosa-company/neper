@@ -1245,3 +1245,89 @@ fn gpava_list(a: *mem.Arena, x: []const f64, yv: []const f64, wv: []const f64, l
     }
     ret ok
 }
+
+// gpava with a list response and ties 0 primary, 1 secondary, 2 tertiary; the rows sharing an x must have one length (R's rbind would fail otherwise)
+fn gpava_list2(a: *mem.Arena, x: []const f64, yv: []const f64, wv: []const f64, len: []const usize, kind: u8, p: f64, ties: u8, out: []f64) -> err {
+    if ties == 0u8 { ret gpava_list(a, x, yv, wv, len, kind, p, out) }
+    let n = len.len
+    let (off, e0) = mem.alloc[usize](a, n + 1usize)
+    let (ux, e1) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok { ret mem.Full }
+    off[0usize] = 0usize
+    var i = 0usize
+    var ng = 0usize
+    while i < n {
+        off[i + 1usize] = off[i] + len[i]
+        var seen = false
+        var j = 0usize
+        while j < ng {
+            if ux[j] == x[i] { seen = true }
+            j += 1usize
+        }
+        if !seen {
+            ux[ng] = x[i]
+            ng += 1usize
+        }
+        i += 1usize
+    }
+    let (glen, e2) = mem.alloc[usize](a, ng)
+    let (ya, e3) = mem.alloc[f64](a, yv.len)
+    let (wa, e4) = mem.alloc[f64](a, yv.len)
+    let (fa, e5) = mem.alloc[f64](a, ng)
+    let (gof, e6) = mem.alloc[usize](a, ng + 1usize)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
+    // groups in order of first appearance, then ordered by x inside gpava_list (distinct x, so the order is by x alone)
+    var g = 0usize
+    gof[0usize] = 0usize
+    while g < ng {
+        var first = n
+        i = 0usize
+        while i < n {
+            if x[i] == ux[g] && first == n { first = i }
+            i += 1usize
+        }
+        glen[g] = len[first]
+        gof[g + 1usize] = gof[g] + glen[g]
+        var c = 0usize
+        while c < glen[g] {
+            ya[gof[g] + c] = 0.0f64
+            wa[gof[g] + c] = 0.0f64
+            c += 1usize
+        }
+        var cnt = 0.0f64
+        i = 0usize
+        while i < n {
+            if x[i] == ux[g] {
+                if len[i] != glen[g] { ret mem.Full }
+                cnt += 1.0f64
+                c = 0usize
+                while c < glen[g] {
+                    ya[gof[g] + c] += yv[off[i] + c]
+                    wa[gof[g] + c] += wv[off[i] + c]
+                    c += 1usize
+                }
+            }
+            i += 1usize
+        }
+        c = 0usize
+        while c < glen[g] {
+            ya[gof[g] + c] = ya[gof[g] + c] / cnt
+            c += 1usize
+        }
+        g += 1usize
+    }
+    let pe = gpava_list(a, ux[0usize..ng], ya[0usize..gof[ng]], wa[0usize..gof[ng]], glen, kind, p, fa)
+    if pe != ok { ret pe }
+    i = 0usize
+    while i < n {
+        g = 0usize
+        while ux[g] != x[i] { g += 1usize }
+        if ties == 1u8 {
+            out[i] = fa[g]
+        } else {
+            out[i] = solve(a, yv[off[i]..off[i + 1usize]], wv[off[i]..off[i + 1usize]], kind, p) + (fa[g] - solve(a, ya[gof[g]..gof[g + 1usize]], wa[gof[g]..gof[g + 1usize]], kind, p))
+        }
+        i += 1usize
+    }
+    ret ok
+}
