@@ -10,6 +10,16 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[0usize])
+    if c.name.len == 6usize {
+        let nc = usize(z[1usize + 3usize * n])
+        let r0 = 2usize + 3usize * n + nc
+        let (o, e1) = mem.alloc[f64](a, 5usize * n * (nc + 1usize))
+        if e1 != ok { ret 0.0f64 / 0.0f64 }
+        let rows = cx.surv_split(z[1usize..1usize + n], z[1usize + n..1usize + 2usize * n], z[1usize + 2usize * n..1usize + 3usize * n], n, z[2usize + 3usize * n..2usize + 3usize * n + nc], nc, o)
+        let rq = z[r0]
+        if rq < 0.0f64 { ret f64(rows) }
+        ret o[usize(rq) * 5usize + usize(z[r0 + 1usize])]
+    }
     var out: [6]f64 = zero
     cx.concordance(z[1usize..1usize + n], z[1usize + n..1usize + 2usize * n], z[1usize + 2usize * n..1usize + 3usize * n], n, out[0usize..6usize])
     ret out[usize(z[1usize + 3usize * n])]

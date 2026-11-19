@@ -1148,3 +1148,38 @@ fn concordance(time: []const f64, status: []const f64, x: []const f64, n: usize,
     out[4usize] = txy
     out[5usize] = (conc + tx / 2.0f64) / (conc + disc + tx)
 }
+
+// survival::survSplit(Surv(tstart, time, event) ~ ., cut = cuts, episode): every subject's follow-up (start, time] is cut at the sorted cut points strictly inside it; the event stays on the last piece, the episode is one more than the number
+// of cuts at or below the piece's start. out is five columns per row in subject-major order (subject index, tstart, tstop, event, episode), room for n (nc + 1) rows; returns the number of rows
+fn surv_split(start: []const f64, time: []const f64, event: []const f64, n: usize, cuts: []const f64, nc: usize, out: []f64) -> usize {
+    var rows = 0usize
+    var i = 0usize
+    while i < n {
+        var from = start[i]
+        var k = 0usize
+        var ep = 1usize
+        while k < nc && cuts[k] <= from {
+            ep += 1usize
+            k += 1usize
+        }
+        while k < nc && cuts[k] < time[i] {
+            out[rows * 5usize] = f64(i)
+            out[rows * 5usize + 1usize] = from
+            out[rows * 5usize + 2usize] = cuts[k]
+            out[rows * 5usize + 3usize] = 0.0f64
+            out[rows * 5usize + 4usize] = f64(ep)
+            rows += 1usize
+            from = cuts[k]
+            ep += 1usize
+            k += 1usize
+        }
+        out[rows * 5usize] = f64(i)
+        out[rows * 5usize + 1usize] = from
+        out[rows * 5usize + 2usize] = time[i]
+        out[rows * 5usize + 3usize] = event[i]
+        out[rows * 5usize + 4usize] = f64(ep)
+        rows += 1usize
+        i += 1usize
+    }
+    ret rows
+}
