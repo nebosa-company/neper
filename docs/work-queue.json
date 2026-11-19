@@ -23,7 +23,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit; not previously a queue row. Acceptance: `neper --help`, `-h` and `help` print the same text the two E-CLI-9999 sites use, naming all dispatched commands, and `info.commands` matches. A conformance check fails if the three disagree with the dispatcher. Size S. Checked open: grep '\"--help\"' in src/main.e: none; src/main.e:1115 usage names only tokens|parse|fmt-file|info; no work-done record. The 2026-11-12 compiler review adds to the acceptance: `scripts/check_agent_routes.py` gains a check that every dispatched command is in `info`; a tools golden pins the capabilities stream. Notes: docs/compiler-hardening-plan.md."
+      "evidence": "Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit; not previously a queue row. Acceptance: `neper --help`, `-h` and `help` print the same text the two E-CLI-9999 sites use, naming all dispatched commands, and `info.commands` matches. A conformance check fails if the three disagree with the dispatcher. Size S. Checked open: grep '\"--help\"' in src/main.e: none; src/main.e:1115 usage names only tokens|parse|fmt-file|info; no work-done record. The 2026-11-12 compiler review adds to the acceptance: `scripts/check_agent_routes.py` gains a check that every dispatched command is in `info`; a tools golden pins the capabilities stream. Notes: docs/compiler-hardening-plan.md. Measured 2026-11-19 (D7720): the usage error E-CLI-9999 is in 125 failing tool results in the Claude logs, 152 in the Codex logs (fork replay included) and 31 in the DeepSeek harness logs."
     },
     {
       "id": "T078",
@@ -111,7 +111,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: one skill source renders both .opencode/skills/neper/SKILL.md and .claude/skills/neper/SKILL.md; project hooks refuse a shell heredoc or script that carries old/new replacement strings, refuse a whole-file read of docs/decisions.md with a pointer to the digest, and answer a read of a large .e file with the context-file line for it; scripts/check_agent_routes.py checks the Claude skill and the hook file as it checks the OpenCode skill. Size M. Checked open: .claude holds settings.local.json and worktrees only; the skill and the route check cover OpenCode alone (T036), so the rules in AGENTS.md are prose for Claude Code sessions."
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: one skill source renders both .opencode/skills/neper/SKILL.md and .claude/skills/neper/SKILL.md; project hooks refuse a shell heredoc or script that carries old/new replacement strings, refuse a whole-file read of docs/decisions.md with a pointer to the digest, and answer a read of a large .e file with the context-file line for it; scripts/check_agent_routes.py checks the Claude skill and the hook file as it checks the OpenCode skill. Size M. Checked open: .claude holds settings.local.json and worktrees only; the skill and the route check cover OpenCode alone (T036), so the rules in AGENTS.md are prose for Claude Code sessions. Measured 2026-11-19 (D7720), tool calls in the Claude logs from 2026-08-24, all projects: 17,194 shell commands with sed -i, 12,292 Python patch scripts and 14,559 heredoc file writes against 6,762 Edit calls and 49 patch.exe calls; in November 8,374 sed -i against 2,181 Edit; context-file was called 9 times."
     },
     {
       "id": "T112",
@@ -122,7 +122,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: scripts/lang-stats.py writes the adoption measures for a window (context at a landing turn, reads per edit, script share, repeated-code share) in a machine-readable form; T026 and T036 state a target for each and are scored against it; the route check prints the trend. Size S. Checked open: for the 14 days to 2026-11-19 Neper's context at a landing turn was 430 K tokens (Dart 320, Python 198, JS 122), reads per edit 4.5, repeated codes 56.2% and script share 8%; T026 stands at 0.85 on evidence that quotes 515 K from September, and check_agent_routes.py tests only that the routes are written down."
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: scripts/lang-stats.py writes the adoption measures for a window (context at a landing turn, reads per edit, script share, repeated-code share) in a machine-readable form; T026 and T036 state a target for each and are scored against it; the route check prints the trend. Size S. Checked open: for the 14 days to 2026-11-19 Neper's context at a landing turn was 430 K tokens (Dart 320, Python 198, JS 122), reads per edit 4.5, repeated codes 56.2% and script share 8%; T026 stands at 0.85 on evidence that quotes 515 K from September, and check_agent_routes.py tests only that the routes are written down. Measured 2026-11-19 over every log (D7720): the average context per request is about 413 K tokens for Claude, 419 K for the DeepSeek harness and 135 K for Codex; lang-stats reads no Codex session until T115 lands."
     },
     {
       "id": "T062",
@@ -3972,7 +3972,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "low",
-      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one reject fixture per new code; the script passes; the card's per-family counts re-render. Notes: docs/compiler-hardening-plan.md."
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one reject fixture per new code; the script passes; the card's per-family counts re-render. Notes: docs/compiler-hardening-plan.md. Measured 2026-11-19 (D7720): among the sixteen most frequent codes in failing tool results, the -9999 catch-alls are 76% of occurrences in the Claude logs, 67% in the Codex logs and 70% in the DeepSeek harness logs; E-TYPE-9999 and E-NAME-9999 lead in all three."
     },
     {
       "id": "T088",
@@ -5106,6 +5106,39 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: a module under lib/x builds chat requests with system text, messages and tool definitions, reads a streamed reply through e.fmt.sse, carries a tool call and its result through one round trip, and holds a provider table (Anthropic, OpenAI-compatible endpoints, OpenRouter) with keys that are never logged; retries use e.resilience; a fixture replays recorded exchanges from a local server, with no live network; neperos/src/ai.e is rebuilt on it. Size M. Checked open: neperos/src/ai.e is 79 KB and holds the providers, models, tool messages and request body itself; no anthropic, openai or openrouter in lib; C171 is the app's own remainder."
+    },
+    {
+      "id": "T115",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 872,
+      "title": "lang-stats reads compressed Codex sessions and counts forked history once",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the harness log analysis (D7720). Acceptance: scripts/lang-stats.py reads *.jsonl.zst under the Codex sessions and archived_sessions folders, through the Node zstd path it already uses for the DeepSeek harness; an item a forked session inherited is counted in the session that made it and nowhere else; a session with no call of its own lands nothing; the Codex columns carry numbers for the period the sessions cover, and a note prints when a store holds files the script cannot read. Size S. Checked open: all 2,128 Codex session files on this machine are .jsonl.zst and the all-time run prints a dash in every Codex column; 870 files are forks, 1,175 hold no tool call of their own, and 2,200 of 3,218 aborted-before-dispatch results are inherited. T112 needs this for Codex."
+    },
+    {
+      "id": "T116",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 873,
+      "title": "lang-stats reports tool failures per harness: rate by month, category, failing commands and repeats",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the harness log analysis (D7720). Acceptance: a FAILURES table per harness gives the failed share of tool calls by month, the shell and edit-tool failure shares, a category for each failure (edit miss, missing path, shell syntax, timeout, compile diagnostic, test failure, denied, interrupted), the most frequent failing commands and diagnostic codes with the catch-all share, runs of three or more consecutive failures, repeated identical commands, and peak context and compactions per session; a failure is read from the harness's own error flag or exit code where it logs one; one fixture transcript per harness pins the table. Size M. Needs T115. Checked open: the figures of D7720 came from a one-off script outside the repository and cannot be rerun; lang-stats has cost, process, repair and delivery tables and no failure taxonomy. Baseline to 2026-11-19: Claude 6.4% of 92,362 calls failed, rising 3.7, 5.3, 5.9, 7.3% from August to November, shell 7.8%, Edit tool 1.6%; the DeepSeek harness 8.6% of 40,032 calls, PowerShell 10.4%, edit tool 8.2%."
+    },
+    {
+      "id": "T117",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 874,
+      "title": "The agent routes bound tool output and rule out polling loops",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the harness log analysis (D7720). Acceptance: AGENTS.md and the skills state an output bound for search and dump commands (a match cap or a line cap) and that a listing is fetched once in a session, not polled; the hooks of T111 enforce the bound where a harness has hooks; the average result size and the repeated-command count of T116 are the measure, each with a stated target. Size S. Needs T116. Checked open: Codex's average tool result is 3.4 KB against 1.2 KB for Claude and 1.1 KB for the DeepSeek harness, with 5,172 results over 30 KB, mostly rg with context lines and PowerShell dumps; one gh issue list command recurs about 1,030 times and one emit command 1,272 times in the Codex logs. The Codex counts include history replayed into forked sessions (T115)."
     }
   ]
 }

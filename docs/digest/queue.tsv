@@ -1,6 +1,6 @@
 id	category	score	evidence_bytes	title	status
 T108	tooling	0	853	One entry point for the current compiler: scripts/neper resolves the binary and fills root, arch and OS	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
-T054	tooling	0	691	One shared usage text for --help, -h, help and E-CLI-9999; info.commands lists every dispatched command	Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit;
+T054	tooling	0	880	One shared usage text for --help, -h, help and E-CLI-9999; info.commands lists every dispatched command	Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit;
 T078	tooling	0	435	Query commands take flags by name and have short forms	Opened from the 2026-11-12 compiler review.
 T109	tooling	0	612	The context budget says what it counts: --budget is records, --bytes is bytes, and the skill asks for bytes	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
 T110	tooling	0	579	A query subject resolves as the source spells it, and an unknown subject names its nearest matches	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
@@ -8,8 +8,8 @@ T080	tooling	0	385	Bounded, compact answers by default	Opened from the 2026-11-1
 T081	tooling	0	236	`check --digest`: keep-going text diagnostics with fixes	Opened from the 2026-11-12 compiler review.
 T089	tooling	0	259	Many errors per function, no cascades	Opened from the 2026-11-12 compiler review.
 T114	tooling	0	483	The card lists a standing only where it differs, under a size budget	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
-T111	tooling	0	718	Claude Code integration: a project skill and hooks that enforce the agent routes	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
-T112	tooling	0	686	Agent-route adoption is scored on the measured numbers, not on what the docs mention	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T111	tooling	0	1029	Claude Code integration: a project skill and hooks that enforce the agent routes	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T112	tooling	0	900	Agent-route adoption is scored on the measured numbers, not on what the docs mention	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
 T062	tooling	0	875	Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools	Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit;
 L332	library	0.55	881	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
 L358	library	0.2	536	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
@@ -359,7 +359,7 @@ C315	compiler	0	196	Type memo key ignores `in_shared` and `foreign`	Opened from 
 C316	compiler	0	221	Identical-function folding trusts a 64-bit hash	Opened from the 2026-11-12 compiler review.
 C322	compiler	0	194	Module path segments are case-checked	Opened from the 2026-11-12 compiler review.
 T079	tooling	0	235	Short forms forward every flag	Opened from the 2026-11-12 compiler review.
-T085	tooling	0	187	Every checker diagnostic kind has a registered code	Opened from the 2026-11-12 compiler review.
+T085	tooling	0	450	Every checker diagnostic kind has a registered code	Opened from the 2026-11-12 compiler review.
 T088	tooling	0	165	Float literals are range-checked by the checker	Opened from the 2026-11-12 compiler review.
 T091	tooling	0	154	Module errors have a span and a suggestion	Opened from the 2026-11-12 compiler review.
 T093	tooling	0	204	Probing never writes into the project	Opened from the 2026-11-12 compiler review.
@@ -463,3 +463,6 @@ T107	tooling	0	598	Reconcile local master with origin and restore a push cadence
 L545	library	0	732	Scope decision: a PDE and finite-element kernel and a quantum state-vector simulator	Opened 2026-11-19 from the improvement review (D7718).
 T113	tooling	0	542	llms.txt and the site link to a branch the repository has	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
 L546	library	0	724	An LLM client library lifted out of the NeperOS AI app	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T115	tooling	0	801	lang-stats reads compressed Codex sessions and counts forked history once	Opened 2026-11-19 from the harness log analysis (D7720).
+T116	tooling	0	1078	lang-stats reports tool failures per harness: rate by month, category, failing commands and repeats	Opened 2026-11-19 from the harness log analysis (D7720).
+T117	tooling	0	794	The agent routes bound tool output and rule out polling loops	Opened 2026-11-19 from the harness log analysis (D7720).
