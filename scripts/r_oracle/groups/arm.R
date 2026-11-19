@@ -114,4 +114,13 @@ for (rep in 1:14) {
     cases[[length(cases) + 1]] <- case("simlm", c(sd0, ns, n, k, y, as.vector(t(X)), 1, i - 1), sum((s@coef[i, ] - coef(fit))^2), rel = 1e-8, abs = 1e-10)
   }
 }
+# sim(glm): "simglm" args (seed, nsims, n, k, fam 1 binomial 2 poisson, y[n], x[n*k] row-major, which, s) with which 0 sum((draw s - coef)^2), 1 coef[s]
+for (rep in 1:12) {
+  n <- sample(40:120, 1); k <- sample(2:4, 1); fam <- 1 + rep %% 2; X <- matrix(round(rnorm(n * k, 0, 0.7), 4), n, k); X[, 1] <- 1; b <- rnorm(k, 0, 0.5)
+  y <- if (fam == 1) rbinom(n, 1, plogis(X %*% b)) else rpois(n, exp(X %*% b))
+  fit <- tryCatch(suppressWarnings(glm(y ~ X - 1, family = if (fam == 1) binomial else poisson)), error = function(e) NULL); if (is.null(fit)) next
+  sd0 <- sample(1:100000, 1); ns <- 5; set.seed(sd0); s <- sim(fit, ns)
+  for (i in 1:ns) cases[[length(cases) + 1]] <- case("simglm", c(sd0, ns, n, k, fam, y, as.vector(t(X)), 0, i - 1), sum((s@coef[i, ] - coef(fit))^2), rel = 1e-6, abs = 1e-9)
+  for (j in 1:k) cases[[length(cases) + 1]] <- case("simglm", c(sd0, ns, n, k, fam, y, as.vector(t(X)), 1, j - 1), coef(fit)[j], rel = 1e-6, abs = 1e-9)
+}
 emit("arm", "arm", list(cases))

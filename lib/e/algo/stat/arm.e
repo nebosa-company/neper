@@ -625,3 +625,96 @@ fn sim_lm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, 
     }
     ret ok
 }
+
+// IRLS of glm.fit for the binomial (family 1, logit) and poisson (family 2, log) with a dispersion of 1: the stopping rule is R's (|dev - devold| / (|dev| + 0.1) < 1e-8), cov is (X'WX)^-1 with the
+// weights of the last iteration (what summary.glm uses); d is n by k row-major
+fn glm_fit(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, family: usize, beta: []f64, cov: []f64) -> err {
+    let (eta, e2) = mem.alloc[f64](a, n)
+    let (mu, e3) = mem.alloc[f64](a, n)
+    let (am, e4) = mem.alloc[f64](a, k * k)
+    let (bv, e5) = mem.alloc[f64](a, k)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    var i = 0usize
+    var devold = 0.0f64
+    while i < n {
+        if family == 1usize { mu[i] = (y[i] + 0.5f64) / 2.0f64 } else { mu[i] = y[i] + 0.1f64 }
+        if family == 1usize { eta[i] = math.log[f64](mu[i] / (1.0f64 - mu[i])) } else { eta[i] = math.log[f64](mu[i]) }
+        devold += dev_resid(family, y[i], mu[i])
+        i += 1usize
+    }
+    var it = 0usize
+    while it < 25usize {
+        var r = 0usize
+        while r < k {
+            var c = 0usize
+            while c < k {
+                am[r * k + c] = 0.0f64
+                c += 1usize
+            }
+            bv[r] = 0.0f64
+            r += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var w = mu[i]
+            if family == 1usize { w = mu[i] * (1.0f64 - mu[i]) }
+            let z = eta[i] + (y[i] - mu[i]) / w
+            r = 0usize
+            while r < k {
+                var c = 0usize
+                while c < k {
+                    am[r * k + c] += w * d[i * k + r] * d[i * k + c]
+                    c += 1usize
+                }
+                bv[r] += w * d[i * k + r] * z
+                r += 1usize
+            }
+            i += 1usize
+        }
+        let (inv, ie) = gp.invert(a, am, k)
+        if ie != ok { ret ie }
+        r = 0usize
+        while r < k * k {
+            cov[r] = inv[r]
+            r += 1usize
+        }
+        r = 0usize
+        while r < k {
+            var v = 0.0f64
+            var c = 0usize
+            while c < k {
+                v += inv[r * k + c] * bv[c]
+                c += 1usize
+            }
+            beta[r] = v
+            r += 1usize
+        }
+        var dev = 0.0f64
+        i = 0usize
+        while i < n {
+            var e = 0.0f64
+            r = 0usize
+            while r < k {
+                e += d[i * k + r] * beta[r]
+                r += 1usize
+            }
+            eta[i] = e
+            if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) } else { mu[i] = math.exp[f64](e) }
+            dev += dev_resid(family, y[i], mu[i])
+            i += 1usize
+        }
+        it += 1usize
+        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 1.0e-8f64 { break }
+        devold = dev
+    }
+    ret ok
+}
+
+// arm::sim for a binomial or poisson glm: beta = mvrnorm(nsims, beta.hat, cov.scaled) and sigma = sqrt(dispersion) = 1; the draws are nsims by k row-major in beta (all normals drawn at once)
+fn sim_glm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, nsims: usize, bhat: []f64, beta: []f64) -> err {
+    let (cv, e1) = mem.alloc[f64](a, k * k)
+    if e1 != ok { ret e1 }
+    let fe = glm_fit(a, x, y, n, k, family, bhat, cv)
+    if fe != ok { ret fe }
+    ret ms.mvrnorm(a, g, nsims, k, bhat, cv, beta)
+}

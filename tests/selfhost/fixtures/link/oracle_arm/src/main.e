@@ -24,6 +24,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
     if str.eq(k, "logit") { ret arm.logit(x[0usize]) }
+    if str.eq(k, "simglm") {
+        let ns = usize(x[1usize])
+        let n = usize(x[2usize])
+        let q = usize(x[3usize])
+        let (bt, e2) = mem.alloc[f64](a, ns * q)
+        let (bh, e3) = mem.alloc[f64](a, q)
+        if e2 != ok || e3 != ok { os.exit(33) }
+        var g: rng.Rng = zero
+        rng.seed(&g, i64(x[0usize]))
+        let ds = 5usize + n
+        if arm.sim_glm(a, &g, x[ds..ds + n * q], x[5usize..ds], n, q, usize(x[4usize]), ns, bh, bt) != ok { os.exit(34) }
+        let at = usize(x[ds + n * q + 1usize])
+        if x[ds + n * q] == 1.0f64 { ret bh[at] }
+        var dev = 0.0f64
+        var j = 0usize
+        while j < q {
+            let dj = bt[at * q + j] - bh[j]
+            dev += dj * dj
+            j += 1usize
+        }
+        ret dev
+    }
     if str.eq(k, "simlm") {
         let ns = usize(x[1usize])
         let n = usize(x[2usize])
