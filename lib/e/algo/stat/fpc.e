@@ -1258,3 +1258,94 @@ fn ncoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, 
     }
     ret ok
 }
+
+// log |det m| and m^-1 v of the d by d row-major matrix m (copied) by LU with partial pivoting; the solution goes to sol
+fn logdet_solve(a: *mem.Arena, m: []const f64, v: []const f64, d: usize, sol: []f64) -> (f64, err) {
+    let (w, e0) = mem.alloc[f64](a, d * (d + 1usize))
+    if e0 != ok { ret (0.0f64, e0) }
+    var r = 0usize
+    while r < d {
+        var c = 0usize
+        while c < d {
+            w[r * (d + 1usize) + c] = m[r * d + c]
+            c += 1usize
+        }
+        w[r * (d + 1usize) + d] = v[r]
+        r += 1usize
+    }
+    var ld = 0.0f64
+    var col = 0usize
+    while col < d {
+        var piv = col
+        var rr = col + 1usize
+        while rr < d {
+            if math.abs[f64](w[rr * (d + 1usize) + col]) > math.abs[f64](w[piv * (d + 1usize) + col]) { piv = rr }
+            rr += 1usize
+        }
+        var cc = 0usize
+        while cc <= d {
+            let t = w[col * (d + 1usize) + cc]
+            w[col * (d + 1usize) + cc] = w[piv * (d + 1usize) + cc]
+            w[piv * (d + 1usize) + cc] = t
+            cc += 1usize
+        }
+        let pv = w[col * (d + 1usize) + col]
+        ld += math.log[f64](math.abs[f64](pv))
+        rr = col + 1usize
+        while rr < d {
+            let f = w[rr * (d + 1usize) + col] / pv
+            cc = col
+            while cc <= d {
+                w[rr * (d + 1usize) + cc] -= f * w[col * (d + 1usize) + cc]
+                cc += 1usize
+            }
+            rr += 1usize
+        }
+        col += 1usize
+    }
+    var i = d
+    while i > 0usize {
+        let q = i - 1usize
+        var s = w[q * (d + 1usize) + d]
+        var k = q + 1usize
+        while k < d {
+            s -= w[q * (d + 1usize) + k] * sol[k]
+            k += 1usize
+        }
+        sol[q] = s / w[q * (d + 1usize) + q]
+        i -= 1usize
+    }
+    ret (ld, ok)
+}
+
+// fpc bhattacharyya.dist(mu1, mu2, Sigma1, Sigma2) for d-dimensional Gaussian components
+fn bhattacharyya_dist(a: *mem.Arena, mu1: []const f64, mu2: []const f64, s1: []const f64, s2: []const f64, d: usize) -> (f64, err) {
+    let (sg, e0) = mem.alloc[f64](a, d * d)
+    let (df, e1) = mem.alloc[f64](a, d)
+    let (sol, e2) = mem.alloc[f64](a, d)
+    let (sol2, e3) = mem.alloc[f64](a, d)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, mem.Full) }
+    var i = 0usize
+    while i < d * d {
+        sg[i] = (s1[i] + s2[i]) / 2.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < d {
+        df[i] = mu1[i] - mu2[i]
+        i += 1usize
+    }
+    let (lds, ea) = logdet_solve(a, sg, df, d, sol)
+    if ea != ok { ret (0.0f64, ea) }
+    let (lds1, eb) = logdet_solve(a, s1, df, d, sol2)
+    if eb != ok { ret (0.0f64, eb) }
+    let (lds2, ec) = logdet_solve(a, s2, df, d, sol2)
+    if ec != ok { ret (0.0f64, ec) }
+    var mh = 0.0f64
+    i = 0usize
+    while i < d {
+        mh += df[i] * sol[i]
+        i += 1usize
+    }
+    ret (mh / 8.0f64 + 0.5f64 * lds - 0.25f64 * lds1 - 0.25f64 * lds2, ok)
+}

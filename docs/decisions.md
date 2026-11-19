@@ -50890,3 +50890,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7473 — MASS fitdistr for the chi-squared family
 `fitdistr_chisq` is fitdistr(x, "chi-squared", start = list(df = df0)): the one-parameter fit by optim Nelder-Mead (`rnm.nmmin`, reltol 1.49e-8, reflection 1, contraction 0.5, extension 2) and optimHess (central differences of the central-difference gradient, step 1e-3) for the standard error; equal to MASS on 30 samples (estimate and log-likelihood at 1e-5, standard error at 1e-3; 90 values added to oracle_mass_fdbf). Open for L306: lqs, cov.rob, bounded (L-BFGS-B) fits, isoMDS, sammon.
+
+## D7474 — fpc bhattacharyya.dist
+`bhattacharyya_dist` is fpc's bhattacharyya.dist for d-dimensional Gaussian components: the Mahalanobis term of the mean difference under the averaged covariance divided by 8, plus half the log determinant of the average less a quarter of each component's, through one LU routine (`logdet_solve`) that returns the log determinant and the solution; equal to fpc on 60 random component pairs (1 to 4 dimensions). bhattacharyya.matrix is this per pair (exp(-d) for the misclassification bound). Open for L468: the merging loop of mergenormals (bhat, ridge, dip, demp, predictive), noise clusters, clusterboot, nselectboot, cluster.varstats.
