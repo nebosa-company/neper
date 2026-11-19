@@ -1047,9 +1047,9 @@ fn gam_summary(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen: []const 
 // ---- GCV selection of two smoothing parameters (an additive model of two smooths, each absorbed and scaled): the GCV score n rss / (n - edf)^2 minimised over (log sp1, log sp2)
 // by a 25 by 25 grid over [-12, 12]^2 followed by Nelder-Mead from the best grid point; mgcv stops at a score tolerance, so the oracle compares the score tightly and the
 // fits loosely.
-type Gcv2 = struct { a: *mem.Arena, dm: []const f64, n: usize, p: usize, q1: usize, q2: usize, s1: []const f64, s2: []const f64, y: []const f64, coef: []f64, fit: []f64, pen: []f64 }
+type Gcv2 = struct { a: *mem.Arena, dm: []const f64, n: usize, p: usize, q1: usize, q2: usize, s1: []const f64, s2: []const f64, y: []const f64, coef: []f64, fit: []f64, pen: []f64, ld1: f64, r1: usize, ld2: f64, r2: usize }
 
-fn gcv2_value(c: *Gcv2, rho: []const f64) -> f64 {
+fn gcv2_pen(c: *Gcv2, rho: []const f64) {
     let sp1 = math.exp[f64](rho[0usize])
     let sp2 = math.exp[f64](rho[1usize])
     let p = c.p
@@ -1076,20 +1076,84 @@ fn gcv2_value(c: *Gcv2, rho: []const f64) -> f64 {
         }
         i += 1usize
     }
+}
+
+// the REML score of the two-smooth model: 0.5 (Dp / phi + (n - Mp) log(2 pi phi) + log|X'X + S| - log|S|+), phi = Dp / (n - Mp), Mp = 1 + the null space dimensions
+fn reml2_value(c: *Gcv2, rho: []const f64) -> f64 {
+    gcv2_pen(c, rho)
+    let p = c.p
     let m = mem.mark(c.a)
     let (edf, rss, e) = pls_fit(c.a, c.dm, c.n, p, c.pen, c.y, c.coef, c.fit)
+    let _ = edf
+    if e != ok {
+        mem.reset(c.a, m)
+        ret 1.0e300f64
+    }
+    var bsb = 0.0f64
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            bsb += c.coef[i] * c.pen[i * p + j] * c.coef[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (am, e1) = mem.alloc[f64](c.a, p * p)
+    if e1 != ok {
+        mem.reset(c.a, m)
+        ret 1.0e300f64
+    }
+    var r = 0usize
+    while r < p {
+        var cc = 0usize
+        while cc < p {
+            var v = c.pen[r * p + cc]
+            var t = 0usize
+            while t < c.n {
+                v += c.dm[t * p + r] * c.dm[t * p + cc]
+                t += 1usize
+            }
+            am[r * p + cc] = v
+            cc += 1usize
+        }
+        r += 1usize
+    }
+    let lda = logdet_spd(c.a, am, p)
+    mem.reset(c.a, m)
+    let nf = f64(c.n)
+    let mp = f64(1usize + (c.q1 - c.r1) + (c.q2 - c.r2))
+    let dp = rss + bsb
+    let phi = dp / (nf - mp)
+    let ldsl = f64(c.r1) * rho[0usize] + c.ld1 + f64(c.r2) * rho[1usize] + c.ld2
+    ret 0.5f64 * (dp / phi + (nf - mp) * math.log[f64](6.283185307179586f64 * phi) + lda - ldsl)
+}
+
+fn gcv2_value(c: *Gcv2, rho: []const f64) -> f64 {
+    gcv2_pen(c, rho)
+    let m = mem.mark(c.a)
+    let (edf, rss, e) = pls_fit(c.a, c.dm, c.n, c.p, c.pen, c.y, c.coef, c.fit)
     mem.reset(c.a, m)
     if e != ok { ret 1.0e300f64 }
     let nf = f64(c.n)
     ret nf * rss / ((nf - edf) * (nf - edf))
 }
-
 // answers (sp1, sp2)
-fn gam_gcv_select2(a: *mem.Arena, dm: []const f64, n: usize, q1: usize, s1: []const f64, q2: usize, s2: []const f64, y: []const f64, coef: []f64, fit: []f64, rho: []f64) -> err {
+fn gam_gcv_select2(a: *mem.Arena, dm: []const f64, n: usize, q1: usize, s1: []const f64, q2: usize, s2: []const f64, y: []const f64, coef: []f64, fit: []f64, rho: []f64, reml: bool) -> err {
     let p = 1usize + q1 + q2
     let (pen, e0) = mem.alloc[f64](a, p * p)
     if e0 != ok { ret e0 }
-    var c = Gcv2 { a: a, dm: dm, n: n, p: p, q1: q1, q2: q2, s1: s1, s2: s2, y: y, coef: coef, fit: fit, pen: pen }
+    var c = Gcv2 { a: a, dm: dm, n: n, p: p, q1: q1, q2: q2, s1: s1, s2: s2, y: y, coef: coef, fit: fit, pen: pen, ld1: 0.0f64, r1: 0usize, ld2: 0.0f64, r2: 0usize }
+    if reml {
+        let (l1, k1, f1) = pseudo_logdet(a, s1, q1)
+        let (l2, k2, f2) = pseudo_logdet(a, s2, q2)
+        if f1 != ok { ret f1 }
+        if f2 != ok { ret f2 }
+        c.ld1 = l1
+        c.r1 = k1
+        c.ld2 = l2
+        c.r2 = k2
+    }
     var best = 1.0e300f64
     var b1 = 0.0f64
     var b2 = 0.0f64
@@ -1100,7 +1164,7 @@ fn gam_gcv_select2(a: *mem.Arena, dm: []const f64, n: usize, q1: usize, s1: []co
         while j < 25usize {
             tr[0usize] = 0.0f64 - 12.0f64 + f64(i)
             tr[1usize] = 0.0f64 - 12.0f64 + f64(j)
-            let v = gcv2_value(&c, tr[0usize..2usize])
+            let v = objective2(&c, tr[0usize..2usize], reml)
             if v < best {
                 best = v
                 b1 = tr[0usize]
@@ -1117,7 +1181,7 @@ fn gam_gcv_select2(a: *mem.Arena, dm: []const f64, n: usize, q1: usize, s1: []co
     var round = 0usize
     var last = 1.0e300f64
     while round < 20usize {
-        let (r, e2) = opt.nelder_mead[Gcv2](&c, gcv2_value, rho, 0.5f64, 1.0e-16f64, 5000u32, scr)
+        let (r, e2) = nm2(&c, rho, scr, reml)
         if e2 != ok { ret e2 }
         if math.abs[f64](last - r.value) < 1.0e-14f64 * (1.0f64 + math.abs[f64](r.value)) && round > 1usize { break }
         last = r.value
@@ -1401,4 +1465,18 @@ fn gcv_gen_select(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen0: []co
         it += 1usize
     }
     ret math.exp[f64](0.5f64 * (lo + hi))
+}
+
+fn objective2(c: *Gcv2, rho: []const f64, reml: bool) -> f64 {
+    if reml { ret reml2_value(c, rho) }
+    ret gcv2_value(c, rho)
+}
+
+fn nm2(c: *Gcv2, rho: []f64, scr: []f64, reml: bool) -> (opt.Result, err) {
+    if reml {
+        let (r, e) = opt.nelder_mead[Gcv2](c, reml2_value, rho, 0.5f64, 1.0e-16f64, 5000u32, scr)
+        ret (r, e)
+    }
+    let (r2, e2) = opt.nelder_mead[Gcv2](c, gcv2_value, rho, 0.5f64, 1.0e-16f64, 5000u32, scr)
+    ret (r2, e2)
 }

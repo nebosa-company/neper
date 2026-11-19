@@ -76,7 +76,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     var rho: [2]f64 = zero
-    let es = mg.gam_gcv_select2(a, dm, n, q1, sz1, q2, sz2, y, coef, fit, rho[0usize..2usize])
+    let es = mg.gam_gcv_select2(a, dm, n, q1, sz1, q2, sz2, y, coef, fit, rho[0usize..2usize], false)
     if es != ok { os.exit(7) }
     i = 0usize
     while i < p * p {
