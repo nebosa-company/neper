@@ -430,7 +430,7 @@
       "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases; Linux pending). Distance-matrix input equals too (D7692, 784 cases). Open: the Barnes-Hut tree, the random start and PCA step, uwot. Was: Open (CRAN ranks 311, 315). Mid. e.ml.reduce has t-SNE and UMAP; verify against R under set.seed first. Acceptance, equal to R: uwot umap and umap_transform with its nearest-neighbour graph, spectral and random initialization, optimizer epochs; Rtsne Barnes-Hut and exact, with perplexity, theta and PCA preprocessing."
+      "evidence": "Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases; Linux pending). Distance-matrix input equals too (D7692, 784 cases). PCA step (prcomp rank) equals too (D7693, 982 cases). Open: the Barnes-Hut tree, the random start, uwot. Was: Open (CRAN ranks 311, 315). Mid. e.ml.reduce has t-SNE and UMAP; verify against R under set.seed first. Acceptance, equal to R: uwot umap and umap_transform with its nearest-neighbour graph, spectral and random initialization, optimizer epochs; Rtsne Barnes-Hut and exact, with perplexity, theta and PCA preprocessing."
     },
     {
       "id": "L393",

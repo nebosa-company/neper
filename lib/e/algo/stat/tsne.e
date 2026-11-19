@@ -4,6 +4,7 @@
 //
 // Not here: the Barnes-Hut tree (theta > 0), the random start from R's generator and the PCA step.
 
+use e.algo.linalg.lapack_syevr as sy
 use e.math
 use e.mem
 
@@ -228,6 +229,56 @@ fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, pe
         }
         zero_mean(y, n, dims)
         iter += 1usize
+    }
+    ret ok
+}
+
+// Rtsne's PCA step: prcomp(x, center = TRUE, scale. = FALSE, rank. = k)$x, the first k principal-component scores of the n by d matrix x (row-major) into out (n by k). Component signs are
+// LAPACK's and do not matter to t-SNE, which only sees distances
+fn pca_scores(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, out: []f64) -> err {
+    let (xc, e0) = mem.alloc[f64](a, n * d)
+    let (cv, e1) = mem.alloc[f64](a, d * d)
+    let (w, e2) = mem.alloc[f64](a, d)
+    let (v, e3) = mem.alloc[f64](a, d * d)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret e0 }
+    var i = 0usize
+    while i < n * d {
+        xc[i] = x[i]
+        i += 1usize
+    }
+    zero_mean(xc, n, d)
+    var r = 0usize
+    while r < d {
+        var c = 0usize
+        while c < d {
+            var s = 0.0f64
+            i = 0usize
+            while i < n {
+                s += xc[i * d + r] * xc[i * d + c]
+                i += 1usize
+            }
+            cv[r * d + c] = s / f64(n - 1usize)
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let ee = sy.dsyevr_all(a, cv, d, w, v)
+    if ee != ok { ret ee }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < k {
+            let col = d - 1usize - j
+            var s = 0.0f64
+            var c = 0usize
+            while c < d {
+                s += xc[i * d + c] * v[col * d + c]
+                c += 1usize
+            }
+            out[i * k + j] = s
+            j += 1usize
+        }
+        i += 1usize
     }
     ret ok
 }

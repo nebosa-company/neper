@@ -19,6 +19,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         y[i] = x[11usize + n * d + i]
         i += 1usize
     }
+    let mode = usize(x[11usize + n * d + n * dims + 1usize])
+    if mode == 3usize {
+        let kk = usize(x[11usize + n * d + n * dims + 2usize])
+        let (sc, e2) = mem.alloc[f64](a, n * kk)
+        if e2 != ok { os.exit(7) }
+        if ts.pca_scores(a, x[11usize..11usize + n * d], n, d, kk, sc) != ok { os.exit(8) }
+        if ts.tsne_exact(a, sc, n, kk, dims, x[3usize], y, usize(x[4usize]), usize(x[5usize]), usize(x[6usize]), x[7usize], x[8usize], x[9usize], x[10usize], 1usize) != ok { os.exit(9) }
+        ret y[usize(x[11usize + n * d + n * dims])]
+    }
     if ts.tsne_exact(a, x[11usize..11usize + n * d], n, d, dims, x[3usize], y, usize(x[4usize]), usize(x[5usize]), usize(x[6usize]), x[7usize], x[8usize], x[9usize], x[10usize], usize(x[11usize + n * d + n * dims + 1usize])) != ok { os.exit(6) }
     ret y[usize(x[11usize + n * d + n * dims])]
 }

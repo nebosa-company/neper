@@ -51466,3 +51466,6 @@ The tree likelihood is split into `gtr_site_lik` (per-site likelihood at a rate 
 
 ## D7692 — Rtsne distance-matrix input
 `tsne_exact` takes a mode (0 plain, 1 normalize, 2 distance matrix): with is_distance Rtsne skips the PCA, the duplicate check and the normalization and, for theta = 0, squares the matrix to use as the squared distances; mode 2 does the same. Equal to Rtsne(dist matrix, is_distance = TRUE, theta = 0, Y_init) on 4 data sets of 15 to 30 points (176 coordinates added to oracle_tsne, 784 in all) on the first run. The Barnes-Hut tree, the random start, the PCA step and uwot stay open.
+
+## D7693 — Rtsne PCA step
+`pca_scores` is Rtsne's prcomp(x, center = TRUE, scale. = FALSE, rank. = initial_dims)$x: the columns centred, the covariance matrix (n - 1) eigen-decomposed with dsyevr, the first k scores kept; the component signs are LAPACK's and t-SNE sees only distances, so they cannot matter. Followed by the normalization and the exact t-SNE, equal to Rtsne(X, pca = TRUE, initial_dims = k, theta = 0, Y_init) on 5 data sets of 15 to 30 points in 4 to 7 dimensions reduced to 2 or 3 (198 coordinates added to oracle_tsne, 982 in all) on the first run. The Barnes-Hut tree, the random start and uwot stay open.
