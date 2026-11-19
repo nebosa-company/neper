@@ -511,3 +511,12 @@ fn quade_pair(a: *mem.Arena, b: usize, k: usize, y: []const f64, dist_kind: usiz
     let zv = dz / denom
     ret (zv, 2.0f64 * dist.pnorm(0.0f64 - zv, 0.0f64, 1.0f64, true, false), ok)
 }
+
+// Dunn's many-to-one test against group 0: the signed z of (mean rank_j - mean rank_0) and its two-sided p (ties corrected as in dunn)
+fn dunn_many(q: Ranks, rbar: []const f64, rn: []const f64, j: usize) -> (f64, f64) {
+    let dif = rbar[j] - rbar[0usize]
+    let z = dif / math.sqrt[f64]((q.n * (q.n + 1.0f64) / 12.0f64 - q.ties_dunn) * (1.0f64 / rn[0usize] + 1.0f64 / rn[j]))
+    var az = z
+    if az < 0.0f64 { az = 0.0f64 - az }
+    ret (z, 2.0f64 * dist.pnorm(0.0f64 - az, 0.0f64, 1.0f64, true, false))
+}

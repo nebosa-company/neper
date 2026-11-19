@@ -50203,3 +50203,6 @@ For `coxph(Surv(Tstart, Tstop, status) ~ strata(trans), method = "breslow")` the
 
 ## D7358 — PMCMRplus Quade all-pairs
 `quade_pair` ranks within blocks and the block ranges across blocks, forms s = q (r - (k + 1)/2), and answers the t form (|S_i - S_j| over sqrt(2b(A - B)/((b-1)(k-1))), two-sided p at (b-1)(k-1) df) or the normal form on the weighted rank sums scaled by 1/(b(b+1)/2). Equal to R on ten random block designs, unadjusted p. L487 at 0.5.
+
+## D7359 — PMCMRplus Dunn many-to-one
+`dunn_many` compares each group with group 0: the signed z of the mean rank difference over sqrt((n(n+1)/12 - C) (1/n_0 + 1/n_j)) with the same tie correction as the all-pairs Dunn test, and the two-sided normal p; Holm adjustment runs over the k - 1 comparisons. Equal to R on twelve random data sets. L487 at 0.55; the single-step multivariate-normal form and the other many-to-one families remain.

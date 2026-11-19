@@ -518,3 +518,4 @@ oracle_mstate_fixed
 oracle_pmcmr_frd
 oracle_pmcmr_vdw
 oracle_pmcmr_quade
+oracle_pmcmr_many
