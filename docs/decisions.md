@@ -50515,3 +50515,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 
 ## D7420 — pscl hurdle with a negative binomial count
 `hurdle_nb` keeps the exact logit zero part and fits the zero-truncated negative binomial count part (positive rows: lgamma terms plus theta log(theta / (theta + mu)) + y log(mu / (theta + mu)) - log(1 - (theta / (theta + mu))^theta)) by BFGS on (beta, log theta) from the truncated Poisson fit. The first run diverged (mu to 0 and theta to 1e5, a log-likelihood of +inf) because BFGS's first line-search steps left the sensible region; a penalty returning 1e300 when any parameter exceeds 12 in absolute value fixes it, and the formula itself was checked against R's logLik (-388.1197 reproduced to the digit on a simulated set). Total log-likelihood and theta equal pscl to 2e-3 on six data sets. L412 at 0.55.
+
+## D7336 — mlogit: nested logit standard errors
+
+**Decision.** `mlogitpkg.nested_se` inverts the Hessian of the nested negative log-likelihood, taken by central second differences with step 1e-4 (1 + |par|), at the fitted parameters.
+
+**Result.** `oracle_mlogit` (213 cases, 10 new) equals mlogit's standard errors on Windows to 8e-2 relative as weighted sums over the coefficients and inclusive values: they inherit the 5e-3 accuracy of the Nelder-Mead fit and the finite-difference step, so this is the loosest tolerance in the file. Linux pending. L456 stays partial: an analytic Hessian for tighter standard errors, a common inclusive value, mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, Wald tests, predictions on new data.

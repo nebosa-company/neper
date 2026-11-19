@@ -4233,4 +4233,7 @@ D7331	688	parameters: standardize_parameters of an lm
 D7332	690	bayestestR: map_estimate
 D7333	702	mlogit: shares and marginal effects
 D7334	527	mlogit: likelihood-ratio test
-D7335	901	mlogit: nested logit
+D7335	902	mlogit: nested logit
+D7419	772	pscl zeroinfl with a negative binomial count
+D7420	770	pscl hurdle with a negative binomial count
+D7336	757	mlogit: nested logit standard errors

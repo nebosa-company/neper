@@ -6,6 +6,7 @@ use e.algo.stat.gparot as gp
 use e.math
 use e.mem
 use e.math.opt as opt
+use e.algo.stat.quantreg as qrb
 
 // x is n choosers by j alternatives by k covariates (row-major in that order); ch[i] is the chosen alternative (0-based); out = coefficients (q), standard errors (q), log-likelihood, q = (asc ? j - 1 : 0) + k
 fn clogit(a: *mem.Arena, x: []const f64, ch: []const f64, n: usize, j: usize, k: usize, asc: bool, out: []f64) -> err {
@@ -415,4 +416,94 @@ fn nested_logit(a: *mem.Arena, x: []const f64, ch: []const f64, n: usize, j: usi
     }
     out[dim] = 0.0f64 - best
     ret ok
+}
+
+// the standard errors of `nested_logit` from the inverse of the numerical Hessian (central second differences of the negative log-likelihood, step 1e-4 (1 + |par|)) at the fitted parameters par (dim values:
+// constants, covariates, inclusive values); false when the Hessian is singular
+fn nested_se(a: *mem.Arena, x: []const f64, ch: []const f64, n: usize, j: usize, k: usize, asc: bool, nest: []const usize, nn: usize, par: []const f64, se: []f64) -> bool {
+    var na = 0usize
+    if asc { na = j - 1usize }
+    let dim = par.len
+    let (lamidx, e1) = mem.alloc[usize](a, nn)
+    let (h, e2) = mem.alloc[f64](a, dim * dim)
+    let (pp, e3) = mem.alloc[f64](a, dim)
+    let (mat, e4) = mem.alloc[f64](a, dim * dim)
+    let (col, e5) = mem.alloc[f64](a, dim)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret false }
+    var nl = 0usize
+    var m = 0usize
+    while m < nn {
+        var cnt = 0usize
+        var a1 = 0usize
+        while a1 < j {
+            if nest[a1] == m { cnt += 1usize }
+            a1 += 1usize
+        }
+        lamidx[m] = 1000usize
+        if cnt > 1usize {
+            lamidx[m] = nl
+            nl += 1usize
+        }
+        m += 1usize
+    }
+    var c = NCtx { x: x, ch: ch, n: n, j: j, k: k, na: na, nest: nest, nn: nn, lamidx: lamidx }
+    var i = 0usize
+    while i < dim {
+        pp[i] = par[i]
+        i += 1usize
+    }
+    let f0 = nested_negll(&c, pp)
+    i = 0usize
+    while i < dim {
+        var j2 = i
+        while j2 < dim {
+            let hi = 1.0e-4f64 * (1.0f64 + math.abs[f64](par[i]))
+            let hj = 1.0e-4f64 * (1.0f64 + math.abs[f64](par[j2]))
+            var v = 0.0f64
+            if i == j2 {
+                pp[i] = par[i] + hi
+                let fp = nested_negll(&c, pp)
+                pp[i] = par[i] - hi
+                let fm = nested_negll(&c, pp)
+                pp[i] = par[i]
+                v = (fp - 2.0f64 * f0 + fm) / (hi * hi)
+            } else {
+                pp[i] = par[i] + hi
+                pp[j2] = par[j2] + hj
+                let fpp = nested_negll(&c, pp)
+                pp[j2] = par[j2] - hj
+                let fpm = nested_negll(&c, pp)
+                pp[i] = par[i] - hi
+                let fmm = nested_negll(&c, pp)
+                pp[j2] = par[j2] + hj
+                let fmp = nested_negll(&c, pp)
+                pp[i] = par[i]
+                pp[j2] = par[j2]
+                v = (fpp - fpm - fmp + fmm) / (4.0f64 * hi * hj)
+            }
+            h[i * dim + j2] = v
+            h[j2 * dim + i] = v
+            j2 += 1usize
+        }
+        i += 1usize
+    }
+    var cc = 0usize
+    while cc < dim {
+        var r = 0usize
+        while r < dim * dim {
+            mat[r] = h[r]
+            r += 1usize
+        }
+        r = 0usize
+        while r < dim {
+            col[r] = 0.0f64
+            r += 1usize
+        }
+        col[cc] = 1.0f64
+        if !qrb.solve_dense(mat, col, dim) { ret false }
+        if col[cc] <= 0.0f64 { ret false }
+        se[cc] = math.sqrt[f64](col[cc])
+        cc += 1usize
+    }
+    ret true
 }

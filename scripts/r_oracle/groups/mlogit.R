@@ -68,5 +68,7 @@ for (rep in 1:14) {
   cases[[length(cases) + 1]] <- case("nl_coef", a, ws(b), rel = 5e-3, abs = 5e-3)
   cases[[length(cases) + 1]] <- case("nl_iv", a, ws(cf[ivn]), rel = 5e-3, abs = 5e-3)
   cases[[length(cases) + 1]] <- case("nl_ll", a, as.numeric(logLik(f)), rel = 1e-6, abs = 1e-6)
+  sev <- sqrt(diag(vcov(f))); sb <- if (asc) c(sev[grep("Intercept", names(sev))], sev[paste0("x", 1:k)]) else sev[paste0("x", 1:k)]
+  cases[[length(cases) + 1]] <- case("nl_se", a, ws(c(sb, sev[ivn])), rel = 8e-2, abs = 3e-3)
 }
 emit("mlogit", "mlogit", list(cases))

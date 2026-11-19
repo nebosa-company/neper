@@ -44,6 +44,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             m += 1usize
         }
         if str.eq(c.name, "nl_ll") { ret out[q + nl] }
+        if str.eq(c.name, "nl_se") {
+            let (nse, nee) = mem.alloc[f64](a, q + nl)
+            if nee != ok { ret nan }
+            if !ml.nested_se(a, xs, chs, n, j, k, asc, nest, nn, out[0usize..q + nl], nse) { ret nan }
+            var ss = 0.0f64
+            t = 0usize
+            while t < q + nl {
+                ss += nse[t] * f64(t + 1usize)
+                t += 1usize
+            }
+            ret ss
+        }
         var lo = 0usize
         var hi = q
         if str.eq(c.name, "nl_iv") {
