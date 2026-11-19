@@ -13,7 +13,8 @@ error NearNull
 
 type Opts = struct {
     nv: usize, nu: usize, maxit: usize, work: usize, reorth: bool, tol: f64, svtol: f64, right_only: bool, smallest: bool, maxritz: usize,
-    center: []f64, scale: []f64, has_shift: bool, shift: f64, v: []f64
+    center: []f64, scale: []f64, has_shift: bool, shift: f64, v: []f64,
+    du: []f64, dv: []f64, dd: []f64
 }
 
 // a result: d (k values), u (ur by nu), v (vr by nv), column-major; u and v are empty with right_only
@@ -288,6 +289,60 @@ fn svd_cols(a: *mem.Arena, b: []const f64, nr: usize, nc: usize, s: []f64, u: []
     ret ok
 }
 
+// mult() of irlba with the deflation vectors u (m0 by p, column-major): the product (fwd, or its adjoint) of the matrix x and v, deflated on the m0 side
+// as irlba:::mult does; ua is the p by n0 cross(u, x); sc has room for m0 + p values
+fn dmult(x: []const f64, m0: usize, n0: usize, ichg: bool, fwd: bool, du: []const f64, p: usize, ua: []const f64, sc: []f64, v: []const f64, out: []f64) {
+    var tr = ichg
+    if !fwd { tr = !ichg }
+    if p == 0usize {
+        gemv(x, m0, n0, tr, v, out)
+        ret
+    }
+    var outlen = m0
+    if tr { outlen = n0 }
+    gemv(x, m0, n0, tr, v, out)
+    var left = false
+    if fwd && !ichg { left = true }
+    if !fwd && ichg { left = true }
+    if left {
+        // a - u (u' a)
+        var l = 0usize
+        while l < p {
+            sc[l] = dotp(du[l * m0..(l + 1usize) * m0], out, m0)
+            l += 1usize
+        }
+        var i = 0usize
+        while i < m0 {
+            var acc = 0.0f64
+            l = 0usize
+            while l < p {
+                acc += du[l * m0 + i] * sc[l]
+                l += 1usize
+            }
+            out[i] = out[i] - acc
+            i += 1usize
+        }
+    } else {
+        // x'v - (v'u)(u'x)
+        var l = 0usize
+        while l < p {
+            sc[l] = dotp(v, du[l * m0..(l + 1usize) * m0], m0)
+            l += 1usize
+        }
+        var j = 0usize
+        while j < outlen {
+            var acc = 0.0f64
+            l = 0usize
+            while l < p {
+                acc += sc[l] * ua[j * p + l]
+                l += 1usize
+            }
+            out[j] = out[j] - acc
+            j += 1usize
+        }
+    }
+}
+
 fn irlba(a: *mem.Arena, g: *rr.Rng, x: []const f64, m0: usize, n0: usize, o: Opts, res: *Fit) -> err {
     var m = m0
     var n = n0
@@ -303,6 +358,13 @@ fn irlba(a: *mem.Arena, g: *rr.Rng, x: []const f64, m0: usize, n0: usize, o: Opt
     var work = o.work
     if work <= 1usize || o.maxit == 0usize || o.tol < 0.0f64 { ret BadArg }
     if work <= k && !o.right_only { work = k + 1usize }
+    let pd = o.dd.len
+    if pd > 0usize {
+        if o.center.len > 0usize || o.right_only { ret BadArg }
+        var w2 = 1usize
+        if work > pd + 2usize { w2 = work - pd - 2usize }
+        work = w2
+    }
     if work >= mn {
         work = 1usize
         if mn > 3usize { work = mn - 2usize }
@@ -432,6 +494,30 @@ fn irlba(a: *mem.Arena, g: *rr.Rng, x: []const f64, m0: usize, n0: usize, o: Opt
             vm[i] = rr.rnorm(g, 0.0f64, 1.0f64)
             i += 1usize
         }
+        if pd > 0usize {
+            let (otmp, eo) = zalloc(a, n + m)
+            if eo != ok { ret mem.Full }
+            if m == n {
+                orthog(vm[0usize..n], o.du, n, pd, otmp)
+                orthog(vm[0usize..n], o.dv, n, pd, otmp)
+            } else {
+                if ichg { orthog(vm[0usize..n], o.du, n, pd, otmp) } else { orthog(vm[0usize..n], o.dv, n, pd, otmp) }
+            }
+        }
+    }
+    let (uax, eua) = zalloc(a, pd * n0 + 1usize)
+    let (dsc, edc) = zalloc(a, m0 + n0 + pd + 1usize)
+    if eua != ok || edc != ok { ret mem.Full }
+    if pd > 0usize {
+        var jx = 0usize
+        while jx < n0 && pd > 0usize {
+            var l = 0usize
+            while l < pd {
+                uax[jx * pd + l] = dotp(o.du[l * m0..(l + 1usize) * m0], x[jx * m0..(jx + 1usize) * m0], m0)
+                l += 1usize
+            }
+            jx += 1usize
+        }
     }
     var reorth = o.reorth
     var nrb = 0usize
@@ -471,7 +557,7 @@ fn irlba(a: *mem.Arena, g: *rr.Rng, x: []const f64, m0: usize, n0: usize, o: Opt
             if hass { tmpn[i] = tmpn[i] / o.scale[i] }
             i += 1usize
         }
-        gemv(x, m0, n0, ichg, tmpn, tmpm)
+        dmult(x, m0, n0, ichg, true, o.du, pd, uax, dsc, tmpn, tmpm)
         mprod += 1usize
         i = 0usize
         while i < m {
@@ -524,7 +610,7 @@ fn irlba(a: *mem.Arena, g: *rr.Rng, x: []const f64, m0: usize, n0: usize, o: Opt
             jw = 1usize
             if wide { jw = j }
             // F = A' W[, jw] (shift, scale, centre)
-            gemv(x, m0, n0, !ichg, wm[(jw - 1usize) * m..jw * m], fv)
+            dmult(x, m0, n0, ichg, false, o.du, pd, uax, dsc, wm[(jw - 1usize) * m..jw * m], fv)
             if o.has_shift {
                 i = 0usize
                 while i < n {
@@ -608,7 +694,7 @@ fn irlba(a: *mem.Arena, g: *rr.Rng, x: []const f64, m0: usize, n0: usize, o: Opt
                     if hass { tmpn[i] = tmpn[i] / o.scale[i] }
                     i += 1usize
                 }
-                gemv(x, m0, n0, ichg, tmpn, tmp2[0usize..m])
+                dmult(x, m0, n0, ichg, true, o.du, pd, uax, dsc, tmpn, tmp2[0usize..m])
                 mprod += 1usize
                 i = 0usize
                 while i < m {
@@ -1050,6 +1136,32 @@ fn irlba(a: *mem.Arena, g: *rr.Rng, x: []const f64, m0: usize, n0: usize, o: Opt
         iter += 1usize
     }
     if bfail { ret BadArg }
+    if o.smallest && pd > 0usize && bsz > 0usize {
+        var maxdd = o.dd[0usize]
+        var q0 = 1usize
+        while q0 < pd {
+            if o.dd[q0] > maxdd { maxdd = o.dd[q0] }
+            q0 += 1usize
+        }
+        if bsv[0usize] < maxdd {
+            var keep = 0usize
+            var q = 0usize
+            while q < bsz {
+                if bsv[q] >= maxdd {
+                    var r0 = 0usize
+                    while r0 < bsz {
+                        bu[keep * bsz + r0] = bu[q * bsz + r0]
+                        bv[keep * bsz + r0] = bv[q * bsz + r0]
+                        r0 += 1usize
+                    }
+                    bsv[keep] = bsv[q]
+                    keep += 1usize
+                }
+                q += 1usize
+            }
+            // R then indexes past the kept columns (NA); the filter only drops what the deflation already holds, so keep the rest as is
+        }
+    }
     // d, U, V from the last Bsvd
     let (d, g1) = zalloc(a, k_org)
     let (vo, g2) = zalloc(a, n * nv)
@@ -1104,24 +1216,88 @@ fn irlba(a: *mem.Arena, g: *rr.Rng, x: []const f64, m0: usize, n0: usize, o: Opt
         }
         c += 1usize
     }
-    res.d = d
+    var dout = d
+    var uout = uo
+    var vout = vo
+    var nuo = nu
+    var nvo = nv
+    if pd > 0usize {
+        let (d2, h1) = zalloc(a, k_org + pd)
+        let (u2, h2) = zalloc(a, m * (nu + pd))
+        let (v2, h3) = zalloc(a, n * (nv + pd))
+        if h1 != ok || h2 != ok || h3 != ok { ret mem.Full }
+        // the deflated pairs go last for smallest, first otherwise; in the interchanged problem the roles of u and v swap
+        var ucols: []f64 = o.du
+        var vcols: []f64 = o.dv
+        if o.smallest && ichg {
+            ucols = o.dv
+            vcols = o.du
+        }
+        var q = 0usize
+        while q < k_org + pd {
+            var src = q
+            if o.smallest {
+                if q < k_org { d2[q] = d[q] } else { d2[q] = o.dd[q - k_org] }
+            } else {
+                if q < pd { d2[q] = o.dd[q] } else { d2[q] = d[q - pd] }
+            }
+            src = src + 0usize
+            q += 1usize
+        }
+        q = 0usize
+        while q < nu + pd {
+            var i2 = 0usize
+            while i2 < m {
+                var vv = 0.0f64
+                if o.smallest {
+                    if q < nu { vv = uo[q * m + i2] } else { vv = ucols[(q - nu) * m + i2] }
+                } else {
+                    if q < pd { vv = ucols[q * m + i2] } else { vv = uo[(q - pd) * m + i2] }
+                }
+                u2[q * m + i2] = vv
+                i2 += 1usize
+            }
+            q += 1usize
+        }
+        q = 0usize
+        while q < nv + pd {
+            var i2 = 0usize
+            while i2 < n {
+                var vv = 0.0f64
+                if o.smallest {
+                    if q < nv { vv = vo[q * n + i2] } else { vv = vcols[(q - nv) * n + i2] }
+                } else {
+                    if q < pd { vv = vcols[q * n + i2] } else { vv = vo[(q - pd) * n + i2] }
+                }
+                v2[q * n + i2] = vv
+                i2 += 1usize
+            }
+            q += 1usize
+        }
+        dout = d2
+        uout = u2
+        vout = v2
+        nuo = nu + pd
+        nvo = nv + pd
+    }
+    res.d = dout
     res.iter = iter
     res.mprod = mprod
     res.converged = converged
     if ichg {
-        res.u = vo
+        res.u = vout
         res.ur = n
-        res.nu = nv
-        res.v = uo
+        res.nu = nvo
+        res.v = uout
         res.vr = m
-        res.nv = nu
+        res.nv = nuo
     } else {
-        res.u = uo
+        res.u = uout
         res.ur = m
-        res.nu = nu
-        res.v = vo
+        res.nu = nuo
+        res.v = vout
         res.vr = n
-        res.nv = nv
+        res.nv = nvo
     }
     if o.right_only {
         res.u = uo
