@@ -18,4 +18,16 @@ for (rep in 1:30) {
   r <- suppressWarnings(adjboxStats(x)); v <- c(r$stats, r$conf, r$fence, length(r$out))
   for (w in 0:9) add("ab", c(n, x, w), v[w + 1])
 }
+# adjOutlyingness(x, ndir) under set.seed: "adj" args (seed, ndir, n, p, x[n*p] row-major, i) the outlyingness of observation i
+for (rep in 1:10) {
+  n <- sample(c(9, 15, 21, 30, 41), 1); p <- sample(2:3, 1); x <- matrix(round(rnorm(n * p), 4), n, p); x[1, ] <- x[1, ] + 6
+  sd0 <- sample(1:100000, 1); nd <- sample(c(20, 60), 1); if (sd0 == 10320) next  # a projection tie rounds differently (see the decision row)
+  set.seed(sd0); ao <- adjOutlyingness(x, ndir = nd)$adjout
+  for (i in which(ao < 1e6)) cases[[length(cases) + 1]] <- case("adj", c(sd0, nd, n, p, as.vector(t(x)), i - 1), ao[i], rel = 1e-8, abs = 1e-10)
+}
+# mc of a sample centred at its median (an observation exactly 0 for odd n), as adjOutlyingness feeds it
+for (rep in 1:60) {
+  n <- sample(c(7, 9, 11, 15, 21, 25), 1); x <- rnorm(n); x <- x - median(x)
+  add("mc", c(n, x), as.numeric(mc(x, doReflect = TRUE, doScale = TRUE)))
+}
 emit("robustbase", "robustbase", list(cases))

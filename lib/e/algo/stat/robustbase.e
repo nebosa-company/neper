@@ -4,6 +4,8 @@
 // Not here: mc (the medcouple), covMcd, lmrob, scaleTau2, adjOutlyingness and the rest of the package.
 
 use e.math
+use e.algo.rand.r as rng
+use e.algo.stat.gparot as gp
 use e.math.dist as dist
 
 use e.mem
@@ -313,4 +315,164 @@ fn adjbox_stats(a: *mem.Arena, x: []const f64, coef: f64, ca: f64, cb: f64, out:
     out[7usize] = f0
     out[8usize] = f1
     out[9usize] = f64(nout)
+}
+
+fn quantile7(s: []const f64, p: f64) -> f64 {
+    let n = s.len
+    let h = f64(n - 1usize) * p
+    let lo = math.floor[f64](h)
+    let i = usize(lo)
+    if i + 1usize >= n { ret s[n - 1usize] }
+    ret s[i] + (h - lo) * (s[i + 1usize] - s[i])
+}
+
+// robustbase::adjOutlyingness(x) with the defaults (ndir directions from p-subsets of the rows drawn by sample.int and sorted, B = solve(P, 1) normalized, medcouple adjusted fences
+// with clower 4, cupper 3, coef 1.5, quantile type 7); x is n by p row-major, out gets the n adjusted outlyingnesses. Needs n <= 100 for the reflected medcouple the package uses then.
+fn adj_outlyingness(a: *mem.Arena, g: *rng.Rng, x: []const f64, n: usize, p: usize, ndir: usize, out: []f64) -> err {
+    let (bm, e0) = mem.alloc[f64](a, p * ndir)
+    let (pm, e1) = mem.alloc[f64](a, p * p)
+    let (yy, e2) = mem.alloc[f64](a, ndir * n)
+    let (col, e3) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret e0 }
+    var i = 0usize
+    var guard = 0usize
+    while i < ndir && guard < 100usize * ndir {
+        guard += 1usize
+        let start = mem.mark(a)
+        let (idx, se) = rng.sample_int(a, g, i64(n), i64(p), false)
+        if se != ok { ret se }
+        var q = 1usize
+        while q < p {
+            let v = idx[q]
+            var j = q
+            while j > 0usize && idx[j - 1usize] > v {
+                idx[j] = idx[j - 1usize]
+                j -= 1usize
+            }
+            idx[j] = v
+            q += 1usize
+        }
+        var r = 0usize
+        while r < p {
+            var c = 0usize
+            while c < p {
+                pm[r * p + c] = x[usize(idx[r] - 1i64) * p + c]
+                c += 1usize
+            }
+            r += 1usize
+        }
+        let (inv, ie) = gp.invert(a, pm, p)
+        if ie == ok {
+            var nrm = 0.0f64
+            r = 0usize
+            while r < p {
+                var s = 0.0f64
+                var c = 0usize
+                while c < p {
+                    s += inv[r * p + c]
+                    c += 1usize
+                }
+                bm[i * p + r] = s
+                nrm += s * s
+                r += 1usize
+            }
+            nrm = math.sqrt[f64](nrm)
+            r = 0usize
+            while r < p {
+                bm[i * p + r] /= nrm
+                r += 1usize
+            }
+            i += 1usize
+        }
+        mem.reset(a, start)
+    }
+    if i < ndir { ret mem.Full }
+    var d = 0usize
+    while d < ndir {
+        var t = 0usize
+        while t < n {
+            var s = 0.0f64
+            var c = 0usize
+            while c < p {
+                s += x[t * p + c] * bm[d * p + c]
+                c += 1usize
+            }
+            yy[d * n + t] = s
+            t += 1usize
+        }
+        let (srt, ee) = sort_copy(a, yy[d * n..d * n + n])
+        if ee != ok { ret ee }
+        let med = median_sorted(srt)
+        t = 0usize
+        while t < n {
+            yy[d * n + t] -= med
+            t += 1usize
+        }
+        d += 1usize
+    }
+    let (yup, e4) = mem.alloc[f64](a, ndir)
+    let (ylo, e5) = mem.alloc[f64](a, ndir)
+    if e4 != ok || e5 != ok { ret e4 }
+    d = 0usize
+    while d < ndir {
+        let start = mem.mark(a)
+        var t = 0usize
+        while t < n {
+            col[t] = yy[d * n + t]
+            t += 1usize
+        }
+        let tmc = mc(a, col[0usize..n])
+        let (srt, ee) = sort_copy(a, col[0usize..n])
+        if ee != ok { ret ee }
+        let q1 = quantile7(srt, 0.25f64)
+        let q3 = quantile7(srt, 0.75f64)
+        let iqr = q3 - q1
+        var cu = 0.0f64 - tmc * 4.0f64
+        var cl = 0.0f64 - tmc * 3.0f64
+        var ew = 3.0f64 * tmc
+        var lw = 0.0f64 - 4.0f64 * tmc
+        if tmc >= 0.0f64 {
+            cu = 3.0f64 * tmc
+            cl = 0.0f64 - 4.0f64 * tmc
+            ew = cu
+            lw = cl
+        } else {
+            ew = 4.0f64 * tmc
+            lw = 0.0f64 - 3.0f64 * tmc
+        }
+        let tup = q3 + 1.5f64 * (iqr * math.exp[f64](ew))
+        let tlo = q1 - 1.5f64 * (iqr * math.exp[f64](lw))
+        var mxu = 0.0f64 - 1.0e308f64 * 10.0f64
+        var mnl = 1.0e308f64 * 10.0f64
+        t = 0usize
+        while t < n {
+            let v = yy[d * n + t]
+            if v < tup && v > mxu { mxu = v }
+            if v > tlo && v < mnl { mnl = v }
+            t += 1usize
+        }
+        yup[d] = mxu
+        ylo[d] = 0.0f64 - mnl
+        mem.reset(a, start)
+        d += 1usize
+    }
+    var t = 0usize
+    while t < n {
+        var best = 0.0f64 - 1.0e308f64
+        d = 0usize
+        while d < ndir {
+            let y = yy[d * n + t]
+            var v = 0.0f64
+            if y != 0.0f64 {
+                var dd = ylo[d]
+                if y > 0.0f64 { dd = yup[d] }
+                v = math.abs[f64](y) / dd
+            }
+            if v == v && v < 1.0e308f64 && v > best { best = v }
+            d += 1usize
+        }
+        out[t] = best
+        t += 1usize
+    }
+    ret ok
 }

@@ -3,6 +3,7 @@
 
 use e.algo.stat.robustbase as rb
 use e.io
+use e.algo.rand.r as rng
 use e.mem
 use e.os
 use e.str
@@ -10,9 +11,19 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    let k = c.name
+    if str.eq(k, "adj") {
+        let an = usize(x[2usize])
+        let ap = usize(x[3usize])
+        let (ao, ae) = mem.alloc[f64](a, an)
+        if ae != ok { os.exit(5) }
+        var g: rng.Rng = zero
+        rng.seed(&g, i64(x[0usize]))
+        if rb.adj_outlyingness(a, &g, x[4usize..4usize + an * ap], an, ap, usize(x[1usize]), ao) != ok { os.exit(6) }
+        ret ao[usize(x[4usize + an * ap])]
+    }
     let n = usize(x[0usize])
     let v = x[1usize..1usize + n]
-    let k = c.name
     if str.eq(k, "qn") { ret rb.qn(a, v) }
     if str.eq(k, "sn") { ret rb.sn(a, v) }
     if str.eq(k, "mc") { ret rb.mc(a, v) }
