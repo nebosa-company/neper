@@ -609,3 +609,126 @@ fn sgarch_pq(a: *mem.Arena, y: []const f64, n: usize, p: usize, q: usize, out: [
     out[m] = 0.0f64 - pq_f(&c, x[0usize..m])
     ret true
 }
+
+type ArCtx = struct { y: []const f64, n: usize, k: usize, r: []f64, qq: []f64 }
+
+// the log-likelihood of an AR(k) mean with sGARCH(1,1): the residuals are (y_t - mu) - sum phi_i (y_{t-i} - mu) once t > m = max(k, 1) and y_t - mu before (the demeaned form, which reproduced ugarchfit at its own coefficients, where the
+// intercept form did not), h_1 = mean(r^2), then the usual recursion; par = mu, phi_1 .. phi_k, omega, alpha, beta
+fn ar_ll(c: *ArCtx, par: []const f64) -> f64 {
+    let n = c.n
+    let k = c.k
+    var m = k
+    if m < 1usize { m = 1usize }
+    var i = 0usize
+    var m2 = 0.0f64
+    while i < n {
+        var r = c.y[i] - par[0usize]
+        if i >= m {
+            var l = 0usize
+            while l < k {
+                r = r - par[1usize + l] * (c.y[i - 1usize - l] - par[0usize])
+                l += 1usize
+            }
+        }
+        c.r[i] = r
+        m2 += r * r
+        i += 1usize
+    }
+    m2 = m2 / f64(n)
+    let om = par[1usize + k]
+    let al = par[2usize + k]
+    let be = par[3usize + k]
+    var h = m2
+    var ll = 0.0f64
+    i = 0usize
+    while i < n {
+        // the first m conditional variances are mean(r^2), as the max-order rule found for the pure GARCH orders
+        if i >= m { h = om + al * c.r[i - 1usize] * c.r[i - 1usize] + be * h }
+        ll += 0.0f64 - 0.5f64 * (math.log[f64](2.0f64 * 3.141592653589793238462643383279f64) + math.log[f64](h) + c.r[i] * c.r[i] / h)
+        i += 1usize
+    }
+    ret ll
+}
+
+// minus the log-likelihood at x = (mu, phi_1 .. phi_k, log omega, log alpha, log beta); persistence at or above one costs a large constant
+fn ar_f(c: *ArCtx, x: []const f64) -> f64 {
+    let k = c.k
+    var par: [8]f64 = zero
+    var i = 0usize
+    while i <= k {
+        par[i] = x[i]
+        i += 1usize
+    }
+    par[1usize + k] = math.exp[f64](x[1usize + k])
+    par[2usize + k] = math.exp[f64](x[2usize + k])
+    par[3usize + k] = math.exp[f64](x[3usize + k])
+    if par[2usize + k] + par[3usize + k] >= 0.9999f64 { ret 1.0e8f64 }
+    ret 0.0f64 - ar_ll(c, par[0usize..4usize + k])
+}
+
+fn ar_g(c: *ArCtx, x: []const f64, g: []f64) {
+    let m = 4usize + c.k
+    var i = 0usize
+    while i < m {
+        c.qq[i] = x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        let h = 1.0e-6f64
+        c.qq[i] = x[i] + h
+        let fp = ar_f(c, c.qq[0usize..m])
+        c.qq[i] = x[i] - h
+        let fm = ar_f(c, c.qq[0usize..m])
+        c.qq[i] = x[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// ugarchfit of an AR(k) mean (k at most 2) with sGARCH(1,1) and normal innovations: out = mu, phi_1 .. phi_k, omega, alpha1, beta1, the log-likelihood
+fn sgarch_ar(a: *mem.Arena, y: []const f64, n: usize, k: usize, out: []f64) -> bool {
+    let m = 4usize + k
+    let (rr, e1) = mem.alloc[f64](a, n)
+    let (qq, e2) = mem.alloc[f64](a, m)
+    let (scr, e3) = mem.alloc[f64](a, 256usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += y[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    var v = 0.0f64
+    i = 0usize
+    while i < n {
+        v += (y[i] - mean) * (y[i] - mean)
+        i += 1usize
+    }
+    v = v / f64(n)
+    var x: [8]f64 = zero
+    x[0usize] = mean
+    x[1usize + k] = math.log[f64](v * 0.05f64)
+    x[2usize + k] = math.log[f64](0.1f64)
+    x[3usize + k] = math.log[f64](0.7f64)
+    var c = ArCtx { y: y, n: n, k: k, r: rr, qq: qq }
+    var round = 0usize
+    while round < 3usize {
+        let (r2, e5) = opt.nelder_mead[ArCtx](&c, ar_f, x[0usize..m], 0.05f64, 1.0e-16f64, 4000u32, scr)
+        if e5 != ok { ret false }
+        let (r3, e6) = opt.bfgs[ArCtx](&c, ar_f, ar_g, x[0usize..m], 1.0e-12f64, 400u32, scr)
+        if e6 != ok { ret false }
+        round += 1usize
+    }
+    i = 0usize
+    while i <= k {
+        out[i] = x[i]
+        i += 1usize
+    }
+    out[1usize + k] = math.exp[f64](x[1usize + k])
+    out[2usize + k] = math.exp[f64](x[2usize + k])
+    out[3usize + k] = math.exp[f64](x[3usize + k])
+    out[m] = 0.0f64 - ar_f(&c, x[0usize..m])
+    ret true
+}
