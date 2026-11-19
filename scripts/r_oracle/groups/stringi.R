@@ -44,4 +44,12 @@ for (ci in seq_along(charsets)) for (b in 128:255) {
   if (charsets[ci] == "windows-1253" && b == 0xAA) next  # ICU keeps U+00AA, the WHATWG table leaves the byte undefined
   cases[[length(cases) + 1]] <- case("dec", c(ci - 1, b), r, rel = 0, abs = 0)
 }
+# single-byte encoding: "enc" args (charset index, scalar): the byte stri_encode(intToUtf8(scalar), to = charset, to_raw = TRUE) writes (26 for an unmappable scalar)
+set.seed(20271103)
+for (ci in seq_along(charsets)) for (rep in 1:60) {
+  cp <- if (rep %% 3 == 0) sample(0xA0:0xFF, 1) else if (rep %% 3 == 1) sample(c(0x391:0x3C9, 0x401:0x45F, 0x2010:0x2044, 0x20AC, 0x2122), 1) else sample(0x100:0x17F, 1)
+  r <- tryCatch(stri_encode(intToUtf8(cp), from = "UTF-8", to = charsets[ci], to_raw = TRUE)[[1]], error = function(e) NULL)
+  if (is.null(r) || length(r) != 1) next
+  cases[[length(cases) + 1]] <- case("enc", c(ci - 1, cp), as.integer(r), rel = 0, abs = 0)
+}
 emit("stringi", "stringi", list(cases))

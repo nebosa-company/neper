@@ -13,6 +13,7 @@ use e.mem
 use e.str
 use e.text.charset_table as table
 use e.text.encoding as unicode_encoding
+use e.text.unicode as ucode
 
 error Unsupported
 
@@ -171,4 +172,45 @@ fn decode_sniffing_bom(a: *mem.Arena, name: str, bytes: []const u8) -> (str, err
     }
     let (text2, e2) = decode(a, name, bytes)
     ret (text2, e2)
+}
+
+// The single-byte encoding `index` of a UTF-8 string: ASCII as itself, another scalar as the byte of the table entry that holds it (the first), and a scalar the table lacks as the
+// byte `sub` (ICU writes 0x1A, or 0x3F for the macintosh set).
+fn encode_single(a: *mem.Arena, index: usize, text: str, sub: u8) -> (str, err) {
+    let t = table.single_table(index)
+    let (out, e) = mem.alloc[u8](a, text.len + 1usize)
+    if e != ok { ret ("", e) }
+    var n = 0usize
+    var at = 0usize
+    while at < text.len {
+        let (cp, w) = ucode.read_utf8(text, at)
+        at += w
+        if cp < 128u32 {
+            out[n] = u8(cp)
+            n += 1usize
+        } else {
+            var found = false
+            var i = 0usize
+            while i < 128usize && !found {
+                if entry(t, i) == cp {
+                    out[n] = u8(128usize + i)
+                    found = true
+                }
+                i += 1usize
+            }
+            if !found { out[n] = sub }
+            n += 1usize
+        }
+    }
+    ret (out[0usize..n], ok)
+}
+
+// The table index of the single-byte encoding `name` (canonical), or the count when there is none.
+fn single_index(name: str) -> usize {
+    var i = 0usize
+    while i < table.single_count() {
+        if eq_fold(table.single_name(i), name) { ret i }
+        i += 1usize
+    }
+    ret table.single_count()
 }

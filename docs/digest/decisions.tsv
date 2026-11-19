@@ -4451,4 +4451,5 @@ D7593	953	stringi boundaries: e.text.unicode graphemes and e.text.segment words 
 D7594	756	graphemes: a ZWJ joins only an Extended_Pictographic after a pictographic run
 D7595	770	word boundaries equal ICU except for the colon
 D7596	730	simple case mapping equals ICU
-D7597	553	single-byte decoding equals ICU
+D7597	554	single-byte decoding equals ICU
+D7598	620	single-byte encoding equals ICU

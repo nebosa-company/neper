@@ -51283,3 +51283,6 @@ Probed with stri_count_boundaries on strings from a pool of Latin, Hangul, combi
 
 ## D7597 — single-byte decoding equals ICU
 `e.text.charset.decode` equals stri_encode(from = charset, to = "UTF-8") for the upper half (128 to 255) of twelve single-byte charsets: windows-1250, 1251, 1252, 1253, 1254, 1257, ISO-8859-2, 5, 7, 15, KOI8-R and macintosh (1535 byte cases in oracle_stringi, 2972 in all). One byte differs by design: windows-1253 0xAA is undefined in the WHATWG table that charset.e follows (U+FFFD) and U+00AA in ICU, so it is left out. Encoding into the charsets, the multi-byte (CJK) sets and stri_enc_detect stay open.
+
+## D7598 — single-byte encoding equals ICU
+`e.text.charset.encode_single` (new, with `single_index`) writes a UTF-8 string into a single-byte charset: ASCII as itself, other scalars as the first table entry that holds them, anything else as a substitution byte the caller names. It equals stri_encode(to = charset, to_raw = TRUE) on 60 scalars per charset for the twelve charsets of D7597 (711 cases added to oracle_stringi, 3683 in all), including the unmappable ones: ICU writes 0x1A, and 0x3F for macintosh. The text_charset and text_encoding fixtures still pass. The multi-byte sets and stri_enc_detect stay open.

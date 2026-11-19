@@ -12,6 +12,31 @@ use e.text.unicode as uc
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "enc") {
+        var enames: [12]str = zero
+        enames[0usize] = "windows-1252"
+        enames[1usize] = "windows-1251"
+        enames[2usize] = "windows-1250"
+        enames[3usize] = "windows-1253"
+        enames[4usize] = "windows-1254"
+        enames[5usize] = "windows-1257"
+        enames[6usize] = "ISO-8859-2"
+        enames[7usize] = "ISO-8859-5"
+        enames[8usize] = "ISO-8859-7"
+        enames[9usize] = "ISO-8859-15"
+        enames[10usize] = "KOI8-R"
+        enames[11usize] = "macintosh"
+        var ebuf: [4]u8 = zero
+        let ew = uc.write_utf8(u32(x[1usize]), ebuf[0usize..4usize], 0usize)
+        let (en, eok) = cs.label_to_name(enames[usize(x[0usize])])
+        if !eok { os.exit(11) }
+        let idx = cs.single_index(en)
+        var subb = 26u8
+        if usize(x[0usize]) == 11usize { subb = 63u8 }
+        let (bytes, ee) = cs.encode_single(a, idx, ebuf[0usize..ew], subb)
+        if ee != ok || bytes.len != 1usize { os.exit(12) }
+        ret f64(bytes[0usize])
+    }
     if str.eq(c.name, "dec") {
         var names: [12]str = zero
         names[0usize] = "windows-1252"
