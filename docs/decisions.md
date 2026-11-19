@@ -51178,3 +51178,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7561 — epiR epi.sssimpleestb
 `sssimpleestb` is the sample size to estimate a true prevalence from an imperfect test by simple random sampling: (z / epsilon)^2 times the apparent-prevalence variance over (se + sp - 1)^2, with the relative or absolute error, an optional finite population and the rounding choice. Equal to epiR on 40 draws (40 values added to oracle_epir, 3470 in all). This closes the sample-size family the acceptance names (epi.sscohortc D7557, epi.sscc D7558, epi.sssimpleestb); their other modes stay open.
+
+## D7562 — epiR epi.2by2 cross-sectional tables
+The cross-sectional design reports the cohort.count measures under the prevalence-ratio names, and the same functions (risk_ratio, odds_ratio, risk_difference, nnt, par_risk, the Wald and chi-squared tests, rr_score, paf_risk, par_risk_ci, af_risk) equal epiR for method "cross.sectional" on 20 tables (720 values added to oracle_epir, 4190 in all), with no new code. Stratified (Mantel-Haenszel) tables and the boundary and MLE and Cornfield odds-ratio intervals stay open.

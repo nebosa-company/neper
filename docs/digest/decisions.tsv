@@ -4416,4 +4416,5 @@ D7557	529	epiR epi.sscohortc sample size and power
 D7558	550	epiR epi.sscc unmatched sample size and power
 D7559	583	epiR epi.dsl for odds ratios
 D7560	571	epiR epi.iv for odds ratios
-D7561	533	epiR epi.sssimpleestb
+D7561	534	epiR epi.sssimpleestb
+D7562	525	epiR epi.2by2 cross-sectional tables

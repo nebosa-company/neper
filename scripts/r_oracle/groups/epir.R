@@ -101,4 +101,25 @@ for (rep in 1:40) {
   v <- epi.sssimpleestb(N = NN, Py = py, epsilon = eps, error = if (ab) "absolute" else "relative", se = se, sp = sp, nfractional = fr)
   cases[[length(cases) + 1]] <- case("sb", c(if (is.na(NN)) 0 else NN, py, eps, as.numeric(ab), se, sp, as.numeric(fr)), v, rel = 1e-9, abs = 1e-9)
 }
+# epi.2by2 cross.sectional: the same measures under the prevalence-ratio names ("m" which 0..20, 24..32 as for cohort.count)
+for (rep in 1:20) {
+  a <- sample(3:200, 1); b <- sample(50:3000, 1); cc <- sample(2:150, 1); d <- sample(50:4000, 1); un <- c(100, 1000, 1)[rep %% 3 + 1]
+  dat <- as.table(matrix(c(a, b, cc, d), nrow = 2, byrow = TRUE))
+  r <- epi.2by2(dat = dat, method = "cross.sectional", conf.level = 0.95, units = un, interpret = FALSE, outcome = "as.columns")$massoc.detail
+  base <- c(a, b, cc, d, un)
+  for (i in 1:3) add(i - 1, base, unlist(r$PR.strata.taylor[1, ])[i])
+  for (i in 1:3) add(2 + i, base, unlist(r$OR.strata.wald[1, ])[i])
+  for (i in 1:3) add(5 + i, base, unlist(r$ARisk.strata.wald[1, ])[i])
+  nn <- unlist(r$NNT.strata.wald[1, ]); for (i in 1:3) add(8 + i, base, nn[i])
+  add(12, base, r$PARisk.strata.wald$est)
+  add(13, base, r$wald.strata.rr$test.statistic); add(14, base, r$wald.strata.rr$p.value.2s)
+  add(15, base, r$wald.strata.or$test.statistic); add(16, base, r$wald.strata.or$p.value.2s)
+  add(17, base, r$chi2.strata.uncor$test.statistic); add(18, base, r$chi2.strata.uncor$p.value.2s)
+  add(19, base, r$chi2.strata.yates$test.statistic); add(20, base, r$chi2.strata.yates$p.value.2s)
+  for (i in 1:3) add(26 + i, base, unlist(r$PARisk.strata.wald[1, ])[i])
+  for (i in 1:3) add(29 + i, base, unlist(r$PARisk.strata.piri[1, ])[i])
+  for (i in 1:3) add(23 + i, base, unlist(r$PAFRisk.strata.wald[1, ])[i])
+  for (i in 1:3) add(20 + i, base, unlist(r$PR.strata.score[1, ])[i])
+  for (i in 1:3) add(32 + i, base, unlist(r$AFRisk.strata.wald[1, ])[i])
+}
 emit("epir", "epiR", list(cases))
