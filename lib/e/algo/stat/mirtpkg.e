@@ -68,21 +68,55 @@ fn tpl_f(c: *TplCtx, par: []const f64) -> f64 {
 type TplGrad = struct { c: *TplCtx, x: []f64 }
 
 fn tpl_g(t: *TplGrad, par: []const f64, g: []f64) {
-    let m = par.len
-    var i = 0usize
-    while i < m {
-        t.x[i] = par[i]
-        i += 1usize
+    let c = t.c
+    let nq = c.nq
+    let j = c.j
+    // tpl_f at par fills lp and lq, which the gradient reuses: d(ll)/d(a_j) = sum over patterns of count times the posterior mean of (y - P) q, and of (y - P) for d_j
+    let fv = tpl_f(c, par)
+    var jj = 0usize
+    while jj < 2usize * j {
+        g[jj] = 0.0f64
+        jj += 1usize
     }
-    i = 0usize
-    while i < m {
-        let h = 1.0e-6f64
-        t.x[i] = par[i] + h
-        let fp = tpl_f(t.c, t.x[0usize..m])
-        t.x[i] = par[i] - h
-        let fm = tpl_f(t.c, t.x[0usize..m])
-        t.x[i] = par[i]
-        g[i] = (fp - fm) / (2.0f64 * h)
+    var i = 0usize
+    while i < c.n {
+        if c.cnt[i] == 0.0f64 {
+            i += 1usize
+            continue
+        }
+        var mx = 0.0f64 - 1.0e300f64
+        var k = 0usize
+        while k < nq {
+            var s = math.log[f64](c.w[k])
+            jj = 0usize
+            while jj < j {
+                if c.y[i * j + jj] > 0.5f64 { s += c.lp[k * j + jj] } else { s += c.lq[k * j + jj] }
+                jj += 1usize
+            }
+            c.g[k] = s
+            if s > mx { mx = s }
+            k += 1usize
+        }
+        var tot = 0.0f64
+        k = 0usize
+        while k < nq {
+            c.g[k] = math.exp[f64](c.g[k] - mx)
+            tot += c.g[k]
+            k += 1usize
+        }
+        k = 0usize
+        while k < nq {
+            let r = c.cnt[i] * c.g[k] / tot
+            jj = 0usize
+            while jj < j {
+                let pk = math.exp[f64](c.lp[k * j + jj])
+                let res = c.y[i * j + jj] - pk
+                g[2usize * jj] += 0.0f64 - r * res * c.q[k]
+                g[2usize * jj + 1usize] += 0.0f64 - r * res
+                jj += 1usize
+            }
+            k += 1usize
+        }
         i += 1usize
     }
 }

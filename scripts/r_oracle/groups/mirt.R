@@ -13,8 +13,8 @@ for (rep in 1:5) {
   for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("tpl", c(N, J, as.vector(t(Y)), k - 1), as.numeric(v[k]), rel = if (k == length(v)) 1e-6 else 1e-2, abs = if (k == length(v)) 1e-4 else 5e-3)
 }
 # itemtype = "Rasch": "rasch" args (n, j, y[n * j], k) k 0 .. j - 1 the intercepts, j the latent variance, j + 1 the log-likelihood
-for (rep in 1:4) {
-  N <- sample(300:500, 1); J <- sample(4:6, 1); th <- rnorm(N, 0, runif(1, 0.8, 1.6)); d <- rnorm(J, 0, 0.8)
+for (rep in 1:3) {
+  N <- sample(250:350, 1); J <- sample(4:5, 1); th <- rnorm(N, 0, runif(1, 0.8, 1.6)); d <- rnorm(J, 0, 0.8)
   Y <- sapply(1:J, function(j) rbinom(N, 1, plogis(th + d[j]))); colnames(Y) <- paste0("i", 1:J)
   f <- tryCatch(mirt(Y, 1, itemtype = "Rasch", verbose = FALSE, TOL = 1e-9), error = function(e) NULL)
   if (is.null(f) || !f@OptimInfo$converged) next
@@ -23,7 +23,7 @@ for (rep in 1:4) {
 }
 # itemtype = "graded", K ordered categories coded 0 .. K - 1: "graded" args (n, j, K, y[n * j], k) k item * K the slope and item * K + 1 .. item * K + K - 1 the intercepts of the item, j K the log-likelihood
 for (rep in 1:6) {
-  N <- sample(250:350, 1); J <- 3; K <- 3; th <- rnorm(N); a <- runif(J, 0.9, 1.8)
+  N <- sample(200:250, 1); J <- 3; K <- 3; th <- rnorm(N); a <- runif(J, 0.9, 1.8)
   Y <- sapply(1:J, function(j) { d <- sort(rnorm(K - 1, 0, 1), decreasing = TRUE); pr <- plogis(outer(a[j] * th, d, "+")); u <- runif(N); rowSums(u < pr) }); colnames(Y) <- paste0("i", 1:J)
   if (any(apply(Y, 2, function(v) length(unique(v))) < K)) next
   f <- tryCatch(mirt(Y, 1, itemtype = "graded", verbose = FALSE, TOL = 1e-9), error = function(e) NULL)

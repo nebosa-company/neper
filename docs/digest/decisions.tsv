@@ -4553,4 +4553,5 @@ D7652	898	unmarked: N-mixture abundance
 D7653	1040	mirt: two-parameter logistic model
 D7654	825	mirt: Rasch with a free latent variance
 D7655	1070	mirt: graded response model
-D7656	653	queue scores re-set for the CRAN items started this session
+D7656	654	queue scores re-set for the CRAN items started this session
+D7657	872	mirt: analytic 2PL gradient, smaller fixture
