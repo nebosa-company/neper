@@ -22,4 +22,15 @@ for (rep in 1:30) {
     for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("upg", c(w, n, k - 1, as.vector(m)), as.numeric(v[k]), rel = 1e-9, abs = 1e-11)
   }
 }
+# dist.hamming and the Jukes-Cantor dist.ml of unambiguous DNA ("ham": which 0 hamming 1 JC69, nt, ns, i, j, data row-major bit masks)
+for (rep in 1:25) {
+  nt <- sample(3:10, 1); ns <- sample(30:150, 1)
+  M <- matrix(sample(codes, nt * ns, TRUE), nt, ns, dimnames = list(paste0("t", 1:nt), NULL)); d <- phyDat(M, type = "DNA")
+  dh <- as.matrix(dist.hamming(d)); dj <- as.matrix(dist.ml(d, model = "JC69"))
+  Bm <- as.vector(t(matrix(bits[M], nt, ns)))
+  for (i in 1:(nt - 1)) for (j in (i + 1):nt) {
+    cases[[length(cases) + 1]] <- case("hamd", c(0, nt, ns, i - 1, j - 1, Bm), dh[i, j], rel = 1e-9, abs = 1e-11)
+    cases[[length(cases) + 1]] <- case("hamd", c(1, nt, ns, i - 1, j - 1, Bm), dj[i, j], rel = 1e-4, abs = 1e-6)
+  }
+}
 emit("phangorn", "phangorn", list(cases))

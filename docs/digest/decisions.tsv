@@ -4496,4 +4496,6 @@ D7704	789	dbscan extractXi
 D7629	234	performance: r2_xu of an lm
 D7684	1168	segmented davies.test for a linear model
 D7630	587	phangorn: Fitch parsimony
-D7631	494	phangorn: upgma and wpgma
+D7631	495	phangorn: upgma and wpgma
+D7685	781	segmented pscore.test for a linear model
+D7632	524	phangorn: Hamming and Jukes-Cantor distances

@@ -51421,3 +51421,9 @@ L442 starts. `e.algo.stat.phangornpkg.fitch` scores a binary tree (ape's cladewi
 
 ## D7631 — phangorn: upgma and wpgma
 `phangornpkg.upgma(d, n, weighted)` merges the closest pair, height half the distance, updating by the size-weighted mean (UPGMA) or the plain mean (WPGMA); it returns the merge heights in order and the total edge length. Equal to phangorn::upgma and wpgma on 30 random distance matrices (4 to 14 taxa), the sorted branching times and the tree length, 582 values to 1e-9 (622 in oracle_phangorn). Topology itself is not exported, only what it determines.
+
+## D7685 — segmented pscore.test for a linear model
+`pscore_lm` ports pscore.test for an lm with one break (test.Sc2 of the package): the term mean over k = 10 values psi from min to max of the segmented variable of pmax(z - psi, 0) is projected off the design, the score sc = resid(term) . y over sigma sqrt(resid(term) . term) with sigma^2 the residual variance, and the p value from t with the residual degrees of freedom (two-sided, less, greater). Read from the segmented source (deparse of pscore.test); equal to pscore.test(lm(y ~ x), ~x, k = 10, alternative) on 30 simulated data sets for the statistic and the p value (60 values added to oracle_strucchange) on the first run. The glm path, the weighted and two-break forms, gefp, mefp and segmented() itself stay open.
+
+## D7632 — phangorn: Hamming and Jukes-Cantor distances
+`phangornpkg.hamming` gives the share of differing sites between two tips of an unambiguous alignment, or with `jc` the closed-form Jukes-Cantor distance -3/4 log(1 - 4/3 p). Equal to phangorn::dist.hamming (1e-9) and dist.ml(model = "JC69") (1e-4 relative, the latter being a numerical optimum in R) on 25 random alignments (3 to 10 taxa, 30 to 150 sites), 988 values added to oracle_phangorn (1610 in all). Ambiguity codes are not handled by either distance here.

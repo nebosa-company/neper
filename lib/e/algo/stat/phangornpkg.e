@@ -3,6 +3,7 @@
 //
 // Not here: the other cost matrices (sankoff), non-binary trees, pratchet and the search, pml and the likelihood models, model selection, bootstrap.
 
+use e.math
 use e.mem
 
 fn fitch(a: *mem.Arena, par: []const f64, chd: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize) -> f64 {
@@ -114,4 +115,18 @@ fn upgma(a: *mem.Arena, d: []const f64, n: usize, weighted: bool, out: []f64) ->
     }
     out[n - 1usize] = len
     ret ok
+}
+
+// phangorn::dist.hamming(ratio = TRUE) of tips i and j of an alignment of unambiguous states (bit sets as in fitch): the share of sites that differ; jc turns it into the Jukes-Cantor distance -3/4 log(1 - 4/3 p), the maximum
+// likelihood distance of dist.ml(model = "JC69")
+fn hamming(data: []const f64, ns: usize, i: usize, j: usize, jc: bool) -> f64 {
+    var diff = 0.0f64
+    var s = 0usize
+    while s < ns {
+        if data[i * ns + s] != data[j * ns + s] { diff += 1.0f64 }
+        s += 1usize
+    }
+    let p = diff / f64(ns)
+    if !jc { ret p }
+    ret 0.0f64 - 0.75f64 * math.log[f64](1.0f64 - 4.0f64 / 3.0f64 * p)
 }

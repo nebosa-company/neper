@@ -9,6 +9,11 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if c.name.len == 4usize {
+        let nt = usize(z[1usize])
+        let ns = usize(z[2usize])
+        ret pg.hamming(z[5usize..5usize + nt * ns], ns, usize(z[3usize]), usize(z[4usize]), z[0usize] > 0.5f64)
+    }
     if c.name.len == 3usize {
         let nn = usize(z[1usize])
         let (o, oe) = mem.alloc[f64](a, nn)

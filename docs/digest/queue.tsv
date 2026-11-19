@@ -104,7 +104,7 @@ L375	library	0	219	partykit: conditional inference trees and MOB	Open (CRAN rank
 L377	library	0.15	912	xgboost: gradient-boosted trees	Partial (D6632).
 L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).
 L441	library	0.35	1116	msm and mstate: multi-state models	Partial (D7352).
-L442	library	0.04	604	phangorn: phylogenetic inference	Started (D7630, D7631: Fitch parsimony score of a binary tree on a DNA alignment with ambiguity codes, and upgma and wpgma merge heights and tree length, equal to phangorn on Windows;
+L442	library	0.04	669	phangorn: phylogenetic inference	Started (D7630 to D7632: Fitch parsimony score of a binary tree on a DNA alignment with ambiguity codes, upgma and wpgma merge heights and tree length, and dist.hamming and the Jukes-Cantor dist.ml of
 L466	library	0.3	2928	EnvStats: environmental statistics	D6723: e.algo.stat.envstats has rosnerTest, tolIntNormK (one-sided content, Wald-Wolfowitz, expectation) and predIntNormK (one future mean, Bonferroni), equal to EnvStats on 1852 values on Windows (or
 L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
 L496	library	0.42	838	fda: functional data analysis	Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda;
