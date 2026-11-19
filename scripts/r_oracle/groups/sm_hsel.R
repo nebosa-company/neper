@@ -36,4 +36,10 @@ for (rep in 1:15) {
   cases[[length(cases) + 1]] <- case("hbmean", a, sum(b$means * w), rel = 1e-10, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("hbdev", a, sum(b$devs * w), rel = 1e-9, abs = 1e-12)
 }
+# hbreg (n, nbins, h, p, x[n], y[n]): sm.regression on nbins bins
+for (rep in 1:15) {
+  n <- sample(100:400, 1); nb <- sample(8:25, 1); x <- runif(n, 0, 10); y <- sin(x) + rnorm(n, 0, 0.3); h <- runif(1, 0.5, 1.5); p <- runif(1, 1, 9)
+  r <- sm.regression(x, y, h = h, eval.points = p, display = "none", nbins = nb)$estimate
+  cases[[length(cases) + 1]] <- case("hbreg", c(n, nb, h, p, x, y), r[1], rel = 1e-9, abs = 1e-12)
+}
 emit("sm_hsel", "sm", list(cases))

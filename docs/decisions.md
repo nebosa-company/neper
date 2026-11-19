@@ -50794,3 +50794,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7443 — sm binning
 `binning1d` is sm's binning(x, y, nbins) for one variable: R's seq() breaks from min to max with the first lowered by 1e-5 (by = (max - min) / nbins, not from the shifted start), right-closed cut, and the non-empty bins' midpoints, counts, y means and deviations; equal to sm on 15 samples (five checks each) in oracle_sm_hsel. Open for L505: running the estimators on binned data above 100 observations, reference bands, 2-d, sm.ancova, sm.survival, sm.options.
+
+## D7444 — sm.regression on binned data
+`regression_w` is the local-linear estimate over weighted points; with `binning1d` bin midpoints, means and counts it equals sm.regression(x, y, h, nbins = k) at rel 1e-9 on 15 cases in oracle_sm_hsel. Open for L505: binned density and bandwidth selection, reference bands, 2-d, sm.ancova, sm.survival, sm.options.

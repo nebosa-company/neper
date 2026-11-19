@@ -469,3 +469,24 @@ fn binning1d(a: *mem.Arena, x: []const f64, y: []const f64, nbins: usize, bx: []
     }
     ret (m, ok)
 }
+
+// the local-linear sm.regression estimate at p over weighted points (the bin counts f as weights, the bin means as y): binned sm.regression
+fn regression_w(x: []const f64, y: []const f64, f: []const f64, h: f64, p: f64) -> f64 {
+    var s0 = 0.0f64
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var t0 = 0.0f64
+    var t1 = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        let d = x[i] - p
+        let w = f[i] * phi(d / h)
+        s0 += w
+        s1 += w * d
+        s2 += w * d * d
+        t0 += w * y[i]
+        t1 += w * d * y[i]
+        i += 1usize
+    }
+    ret (s2 * t0 - s1 * t1) / (s0 * s2 - s1 * s1)
+}

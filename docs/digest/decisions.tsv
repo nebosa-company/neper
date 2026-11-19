@@ -4293,4 +4293,5 @@ D7439	573	sm h.select with the cross-validation criterion
 D7440	325	sm h.select cv for regression
 D7441	424	sm h.select df and aicc criteria
 D7442	439	sm.regression standard errors
-D7443	487	sm binning
+D7443	488	sm binning
+D7444	357	sm.regression on binned data

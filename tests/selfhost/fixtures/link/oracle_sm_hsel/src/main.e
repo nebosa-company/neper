@@ -46,6 +46,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "hbreg") {
+            let nbn = usize(c.args[1usize])
+            let (bx, f0) = mem.alloc[f64](a, nbn)
+            let (bf, f1) = mem.alloc[f64](a, nbn)
+            let (bm, f2) = mem.alloc[f64](a, nbn)
+            let (bd, f3) = mem.alloc[f64](a, nbn)
+            if f0 != ok || f1 != ok || f2 != ok || f3 != ok { os.exit(4) }
+            let (m, eb) = sm.binning1d(a, c.args[4usize..4usize + n], c.args[4usize + n..4usize + 2usize * n], nbn, bx, bf, bm, bd)
+            if eb != ok { os.exit(4) }
+            let est = sm.regression_w(bx[0usize..m], bm[0usize..m], bf[0usize..m], c.args[2usize], c.args[3usize])
+            if !oracle.agrees(est, c) { failures += 1usize }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "hse") {
             let hh = c.args[1usize]
             let pp = c.args[2usize]
