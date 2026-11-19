@@ -209,6 +209,14 @@ for (rep in 1:50) {
   v <- switch(kd + 1, rztpois(n, a), rztnbinom(n, a, b), rztbinom(n, a, b), rztgeom(n, b), rlogarithmic(n, b))
   cases[[length(cases) + 1]] <- case("rc", c(sd, kd, a, b, n), sum(v * seq_along(v)), rel = 0, abs = 0)
 }
+# ruin() with phase-type claims and exponential waiting: "rp" args (m, prob[m], T[m m], lambda, c, u)
+for (rep in 1:30) {
+  m <- sample(1:4, 1); pr <- runif(m); pr <- pr / sum(pr)
+  T <- matrix(runif(m * m, 0, 1.5), m); diag(T) <- 0; ex <- runif(m, 0.5, 2); diag(T) <- -(rowSums(T) + ex)
+  mean.claim <- sum(pr %*% solve(-T)); cc <- runif(1, 1.2, 2.5); lam <- runif(1, 0.2, 0.8) * cc / mean.claim; u <- runif(1, 0, 6)
+  f <- ruin(claims = "phase-type", par.claims = list(prob = pr, rates = T), wait = "exponential", par.wait = list(rate = lam), premium.rate = cc)
+  cases[[length(cases) + 1]] <- case("rp", c(m, pr, as.vector(t(T)), lam, cc, u), f(u), rel = 1e-7, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

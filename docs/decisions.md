@@ -51217,3 +51217,6 @@ epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude
 
 ## D7574 — actuar zero-truncated and logarithmic generators
 `rand_count` draws one count from a uniform by inversion: the zero-truncated Poisson, negative binomial and binomial through `zt_q`, and the logarithmic law through a search on `logd_p`. Probed first: actuar's rztpois, rztnbinom and rlogarithmic equal the quantile at the uniform stream, rzmpois does not, and rztgeom does not either (it is not an inversion of that stream, so it and the zero-modified generators stay open). Equal to actuar on 50 seeded runs over the four kinds (5308 cases in all, exact).
+
+## D7575 — actuar ruin with phase-type claims
+`ruin_ph_exp` gives the Cramer-Lundberg ruin probability for phase-type claims (prob, sub-intensity T) and exponential waiting times: psi(u) = pi+ exp((T + t pi+) u) 1 with pi+ = (lambda / c) pi (-T)^(-1) and t = -T 1, through the matrix exponential. Probed against ruin(claims = "phase-type") before porting, then equal to actuar on 30 draws with the net profit condition holding (27 values added to oracle_actuar, 5335 in all). Phase-type waiting times, Erlang mixtures and the other wait/claims pairs stay open.

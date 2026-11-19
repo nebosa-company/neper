@@ -4429,4 +4429,5 @@ D7570	374	actuar rinvtrgamma under set.seed
 D7571	485	actuar rinvweibull and rinvexp under set.seed
 D7572	429	actuar rgenbeta under set.seed
 D7573	649	actuar rtrbeta and rgenpareto under set.seed
-D7574	569	actuar zero-truncated and logarithmic generators
+D7574	570	actuar zero-truncated and logarithmic generators
+D7575	563	actuar ruin with phase-type claims

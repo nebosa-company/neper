@@ -714,3 +714,60 @@ fn rand_count(g: *rr.Rng, kind: usize, a: f64, b: f64) -> f64 {
     while logd_p(x, a) < goal && x < 1.0e6f64 { x += 1.0f64 }
     ret x
 }
+
+// actuar ruin() with phase-type claims (prob, sub-intensity t) and exponential waiting times (rate lambda) at premium rate c: psi(u) = pi+ exp((T + t pi+) u) 1 with
+// pi+ = -(lambda / c) pi T^(-1) and t = -T 1
+fn ruin_ph_exp(a: *mem.Arena, prob: []const f64, t: []const f64, m: usize, u: f64, lambda: f64, c: f64) -> f64 {
+    let (neg, e1) = mem.alloc[f64](a, m * m)
+    let (qu, e2) = mem.alloc[f64](a, m * m)
+    let (ex, e3) = mem.alloc[f64](a, m * m)
+    let (pp, e4) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret nan() }
+    var i = 0usize
+    while i < m * m {
+        neg[i] = 0.0f64 - t[i]
+        i += 1usize
+    }
+    let (inv, ei) = gp.invert(a, neg, m)
+    if ei != ok { ret nan() }
+    // pi+ = (lambda / c) pi (-T)^(-1)
+    var j = 0usize
+    while j < m {
+        var s = 0.0f64
+        i = 0usize
+        while i < m {
+            s += prob[i] * inv[i * m + j]
+            i += 1usize
+        }
+        pp[j] = lambda / c * s
+        j += 1usize
+    }
+    i = 0usize
+    while i < m {
+        var ti = 0.0f64
+        j = 0usize
+        while j < m {
+            ti -= t[i * m + j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < m {
+            qu[i * m + j] = (t[i * m + j] + ti * pp[j]) * u
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let ee = mexp.expm(a, qu, m, ex)
+    if ee != ok { ret nan() }
+    var r = 0.0f64
+    i = 0usize
+    while i < m {
+        j = 0usize
+        while j < m {
+            r += pp[i] * ex[i * m + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret r
+}

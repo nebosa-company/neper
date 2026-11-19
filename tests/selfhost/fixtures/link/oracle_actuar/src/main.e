@@ -164,6 +164,10 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tr
     }
+    if str.eq(c.name, "rp") {
+        let mr = usize(x[0usize])
+        ret ac.ruin_ph_exp(ar, x[1usize..1usize + mr], x[1usize + mr..1usize + mr + mr * mr], mr, x[3usize + mr + mr * mr], x[1usize + mr + mr * mr], x[2usize + mr + mr * mr])
+    }
     if str.eq(c.name, "rc") {
         var gc: rr.Rng = zero
         rr.seed(&gc, i64(x[0usize]))
