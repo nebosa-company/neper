@@ -505,3 +505,4 @@ oracle_mgcv_ps
 oracle_mgcv_gam
 oracle_mgcv_gcv
 oracle_mgcv_reml
+oracle_mgcv_add

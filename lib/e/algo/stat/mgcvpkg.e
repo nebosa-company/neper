@@ -812,3 +812,62 @@ fn gam_reml_score(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const 
     if e0 != ok { ret 1.0e300f64 }
     ret reml_at(a, x, n, q, s, y, math.log[f64](sp), lds, rank, coef, fitted)
 }
+
+// ---- penalised least squares for a general design: dm is n by p (row-major), pen the p by p total penalty (the sum of sp_j S_j placed on their coefficients), the normal equations
+// (dm'dm + pen) beta = dm'y; answers (the sum of the effective degrees of freedom trace((dm'dm + pen)^-1 dm'dm), the residual sum of squares). Used for an additive model of
+// several smooths with given smoothing parameters.
+fn pls_fit(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen: []const f64, y: []const f64, coef: []f64, fitted: []f64) -> (f64, f64, err) {
+    let (xtx, e0) = mem.alloc[f64](a, p * p)
+    let (am, e1) = mem.alloc[f64](a, p * p)
+    let (xty, e2) = mem.alloc[f64](a, p)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var v = 0.0f64
+            var i = 0usize
+            while i < n {
+                v += dm[i * p + r] * dm[i * p + c]
+                i += 1usize
+            }
+            xtx[r * p + c] = v
+            am[r * p + c] = v + pen[r * p + c]
+            c += 1usize
+        }
+        var t = 0.0f64
+        var i = 0usize
+        while i < n {
+            t += dm[i * p + r] * y[i]
+            i += 1usize
+        }
+        xty[r] = t
+        r += 1usize
+    }
+    let e3 = solve_dense(a, am, p, xty, 1usize, coef)
+    if e3 != ok { ret (0.0f64, 0.0f64, e3) }
+    let (sol, e4) = mem.alloc[f64](a, p * p)
+    if e4 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    let e5 = solve_dense(a, am, p, xtx, p, sol)
+    if e5 != ok { ret (0.0f64, 0.0f64, e5) }
+    var edf = 0.0f64
+    r = 0usize
+    while r < p {
+        edf += sol[r * p + r]
+        r += 1usize
+    }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        var v = 0.0f64
+        var j = 0usize
+        while j < p {
+            v += dm[i * p + j] * coef[j]
+            j += 1usize
+        }
+        fitted[i] = v
+        rss += (y[i] - v) * (y[i] - v)
+        i += 1usize
+    }
+    ret (edf, rss, ok)
+}
