@@ -243,6 +243,18 @@ for (rep in 1:90) {
   v <- c(r$means[[1]], r$means[[2]], r$cred, r$unbiased)
   for (w in 0:4) if (w < length(v) && is.finite(v[w + 1])) cases[[length(cases) + 1]] <- case("by", c(kd, p1, p2, p3, n, x, w), unname(v[w + 1]), rel = 1e-9, abs = 1e-12)
 }
+# Hachemeister regression credibility (hache.origin): "ha" args (n, t, p, ratios[n t], weights[n t], xreg[t p], which): which 0..p-1 the collective coefficients, then A (p * p), s2, the summed credibility matrix (p * p)
+for (rep in 1:25) {
+  n <- sample(4:10, 1); tt <- sample(6:12, 1); p <- sample(2:3, 1)
+  xr <- cbind(1, 1:tt, if (p == 3) (1:tt)^2 / 10 else NULL)[, seq_len(p), drop = FALSE]
+  bi <- cbind(rnorm(n, 50, 8), rnorm(n, 1.5, 1), if (p == 3) rnorm(n, 0.2, 0.3) else NULL)[, seq_len(p), drop = FALSE]
+  ratios <- t(sapply(seq_len(n), function(i) as.vector(xr %*% bi[i, ]) + rnorm(tt, 0, 3)))
+  weights <- matrix(round(runif(n * tt, 50, 300)), n)
+  ech <- capture.output(r <- tryCatch(suppressWarnings(actuar:::hache.origin(ratios, weights, xr, sqrt(.Machine$double.eps), 100, TRUE)), error = function(e) NULL))
+  if (is.null(r) || length(ech) - 1 > 40) next  # skip the ill-conditioned fits (singular or not converged: the iteration then amplifies rounding differences)
+  v <- c(as.vector(r$means[[1]]), as.vector(t(r$iterative[[1]])), r$iterative[[2]], as.vector(t(r$weights[[1]])))
+  for (w in seq_along(v)) cases[[length(cases) + 1]] <- case("ha", c(n, tt, p, as.vector(t(ratios)), as.vector(t(weights)), as.vector(t(xr)), w - 1), v[w], rel = 1e-7, abs = 1e-9)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

@@ -877,3 +877,340 @@ fn bayes_linear(kind: usize, p1: f64, p2: f64, p3: f64, x: []const f64, out: []f
     out[3usize] = v1
     out[4usize] = v2
 }
+
+// actuar hache.origin (the regression credibility model of Hachemeister, iterative estimator without the barycentre adjustment) for full data: ratios and weights are n contracts by t periods
+// (row-major), xreg the t by p design. Each contract's weighted regression gives its coefficients beta_i, its residual variance and (X' W X)^-1; the iteration re-estimates the between
+// covariance A and the credibility matrices A (A + s2 W_i)^-1 until the collective coefficients settle (relative change below tol, at most maxit rounds). out = (collective coefficients [p],
+// A [p * p], s2, the summed credibility matrix [p * p], iterations)
+fn hache_origin(a: *mem.Arena, ratios: []const f64, weights: []const f64, xreg: []const f64, n: usize, t: usize, p: usize, tol: f64, maxit: usize, out: []f64) -> err {
+    let (beta, e1) = mem.alloc[f64](a, n * p)
+    let (wi, e2) = mem.alloc[f64](a, n * p * p)
+    let (cred, e3) = mem.alloc[f64](a, n * p * p)
+    let (coll, e4) = mem.alloc[f64](a, p)
+    let (coll1, e5) = mem.alloc[f64](a, p)
+    let (am, e6) = mem.alloc[f64](a, p * p)
+    let (tmp, e7) = mem.alloc[f64](a, p * p)
+    let (crs, e8) = mem.alloc[f64](a, p * p)
+    let (rhs, e9) = mem.alloc[f64](a, p)
+    let (s2v, e10) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret e1 }
+    var i = 0usize
+    while i < n {
+        let start = mem.mark(a)
+        let (xtx, f1) = mem.alloc[f64](a, p * p)
+        let (xty, f2) = mem.alloc[f64](a, p)
+        if f1 != ok || f2 != ok { ret f1 }
+        var r = 0usize
+        while r < p * p {
+            xtx[r] = 0.0f64
+            r += 1usize
+        }
+        r = 0usize
+        while r < p {
+            xty[r] = 0.0f64
+            r += 1usize
+        }
+        var k = 0usize
+        while k < t {
+            let w = weights[i * t + k]
+            var c1 = 0usize
+            while c1 < p {
+                xty[c1] += w * xreg[k * p + c1] * ratios[i * t + k]
+                var c2 = 0usize
+                while c2 < p {
+                    xtx[c1 * p + c2] += w * xreg[k * p + c1] * xreg[k * p + c2]
+                    c2 += 1usize
+                }
+                c1 += 1usize
+            }
+            k += 1usize
+        }
+        let (inv, f3) = mem.alloc[f64](a, p * p)
+        if f3 != ok { ret f3 }
+        if !small_inverse(a, xtx, p, inv) { ret mem.Full }
+        r = 0usize
+        while r < p {
+            var v = 0.0f64
+            var c = 0usize
+            while c < p {
+                v += inv[r * p + c] * xty[c]
+                wi[i * p * p + r * p + c] = inv[r * p + c]
+                c += 1usize
+            }
+            beta[i * p + r] = v
+            r += 1usize
+        }
+        var sse = 0.0f64
+        k = 0usize
+        while k < t {
+            var fit = 0.0f64
+            var c = 0usize
+            while c < p {
+                fit += xreg[k * p + c] * beta[i * p + c]
+                c += 1usize
+            }
+            let res = ratios[i * t + k] - fit
+            sse += weights[i * t + k] * res * res
+            k += 1usize
+        }
+        s2v[i] = sse / f64(t - p)
+        mem.reset(a, start)
+        i += 1usize
+    }
+    var s2 = 0.0f64
+    i = 0usize
+    while i < n {
+        s2 += s2v[i]
+        i += 1usize
+    }
+    s2 = s2 / f64(n)
+    var r = 0usize
+    while r < n * p * p {
+        cred[r] = 0.0f64
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        r = 0usize
+        while r < p {
+            cred[i * p * p + r * p + r] = 1.0f64
+            r += 1usize
+        }
+        i += 1usize
+    }
+    r = 0usize
+    while r < p {
+        var v = 0.0f64
+        i = 0usize
+        while i < n {
+            v += beta[i * p + r]
+            i += 1usize
+        }
+        coll[r] = v / f64(n)
+        r += 1usize
+    }
+    var count = 0usize
+    var iters = 0usize
+    while true {
+        r = 0usize
+        while r < p {
+            coll1[r] = coll[r]
+            r += 1usize
+        }
+        count += 1usize
+        if maxit < count { break }
+        hache_a(cred, beta, coll, n, p, am, tmp)
+        let hc1 = hache_cred(a, am, wi, s2, n, p, cred, crs)
+        if hc1 != ok { ret hc1 }
+        r = 0usize
+        while r < p {
+            var v = 0.0f64
+            i = 0usize
+            while i < n {
+                var c = 0usize
+                while c < p {
+                    v += cred[i * p * p + r * p + c] * beta[i * p + c]
+                    c += 1usize
+                }
+                i += 1usize
+            }
+            rhs[r] = v
+            r += 1usize
+        }
+        let (ci, ce) = mem.alloc[f64](a, p * p)
+        if ce != ok { ret ce }
+        if !small_inverse(a, crs, p, ci) { ret mem.Full }
+        r = 0usize
+        while r < p {
+            var v = 0.0f64
+            var c = 0usize
+            while c < p {
+                v += ci[r * p + c] * rhs[c]
+                c += 1usize
+            }
+            coll[r] = v
+            r += 1usize
+        }
+        var mx = 0.0f64
+        r = 0usize
+        while r < p {
+            let d = math.abs[f64]((coll[r] - coll1[r]) / coll1[r])
+            if d > mx { mx = d }
+            r += 1usize
+        }
+        iters = count
+        if mx < tol { break }
+    }
+    hache_a(cred, beta, coll, n, p, am, tmp)
+    let hc2 = hache_cred(a, am, wi, s2, n, p, cred, tmp)
+    if hc2 != ok { ret hc2 }
+    r = 0usize
+    while r < p {
+        out[r] = coll[r]
+        r += 1usize
+    }
+    r = 0usize
+    while r < p * p {
+        out[p + r] = am[r]
+        out[p + p * p + 1usize + r] = crs[r]
+        r += 1usize
+    }
+    out[p + p * p] = s2
+    out[p + 2usize * p * p + 1usize] = f64(iters)
+    ret ok
+}
+
+// A = sum_i cred_i (beta_i - coll)(beta_i - coll)' / (n - 1), symmetrised
+fn hache_a(cred: []const f64, beta: []const f64, coll: []const f64, n: usize, p: usize, am: []f64, tmp: []f64) {
+    var r = 0usize
+    while r < p * p {
+        tmp[r] = 0.0f64
+        r += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var c1 = 0usize
+        while c1 < p {
+            var c2 = 0usize
+            while c2 < p {
+                let outer = (beta[i * p + c1] - coll[c1]) * (beta[i * p + c2] - coll[c2])
+                var k = 0usize
+                var v = 0.0f64
+                while k < p {
+                    v += cred[i * p * p + c1 * p + k] * (beta[i * p + k] - coll[k]) * (beta[i * p + c2] - coll[c2])
+                    k += 1usize
+                }
+                let _ = outer
+                tmp[c1 * p + c2] += v
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        i += 1usize
+    }
+    var c1 = 0usize
+    while c1 < p {
+        var c2 = 0usize
+        while c2 < p {
+            am[c1 * p + c2] = (tmp[c1 * p + c2] + tmp[c2 * p + c1]) / (2.0f64 * f64(n - 1usize))
+            c2 += 1usize
+        }
+        c1 += 1usize
+    }
+}
+
+// cred_i = A (A + s2 W_i)^-1 for every contract and their sum into crs
+fn hache_cred(a: *mem.Arena, am: []const f64, wi: []const f64, s2: f64, n: usize, p: usize, cred: []f64, crs: []f64) -> err {
+    var r = 0usize
+    while r < p * p {
+        crs[r] = 0.0f64
+        r += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        let start = mem.mark(a)
+        let (m1, f1) = mem.alloc[f64](a, p * p)
+        if f1 != ok { ret f1 }
+        r = 0usize
+        while r < p * p {
+            m1[r] = am[r] + s2 * wi[i * p * p + r]
+            r += 1usize
+        }
+        let (inv, ie) = mem.alloc[f64](a, p * p)
+        if ie != ok { ret ie }
+        if !small_inverse(a, m1, p, inv) { ret mem.Full }
+        var c1 = 0usize
+        while c1 < p {
+            var c2 = 0usize
+            while c2 < p {
+                var v = 0.0f64
+                var k = 0usize
+                while k < p {
+                    v += am[c1 * p + k] * inv[k * p + c2]
+                    k += 1usize
+                }
+                cred[i * p * p + c1 * p + c2] = v
+                crs[c1 * p + c2] += v
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        mem.reset(a, start)
+        i += 1usize
+    }
+    ret ok
+}
+
+// the inverse of the p by p matrix m (row-major) by Gauss-Jordan with partial pivoting in double precision; false when singular
+fn small_inverse(a: *mem.Arena, m: []const f64, p: usize, out: []f64) -> bool {
+    let start = mem.mark(a)
+    let (w, e) = mem.alloc[f64](a, p * 2usize * p)
+    if e != ok { ret false }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            w[i * 2usize * p + j] = m[i * p + j]
+            if i == j { w[i * 2usize * p + p + j] = 1.0f64 } else { w[i * 2usize * p + p + j] = 0.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var col = 0usize
+    while col < p {
+        var piv = col
+        var best = math.abs[f64](w[col * 2usize * p + col])
+        var r = col + 1usize
+        while r < p {
+            let v = math.abs[f64](w[r * 2usize * p + col])
+            if v > best {
+                best = v
+                piv = r
+            }
+            r += 1usize
+        }
+        if best < 1.0e-300f64 {
+            mem.reset(a, start)
+            ret false
+        }
+        if piv != col {
+            var k = 0usize
+            while k < 2usize * p {
+                let tmp = w[col * 2usize * p + k]
+                w[col * 2usize * p + k] = w[piv * 2usize * p + k]
+                w[piv * 2usize * p + k] = tmp
+                k += 1usize
+            }
+        }
+        let d = w[col * 2usize * p + col]
+        var k = 0usize
+        while k < 2usize * p {
+            w[col * 2usize * p + k] = w[col * 2usize * p + k] / d
+            k += 1usize
+        }
+        r = 0usize
+        while r < p {
+            if r != col {
+                let f = w[r * 2usize * p + col]
+                k = 0usize
+                while k < 2usize * p {
+                    w[r * 2usize * p + k] = w[r * 2usize * p + k] - f * w[col * 2usize * p + k]
+                    k += 1usize
+                }
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            out[i * p + j] = w[i * 2usize * p + p + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    mem.reset(a, start)
+    ret true
+}

@@ -196,6 +196,15 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(c.name, "ha") {
+        let nh = usize(x[0usize])
+        let th = usize(x[1usize])
+        let ph = usize(x[2usize])
+        var ho: [40]f64 = zero
+        let he = ac.hache_origin(ar, x[3usize..3usize + nh * th], x[3usize + nh * th..3usize + 2usize * nh * th], x[3usize + 2usize * nh * th..3usize + 2usize * nh * th + th * ph], nh, th, ph, 1.4901161193847656e-08f64, 100usize, ho[0usize..40usize])
+        if he != ok { os.exit(40) }
+        ret ho[usize(x[3usize + 2usize * nh * th + th * ph])]
+    }
     if str.eq(c.name, "by") {
         let nb2 = usize(x[4usize])
         var bo: [5]f64 = zero
