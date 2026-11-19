@@ -1,7 +1,7 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. The agent-tooling rows T108, T054, T078, T109, T110, T080, T081, T089, T114, T111, T112 and T062 stand first (D7719), because every later row is built by agents that pay for the gaps they close. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. The agent-tooling rows T108, T054, T078, T079, T109, T110, T080, T081, T089, T085, T114, T111, T115, T112 and T062 stand first (D7719, D7721), because every later row is built by agents that pay for the gaps they close. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
       "id": "T108",
@@ -35,6 +35,17 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a tools conformance case runs `context-file` with `--symbol` before and after `--json` and gets identical streams; an unknown flag exits 2 with E-CLI naming it; `neper context --symbol m.f` equals the long form. Card re-rendered, with `docs/llm-neper-card.src.md:189` (\"past 256 locals silently\") corrected to the bootstrap's reported 400. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T079",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 436,
+      "title": "Short forms forward every flag",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `build F --time` prints phases; `check F --nope` exits 2; `test F --only a` runs one test; a build with five `--overlay` pairs is accepted. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "T109",
@@ -92,6 +103,17 @@
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: three independent errors in one function give three records; one undefined local used five times gives one; both suites' reject goldens reviewed for count changes. Notes: docs/compiler-hardening-plan.md."
     },
     {
+      "id": "T085",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 437,
+      "title": "Every checker diagnostic kind has a registered code",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one reject fixture per new code; the script passes; the card's per-family counts re-render. Notes: docs/compiler-hardening-plan.md. Measured 2026-11-19 (D7720): among the sixteen most frequent codes in failing tool results, the -9999 catch-alls are 76% of occurrences in the Claude logs, 67% in the Codex logs and 70% in the DeepSeek harness logs; E-TYPE-9999 and E-NAME-9999 lead in all three."
+    },
+    {
       "id": "T114",
       "category": "tooling",
       "group": "Tooling",
@@ -112,6 +134,17 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: one skill source renders both .opencode/skills/neper/SKILL.md and .claude/skills/neper/SKILL.md; project hooks refuse a shell heredoc or script that carries old/new replacement strings, refuse a whole-file read of docs/decisions.md with a pointer to the digest, and answer a read of a large .e file with the context-file line for it; scripts/check_agent_routes.py checks the Claude skill and the hook file as it checks the OpenCode skill. Size M. Checked open: .claude holds settings.local.json and worktrees only; the skill and the route check cover OpenCode alone (T036), so the rules in AGENTS.md are prose for Claude Code sessions. Measured 2026-11-19 (D7720), tool calls in the Claude logs from 2026-08-24, all projects: 17,194 shell commands with sed -i, 12,292 Python patch scripts and 14,559 heredoc file writes against 6,762 Edit calls and 49 patch.exe calls; in November 8,374 sed -i against 2,181 Edit; context-file was called 9 times."
+    },
+    {
+      "id": "T115",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 872,
+      "title": "lang-stats reads compressed Codex sessions and counts forked history once",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the harness log analysis (D7720). Acceptance: scripts/lang-stats.py reads *.jsonl.zst under the Codex sessions and archived_sessions folders, through the Node zstd path it already uses for the DeepSeek harness; an item a forked session inherited is counted in the session that made it and nowhere else; a session with no call of its own lands nothing; the Codex columns carry numbers for the period the sessions cover, and a note prints when a store holds files the script cannot read. Size S. Checked open: all 2,128 Codex session files on this machine are .jsonl.zst and the all-time run prints a dash in every Codex column; 870 files are forks, 1,175 hold no tool call of their own, and 2,200 of 3,218 aborted-before-dispatch results are inherited. T112 needs this for Codex."
     },
     {
       "id": "T112",
@@ -3953,28 +3986,6 @@
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixture on Windows with the registered module code and the correctly-cased name as the fix. Notes: docs/compiler-hardening-plan.md."
     },
     {
-      "id": "T079",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 436,
-      "title": "Short forms forward every flag",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "low",
-      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `build F --time` prints phases; `check F --nope` exits 2; `test F --only a` runs one test; a build with five `--overlay` pairs is accepted. Notes: docs/compiler-hardening-plan.md."
-    },
-    {
-      "id": "T085",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 437,
-      "title": "Every checker diagnostic kind has a registered code",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "low",
-      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one reject fixture per new code; the script passes; the card's per-family counts re-render. Notes: docs/compiler-hardening-plan.md. Measured 2026-11-19 (D7720): among the sixteen most frequent codes in failing tool results, the -9999 catch-alls are 76% of occurrences in the Claude logs, 67% in the Codex logs and 70% in the DeepSeek harness logs; E-TYPE-9999 and E-NAME-9999 lead in all three."
-    },
-    {
       "id": "T088",
       "category": "tooling",
       "group": "Tooling",
@@ -5108,17 +5119,6 @@
       "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: a module under lib/x builds chat requests with system text, messages and tool definitions, reads a streamed reply through e.fmt.sse, carries a tool call and its result through one round trip, and holds a provider table (Anthropic, OpenAI-compatible endpoints, OpenRouter) with keys that are never logged; retries use e.resilience; a fixture replays recorded exchanges from a local server, with no live network; neperos/src/ai.e is rebuilt on it. Size M. Checked open: neperos/src/ai.e is 79 KB and holds the providers, models, tool messages and request body itself; no anthropic, openai or openrouter in lib; C171 is the app's own remainder."
     },
     {
-      "id": "T115",
-      "category": "tooling",
-      "group": "Project tools",
-      "order": 872,
-      "title": "lang-stats reads compressed Codex sessions and counts forked history once",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Opened 2026-11-19 from the harness log analysis (D7720). Acceptance: scripts/lang-stats.py reads *.jsonl.zst under the Codex sessions and archived_sessions folders, through the Node zstd path it already uses for the DeepSeek harness; an item a forked session inherited is counted in the session that made it and nowhere else; a session with no call of its own lands nothing; the Codex columns carry numbers for the period the sessions cover, and a note prints when a store holds files the script cannot read. Size S. Checked open: all 2,128 Codex session files on this machine are .jsonl.zst and the all-time run prints a dash in every Codex column; 870 files are forks, 1,175 hold no tool call of their own, and 2,200 of 3,218 aborted-before-dispatch results are inherited. T112 needs this for Codex."
-    },
-    {
       "id": "T116",
       "category": "tooling",
       "group": "Project tools",
@@ -5139,6 +5139,39 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-19 from the harness log analysis (D7720). Acceptance: AGENTS.md and the skills state an output bound for search and dump commands (a match cap or a line cap) and that a listing is fetched once in a session, not polled; the hooks of T111 enforce the bound where a harness has hooks; the average result size and the repeated-command count of T116 are the measure, each with a stated target. Size S. Needs T116. Checked open: Codex's average tool result is 3.4 KB against 1.2 KB for Claude and 1.1 KB for the DeepSeek harness, with 5,172 results over 30 KB, mostly rg with context lines and PowerShell dumps; one gh issue list command recurs about 1,030 times and one emit command 1,272 times in the Codex logs. The Codex counts include history replayed into forked sessions (T115)."
+    },
+    {
+      "id": "T118",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 875,
+      "title": "DeepSeek harness route: the skill in its form, commands in PowerShell, and a route check",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the harness log analysis (D7721). Acceptance: the one skill source of T111 also renders the DeepSeek harness's skill; AGENTS.md and the skills give each routed command in PowerShell form beside the POSIX one, through the PowerShell entry point of T108; scripts/check_agent_routes.py checks the harness's skill as it checks the others; the harness's context-file calls and failing compiles per 1,000 calls in T116 are the measure, each with a target. Size S. Needs T108, T111 and T116. Checked open: the harness reads the workspace AGENTS.md and its shell tool is pwsh, while AGENTS.md and the skill name no PowerShell command; in its 50 sessions of 2026-11-03 to 2026-11-08 it never called context-file, read files through the shell 2,267 times and had 595 failing results carrying a diagnostic in 40,032 calls, about 15 per 1,000 against about 4 for Claude."
+    },
+    {
+      "id": "T119",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 876,
+      "title": "Routed commands end with a status line, so a harness that logs no exit code still records a failure",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the harness log analysis (D7721). Acceptance: the entry point of T108 and scripts/check-fixture.sh end their output with one line carrying the exit code and the elapsed milliseconds; AGENTS.md routes builds, checks and patch applications through commands that print it; T116 reads that line where a harness logs no exit code, and counts patch applications that failed. Size S. Needs T108 and T116. Checked open: a Codex log carries an exit code only when the command printed one (the codex reader in scripts/lang-stats.py says so), and none of about 9,700 patch applications in the Codex logs could be judged."
+    },
+    {
+      "id": "T120",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 877,
+      "title": "A time budget for agent-run commands: a foreground limit, background runs with a deadline, timeouts named",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the harness log analysis (D7721). Acceptance: the routes state a foreground limit and name the commands that run in the background under a deadline (the full suites, a self-host build, oracle generation); the entry point of T108 passes the compiler's --deadline and reports a timeout as a timeout, by name; T116 reports timeouts and calls over two minutes per harness, each with a target. Size S. Needs T108 and T116. Checked open: in the Claude logs 241 failing results were timeouts and 1,409 calls ran over two minutes; in the DeepSeek harness logs 1,086 of 40,032 calls ran over two minutes, with 311 seconds of tool time per KB of Neper against 20 for Claude."
     }
   ]
 }
