@@ -21,6 +21,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if pg.upgma(a, z[3usize..3usize + nn * nn], nn, z[0usize] > 0.5f64, o) != ok { ret 0.0f64 / 0.0f64 }
         ret o[usize(z[2usize])]
     }
+    if c.name.len == 6usize {
+        let nt = usize(z[0usize])
+        let n1 = usize(z[1usize])
+        let n2 = usize(z[2usize])
+        ret pg.rf_dist(a, z[3usize..3usize + n1], z[3usize + n1..3usize + 2usize * n1], n1, z[3usize + 2usize * n1..3usize + 2usize * n1 + n2], z[3usize + 2usize * n1 + n2..3usize + 2usize * n1 + 2usize * n2], n2, nt)
+    }
     let nt = usize(z[0usize])
     let ns = usize(z[1usize])
     let ne = usize(z[2usize])

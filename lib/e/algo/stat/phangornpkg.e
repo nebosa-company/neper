@@ -463,3 +463,69 @@ fn gtr_loglik_gamma(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []con
     }
     ret ll
 }
+
+// the non-trivial splits of a tree (ape edge list, cladewise, 0-based; tips 0 .. nt - 1 with at most 63 tips): each clade below an internal edge as a bit mask of its tips, complemented when it holds tip 0, without duplicates (the two root edges of a rooted tree give one split);
+// returns how many were written to out
+fn splits(a: *mem.Arena, par: []const f64, chd: []const f64, ne: usize, nt: usize, out: []u64) -> usize {
+    let nn = ne + 1usize
+    let (mask, e1) = mem.alloc[u64](a, nn)
+    if e1 != ok { ret 0usize }
+    var i = 0usize
+    while i < nn {
+        mask[i] = 0u64
+        if i < nt { mask[i] = 1u64 << u64(i) }
+        i += 1usize
+    }
+    let all = (1u64 << u64(nt)) - 1u64
+    var cnt = 0usize
+    var k = ne
+    while k > 0usize {
+        k -= 1usize
+        let c = usize(chd[k])
+        let p = usize(par[k])
+        mask[p] = mask[p] | mask[c]
+        if c >= nt {
+            var m = mask[c]
+            if (m & 1u64) != 0u64 { m = all ^ m }
+            var sz = 0usize
+            var t = 0usize
+            while t < nt {
+                if (m & (1u64 << u64(t))) != 0u64 { sz += 1usize }
+                t += 1usize
+            }
+            if sz >= 2usize && sz + 2usize <= nt {
+                var dup = false
+                var u = 0usize
+                while u < cnt {
+                    if out[u] == m { dup = true }
+                    u += 1usize
+                }
+                if !dup {
+                    out[cnt] = m
+                    cnt += 1usize
+                }
+            }
+        }
+    }
+    ret cnt
+}
+
+// phangorn::RF.dist (normalize = FALSE) of two trees on the same tips: the number of splits in one and not the other, each way
+fn rf_dist(a: *mem.Arena, par1: []const f64, chd1: []const f64, ne1: usize, par2: []const f64, chd2: []const f64, ne2: usize, nt: usize) -> f64 {
+    let (s1, e1) = mem.alloc[u64](a, ne1 + 1usize)
+    let (s2, e2) = mem.alloc[u64](a, ne2 + 1usize)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    let n1 = splits(a, par1, chd1, ne1, nt, s1)
+    let n2 = splits(a, par2, chd2, ne2, nt, s2)
+    var common = 0usize
+    var i = 0usize
+    while i < n1 {
+        var j = 0usize
+        while j < n2 {
+            if s1[i] == s2[j] { common += 1usize }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret f64(n1 + n2 - 2usize * common)
+}

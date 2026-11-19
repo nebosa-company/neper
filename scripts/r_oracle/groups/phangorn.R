@@ -71,4 +71,14 @@ for (rep in 1:25) {
   ll <- pml(tr, d, model = "GTR", bf = bf, Q = rt, k = k, shape = shape, inv = inv)$logLik
   cases[[length(cases) + 1]] <- case("gtrgammall", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, tr$edge.length, bf, rt, shape, k, inv, as.vector(t(matrix(bits[M], nt, ns)))), as.numeric(ll), rel = 1e-8, abs = 1e-8)
 }
+# RF.dist of two random trees on the same tips ("rfdist": nt, ne1, ne2, parent1, child1, parent2, child2), the tips of both numbered by the first tree's labels; some trees multifurcating
+for (rep in 1:60) {
+  nt <- sample(4:20, 1); t1 <- reorder(rtree(nt), "cladewise"); t2 <- rtree(nt); t2$tip.label <- sample(t1$tip.label)
+  if (rep %% 4 == 0) t2 <- di2multi(t2, tol = 0)
+  if (rep %% 4 == 1) { t2$edge.length[sample(length(t2$edge.length), 2)] <- 0; t2 <- di2multi(t2) }
+  t2 <- reorder(t2, "cladewise")
+  e2 <- t2$edge; tip <- e2[, 2] <= nt; e2[tip, 2] <- match(t2$tip.label, t1$tip.label)[e2[tip, 2]]
+  # internal node numbers keep their order after nt, so they stay valid; the tips now use the first tree's numbering
+  cases[[length(cases) + 1]] <- case("rfdist", c(nt, nrow(t1$edge), nrow(e2), t1$edge[, 1] - 1, t1$edge[, 2] - 1, e2[, 1] - 1, e2[, 2] - 1), as.numeric(RF.dist(t1, t2)), rel = 0, abs = 1e-9)
+}
 emit("phangorn", "phangorn", list(cases))

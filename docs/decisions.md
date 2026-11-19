@@ -51448,3 +51448,6 @@ The tree likelihood is split into `gtr_site_lik` (per-site likelihood at a rate 
 
 ## D7637 — phangorn: invariant sites
 `gtr_loglik_gamma` takes a share `inv` of invariant sites: the variable part is weighted 1 - inv with its category rates divided by 1 - inv, and a site constant across the tips (the intersection of their state sets non-empty) adds inv times the frequencies of those states. Equal to pml(..., k, shape, inv)$logLik on the 25 gamma trees of oracle_phangorn, now half of them with inv between 0.05 and 0.5, to 1e-8 on the first run (the rescaling by 1 / (1 - inv) was the guess and held). Parameter estimation, the search and bootstrap stay open.
+
+## D7638 — phangorn: Robinson-Foulds distance
+`phangornpkg.splits` collects the non-trivial splits of a tree as u64 tip masks (clade below each internal edge, complemented when it holds tip 0, duplicates dropped so a rooted tree's two root edges count once; at most 63 tips) and `rf_dist` counts the splits in one tree and not the other, each way. Equal to RF.dist(t1, t2) on 60 random pairs (4 to 20 tips, a quarter with multifurcations from collapsed zero-length edges, tips relabelled to a common numbering), exactly (60 values added to oracle_phangorn, 1785 in all). Normalised distance, weighted RF and the other tree metrics stay open.
