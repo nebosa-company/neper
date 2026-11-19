@@ -10,6 +10,17 @@ use e.test.oracle as oracle
 // every case of one fit repeats its data and asks for another number, so the fit is kept and reused while the name and all arguments but the last (the index into its output) are unchanged
 fn fit_case(a: *mem.Arena, c: *const oracle.Case, cached: []f64) -> bool {
     let z = c.args
+    if c.name.len == 9usize {
+        let mm = usize(z[0usize])
+        let jj = usize(z[1usize])
+        let p1 = usize(z[2usize])
+        let p2 = usize(z[3usize])
+        let y0 = 4usize
+        let x0 = y0 + mm * jj
+        let z0 = x0 + mm * p1
+        let out = cached[0usize..p1 + p2 + 1usize]
+        ret um.occu(a, z[x0..x0 + mm * p1], z[z0..z0 + mm * jj * p2], z[y0..y0 + mm * jj], mm, jj, p1, p2, out)
+    }
     if c.name.len == 6usize {
         let mm = usize(z[0usize])
         let jj = usize(z[1usize])

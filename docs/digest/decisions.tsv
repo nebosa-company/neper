@@ -4595,4 +4595,5 @@ D7694	1840	rugarch robust errors: the source read, still not matched
 D7695	1178	rugarch: sGARCH of higher order
 D7696	987	rugarch: an AR(1) mean tried, the likelihood not reproduced
 D7697	1328	rugarch: AR(1) and AR(2) means; D7696 solved
-D7698	1345	rugarch: MA(1) and ARMA(1,1) means; L398 re-scored
+D7698	1346	rugarch: MA(1) and ARMA(1,1) means; L398 re-scored
+D7699	935	unmarked: visit-level detection covariates and missing visits

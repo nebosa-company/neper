@@ -15,6 +15,8 @@ fn lg(t: f64) -> f64 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t)) }
 
 fn occ_f(c: *OccCtx, par: []const f64) -> f64 {
     var ll = 0.0f64
+    // z holds either one row of detection covariates per site or one per visit (m j rows); a response below zero is a missing visit
+    let visit = c.z.len == c.m * c.j * c.p2 && c.j > 1usize
     var i = 0usize
     while i < c.m {
         var e1 = 0.0f64
@@ -23,23 +25,28 @@ fn occ_f(c: *OccCtx, par: []const f64) -> f64 {
             e1 += c.x[i * c.p1 + t] * par[t]
             t += 1usize
         }
-        var e2 = 0.0f64
-        t = 0usize
-        while t < c.p2 {
-            e2 += c.z[i * c.p2 + t] * par[c.p1 + t]
-            t += 1usize
-        }
         let psi = lg(e1)
-        let p = lg(e2)
         var lk = psi
         var any = false
         var v = 0usize
         while v < c.j {
-            if c.y[i * c.j + v] > 0.5f64 {
-                lk = lk * p
-                any = true
-            } else {
-                lk = lk * (1.0f64 - p)
+            let yv = c.y[i * c.j + v]
+            if yv >= 0.0f64 {
+                var row = i
+                if visit { row = i * c.j + v }
+                var e2 = 0.0f64
+                t = 0usize
+                while t < c.p2 {
+                    e2 += c.z[row * c.p2 + t] * par[c.p1 + t]
+                    t += 1usize
+                }
+                let p = lg(e2)
+                if yv > 0.5f64 {
+                    lk = lk * p
+                    any = true
+                } else {
+                    lk = lk * (1.0f64 - p)
+                }
             }
             v += 1usize
         }
