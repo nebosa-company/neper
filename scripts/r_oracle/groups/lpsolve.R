@@ -19,4 +19,21 @@ for (rep in 1:60) {
   rep_ok <- rep_ok + 1
   if (rep_ok >= 30) break
 }
+# equality rows (rel code 2): lp("max", ...) with "=" rows built around a feasible point
+rep_eq <- 0
+for (rep in 1:200) {
+  n <- sample(3:5, 1); me <- sample(1:2, 1); mi <- sample(2:4, 1)
+  cc <- round(runif(n, -1, 4), 2)
+  x0 <- round(runif(n, 0.5, 3), 2)
+  Ae <- matrix(round(runif(me * n, -1, 3), 2), me, n); be <- as.vector(Ae %*% x0)
+  Ai <- matrix(round(runif(mi * n, 0, 3), 2), mi, n); bi <- as.vector(Ai %*% x0) + round(runif(mi, 0.5, 4), 2)
+  A <- rbind(Ae, Ai, rep(1, n)); b <- c(be, bi, sum(x0) + 8); rel <- c(rep("=", me), rep("<=", mi), "<=")
+  s <- lp("max", cc, A, rel, b)
+  if (s$status != 0) next
+  relc <- ifelse(rel == "=", 2, 0)
+  add("obj", c(nrow(A), n, cc, as.vector(t(A)), relc, b), s$objval)
+  add("x", c(nrow(A), n, cc, as.vector(t(A)), relc, b), sum(s$solution * seq_len(n)))
+  rep_eq <- rep_eq + 1
+  if (rep_eq >= 30) break
+}
 emit("lpsolve", "lpSolve", list(cases))

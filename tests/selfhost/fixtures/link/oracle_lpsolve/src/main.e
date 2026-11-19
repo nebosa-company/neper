@@ -14,37 +14,54 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(x[1usize])
     let (cc, e1) = mem.alloc[f64](a, n)
     if e1 != ok { os.exit(5) }
-    let (am, e2) = mem.alloc[f64](a, m * n)
-    if e2 != ok { os.exit(6) }
-    let (b, e3) = mem.alloc[f64](a, m)
-    if e3 != ok { os.exit(7) }
+    // rel 0 is <=, 1 is >= (negated), 2 is an equality (a <= and a negated >= row)
+    let ra = 2usize + n
+    let rr = ra + m * n
+    let rb = rr + m
+    var m2 = 0usize
     var i = 0usize
+    while i < m {
+        m2 += 1usize
+        if x[rr + i] > 1.5f64 { m2 += 1usize }
+        i += 1usize
+    }
+    let (am, e2) = mem.alloc[f64](a, m2 * n)
+    if e2 != ok { os.exit(6) }
+    let (b, e3) = mem.alloc[f64](a, m2)
+    if e3 != ok { os.exit(7) }
+    i = 0usize
     while i < n {
         cc[i] = x[2usize + i]
         i += 1usize
     }
-    let ra = 2usize + n
-    let rr = ra + m * n
-    let rb = rr + m
+    var row = 0usize
     i = 0usize
     while i < m {
-        var sign = 1.0f64
-        if x[rr + i] > 0.5f64 { sign = 0.0f64 - 1.0f64 }
-        var j = 0usize
-        while j < n {
-            am[i * n + j] = sign * x[ra + i * n + j]
-            j += 1usize
+        var pass = 0usize
+        let eq = x[rr + i] > 1.5f64
+        while pass < 2usize {
+            var sign = 1.0f64
+            if x[rr + i] > 0.5f64 && x[rr + i] < 1.5f64 { sign = 0.0f64 - 1.0f64 }
+            if eq && pass == 1usize { sign = 0.0f64 - 1.0f64 }
+            var j = 0usize
+            while j < n {
+                am[row * n + j] = sign * x[ra + i * n + j]
+                j += 1usize
+            }
+            b[row] = sign * x[rb + i]
+            row += 1usize
+            pass += 1usize
+            if !eq { pass = 2usize }
         }
-        b[i] = sign * x[rb + i]
         i += 1usize
     }
     let (sol, e4) = mem.alloc[f64](a, n)
     if e4 != ok { os.exit(8) }
-    let (tab, e5) = mem.alloc[f64](a, (m + 2usize) * (n + m + 2usize))
+    let (tab, e5) = mem.alloc[f64](a, (m2 + 2usize) * (n + m2 + 2usize))
     if e5 != ok { os.exit(9) }
-    let (bas, e6) = mem.alloc[usize](a, m)
+    let (bas, e6) = mem.alloc[usize](a, m2)
     if e6 != ok { os.exit(10) }
-    let (obj, e7) = opt.simplex(cc, am, b, m, n, sol, tab, bas)
+    let (obj, e7) = opt.simplex(cc, am, b, m2, n, sol, tab, bas)
     if e7 != ok { os.exit(11) }
     if str.eq(c.name, "obj") { ret obj }
     var s = 0.0f64
