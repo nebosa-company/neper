@@ -5,12 +5,37 @@ use e.mem
 use e.os
 use e.str
 use e.test.oracle as oracle
+use e.text.charset as cs
 use e.text.normalize as nz
 use e.text.segment as sg
 use e.text.unicode as uc
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "dec") {
+        var names: [12]str = zero
+        names[0usize] = "windows-1252"
+        names[1usize] = "windows-1251"
+        names[2usize] = "windows-1250"
+        names[3usize] = "windows-1253"
+        names[4usize] = "windows-1254"
+        names[5usize] = "windows-1257"
+        names[6usize] = "ISO-8859-2"
+        names[7usize] = "ISO-8859-5"
+        names[8usize] = "ISO-8859-7"
+        names[9usize] = "ISO-8859-15"
+        names[10usize] = "KOI8-R"
+        names[11usize] = "macintosh"
+        let (cn, ok1) = cs.label_to_name(names[usize(x[0usize])])
+        if !ok1 { os.exit(9) }
+        var bb: [1]u8 = zero
+        bb[0usize] = u8(x[1usize])
+        let (txt, de) = cs.decode(a, cn, bb[0usize..1usize])
+        if de != ok { os.exit(10) }
+        let (sc, adv) = uc.read_utf8(txt, 0usize)
+        let _ = adv
+        ret f64(sc)
+    }
     if str.eq(c.name, "case") {
         if usize(x[1usize]) == 0usize { ret f64(uc.to_lower_simple(u32(x[0usize]))) }
         ret f64(uc.to_upper_simple(u32(x[0usize])))

@@ -36,4 +36,12 @@ for (rep in 1:400) {
   if (length(lo) == 1) cases[[length(cases) + 1]] <- case("case", c(cp, 0), lo, rel = 0, abs = 0)
   if (length(up) == 1) cases[[length(cases) + 1]] <- case("case", c(cp, 1), up, rel = 0, abs = 0)
 }
+# single-byte decoding: "dec" args (charset index, byte): the scalar stri_encode(raw(byte), from = charset, to = "UTF-8") gives (U+FFFD for an undefined byte)
+charsets <- c("windows-1252", "windows-1251", "windows-1250", "windows-1253", "windows-1254", "windows-1257", "ISO-8859-2", "ISO-8859-5", "ISO-8859-7", "ISO-8859-15", "KOI8-R", "macintosh")
+for (ci in seq_along(charsets)) for (b in 128:255) {
+  r <- tryCatch(utf8ToInt(suppressWarnings(stri_encode(as.raw(b), from = charsets[ci], to = "UTF-8"))), error = function(e) NA)
+  if (length(r) != 1 || is.na(r)) next
+  if (charsets[ci] == "windows-1253" && b == 0xAA) next  # ICU keeps U+00AA, the WHATWG table leaves the byte undefined
+  cases[[length(cases) + 1]] <- case("dec", c(ci - 1, b), r, rel = 0, abs = 0)
+}
 emit("stringi", "stringi", list(cases))

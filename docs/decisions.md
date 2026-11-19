@@ -51280,3 +51280,6 @@ Probed with stri_count_boundaries on strings from a pool of Latin, Hangul, combi
 
 ## D7596 — simple case mapping equals ICU
 `e.text.unicode.to_lower_simple` and `to_upper_simple` equal stri_trans_tolower and stri_trans_toupper on 400 random scalars from Latin, Greek, Cyrillic, Armenian, Georgian, Greek extended, number forms, Glagolitic and Coptic, Cyrillic Extended-B and Latin Extended-D (up to U+A7BF), fullwidth, Deseret and Adlam, wherever ICU answers with one scalar (the multi-scalar full mappings are not compared; 957 comparisons). The tables here carry Unicode 16 letters (U+A7D3 and U+A7DB map to their capitals) that stringi's ICU 74 does not know, so the block from U+A7C0 is left out. Context-dependent mappings (final sigma, Turkish dotted i) and the full mappings (sharp s to SS) stay open.
+
+## D7597 — single-byte decoding equals ICU
+`e.text.charset.decode` equals stri_encode(from = charset, to = "UTF-8") for the upper half (128 to 255) of twelve single-byte charsets: windows-1250, 1251, 1252, 1253, 1254, 1257, ISO-8859-2, 5, 7, 15, KOI8-R and macintosh (1535 byte cases in oracle_stringi, 2972 in all). One byte differs by design: windows-1253 0xAA is undefined in the WHATWG table that charset.e follows (U+FFFD) and U+00AA in ICU, so it is left out. Encoding into the charsets, the multi-byte (CJK) sets and stri_enc_detect stay open.
