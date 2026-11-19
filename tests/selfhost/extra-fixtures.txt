@@ -557,3 +557,4 @@ oracle_spectra_gen
 oracle_spectra_svdr
 oracle_spectra_prcomp
 oracle_spectra_sparse
+oracle_spectra_op

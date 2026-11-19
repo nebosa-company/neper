@@ -449,3 +449,30 @@ fn eigs_sym_sparse(a: *mem.Arena, m: sp.Csc, k: usize, which: usize, sigma: f64,
     }
     ret eigs_sym(a, dense, n, k, which, sigma, vals, vecs)
 }
+
+// RSpectra::eigs_sym with a matrix-free operator: f(ctx, x, y) writes A x into y for a symmetric n by n A. The operator is applied to the unit vectors to recover the matrix, which then goes through
+// eigs_sym (exact, where RSpectra's Lanczos would only ever apply f); vals receives the k values selected by which as there
+fn eigs_sym_op[Ctx: type](a: *mem.Arena, ctx: *Ctx, f: fn(*Ctx, []const f64, []f64), n: usize, k: usize, which: usize, sigma: f64, vals: []f64) -> err {
+    let (dense, e0) = mem.alloc[f64](a, n * n)
+    let (ex, e1) = mem.alloc[f64](a, n)
+    let (ey, e2) = mem.alloc[f64](a, n)
+    let (vecs, e3) = mem.alloc[f64](a, n * k)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var j = 0usize
+    while j < n {
+        var i = 0usize
+        while i < n {
+            ex[i] = 0.0f64
+            i += 1usize
+        }
+        ex[j] = 1.0f64
+        f(ctx, ex, ey)
+        i = 0usize
+        while i < n {
+            dense[i * n + j] = ey[i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret eigs_sym(a, dense, n, k, which, sigma, vals, vecs)
+}

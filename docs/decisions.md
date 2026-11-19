@@ -50770,3 +50770,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7435 — RSpectra eigs for general matrices: eigenvector moduli
 `eigs_general` also returns the moduli of the unit-norm eigenvectors of the selected eigenvalues (n by k), taken from the complex Schur-form vectors of `decomp.eigen`; an eigenvector is only defined up to a complex phase, so R's moduli, not its entries, are the comparable quantity, and they equal the port's to 1e-6 on the same draws as the values (oracle_spectra_gen kind 2: 15 more values weighted by column-major position). The phase convention of ARPACK's output is not reproduced. L334 at 0.65.
+
+## D7436 — RSpectra eigs_sym with an operator
+`eigs_sym_op` takes the symmetric operator as a function (the generic `f(ctx, x, y)` writing A x), applies it to the unit vectors to recover the matrix and uses the exact dense solver, which gives the same eigenvalues as RSpectra's Lanczos driven by the same function (diagonal plus two rank-one terms, LM, LA and SA, 20 draws to 1e-6). The recovery costs n operator calls where RSpectra would make a few dozen, so it suits the n of the oracle and not a large implicit matrix; svds and general eigs with operators are not covered. L334 at 0.7.
