@@ -20,6 +20,17 @@ for (i in 1:6) {
     v <- rd[[j]]; add("sum", c(i, j - 1), if (is.factor(v)) sum(as.integer(v), na.rm = TRUE) else sum(v, na.rm = TRUE)); add("nas", c(i, j - 1), sum(is.na(v)))
   }
 }
+# write.arff: "wr" args (i, ncols, nrows, kind[nc] (0 numeric 1 factor), nlev[nc], values[nr * nc] row-major, factor columns as 1-based codes, NaN for NA): 1 when the text Neper writes equals the file R wrote
+for (i in 1:8) {
+  n <- sample(6:30, 1); nc <- sample(2:4, 1); kinds <- sample(0:1, nc, replace = TRUE); nl <- ifelse(kinds == 1, sample(2:4, nc, replace = TRUE), 0)
+  cols <- lapply(seq_len(nc), function(j) if (kinds[j] == 0) { v <- round(rnorm(n) * 10, 2); v[sample(n, 1)] <- NA; v } else { f <- sample(seq_len(nl[j]), n, replace = TRUE); f <- as.integer(f); f[sample(n, 1)] <- NA; f })
+  df <- as.data.frame(lapply(seq_len(nc), function(j) if (kinds[j] == 0) cols[[j]] else factor(ifelse(is.na(cols[[j]]), NA, paste0("L", cols[[j]])), levels = paste0("L", seq_len(nl[j])))))
+  names(df) <- paste0("V", seq_len(nc))
+  path <- file.path(root, sprintf("tests/oracle/data/foreign_arffw%d.arff", i))
+  write.arff(df, path, relation = "df")
+  vals <- as.vector(t(sapply(seq_len(nc), function(j) as.numeric(cols[[j]]))))
+  add("wr", c(i, nc, n, kinds, nl, vals), 1)
+}
 for (i in 1:6) {
   n <- sample(8:40, 1)
   df <- data.frame(a = round(rnorm(n) * 10, 3), k = sample(1:500, n, replace = TRUE), s = sample(c("alpha", "be", "gamma ray", "d"), n, replace = TRUE), l = sample(c(TRUE, FALSE), n, replace = TRUE), stringsAsFactors = FALSE)

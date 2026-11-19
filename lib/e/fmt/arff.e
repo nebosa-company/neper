@@ -468,3 +468,71 @@ fn less(t: str, a: usize, b: usize, c: usize, d: usize) -> bool {
     }
     ret b - a < d - c
 }
+
+// foreign::write.arff for numeric and factor columns: "@relation <relation>", one "@attribute <name> numeric" or "@attribute <name> {'l1','l2',...}" per column, "@data", then the
+// rows as comma-separated values (a missing value is ?, a nominal value its quoted level, a number its shortest round-trip text). t holds the columns (kind 0 numeric, 1 nominal
+// with the 1-based level code in values and nlev levels); names and levels (the levels of the nominal columns in column order, flat) are the labels. Characters ' and \ in a
+// level are escaped with a backslash as write.arff does. Ceiling: R prints numbers with 15 significant digits, this the shortest text that reads back, so the two agree for numbers
+// with at most 15 significant digits.
+fn write(a: *mem.Arena, relation: str, names: []const str, levels: []const str, t: Arff) -> (str, err) {
+    let (b0, e0) = str.builder(a, 4096usize)
+    if e0 != ok { ret ("", e0) }
+    var b = b0
+    let _ = str.push(&b, "@relation ")
+    let _ = str.push(&b, relation)
+    let _ = str.push_byte(&b, 10u8)
+    var lbase = 0usize
+    var j = 0usize
+    while j < t.ncols {
+        let _ = str.push(&b, "@attribute ")
+        let _ = str.push(&b, names[j])
+        if t.kind[j] == 1u8 {
+            let _ = str.push(&b, " {")
+            var l = 0usize
+            while l < t.nlev[j] {
+                if l > 0usize { let _ = str.push_byte(&b, 44u8) }
+                quote_level(&b, levels[lbase + l])
+                l += 1usize
+            }
+            let _ = str.push_byte(&b, 125u8)
+            lbase += t.nlev[j]
+        } else {
+            let _ = str.push(&b, " numeric")
+        }
+        let _ = str.push_byte(&b, 10u8)
+        j += 1usize
+    }
+    let _ = str.push(&b, "@data\n")
+    var r = 0usize
+    while r < t.nrows {
+        var base2 = 0usize
+        j = 0usize
+        while j < t.ncols {
+            if j > 0usize { let _ = str.push_byte(&b, 44u8) }
+            let v = t.values[r * t.ncols + j]
+            if v != v {
+                let _ = str.push_byte(&b, 63u8)
+            } else if t.kind[j] == 1u8 {
+                quote_level(&b, levels[base2 + usize(v) - 1usize])
+            } else {
+                let _ = str.push_f64(&b, v)
+            }
+            if t.kind[j] == 1u8 { base2 += t.nlev[j] }
+            j += 1usize
+        }
+        let _ = str.push_byte(&b, 10u8)
+        r += 1usize
+    }
+    ret (str.done(&b), ok)
+}
+
+fn quote_level(b: *str.Builder, s: str) {
+    let _ = str.push_byte(b, 39u8)
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 39u8 || s[i] == 92u8 { let _ = str.push_byte(b, 92u8) }
+        let _ = str.push_byte(b, s[i])
+        i += 1usize
+    }
+    let _ = str.push_byte(b, 39u8)
+}

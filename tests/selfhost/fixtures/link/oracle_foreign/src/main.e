@@ -46,6 +46,59 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "dsum") { ret s }
         ret n
     }
+    if str.eq(k, "wr") {
+        let nc = usize(x[1usize])
+        let nr = usize(x[2usize])
+        let (kind, e1) = mem.alloc[u8](a, nc)
+        let (nlev, e2) = mem.alloc[usize](a, nc)
+        let (names, e3) = mem.alloc[str](a, nc)
+        if e1 != ok || e2 != ok || e3 != ok { os.exit(9) }
+        var tot = 0usize
+        var j = 0usize
+        while j < nc {
+            kind[j] = u8(x[3usize + j])
+            nlev[j] = usize(x[3usize + nc + j])
+            tot += nlev[j]
+            let (nb, ne) = str.builder(a, 16usize)
+            if ne != ok { os.exit(9) }
+            var nbb = nb
+            let _ = str.push(&nbb, "V")
+            let _ = str.push_byte(&nbb, u8(49usize + j))
+            names[j] = str.done(&nbb)
+            j += 1usize
+        }
+        let (levels, e4) = mem.alloc[str](a, tot + 1usize)
+        if e4 != ok { os.exit(9) }
+        var li = 0usize
+        j = 0usize
+        while j < nc {
+            var l = 0usize
+            while l < nlev[j] {
+                let (lb, le) = str.builder(a, 8usize)
+                if le != ok { os.exit(9) }
+                var lbb = lb
+                let _ = str.push(&lbb, "L")
+                let _ = str.push_byte(&lbb, u8(49usize + l))
+                levels[li] = str.done(&lbb)
+                li += 1usize
+                l += 1usize
+            }
+            j += 1usize
+        }
+        let t = arff.Arff { ncols: nc, nrows: nr, kind: kind, nlev: nlev, values: x[3usize + 2usize * nc..3usize + 2usize * nc + nr * nc] }
+        let (out, we) = arff.write(a, "df", names, levels, t)
+        if we != ok { os.exit(10) }
+        let (gold, ge) = fs.read_file(a, path_of(a, "arffw", idx, ".arff"), 1048576usize)
+        if ge != ok { os.exit(11) }
+        var same = out.len == gold.len
+        var q = 0usize
+        while same && q < out.len {
+            if out[q] != gold[q] { same = false }
+            q += 1usize
+        }
+        if same { ret 1.0f64 }
+        ret 0.0f64
+    }
     let (text, re) = fs.read_file(a, path_of(a, "arff", idx, ".arff"), 1048576usize)
     if re != ok { os.exit(8) }
     let (t, pe) = arff.parse(a, text)
