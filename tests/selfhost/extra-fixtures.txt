@@ -598,3 +598,4 @@ oracle_vgam_tobit
 oracle_vgam_bb
 oracle_rugarch
 oracle_unmarked
+oracle_mirt
