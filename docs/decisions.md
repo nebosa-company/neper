@@ -51127,3 +51127,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7544 — actuar loggamma limited moments and inverse Gaussian moments
 `lg_lev` is levlgamma (r / (r - k))^a pgamma(log x, a, r - k) + x^k (1 - pgamma(log x, a, r)); actuar answers 0 for a limit at or below 1 (the support starts at 1, so the true value would be x^k), and the port follows actuar. `ig_m` gives the inverse Gaussian raw moments of order 1 to 3. Equal to actuar on 40 draws each (77 values added to oracle_actuar, 4676 in all).
+
+## D7545 — actuar zero-truncated and zero-modified binomial and geometric
+The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 geometric; equal to actuar dztbinom, pztbinom, dztgeom, pztgeom and the zero-modified pairs on 40 draws (163 values added to oracle_actuar, 4839 in all). The count quantiles and generators stay open.

@@ -526,14 +526,18 @@ fn gu_p(x: f64, al: f64, sc: f64) -> f64 { ret math.exp[f64](0.0f64 - math.exp[f
 
 fn gu_q(p: f64, al: f64, sc: f64) -> f64 { ret al - sc * math.log[f64](0.0f64 - math.log[f64](p)) }
 
-// ---- zero-truncated and zero-modified counts over a base law: kind 0 Poisson(a), 1 negative binomial(size a, prob b)
+// ---- zero-truncated and zero-modified counts over a base law: kind 0 Poisson(a), 1 negative binomial(size a, prob b), 2 binomial(size a, prob b), 3 geometric(prob b)
 fn cnt_d(kind: usize, x: f64, a: f64, b: f64) -> f64 {
     if kind == 0usize { ret nm.dpois(x, a, false) }
+    if kind == 2usize { ret nb.dbinom(x, a, b, false) }
+    if kind == 3usize { ret nb.dgeom(x, b, false) }
     ret nb.dnbinom(x, a, b, false)
 }
 
 fn cnt_p(kind: usize, x: f64, a: f64, b: f64) -> f64 {
     if kind == 0usize { ret nm.ppois(x, a, true, false) }
+    if kind == 2usize { ret nb.pbinom(x, a, b, true, false) }
+    if kind == 3usize { ret nb.pgeom(x, b, true, false) }
     ret nb.pnbinom(x, a, b, true, false)
 }
 

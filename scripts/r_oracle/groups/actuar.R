@@ -160,6 +160,13 @@ for (rep in 1:40) {
   mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); kk <- sample(1:3, 1)
   cases[[length(cases) + 1]] <- case("lm", c(1, mu, s, 0, kk), minvgauss(kk, mu, s), rel = 1e-9, abs = 1e-13)
 }
+# zero-truncated and zero-modified binomial and geometric: "zc" with kind 2 and 3
+for (rep in 1:40) {
+  kd <- 2 + rep %% 2; a <- sample(2:12, 1); b <- runif(1, 0.2, 0.9); p0 <- runif(1, 0.05, 0.8); xx <- sample(0:12, 1)
+  zt <- if (kd == 2) c(dztbinom(xx, a, b), pztbinom(xx, a, b)) else c(dztgeom(xx, b), pztgeom(xx, b))
+  zm <- if (kd == 2) c(dzmbinom(xx, a, b, p0), pzmbinom(xx, a, b, p0)) else c(dzmgeom(xx, b, p0), pzmgeom(xx, b, p0))
+  for (st in 0:3) cases[[length(cases) + 1]] <- case("zc", c(kd, a, b, p0, xx, st), c(zt, zm)[st + 1], rel = 1e-9, abs = 1e-13)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)
