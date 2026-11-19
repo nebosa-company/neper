@@ -72,6 +72,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ge != ok { ret nan }
         ret gout[usize(z[4usize + 2usize * nd])]
     }
+    if str.eq(c.name, "sg") {
+        let sn = usize(z[0usize])
+        var sout: [10]f64 = zero
+        let se = sc.segmented_lm(a, z[2usize + sn..2usize + 2usize * sn], z[2usize..2usize + sn], z[1usize], sout[0usize..10usize])
+        if se != ok { ret nan }
+        ret sout[usize(z[2usize + 2usize * sn])]
+    }
     if str.eq(c.name, "dg") {
         let nd = usize(z[0usize])
         let (xr, exr) = mem.alloc[f64](a, nd * 2usize)

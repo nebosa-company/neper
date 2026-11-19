@@ -4538,4 +4538,5 @@ D7712	674	fpc cluster.varstats varwise tables
 D7713	1219	stats::ar.ols for one series
 D7714	1354	pcubature in two and more dimensions
 D7715	1258	the pcubature maxEval rule
-D7642	868	VGAM: zero-inflated Poisson regression
+D7642	869	VGAM: zero-inflated Poisson regression
+D7716	1382	segmented() for one breakpoint

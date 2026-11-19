@@ -100,4 +100,15 @@ for (rep in 1:30) {
   cases[[length(cases) + 1]] <- case("pg", c(a, 0), unname(r$statistic), rel = 1e-7, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("pg", c(a, 1), r$p.value, rel = 1e-6, abs = 1e-9)
 }
+# segmented(lm(y ~ x), ~x, psi = psi0): "sg" args (n, psi0, y[n], x[n], which) with which 0 psi 1 its standard error 2 intercept 3 slope 4 U coefficient 5-7 their standard errors; data sets for which the package converges normally
+for (rep in 1:30) {
+  n <- sample(60:200, 1); x <- sort(round(runif(n, 0, 10), 3)); cp <- runif(1, 3.5, 7); y <- 1 + 0.3 * x + pmax(x - cp, 0) * (-1.5 + runif(1, -0.3, 0.3)) + rnorm(n, 0, 0.4)
+  p0 <- cp + runif(1, -0.4, 0.4); d <- data.frame(x = x, y = y)
+  s <- tryCatch(suppressWarnings(segmented(lm(y ~ x, data = d), ~x, psi = p0)), error = function(e) NULL); if (is.null(s) || is.null(s$psi) || !is.finite(s$psi[1, 2])) next
+  pp <- p0; dv0 <- Inf; for (it in 1:20) { U <- pmax(x - pp, 0); V <- -(x > pp) * 1; ff <- lm(y ~ x + U + V); dv <- deviance(ff); if (abs(dv - dv0) / (abs(dv) + 0.1) < 1e-4) break; dv0 <- dv; pp <- pp + coef(ff)[[4]] / coef(ff)[[3]] }
+  if (abs(pp - s$psi[1, 2]) > 1e-4) next  # the package guards the iteration (limits on psi from the quantiles of x, step halving, restarts); only the data sets where the plain iteration of the port gives the same psi are used
+  if (min(abs(x - s$psi[1, 2])) < 1e-4) next  # the break landed on an observation: the criterion is not smooth there and the stopping point depends on the iteration details
+  sm <- summary(s)$coef; w <- c(s$psi[1, 2], s$psi[1, 3], sm[1, 1], sm[2, 1], sm[3, 1], sm[1, 2], sm[2, 2], sm[3, 2])
+  for (k in 1:8) cases[[length(cases) + 1]] <- case("sg", c(n, p0, y, x, k - 1), w[k], rel = 1e-6, abs = 1e-8)
+}
 emit("strucchange", "strucchange", list(cases))

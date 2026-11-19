@@ -3,6 +3,7 @@
 // Not here: efp, sctest, gefp, mefp, partial-change models, BIC choice and the confidence intervals of the breaks.
 
 use e.algo.stat.arm as ar
+use e.algo.stat.carlmtest as ols
 use e.algo.stat.gparot as gp
 use e.math
 use e.math.dist as dist
@@ -1297,5 +1298,66 @@ fn pscore_glm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, 
     if alt == 2usize { pv = dist.pnorm(st, 0.0f64, 1.0f64, false, false) }
     out[0usize] = st
     out[1usize] = pv
+    ret ok
+}
+
+// segmented::segmented for lm(y ~ x) with one breakpoint (seg.Z = ~x) from the starting value psi0: Muggeo's iteration, the fit of y on 1, x, U = (x - psi)+ and V = -I(x > psi), then
+// psi <- psi + gamma / beta (gamma the coefficient of V, beta that of U), until the relative change of the deviance is below 1e-4 (at most 20 iterations); out = (psi, its standard error
+// se(gamma) / |beta|, intercept, slope, U coefficient, their standard errors, deviance of the last fit, iterations)
+fn segmented_lm(a: *mem.Arena, x: []const f64, y: []const f64, psi0: f64, out: []f64) -> err {
+    let n = x.len
+    let (d, e0) = mem.alloc[f64](a, n * 4usize)
+    if e0 != ok { ret e0 }
+    var psi = psi0
+    var dev0 = 1.0e308f64
+    var it = 0usize
+    var dev = 0.0f64
+    var fit_beta: [4]f64 = zero
+    var fit_se: [4]f64 = zero
+    while it < 20usize {
+        let start = mem.mark(a)
+        var i = 0usize
+        while i < n {
+            d[i * 4usize] = 1.0f64
+            d[i * 4usize + 1usize] = x[i]
+            var u = x[i] - psi
+            if u < 0.0f64 { u = 0.0f64 }
+            d[i * 4usize + 2usize] = u
+            var v = 0.0f64
+            if x[i] > psi { v = 0.0f64 - 1.0f64 }
+            d[i * 4usize + 3usize] = v
+            i += 1usize
+        }
+        let (f, fe) = ols.ols(a, d, y, n, 4usize)
+        if fe != ok { ret fe }
+        dev = 0.0f64
+        i = 0usize
+        while i < n {
+            dev += f.resid[i] * f.resid[i]
+            i += 1usize
+        }
+        var c = 0usize
+        while c < 4usize {
+            fit_beta[c] = f.beta[c]
+            fit_se[c] = math.sqrt[f64](dev / f64(n - 4usize) * f.xtx_inv[c * 4usize + c])
+            c += 1usize
+        }
+        mem.reset(a, start)
+        let eps = math.abs[f64](dev - dev0) / (math.abs[f64](dev) + 0.1f64)
+        it += 1usize
+        if eps < 0.0001f64 { break }
+        dev0 = dev
+        psi = psi + fit_beta[3usize] / fit_beta[2usize]
+    }
+    out[0usize] = psi
+    out[1usize] = fit_se[3usize] / math.abs[f64](fit_beta[2usize])
+    out[2usize] = fit_beta[0usize]
+    out[3usize] = fit_beta[1usize]
+    out[4usize] = fit_beta[2usize]
+    out[5usize] = fit_se[0usize]
+    out[6usize] = fit_se[1usize]
+    out[7usize] = fit_se[2usize]
+    out[8usize] = dev
+    out[9usize] = f64(it)
     ret ok
 }
