@@ -10,8 +10,8 @@ for (rep in 1:10) {
   f <- tryCatch(ugarchfit(spec, y, solver = "hybrid"), error = function(e) NULL)
   if (is.null(f) || convergence(f) != 0) next
   cf <- coef(f); if (cf[["alpha1"]] < 0.03 || cf[["alpha1"]] + cf[["beta1"]] > 0.97) next
-  v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], likelihood(f))
-  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("garch", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 5) 1e-6 else 1e-2, abs = if (k == 5) 1e-4 else 1e-3)
+  v <- c(cf[["mu"]], cf[["omega"]], cf[["alpha1"]], cf[["beta1"]], likelihood(f), sqrt(diag(vcov(f))))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("garch", c(n, y, k - 1), as.numeric(v[k]), rel = if (k == 5) 1e-6 else if (k > 5) 5e-2 else 1e-2, abs = if (k == 5) 1e-4 else if (k > 5) 5e-3 else 1e-3)
 }
 # gjrGARCH(1,1), constant mean, normal: "gjr" args (n, y[n], k) k 0 mu, 1 omega, 2 alpha1, 3 beta1, 4 gamma1, 5 the log-likelihood
 for (rep in 1:10) {

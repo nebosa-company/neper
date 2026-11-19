@@ -15,7 +15,8 @@ fn fit_case(a: *mem.Arena, c: *const oracle.Case, out: []f64) -> bool {
     if c.name.len == 6usize { ret rg.egarch11(a, z[1usize..1usize + n], n, out) }
     if c.name.len == 4usize { ret rg.garch11_t(a, z[1usize..1usize + n], n, out) }
     if c.name.len == 3usize { ret rg.gjrgarch11(a, z[1usize..1usize + n], n, out) }
-    ret rg.garch11(a, z[1usize..1usize + n], n, out)
+    if !rg.garch11(a, z[1usize..1usize + n], n, out[0usize..5usize]) { ret false }
+    ret rg.garch11_se(a, z[1usize..1usize + n], n, out[0usize..4usize], out[5usize..9usize])
 }
 
 fn same_key(c: *const oracle.Case, key: []const f64, key_len: usize, key_name: usize) -> bool {

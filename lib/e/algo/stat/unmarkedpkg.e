@@ -7,7 +7,7 @@ use e.math
 use e.math.opt as opt
 use e.math.nmath as nm
 use e.mem
-use e.algo.stat.quantreg as qrb
+use e.algo.stat.numhess as nh
 
 type OccCtx = struct { x: []const f64, z: []const f64, y: []const f64, m: usize, j: usize, p1: usize, p2: usize, q: []f64 }
 
@@ -221,79 +221,12 @@ fn pcount(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: usiz
     ret true
 }
 
-// the square roots of the diagonal of the inverse of the Hessian of f at est (k parameters, second central differences with step 1e-4, at most 8 parameters): what unmarked reports from optim's Hessian of minus the log-likelihood;
-// false when the Hessian is singular
-fn hessian_se[C: type](a: *mem.Arena, ctx: *C, f: fn(*C, []const f64) -> f64, est: []const f64, k: usize, out: []f64) -> bool {
-    let (par, e2) = mem.alloc[f64](a, k)
-    let (hs, e3) = mem.alloc[f64](a, k * k)
-    let (col, e4) = mem.alloc[f64](a, k)
-    if e2 != ok || e3 != ok || e4 != ok { ret false }
-    var i = 0usize
-    while i < k {
-        par[i] = est[i]
-        i += 1usize
-    }
-    let h = 1.0e-4f64
-    let f0 = f(ctx, par[0usize..k])
-    i = 0usize
-    while i < k {
-        var l = i
-        while l < k {
-            var v = 0.0f64
-            if i == l {
-                par[i] = est[i] + h
-                let fp = f(ctx, par[0usize..k])
-                par[i] = est[i] - h
-                let fm = f(ctx, par[0usize..k])
-                par[i] = est[i]
-                v = (fp - 2.0f64 * f0 + fm) / (h * h)
-            } else {
-                par[i] = est[i] + h
-                par[l] = est[l] + h
-                let fpp = f(ctx, par[0usize..k])
-                par[l] = est[l] - h
-                let fpm = f(ctx, par[0usize..k])
-                par[i] = est[i] - h
-                let fmm = f(ctx, par[0usize..k])
-                par[l] = est[l] + h
-                let fmp = f(ctx, par[0usize..k])
-                par[i] = est[i]
-                par[l] = est[l]
-                v = (fpp - fpm - fmp + fmm) / (4.0f64 * h * h)
-            }
-            hs[i * k + l] = v
-            hs[l * k + i] = v
-            l += 1usize
-        }
-        i += 1usize
-    }
-    var cj = 0usize
-    while cj < k {
-        var t = 0usize
-        var mat: [64]f64 = zero
-        while t < k * k {
-            mat[t] = hs[t]
-            t += 1usize
-        }
-        t = 0usize
-        while t < k {
-            col[t] = 0.0f64
-            t += 1usize
-        }
-        col[cj] = 1.0f64
-        if !qrb.solve_dense(mat[0usize..k * k], col, k) { ret false }
-        out[cj] = math.sqrt[f64](col[cj])
-        cj += 1usize
-    }
-    ret true
-}
-
 // the standard errors of the `occu` fit at est (p1 occupancy then p2 detection coefficients)
 fn occu_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: usize, j: usize, p1: usize, p2: usize, est: []const f64, out: []f64) -> bool {
     let (qq, e1) = mem.alloc[f64](a, p1 + p2)
     if e1 != ok { ret false }
     var c = OccCtx { x: x, z: z, y: y, m: m, j: j, p1: p1, p2: p2, q: qq }
-    ret hessian_se[OccCtx](a, &c, occ_f, est, p1 + p2, out)
+    ret nh.hessian_se[OccCtx](a, &c, occ_f, est, p1 + p2, out)
 }
 
 // the standard errors of the `pcount` fit at est, for the same K
@@ -308,5 +241,5 @@ fn pcount_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: u
         i += 1usize
     }
     var c = PcCtx { x: x, z: z, y: y, m: m, j: j, p1: p1, p2: p2, kk: kk, lf: lf, q: qq }
-    ret hessian_se[PcCtx](a, &c, pc_f, est, p1 + p2, out)
+    ret nh.hessian_se[PcCtx](a, &c, pc_f, est, p1 + p2, out)
 }

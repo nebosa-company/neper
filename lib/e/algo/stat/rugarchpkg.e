@@ -7,6 +7,7 @@ use e.math
 use e.math.opt as opt
 use e.math.nmath as nm
 use e.mem
+use e.algo.stat.numhess as nh
 
 type GCtx = struct { y: []const f64, n: usize, q: []f64 }
 
@@ -452,4 +453,14 @@ fn igarch11(a: *mem.Arena, y: []const f64, n: usize, out: []f64) -> bool {
     out[3usize] = 1.0f64 - al
     out[4usize] = garch_ll(y, n, x[0usize], out[1usize], al, 1.0f64 - al)
     ret true
+}
+
+type GSeCtx = struct { y: []const f64, n: usize }
+
+fn garch_nat_f(c: *GSeCtx, x: []const f64) -> f64 { ret 0.0f64 - garch_ll(c.y, c.n, x[0usize], x[1usize], x[2usize], x[3usize]) }
+
+// the standard errors of the sGARCH(1,1) fit at est = (mu, omega, alpha1, beta1): the inverse of the Hessian of minus the log-likelihood on the natural parameters, as rugarch's vcov(fit)
+fn garch11_se(a: *mem.Arena, y: []const f64, n: usize, est: []const f64, out: []f64) -> bool {
+    var c = GSeCtx { y: y, n: n }
+    ret nh.hessian_se[GSeCtx](a, &c, garch_nat_f, est, 4usize, out)
 }
