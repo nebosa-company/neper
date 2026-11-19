@@ -19,7 +19,8 @@ fn em(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize
     let (post, e2) = mem.alloc[f64](a, nr)
     let (acc, e3) = mem.alloc[f64](a, nr * tc)
     let (cls, e4) = mem.alloc[f64](a, nr)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
+    let (den, e5) = mem.alloc[f64](a, nr * nj)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
     var o = 0usize
     v = 0usize
     while v < nj {
@@ -38,6 +39,11 @@ fn em(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize
         r = 0usize
         while r < nr {
             cls[r] = 0.0f64
+            var dz = 0usize
+            while dz < nj {
+                den[r * nj + dz] = 0.0f64
+                dz += 1usize
+            }
             var c = 0usize
             while c < tc {
                 acc[r * tc + c] = 0.0f64
@@ -54,7 +60,7 @@ fn em(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize
                 var pr = prior[r]
                 v = 0usize
                 while v < nj {
-                    pr *= probs[r * tc + off[v] + usize(data[i * nj + v])]
+                    if data[i * nj + v] > 0.0f64 - 0.5f64 { pr *= probs[r * tc + off[v] + usize(data[i * nj + v])] }
                     v += 1usize
                 }
                 post[r] = pr
@@ -68,7 +74,10 @@ fn em(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize
                 cls[r] += w
                 v = 0usize
                 while v < nj {
-                    acc[r * tc + off[v] + usize(data[i * nj + v])] += w
+                    if data[i * nj + v] > 0.0f64 - 0.5f64 {
+                        acc[r * tc + off[v] + usize(data[i * nj + v])] += w
+                        den[r * nj + v] += w
+                    }
                     v += 1usize
                 }
                 r += 1usize
@@ -83,7 +92,7 @@ fn em(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize
             while v < nj {
                 var c = 0usize
                 while c < ncat[v] {
-                    probs[r * tc + off[v] + c] = acc[r * tc + off[v] + c] / cls[r]
+                    probs[r * tc + off[v] + c] = acc[r * tc + off[v] + c] / den[r * nj + v]
                     c += 1usize
                 }
                 v += 1usize

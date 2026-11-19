@@ -27,6 +27,23 @@ for (rep in 1:20) {
   cases[[length(cases) + 1]] <- case("se_prior", a, sum(fs$P.se * seq_along(fs$P.se)), rel = 1e-3, abs = 1e-6)
   }
 }
+# missing responses (coded 0 in poLCA, below zero here): "msll" "msprior" "msprobs" args as "ll" with zeros in the data; start probabilities given
+for (rep in 1:14) {
+  n <- sample(200:400, 1); J <- sample(4:5, 1); R <- 2; ncat <- sample(2:3, J, TRUE)
+  cl <- sample(1:R, n, TRUE, c(0.45, 0.55))
+  th <- lapply(seq_len(J), function(j) t(sapply(seq_len(R), function(r) { p <- runif(ncat[j], 0.25, 1); if (r == 2) p <- rev(p); p / sum(p) })))
+  d <- as.data.frame(sapply(seq_len(J), function(j) sapply(cl, function(c) sample(ncat[j], 1, prob = th[[j]][c, ])))); names(d) <- paste0("y", seq_len(J))
+  for (j in 1:J) d[sample(n, round(n * 0.1)), j] <- NA
+  st <- lapply(seq_len(J), function(j) { m <- t(sapply(seq_len(R), function(r) { p <- runif(ncat[j], 0.2, 1); p / sum(p) })); m })
+  f <- tryCatch(suppressMessages(poLCA(as.formula(paste("cbind(", paste(names(d), collapse = ","), ") ~ 1")), d, nclass = R, probs.start = st, tol = 1e-13, maxiter = 20000, verbose = FALSE, na.rm = FALSE)), error = function(e) NULL)
+  if (is.null(f)) next
+  dz <- as.matrix(d); dz[is.na(dz)] <- 0
+  a <- c(n, J, R, ncat, unlist(lapply(st, function(m) as.vector(t(m)))), as.vector(t(dz)))
+  pr <- unlist(lapply(f$probs, function(m) as.vector(t(m))))
+  cases[[length(cases) + 1]] <- case("msll", a, f$llik, rel = 1e-6, abs = 1e-6)
+  cases[[length(cases) + 1]] <- case("msprior", a, sum(f$P^2), rel = 1e-4, abs = 1e-6)
+  cases[[length(cases) + 1]] <- case("msprobs", a, sum(pr^2), rel = 1e-4, abs = 1e-6)
+}
 # standard errors of well-identified two-class fits away from the boundary: "se_probs" "se_prior" with the same arguments as "ll"
 for (rep in 1:40) {
   n <- sample(250:500, 1); J <- sample(4:6, 1); R <- 2; ncat <- sample(2:3, J, TRUE)

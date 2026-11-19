@@ -50569,3 +50569,9 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 **Decision.** `polcapkg.entropy` is `poLCA.entropy(lc)`: -sum P log P over every cell of the cross-classification of the manifest variables, P the sum over classes of the class size times the product of the response probabilities.
 
 **Result.** `oracle_polca` (272 cases, 20 new) equals poLCA on Windows to 1e-4 (the tolerance of the fitted probabilities). Linux pending. L512 stays partial: covariates (latent class regression), the generalised inverse for singular information, missing responses.
+
+## D7344 — poLCA: missing responses
+
+**Decision.** `polcapkg.em` treats a response below zero as missing: it leaves the case's likelihood factor out and counts the case only for the variables it answered, so each response probability is divided by the posterior weight of the cases that answered that variable; class sizes still divide by the number of cases.
+
+**Result.** `oracle_polca` (316 cases, 42 new on 14 data sets with 10% of each variable missing) equals `poLCA(..., na.rm = FALSE)` on Windows: log-likelihood to 1e-6, the sums of squares of class sizes and response probabilities to 1e-4. Linux pending. L512 stays partial: covariates (latent class regression), the generalised inverse for singular information, standard errors with missing responses.

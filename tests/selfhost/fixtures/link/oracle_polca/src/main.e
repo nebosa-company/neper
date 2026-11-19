@@ -109,6 +109,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     let ll = pl.em(a, data, n, nj, ncat, nr, probs, prior, 1.0e-13f64, 20000usize)
+    if str.eq(c.name, "msll") { ret ll }
+    if str.eq(c.name, "msprior") {
+        var sq0 = 0.0f64
+        var t0 = 0usize
+        while t0 < nr {
+            sq0 += prior[t0] * prior[t0]
+            t0 += 1usize
+        }
+        ret sq0
+    }
+    if str.eq(c.name, "msprobs") {
+        var sq1 = 0.0f64
+        var t1 = 0usize
+        while t1 < nr * tc {
+            sq1 += probs[t1] * probs[t1]
+            t1 += 1usize
+        }
+        ret sq1
+    }
     if str.eq(c.name, "ll") { ret ll }
     if str.eq(c.name, "npar") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 0usize) }
     if str.eq(c.name, "aic") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 1usize) }

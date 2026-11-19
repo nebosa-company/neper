@@ -4245,4 +4245,5 @@ D7340	625	emmeans: eff_size
 D7422	708	pscl zero links
 D7341	501	psych: describeBy
 D7342	1157	psych: fa.parallel
-D7343	527	poLCA: entropy
+D7343	528	poLCA: entropy
+D7344	765	poLCA: missing responses
