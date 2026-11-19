@@ -89,7 +89,7 @@
       "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6610, D7285 initseq and olbm for a scalar chain). e.algo.stat.mcmcpkg.metrop (batch means, per-batch acceptance, final state; three fixed log densities) equals mcmc 0.9-8 under set.seed on Windows (oracle_mcmc, 90 values; Linux pending). Open: user densities, outfun, morph, temper. Was: Open (CRAN rank 789). Small to mid. e.math.mcmc has metropolis_hastings. Acceptance, equal to mcmc value for value under set.seed: metrop with its batching and scaling, morph and morph.metrop, temper with parallel and serial tempering, initseq and olbm variance estimates."
+      "evidence": "D7337: morph and morph.metrop (subexponential and exponential maps, centre) equal to mcmc under set.seed. Partial (D6610, D7285 initseq and olbm for a scalar chain). e.algo.stat.mcmcpkg.metrop (batch means, per-batch acceptance, final state; three fixed log densities) equals mcmc 0.9-8 under set.seed on Windows (oracle_mcmc, 90 values; Linux pending). Open: user densities, outfun, morph, temper. Was: Open (CRAN rank 789). Small to mid. e.math.mcmc has metropolis_hastings. Acceptance, equal to mcmc value for value under set.seed: metrop with its batching and scaling, morph and morph.metrop, temper with parallel and serial tempering, initseq and olbm variance estimates."
     },
     {
       "id": "L450",

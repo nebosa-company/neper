@@ -230,3 +230,187 @@ fn olbm(x: []const f64, blen: usize) -> f64 {
     }
     ret ss * f64(blen) / (f64(nb) * f64(n))
 }
+
+// mcmc::morph: the isotropic transformation of the state space made of the exponential (r, p = 3) and the subexponential (b) maps, applied to the distance from `center`. use_b and use_expo choose the parts (both: expo after subexpo)
+type Morph = struct { use_b: bool, b: f64, use_expo: bool, r: f64, center: []const f64 }
+
+fn sub_finv(x: f64, b: f64) -> f64 {
+    let e = 2.718281828459045f64
+    if x > 1.0f64 / b { ret math.exp[f64](b * x) - e / 3.0f64 }
+    ret (x * b) * (x * b) * (x * b) * e / 6.0f64 + x * b * e / 2.0f64
+}
+
+fn sub_dfinv(x: f64, b: f64) -> f64 {
+    let e = 2.718281828459045f64
+    if x > 1.0f64 / b { ret b * math.exp[f64](b * x) }
+    ret b * (x * b) * (x * b) * e / 2.0f64 + b * e / 2.0f64
+}
+
+fn sub_f(x: f64, b: f64) -> f64 {
+    let e = 2.718281828459045f64
+    if x > 2.0f64 * e / 3.0f64 { ret math.log[f64](x + e / 3.0f64) / b }
+    let b6 = math.pow[f64](b, 6.0f64)
+    let pinv = math.exp[f64](1.0f64 / 3.0f64) * math.pow[f64](math.sqrt[f64](b6 * b6 * (9.0f64 * x * x + e * e)) - 3.0f64 * b6 * x, 0.0f64 - 1.0f64 / 3.0f64)
+    ret pinv * b - 1.0f64 / (pinv * b * b * b)
+}
+
+fn exp_finv(x: f64, r: f64) -> f64 {
+    if x <= r { ret x }
+    ret x + (x - r) * (x - r) * (x - r)
+}
+
+fn exp_dfinv(x: f64, r: f64) -> f64 {
+    if x <= r { ret 1.0f64 }
+    ret 1.0f64 + 3.0f64 * (x - r) * (x - r)
+}
+
+fn exp_f(x: f64, r: f64) -> f64 {
+    if x < r { ret x }
+    let n = math.sqrt[f64]((27.0f64 * r - 27.0f64 * x) * (27.0f64 * r - 27.0f64 * x) + 108.0f64) + 27.0f64 * (r - x)
+    ret r + math.pow[f64](2.0f64 / n, 1.0f64 / 3.0f64) - math.pow[f64](n / 2.0f64, 1.0f64 / 3.0f64) / 3.0f64
+}
+
+fn morph_finv(m: *const Morph, x: f64) -> f64 {
+    var v = x
+    if m.use_expo { v = exp_finv(v, m.r) }
+    if m.use_b { v = sub_finv(v, m.b) }
+    ret v
+}
+
+fn morph_dfinv(m: *const Morph, x: f64) -> f64 {
+    var d = 1.0f64
+    var v = x
+    if m.use_expo {
+        d = exp_dfinv(v, m.r)
+        v = exp_finv(v, m.r)
+    }
+    if m.use_b { d = d * sub_dfinv(v, m.b) }
+    ret d
+}
+
+fn morph_f(m: *const Morph, x: f64) -> f64 {
+    var v = x
+    if m.use_b { v = sub_f(v, m.b) }
+    if m.use_expo { v = exp_f(v, m.r) }
+    ret v
+}
+
+fn norm2(x: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += x[i] * x[i]
+        i += 1usize
+    }
+    ret math.sqrt[f64](s)
+}
+
+// the state in the original coordinates: f.inv applied to the distance, plus the centre
+fn morph_inverse(m: *const Morph, st: []const f64, out: []f64) {
+    let nr = norm2(st)
+    var i = 0usize
+    while i < st.len {
+        if nr == 0.0f64 { out[i] = m.center[i] } else { out[i] = morph_finv(m, nr) * st[i] / nr + m.center[i] }
+        i += 1usize
+    }
+}
+
+fn morph_transform(m: *const Morph, x: []const f64, out: []f64) {
+    var dd: [8]f64 = zero
+    var i = 0usize
+    while i < x.len {
+        dd[i] = x[i] - m.center[i]
+        i += 1usize
+    }
+    let nr = norm2(dd[0usize..x.len])
+    i = 0usize
+    while i < x.len {
+        if nr == 0.0f64 { out[i] = 0.0f64 } else { out[i] = morph_f(m, nr) * dd[i] / nr }
+        i += 1usize
+    }
+}
+
+// the log unnormalised density of the morphed chain: lud(inverse(state)) plus the log Jacobian
+fn morph_lud(id: usize, m: *const Morph, st: []const f64) -> f64 {
+    var xo: [8]f64 = zero
+    morph_inverse(m, st, xo[0usize..st.len])
+    var foo = lud(id, xo[0usize..st.len])
+    if foo == 0.0f64 - 1.0f64 / 0.0f64 { ret foo }
+    let nr = norm2(st)
+    let k = f64(st.len)
+    if nr == 0.0f64 {
+        foo += k * math.log[f64](morph_dfinv(m, 0.0f64))
+    } else {
+        foo += math.log[f64](morph_dfinv(m, nr)) + (k - 1.0f64) * (math.log[f64](morph_finv(m, nr)) - math.log[f64](nr))
+    }
+    ret foo
+}
+
+// mcmc::morph.metrop(lud, initial, nbatch, blen, nspac, scale, morph = morph(...)) under set.seed (the package's morph.metrop does not pass nspac on to metrop, so the chain always uses nspac = 1 and nspac is ignored here too): metrop on the morphed density from the transformed initial state; the batch means are of the states mapped
+// back to the original coordinates, the acceptance rates are the chain's, and fin is the final state in the original coordinates
+fn morph_metrop(a: *mem.Arena, g: *rng.Rng, id: usize, m: *const Morph, initial: []const f64, nbatch: usize, blen: usize, nspac: usize, scale: []const f64, batch: []f64, accb: []f64, fin: []f64) -> err {
+    let d = initial.len
+    let (cur, e1) = mem.alloc[f64](a, d)
+    let (prop, e2) = mem.alloc[f64](a, d)
+    let (sum, e3) = mem.alloc[f64](a, d)
+    let (orig, e4) = mem.alloc[f64](a, d)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    morph_transform(m, initial, cur)
+    var lc = morph_lud(id, m, cur)
+    var i = 0usize
+    var ib = 0usize
+    while ib < nbatch {
+        i = 0usize
+        while i < d {
+            sum[i] = 0.0f64
+            i += 1usize
+        }
+        var nacc = 0usize
+        var jb = 0usize
+        while jb < blen {
+            var is = 0usize
+            while is < 1usize {
+                i = 0usize
+                while i < d {
+                    prop[i] = cur[i] + scale[i] * rng.rnorm(g, 0.0f64, 1.0f64)
+                    i += 1usize
+                }
+                let lp = morph_lud(id, m, prop)
+                var accept = false
+                if lp >= lc { accept = true } else {
+                    let u = rng.unif(g)
+                    if u < math.exp[f64](lp - lc) { accept = true }
+                }
+                if accept {
+                    i = 0usize
+                    while i < d {
+                        cur[i] = prop[i]
+                        i += 1usize
+                    }
+                    lc = lp
+                    nacc += 1usize
+                }
+                is += 1usize
+            }
+            morph_inverse(m, cur, orig)
+            i = 0usize
+            while i < d {
+                sum[i] += orig[i]
+                i += 1usize
+            }
+            jb += 1usize
+        }
+        i = 0usize
+        while i < d {
+            batch[ib * d + i] = sum[i] / f64(blen)
+            i += 1usize
+        }
+        accb[ib] = f64(nacc) / f64(blen)
+        ib += 1usize
+    }
+    morph_inverse(m, cur, fin)
+    ret ok
+}

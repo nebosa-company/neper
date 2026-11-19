@@ -37,6 +37,45 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let cn = usize(z[0usize])
         ret mc.olbm(z[2usize..2usize + cn], usize(z[1usize]))
     }
+    if str.eq(c.name, "mbatch") || str.eq(c.name, "macc") || str.eq(c.name, "mfin") {
+        let seed = i64(z[0usize])
+        let id = usize(z[1usize])
+        let d = usize(z[2usize])
+        let nb = usize(z[3usize])
+        let bl = usize(z[4usize])
+        let ns = usize(z[5usize])
+        let mo = mc.Morph { use_b: z[6usize] > 0.5f64, b: z[7usize], use_expo: z[8usize] > 0.5f64, r: z[9usize], center: z[10usize + 2usize * d..10usize + 3usize * d] }
+        let init = z[10usize..10usize + d]
+        let sc = z[10usize + d..10usize + 2usize * d]
+        let (batch, e1) = mem.alloc[f64](a, nb * d)
+        let (accb, e2) = mem.alloc[f64](a, nb)
+        let (fin, e3) = mem.alloc[f64](a, d)
+        if e1 != ok || e2 != ok || e3 != ok { ret nan }
+        var g: rng.Rng = zero
+        rng.seed(&g, seed)
+        if mc.morph_metrop(a, &g, id, &mo, init, nb, bl, ns, sc, batch, accb, fin) != ok { ret nan }
+        var s = 0.0f64
+        var i = 0usize
+        if str.eq(c.name, "mbatch") {
+            while i < nb * d {
+                s += f64(i + 1usize) * batch[i]
+                i += 1usize
+            }
+            ret s
+        }
+        if str.eq(c.name, "macc") {
+            while i < nb {
+                s += f64(i + 1usize) * accb[i]
+                i += 1usize
+            }
+            ret s
+        }
+        while i < d {
+            s += f64(i + 1usize) * fin[i]
+            i += 1usize
+        }
+        ret s
+    }
     let seed = i64(z[0usize])
     let id = usize(z[1usize])
     let d = usize(z[2usize])

@@ -50524,3 +50524,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 
 ## D7421 — pscl geometric counts
 The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` gained a `geom` flag that fixes theta in the likelihood and drops it from the parameter vector; `zeroinfl_geom` and `hurdle_geom` reuse the BFGS fits of D7419 and D7420 on beta and gamma only. Equal to pscl to 2e-3 (log-likelihoods and position-weighted count coefficients) on six simulated sets each for zeroinfl and hurdle. L412 at 0.6.
+
+## D7337 — mcmc: morph and morph.metrop
+
+**Decision.** `mcmcpkg.morph_metrop` runs the Metropolis chain on the morphed density, lud(inverse(state)) plus the log Jacobian, from the transformed initial state, and records the states mapped back to the original coordinates. The transformations are mcmc's: the isotropic exponential map (r, p = 3, closed-form inverse) and subexponential map (b), alone or composed (exponential after subexponential), applied to the distance from `center`.
+
+**Result.** `oracle_mcmc` (412 cases, 72 new) equals `morph.metrop` under `set.seed` on Windows to 1e-9: batch means, acceptance rates and the final state, on three targets in one to three dimensions with each map and their composition. mcmc's `morph.metrop` accepts `nspac` but does not hand it to `metrop`, so its chain always runs with nspac = 1; the port does the same (an oracle with nspac > 1 first failed on exactly this). Linux pending. L448 stays partial: user densities and outfun (the fixture fixes three targets), temper, p other than 3.

@@ -4236,4 +4236,6 @@ D7334	527	mlogit: likelihood-ratio test
 D7335	902	mlogit: nested logit
 D7419	772	pscl zeroinfl with a negative binomial count
 D7420	770	pscl hurdle with a negative binomial count
-D7336	757	mlogit: nested logit standard errors
+D7336	758	mlogit: nested logit standard errors
+D7421	454	pscl geometric counts
+D7337	1039	mcmc: morph and morph.metrop
