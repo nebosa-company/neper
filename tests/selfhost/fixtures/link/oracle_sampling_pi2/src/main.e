@@ -23,11 +23,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var e = ok
     if kind == 0usize || kind == 2usize || kind == 3usize { e = sm.up_tille_pi2(a, pik, pi2) }
     if kind == 1usize || kind == 4usize || kind == 5usize { e = sm.up_systematic_pi2(a, pik, pi2) }
-    if kind >= 6usize { e = sm.up_midzuno_pi2(a, pik, pi2) }
+    if kind >= 6usize && kind <= 8usize { e = sm.up_midzuno_pi2(a, pik, pi2) }
+    if kind >= 9usize { e = sm.up_sampford_pi2(a, pik, pi2) }
     if e != ok { os.exit(5) }
-    if kind < 2usize || kind == 6usize { ret pi2[ii * n + jj] }
+    if kind < 2usize || kind == 6usize || kind == 9usize { ret pi2[ii * n + jj] }
     var method = 1usize
-    if kind == 3usize || kind == 5usize || kind == 8usize { method = 2usize }
+    if kind == 3usize || kind == 5usize || kind == 8usize || kind == 11usize { method = 2usize }
     ret sm.var_ht(y, pi2, method)
 }
 

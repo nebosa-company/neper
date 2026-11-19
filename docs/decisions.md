@@ -50251,3 +50251,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7374 — sampling UPmidzunopi2
 `up_midzuno_pi2` is sampling's formula pik_i + pik_j - 1 + UPtillepi2(1 - pik), reusing the Tille matrix of the complements. Entries equal R; the varHT of a midzuno matrix is compared only when every entry exceeds 1e-3, because for random pik that no Midzuno design realises the cells are near zero or negative and R's ratio is 1e17-sized rounding noise (the first run disagreed there). L508 at 0.5.
+
+## D7375 — sampling UPsampfordpi2
+`up_sampford_pi2` follows sampling's recursion: lambda = p / (1 - n p), the elementary-symmetric-style sequence Lm (alternating power sums of lambda), the constant Kn, and per pair the sequence Lm2 with the (lambda_i + lambda_j) and lambda_i lambda_j recursion, pikl = Kn lambda_i lambda_j sum((m + 1 - n (p_i + p_j)) Lm2[n - m] / n^(m-1)); it refuses a pik whose Lm has a negative entry, as R does, and the oracle skips those draws. Equal to sampling to 1e-9. L508 at 0.55.

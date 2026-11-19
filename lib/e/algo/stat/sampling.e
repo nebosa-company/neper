@@ -560,3 +560,101 @@ fn up_midzuno_pi2(a: *mem.Arena, pik: []const f64, pi2: []f64) -> err {
     }
     ret ok
 }
+
+// UPsampfordpi2: the joint inclusion probabilities of Sampford's design (sum(pik) an integer n >= 2); pi2 is N by N row-major
+fn up_sampford_pi2(a: *mem.Arena, pik: []const f64, pi2: []f64) -> err {
+    let nn = pik.len
+    var tot = 0.0f64
+    var i = 0usize
+    while i < nn {
+        tot += pik[i]
+        i += 1usize
+    }
+    let n = usize(math.floor[f64](tot + 0.5f64))
+    if n < 2usize { ret mem.Full }
+    let nf = f64(n)
+    let (p, e0) = mem.alloc[f64](a, nn)
+    let (lam, e1) = mem.alloc[f64](a, nn)
+    let (lm, e2) = mem.alloc[f64](a, n + 3usize)
+    let (lm2, e3) = mem.alloc[f64](a, n + 3usize)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    i = 0usize
+    while i < nn * nn {
+        pi2[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < nn {
+        p[i] = pik[i] / nf
+        lam[i] = p[i] / (1.0f64 - nf * p[i])
+        i += 1usize
+    }
+    i = 0usize
+    while i < n + 3usize {
+        lm[i] = 0.0f64
+        lm2[i] = 0.0f64
+        i += 1usize
+    }
+    lm[1usize] = 1.0f64
+    var ii = 2usize
+    while ii <= n {
+        var r = 1usize
+        while r <= ii - 1usize {
+            var sr = 0.0f64
+            var q = 0usize
+            while q < nn {
+                sr += math.pow[f64](lam[q], f64(r))
+                q += 1usize
+            }
+            var sg = 1.0f64
+            if (r - 1usize) % 2usize == 1usize { sg = -1.0f64 }
+            lm[ii] = lm[ii] + sg * sr * lm[ii - r]
+            r += 1usize
+        }
+        lm[ii] = lm[ii] / f64(ii - 1usize)
+        ii += 1usize
+    }
+    var k = 1usize
+    while k <= n {
+        if lm[k] < 0.0f64 { ret mem.Full }
+        k += 1usize
+    }
+    var den = 0.0f64
+    k = 1usize
+    while k <= n {
+        let t1 = f64(n + 1usize - k)
+        den += t1 * lm[k] / math.pow[f64](nf, t1)
+        k += 1usize
+    }
+    let kn = 1.0f64 / den
+    i = 1usize
+    while i < nn {
+        var j = 0usize
+        while j < i {
+            lm2[1usize] = 1.0f64
+            lm2[2usize] = lm[2usize] - (lam[i] + lam[j])
+            var m = 3usize
+            while m + 1usize <= n {
+                lm2[m] = lm[m] - (lam[i] + lam[j]) * lm2[m - 1usize] - lam[i] * lam[j] * lm2[m - 2usize]
+                m += 1usize
+            }
+            var s = 0.0f64
+            m = 1usize
+            while m + 1usize <= n {
+                s += (f64(m + 1usize) - nf * (p[i] + p[j])) * lm2[n - m] / math.pow[f64](nf, f64(m - 1usize))
+                m += 1usize
+            }
+            let v = kn * lam[i] * lam[j] * s
+            pi2[i * nn + j] = v
+            pi2[j * nn + i] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < nn {
+        pi2[i * nn + i] = pik[i]
+        i += 1usize
+    }
+    ret ok
+}
