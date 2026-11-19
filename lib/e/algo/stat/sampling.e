@@ -536,3 +536,27 @@ fn var_ht(y: []const f64, pikl: []const f64, method: usize) -> f64 {
     }
     ret s
 }
+
+// UPmidzunopi2: 1 - b - b' + UPtillepi2(1 - pik) with b_ij = 1 - pik_i, i.e. pik_i + pik_j - 1 + the Tille matrix of the complements
+fn up_midzuno_pi2(a: *mem.Arena, pik: []const f64, pi2: []f64) -> err {
+    let n = pik.len
+    let (comp, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret e0 }
+    var i = 0usize
+    while i < n {
+        comp[i] = 1.0f64 - pik[i]
+        i += 1usize
+    }
+    let e = up_tille_pi2(a, comp, pi2)
+    if e != ok { ret e }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            pi2[i * n + j] = pik[i] + pik[j] - 1.0f64 + pi2[i * n + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}

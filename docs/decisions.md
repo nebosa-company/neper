@@ -50248,3 +50248,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7373 — sampling joint inclusion probabilities and varHT
 `up_tille_pi2` follows UPtillepi2 (the product over N - n eliminations of 1 - v_i - v_j with v = 1 - a/b from successive inclusionprobabilities, diagonal pik, zeros outside the units with eps < pik < 1 - eps), `up_systematic_pi2` UPsystematicpi2 (the matrix M of cumulative-sum comparisons mod 1 times the cell widths, pik_i pik_j for degenerate units) and `var_ht` varHT (methods 1 and 2). Equal to sampling to 1e-9 on twenty random designs; cases where R's varHT is not finite (systematic zeros) are not in the golden. L508 at 0.45.
+
+## D7374 — sampling UPmidzunopi2
+`up_midzuno_pi2` is sampling's formula pik_i + pik_j - 1 + UPtillepi2(1 - pik), reusing the Tille matrix of the complements. Entries equal R; the varHT of a midzuno matrix is compared only when every entry exceeds 1e-3, because for random pik that no Midzuno design realises the cells are near zero or negative and R's ratio is 1e17-sized rounding noise (the first run disagreed there). L508 at 0.5.
