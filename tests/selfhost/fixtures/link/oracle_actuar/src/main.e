@@ -196,6 +196,12 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(c.name, "by") {
+        let nb2 = usize(x[4usize])
+        var bo: [5]f64 = zero
+        ac.bayes_linear(usize(x[0usize]), x[1usize], x[2usize], x[3usize], x[5usize..5usize + nb2], bo[0usize..5usize])
+        ret bo[usize(x[5usize + nb2])]
+    }
     if str.eq(c.name, "rcp") {
         var gr: rr.Rng = zero
         rr.seed(&gr, i64(x[0usize]))

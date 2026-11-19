@@ -227,6 +227,22 @@ for (rep in 1:30) {
   cases[[length(cases) + 1]] <- case("rcp", c(sd, n, lam, sh, rt, 1), F(mean(x)), rel = 0, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("rcp", c(sd, n, lam, sh, rt, 2), F(q), rel = 0, abs = 1e-12)
 }
+# bayes(): linear Bayes credibility: "by" args (kind 0 poisson 1 bernoulli 2 binomial 3 geometric 4 negative binomial 5 exponential 6 gamma 7 normal 8 pareto, p1, p2, p3, n, x[n], which 0 coll 1 ind.mean 2 cred 3 var1 4 var2)
+for (rep in 1:90) {
+  kd <- rep %% 9; n <- sample(3:12, 1); x <- round(runif(n, 1.5, 9), 3)
+  r <- switch(kd + 1,
+    {p1 <- runif(1, 1, 4); p2 <- runif(1, 0.3, 2); p3 <- 0; actuar:::bayes(x, "poisson", shape = p1, scale = p2)},
+    {p1 <- runif(1, 1, 4); p2 <- runif(1, 1, 5); p3 <- 0; actuar:::bayes(x, "bernoulli", shape1 = p1, shape2 = p2)},
+    {p1 <- runif(1, 1, 4); p2 <- runif(1, 1, 5); p3 <- sample(2:10, 1); actuar:::bayes(x, "binomial", shape1 = p1, shape2 = p2, size = p3)},
+    {p1 <- runif(1, 3, 6); p2 <- runif(1, 1, 5); p3 <- 0; actuar:::bayes(x, "geometric", shape1 = p1, shape2 = p2)},
+    {p1 <- runif(1, 3, 6); p2 <- runif(1, 1, 5); p3 <- sample(2:10, 1); actuar:::bayes(x, "negative binomial", shape1 = p1, shape2 = p2, size = p3)},
+    {p1 <- runif(1, 3, 6); p2 <- runif(1, 0.3, 2); p3 <- 0; actuar:::bayes(x, "exponential", shape = p1, scale = p2)},
+    {p1 <- runif(1, 3, 6); p2 <- runif(1, 0.3, 2); p3 <- runif(1, 1, 4); actuar:::bayes(x, "gamma", shape = p1, scale = p2, shape.lik = p3)},
+    {p1 <- rnorm(1, 5, 2); p2 <- runif(1, 0.5, 2); p3 <- runif(1, 0.5, 3); actuar:::bayes(x, "normal", mean = p1, sd = p2, sd.lik = p3)},
+    {p1 <- runif(1, 1, 4); p2 <- runif(1, 0.3, 2); p3 <- 1; actuar:::bayes(x, "pareto", shape = p1, scale = p2, min = p3)})
+  v <- c(r$means[[1]], r$means[[2]], r$cred, r$unbiased)
+  for (w in 0:4) if (w < length(v) && is.finite(v[w + 1])) cases[[length(cases) + 1]] <- case("by", c(kd, p1, p2, p3, n, x, w), unname(v[w + 1]), rel = 1e-9, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

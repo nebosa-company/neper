@@ -793,3 +793,87 @@ fn rcompound_pois_gamma(a: *mem.Arena, g: *rr.Rng, n: usize, lambda: f64, shape:
     }
     ret ok
 }
+
+// actuar bayes(x, likelihood, prior): linear Bayes credibility from the observations x. kind 0 Poisson (Gamma prior shape p1, scale p2), 1 Bernoulli (Beta shape1 p1, shape2 p2), 2 binomial
+// (Beta p1, p2, size p3), 3 geometric (Beta p1, p2), 4 negative binomial (Beta p1, p2, size p3), 5 exponential (Gamma p1, p2), 6 gamma (Gamma p1, p2, shape of the likelihood p3), 7 normal
+// (prior mean p1, prior sd p2, likelihood sd p3), 8 Pareto (Gamma p1, p2, lower bound p3); out = (collective mean, individual mean, credibility factor, first variance, second variance)
+fn bayes_linear(kind: usize, p1: f64, p2: f64, p3: f64, x: []const f64, out: []f64) {
+    let n = f64(x.len)
+    var coll = 0.0f64
+    var k = 0.0f64
+    var v1 = 0.0f64
+    var v2 = 0.0f64
+    var ind = 0.0f64
+    var cred = 0.0f64
+    if kind == 8usize {
+        coll = p1 * p2
+        v1 = 0.0f64 / 0.0f64
+        v2 = v1
+        var sl = 0.0f64
+        var i = 0usize
+        while i < x.len {
+            sl += math.log[f64](x[i])
+            i += 1usize
+        }
+        sl = sl - n * math.log[f64](p3)
+        ind = n / sl
+        cred = 1.0f64 / (1.0f64 + 1.0f64 / (p2 * sl))
+    } else {
+        if kind == 0usize {
+            coll = p1 * p2
+            v1 = coll * p2
+            v2 = coll
+            k = 1.0f64 / p2
+        } else if kind == 1usize {
+            k = p1 + p2
+            coll = p1 / k
+            v1 = p1 * p2 * 1.0f64 / (k * k * (k + 1.0f64))
+            v2 = p1 * p2 * k / (k * k * (k + 1.0f64))
+        } else if kind == 2usize {
+            k = (p1 + p2) / p3
+            coll = p1 / k
+            v1 = p1 * p2 * 1.0f64 / (k * k * (p1 + p2 + 1.0f64))
+            v2 = p1 * p2 * k / (k * k * (p1 + p2 + 1.0f64))
+        } else if kind == 3usize {
+            k = p1 - 1.0f64
+            coll = p2 / k
+            let vv = p2 * (p1 + p2 - 1.0f64) / (k * (k - 1.0f64))
+            v1 = vv / k
+            v2 = vv
+        } else if kind == 4usize {
+            k = (p1 - 1.0f64) / p3
+            coll = p2 / k
+            let vv = p2 * (p1 + p2 - 1.0f64) / (k * (p1 - 2.0f64))
+            v1 = vv / k
+            v2 = vv
+        } else if kind == 5usize {
+            k = p1 - 1.0f64
+            coll = 1.0f64 / (k * p2)
+            v1 = coll * coll / (p1 - 2.0f64)
+            v2 = coll / p2 / (p1 - 2.0f64)
+        } else if kind == 6usize {
+            k = (p1 - 1.0f64) / p3
+            coll = 1.0f64 / (k * p2)
+            v1 = coll * coll / (p1 - 2.0f64)
+            v2 = coll / p2 / (p1 - 2.0f64)
+        } else {
+            coll = p1
+            v1 = p2 * p2
+            v2 = p3 * p3
+            k = v2 / v1
+        }
+        var s = 0.0f64
+        var i = 0usize
+        while i < x.len {
+            s += x[i]
+            i += 1usize
+        }
+        ind = s / n
+        cred = n / (n + k)
+    }
+    out[0usize] = coll
+    out[1usize] = ind
+    out[2usize] = cred
+    out[3usize] = v1
+    out[4usize] = v2
+}
