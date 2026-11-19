@@ -621,3 +621,4 @@ oracle_gslairy
 oracle_gslbessel
 oracle_gsldilog
 oracle_gslzeta
+oracle_irlba_defl
