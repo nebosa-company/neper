@@ -50497,3 +50497,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `mlogitpkg.clogit_probs`, `clogit_shares` and `clogit_effects` give the fitted choice probabilities of a chooser, their mean over choosers (`colMeans(fitted(f, outcome = FALSE))`) and `effects(f, covariate = c)` (the "aa" matrix beta_c P_a (delta_ab - P_b) at the sample means of the covariates by alternative).
 
 **Result.** `oracle_mlogit` (145 cases, 40 new) equals mlogit on Windows to 1e-5 for the shares and 1e-4 for the effects (they inherit the coefficient tolerance). Linux pending. L456 stays partial: nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, hypothesis tests, predictions on new data.
+
+## D7334 — mlogit: likelihood-ratio test
+
+**Decision.** The fixture fits the conditional logit with and without its last covariate and forms 2 (ll1 - ll0) with the chi-square upper tail on one degree of freedom, as `lmtest::lrtest` does for two mlogit fits.
+
+**Result.** `oracle_mlogit` (173 cases, 28 new) equals lrtest on Windows: statistic to 1e-5, p-value to 1e-4. Linux pending. L456 stays partial: nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, Wald tests, predictions on new data.

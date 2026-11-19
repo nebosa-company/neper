@@ -4,6 +4,7 @@
 use e.algo.stat.mlogitpkg as ml
 use e.io
 use e.mem
+use e.math.nmath as nm
 use e.os
 use e.str
 use e.test.oracle as oracle
@@ -60,6 +61,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (out, e1) = mem.alloc[f64](a, 2usize * q + 1usize)
     if e1 != ok { ret nan }
     if ml.clogit(a, z[4usize + n..4usize + n + n * j * k], z[4usize..4usize + n], n, j, k, asc, out) != ok { ret nan }
+    if str.eq(c.name, "lrt") || str.eq(c.name, "lrt_p") {
+        // drop the last covariate: the model on the first k - 1 columns of x
+        let (xr, xe) = mem.alloc[f64](a, n * j * (k - 1usize))
+        let (o0, oe) = mem.alloc[f64](a, 2usize * (q - 1usize) + 1usize)
+        if xe != ok || oe != ok { ret nan }
+        var ii = 0usize
+        while ii < n * j {
+            var cc = 0usize
+            while cc + 1usize < k {
+                xr[ii * (k - 1usize) + cc] = z[4usize + n + ii * k + cc]
+                cc += 1usize
+            }
+            ii += 1usize
+        }
+        if ml.clogit(a, xr, z[4usize..4usize + n], n, j, k - 1usize, asc, o0) != ok { ret nan }
+        let stat = 2.0f64 * (out[2usize * q] - o0[2usize * (q - 1usize)])
+        if str.eq(c.name, "lrt") { ret stat }
+        ret nm.pchisq(stat, 1.0f64, false, false)
+    }
     if str.eq(c.name, "shares") || str.eq(c.name, "effects") {
         let xs = z[4usize + n..4usize + n + n * j * k]
         let (mo, me) = mem.alloc[f64](a, j * j)

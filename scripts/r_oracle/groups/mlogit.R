@@ -21,6 +21,11 @@ for (rep in 1:20) {
   se <- sqrt(diag(vcov(f))); se <- if (asc) c(se[grep("Intercept", names(se))], se[paste0("x", 1:k)]) else se
   a <- c(n, J, k, asc, ch - 1, as.vector(aperm(X, c(3, 2, 1))))
   add("coef", a, ws(cf)); add("se", a, ws(se)); add("ll", a, as.numeric(logLik(f)))
+  if (k >= 2) {
+    fm0 <- as.formula(paste("choice ~", paste0("x", 1:(k - 1), collapse = " + "), if (asc) "" else "| 0"))
+    f0 <- tryCatch(mlogit(fm0, m, reltol = 1e-14, tol = 1e-14, iterlim = 500), error = function(e) NULL)
+    if (!is.null(f0)) { lr <- lmtest::lrtest(f0, f); cases[[length(cases) + 1]] <- case("lrt", a, lr$Chisq[2], rel = 1e-5, abs = 1e-7); cases[[length(cases) + 1]] <- case("lrt_p", a, lr$`Pr(>Chisq)`[2], rel = 1e-4, abs = 1e-9) }
+  }
   sh <- colMeans(fitted(f, outcome = FALSE)); cases[[length(cases) + 1]] <- case("shares", a, ws(sh), rel = 1e-5, abs = 1e-7)
   ef <- effects(f, covariate = "x1"); cases[[length(cases) + 1]] <- case("effects", a, ws(as.vector(t(ef))), rel = 1e-4, abs = 1e-6)
 }
