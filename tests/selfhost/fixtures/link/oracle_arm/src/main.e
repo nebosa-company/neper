@@ -24,7 +24,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "logit") { ret arm.logit(x[0usize]) }
     if str.eq(k, "invlogit") { ret arm.invlogit(x[0usize]) }
     if str.eq(k, "stdlm") { ret stdlm_answer(a, c) }
-    if str.eq(k, "bayesglm") || str.eq(k, "bayesglm2") {
+    if str.eq(k, "bayesglm") || str.eq(k, "bayesglm2") || str.eq(k, "bayesglm3") {
         let n = usize(x[0usize])
         var pdf = 1.0f64
         var psc = 2.5f64
@@ -34,9 +34,30 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         let kk = usize(x[1usize])
         let (o, e) = mem.alloc[f64](a, kk)
-        if e != ok { os.exit(30) }
-        if arm.bayesglm(a, x[3usize..3usize + n * kk], x[3usize + n * kk..3usize + n * kk + n], n, kk, usize(x[2usize]), pdf, psc, o) == 0usize { ret 0.0f64 / 0.0f64 }
-        ret o[usize(x[3usize + n * kk + n])]
+        let (pm, e1) = mem.alloc[f64](a, kk)
+        let (pd, e2) = mem.alloc[f64](a, kk)
+        let (pc, e3) = mem.alloc[f64](a, kk)
+        if e != ok || e1 != ok || e2 != ok || e3 != ok { os.exit(30) }
+        let base = 3usize + n * kk + n
+        var jj = 0usize
+        while jj < kk {
+            pm[jj] = 0.0f64
+            pd[jj] = pdf
+            pc[jj] = psc
+            if jj == 0usize {
+                pd[jj] = 1.0f64
+                pc[jj] = 10.0f64
+                if usize(x[2usize]) == 3usize { pc[jj] = 16.0f64 }
+            }
+            if str.eq(k, "bayesglm3") {
+                pm[jj] = x[base + 1usize + jj]
+                pd[jj] = x[base + 1usize + kk + jj]
+                pc[jj] = x[base + 1usize + 2usize * kk + jj]
+            }
+            jj += 1usize
+        }
+        if arm.bayesglm(a, x[3usize..3usize + n * kk], x[3usize + n * kk..3usize + n * kk + n], n, kk, usize(x[2usize]), pm, pd, pc, o) == 0usize { ret 0.0f64 / 0.0f64 }
+        ret o[usize(x[base])]
     }
     if str.eq(k, "rescale") {
         let n = usize(x[1usize])

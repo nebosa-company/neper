@@ -217,7 +217,7 @@ fn dev_resid(family: usize, y: f64, mu: f64) -> f64 {
 // bayesglm with t priors (prior_df, Inf for normal; prior_scale; 10 and df 1 for the intercept in column 0; prior mean 0; scaled = TRUE): arm's EM-style IRLS, replicated step by step
 // so that the iteration at which it stops is the same. family 0 gaussian, 1 binomial (logit), 2 poisson (log); x is n by k row-major with the constant in column 0. coef receives the
 // coefficients and the answer is the number of iterations (0 on failure).
-fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, prior_df: f64, prior_scale: f64, coef: []f64) -> usize {
+fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, prior_mean: []const f64, prior_df: []const f64, prior_scale: []const f64, coef: []f64) -> usize {
     let nf = f64(n)
     let (ps, e1) = mem.alloc[f64](a, k)
     let (ps0, e2) = mem.alloc[f64](a, k)
@@ -248,11 +248,7 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
     let ysd = math.sqrt[f64](yv)
     var j = 0usize
     while j < k {
-        ps[j] = prior_scale
-        if j == 0usize {
-            ps[j] = 10.0f64
-            if family == 3usize { ps[j] = 16.0f64 }
-        }
+        ps[j] = prior_scale[j]
         if family == 0usize { ps[j] = ps[j] * 2.0f64 * ysd }
         ps0[j] = ps[j]
         j += 1usize
@@ -381,6 +377,16 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
                 t += ww[i] * ww[i] * x[i * k + r] * zz[i]
                 i += 1usize
             }
+            var j3 = 0usize
+            while j3 < k {
+                let wj3 = math.sqrt[f64](disp) / psd[j3]
+                var vr3 = 0.0f64
+                if j3 == 0usize { vr3 = cm[r] } else {
+                    if r == j3 { vr3 = 1.0f64 }
+                }
+                t += wj3 * wj3 * vr3 * prior_mean[j3]
+                j3 += 1usize
+            }
             bv[r] = t
             r += 1usize
         }
@@ -406,9 +412,8 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
         }
         j = 0usize
         while j < k {
-            var dfj = prior_df
-            if j == 0usize { dfj = 1.0f64 }
-            if dfj == math.inf64() { psd[j] = ps[j] } else { psd[j] = math.sqrt[f64]((hat[j] * hat[j] + inv[j * k + j] * disp + dfj * ps[j] * ps[j]) / (1.0f64 + dfj)) }
+            let dfj = prior_df[j]
+            if dfj == math.inf64() { psd[j] = ps[j] } else { psd[j] = math.sqrt[f64](((hat[j] - prior_mean[j]) * (hat[j] - prior_mean[j]) + inv[j * k + j] * disp + dfj * ps[j] * ps[j]) / (1.0f64 + dfj)) }
             coef[j] = hat[j]
             j += 1usize
         }
