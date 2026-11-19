@@ -50740,3 +50740,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `lavaanpkg.cfa_one_factor` fits `cfa("f =~ x1 + ... + xp")` by maximum likelihood from the sample covariance: Sigma = psi l l' + diag(theta) with the first loading fixed at 1, the discrepancy log|Sigma| + tr(Sigma^-1 S) - log|S| - p with S the covariance divided by n (lavaan's normal-theory likelihood), minimised over (loadings, log residual variances, log factor variance) by Nelder-Mead polished with BFGS on a central-difference gradient. The chi-square is n F, the degrees of freedom p (p + 1) / 2 - 2 p.
 
 **Result.** The new `oracle_lavaan_cfa` (202 values on 14 simulated models of 4 to 6 indicators) equals lavaan on Windows to 1e-4 relative. Linux pending. L354 is open at score 0.05: standard errors, several factors, regressions between latent variables, means and intercepts, other estimators, fit indices, the model syntax.
+
+## D7370 — lavaan: standard errors of the one-factor fit
+
+**Decision.** `lavaanpkg.cfa_se` takes the expected information (n / 2) tr(Sigma^-1 dSigma_i Sigma^-1 dSigma_j) at the estimates, with the derivatives of Sigma = psi l l' + diag(theta) written out for each loading, residual variance and the factor variance, and inverts it: lavaan's default `se = "standard"` with expected information.
+
+**Result.** `oracle_lavaan_cfa` (348 cases, 146 new standard errors on 14 models) equals lavaan on Windows to 1e-3 relative. Linux pending. L354 stays open at 0.05: several factors, regressions between latent variables, means and intercepts, other estimators and information types, fit indices, the model syntax.

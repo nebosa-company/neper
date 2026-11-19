@@ -1321,7 +1321,7 @@
       "score": 0.05,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D7369): e.algo.stat.lavaanpkg.cfa_one_factor (maximum-likelihood one-factor confirmatory factor analysis from the sample covariance: loadings, residual variances, factor variance, chi-square, degrees of freedom, p value) equals lavaan::cfa on 202 values on Windows (oracle_lavaan_cfa, 14 models; Linux pending). Open: standard errors, several factors, structural paths, means, other estimators, fit indices, syntax. Open (CRAN rank 275). Very large (about 120k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to lavaan: cfa, sem and growth with ML, GLS, ULS and DWLS estimators, fit indices, modification indices, standardized solutions, multigroup models."
+      "evidence": "D7370: standard errors of the one-factor fit from the expected information equal to lavaan (146 values). Partial (D7369): e.algo.stat.lavaanpkg.cfa_one_factor (maximum-likelihood one-factor confirmatory factor analysis from the sample covariance: loadings, residual variances, factor variance, chi-square, degrees of freedom, p value) equals lavaan::cfa on 202 values on Windows (oracle_lavaan_cfa, 14 models; Linux pending). Open: standard errors, several factors, structural paths, means, other estimators, fit indices, syntax. Open (CRAN rank 275). Very large (about 120k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to lavaan: cfa, sem and growth with ML, GLS, ULS and DWLS estimators, fit indices, modification indices, standardized solutions, multigroup models."
     },
     {
       "id": "L381",

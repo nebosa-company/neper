@@ -11,6 +11,8 @@ for (rep in 1:14) {
   fm <- fitMeasures(fit, c("chisq", "df", "pvalue"))
   v <- c(ld, th, ps, as.numeric(fm))
   S <- cov(X)
+  se <- pe$se[pe$op == "=~"][-1]; se <- c(se, pe$se[pe$op == "~~" & pe$lhs != "f"], pe$se[pe$op == "~~" & pe$lhs == "f"])
+  for (q in seq_along(se)) cases[[length(cases) + 1]] <- case("cfa_se", c(n, p, as.vector(t(S)), q - 1), se[q], rel = 1e-3, abs = 1e-6)
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("cfa", c(n, p, as.vector(t(S)), q - 1), v[q], rel = 1e-4, abs = 1e-6)
 }
 emit("lavaan_cfa", "lavaan", list(cases))

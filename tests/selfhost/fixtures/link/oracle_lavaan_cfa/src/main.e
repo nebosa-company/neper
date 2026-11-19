@@ -14,6 +14,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (out, e1) = mem.alloc[f64](a, 2usize * p + 4usize)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
     if !lv.cfa_one_factor(a, z[2usize..2usize + p * p], n, p, out) { ret 0.0f64 / 0.0f64 }
+    if c.name.len == 6usize {
+        // the standard errors, in the order loadings 2 .. p, residual variances, factor variance
+        let (se, se1) = mem.alloc[f64](a, 2usize * p)
+        if se1 != ok { ret 0.0f64 / 0.0f64 }
+        if !lv.cfa_se(a, out, n, p, se) { ret 0.0f64 / 0.0f64 }
+        ret se[usize(z[2usize + p * p])]
+    }
     ret out[usize(z[2usize + p * p])]
 }
 
