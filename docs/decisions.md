@@ -50374,3 +50374,9 @@ vanWaerdenManyOneTest(p.adjust.method = "single-step") takes its p from the same
 
 ## D7411 — PMCMRplus frdAllPairsExactTest
 `frd_exact_p` replaces pexactfrsd's alternating binomial sum, which R evaluates in 2048-bit arithmetic, by the exact convolution it stands for: one block of k untied ranks gives a rank difference delta with probability (k - |delta|) / (k (k - 1)) for delta != 0, the n blocks convolve, and p = P(|D| >= d) (1 for d = 0). Plain doubles carry it exactly for the small designs involved (n up to a few hundred in width 1024 cells), with no cancellation. Statistic (the signed rank-sum difference), unadjusted and Holm p (adjusted over k (k - 1) / 2 pairs) equal PMCMRplus on 14 designs without ties. L487 at 0.98; steelsKSampleTest and normalScoresManyOneTest are all that remain of its acceptance list.
+
+## D7317 — psych: tetrachoric and polychoric of a column pair
+
+**Decision.** `psych.tetrachoric_pair` (0/1 columns, thresholds -qnorm of the column means, zero cells replaced by 0.5, psych's cell order in which the first threshold belongs to the second variable) and `polychoric_pair` (categories 1 to k <= 8, thresholds from cumulative proportions, rho by `optimize` of the multinomial log-likelihood with bivariate normal cell probabilities from `pbivnorm`). Both minimise with R's Brent `optimize`, as psych does.
+
+**Result.** `oracle_psych` (1477 cases, 81 new) equals psych on Windows: tetrachoric to 1e-6, polychoric to 1e-4 (psych's `sadmvn` is itself only accurate to about 1e-6, and every category must be observed so no threshold is infinite). Linux pending. L312 stays partial: smoothing of non-positive-definite matrices, omega, fa with rotations, principal, fa.parallel, VSS, scoreItems, describeBy.

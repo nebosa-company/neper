@@ -510,3 +510,102 @@ fn tetrachoric(t: []const f64, correct: f64, out: []f64) {
     out[1usize] = c.cc
     out[2usize] = c.rc
 }
+
+// psych::tetrachoric(X, smooth = FALSE) for one pair of 0 / 1 columns without missing values (global = TRUE): the thresholds are -qnorm of the column means, the table of counts has zero cells
+// replaced by `correct`, and rho minimises sum(tab log P) on (-1, 1) with psych's cell order, in which the first threshold belongs to the second variable
+fn tetrachoric_pair(x: []const f64, y: []const f64, correct: f64) -> f64 {
+    var c = TetCtx { tab: zero, rc: 0.0f64, cc: 0.0f64 }
+    var sx = 0.0f64
+    var sy = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        sx += x[i]
+        sy += y[i]
+        var cell = 0usize
+        if x[i] > 0.5f64 { cell += 1usize }
+        if y[i] > 0.5f64 { cell += 2usize }
+        c.tab[cell] += 1.0f64
+        i += 1usize
+    }
+    let nn = f64(x.len)
+    var mn = c.tab[0usize]
+    i = 1usize
+    while i < 4usize {
+        if c.tab[i] < mn { mn = c.tab[i] }
+        i += 1usize
+    }
+    if nn > 1.0f64 && mn == 0.0f64 && correct > 0.0f64 {
+        i = 0usize
+        while i < 4usize {
+            if c.tab[i] == 0.0f64 { c.tab[i] = correct }
+            i += 1usize
+        }
+    }
+    c.cc = 0.0f64 - dst.qnorm(sx / nn, 0.0f64, 1.0f64, true, false)
+    c.rc = 0.0f64 - dst.qnorm(sy / nn, 0.0f64, 1.0f64, true, false)
+    ret fd.brent_min[TetCtx](&c, tetra_f, 0.0f64 - 1.0f64, 1.0f64)
+}
+
+type PolyCtx = struct { tab: [64]f64, rc: [8]f64, cc: [8]f64, k: usize }
+
+fn bvn_cut(a: f64, b: f64, rho: f64) -> f64 {
+    var x = a
+    var y = b
+    if x > 10.0f64 { x = 10.0f64 }
+    if y > 10.0f64 { y = 10.0f64 }
+    if x < 0.0f64 - 10.0f64 { ret 0.0f64 }
+    if y < 0.0f64 - 10.0f64 { ret 0.0f64 }
+    ret pbv.pbivnorm(x, y, rho)
+}
+
+fn poly_f(c: *PolyCtx, rho: f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.k {
+        var lo_r = 0.0f64 - 12.0f64
+        var hi_r = 12.0f64
+        if i > 0usize { lo_r = c.rc[i - 1usize] }
+        if i + 1usize < c.k { hi_r = c.rc[i] }
+        var j = 0usize
+        while j < c.k {
+            var lo_c = 0.0f64 - 12.0f64
+            var hi_c = 12.0f64
+            if j > 0usize { lo_c = c.cc[j - 1usize] }
+            if j + 1usize < c.k { hi_c = c.cc[j] }
+            let p = bvn_cut(hi_r, hi_c, rho) - bvn_cut(lo_r, hi_c, rho) - bvn_cut(hi_r, lo_c, rho) + bvn_cut(lo_r, lo_c, rho)
+            if p > 0.0f64 { s += c.tab[i * 8usize + j] * math.log[f64](p) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret 0.0f64 - s
+}
+
+// psych::polychoric(X, smooth = FALSE) for one pair of columns coded 1 .. k (k <= 8, every category observed, no missing values), global = TRUE: thresholds from the cumulative column proportions,
+// rho by R's optimize on (-1, 1) of the multinomial log-likelihood with bivariate normal cell probabilities (psych's sadmvn is only accurate to 1e-6, so the two agree to about that)
+fn polychoric_pair(x: []const f64, y: []const f64, k: usize) -> f64 {
+    var c = PolyCtx { tab: zero, rc: zero, cc: zero, k: k }
+    let nn = f64(x.len)
+    var fx: [8]f64 = zero
+    var fy: [8]f64 = zero
+    var i = 0usize
+    while i < x.len {
+        let a = usize(x[i]) - 1usize
+        let b = usize(y[i]) - 1usize
+        c.tab[a * 8usize + b] += 1.0f64 / nn
+        fx[a] += 1.0f64 / nn
+        fy[b] += 1.0f64 / nn
+        i += 1usize
+    }
+    var cx = 0.0f64
+    var cy = 0.0f64
+    i = 0usize
+    while i + 1usize < k {
+        cx += fx[i]
+        cy += fy[i]
+        c.rc[i] = dst.qnorm(cx, 0.0f64, 1.0f64, true, false)
+        c.cc[i] = dst.qnorm(cy, 0.0f64, 1.0f64, true, false)
+        i += 1usize
+    }
+    ret fd.brent_min[PolyCtx](&c, poly_f, 0.0f64 - 1.0f64, 1.0f64)
+}

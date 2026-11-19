@@ -24,6 +24,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ps.tetrachoric(x[0usize..4usize], 0.5f64, to[0usize..3usize])
         ret to[usize(x[4usize])]
     }
+    if str.eq(c.name, "tetrap") {
+        let tn = usize(x[0usize])
+        ret ps.tetrachoric_pair(x[1usize..1usize + tn], x[1usize + tn..1usize + 2usize * tn], 0.5f64)
+    }
+    if str.eq(c.name, "polyp") {
+        let pn = usize(x[0usize])
+        ret ps.polychoric_pair(x[2usize..2usize + pn], x[2usize + pn..2usize + 2usize * pn], usize(x[1usize]))
+    }
     if str.eq(c.name, "bis") {
         let bn = usize(x[0usize])
         ret ps.biserial(x[1usize..1usize + bn], x[1usize + bn..1usize + 2usize * bn])

@@ -61,4 +61,20 @@ for (rep in 1:15) {
   r <- suppressMessages(suppressWarnings(biserial(xx, yy)))
   add("bis", c(n, xx, yy, 0), as.numeric(r))
 }
+# tetrachoric of two 0 / 1 columns inside a data matrix (global thresholds): "tetrap" (n, x[n], y[n], 0)
+for (rep in 1:12) {
+  n <- sample(60:200, 1); p <- 3; f <- rnorm(n)
+  X <- sapply(1:p, function(j) as.numeric(f * runif(1, 0.5, 1.2) + rnorm(n) > rnorm(1, 0, 0.5)))
+  if (any(colMeans(X) %in% c(0, 1))) next
+  tt <- suppressMessages(suppressWarnings(tetrachoric(X, smooth = FALSE)))$rho
+  for (u in 1:(p - 1)) for (v in (u + 1):p) cases[[length(cases) + 1]] <- case("tetrap", c(n, X[, u], X[, v], 0), tt[u, v], rel = 1e-6, abs = 1e-7)
+}
+# polychoric of two columns coded 1..k inside a data matrix: "polyp" (n, k, x[n], y[n], 0); psych's sadmvn is accurate to about 1e-6
+for (rep in 1:16) {
+  n <- sample(150:400, 1); k <- sample(3:5, 1); f <- rnorm(n)
+  X <- sapply(1:3, function(j) { z <- f * runif(1, 0.5, 1.2) + rnorm(n); as.numeric(cut(z, c(-Inf, sort(rnorm(k - 1, 0, 0.8)), Inf))) })
+  if (any(apply(X, 2, function(v) length(unique(v))) != k)) next
+  pc <- suppressMessages(suppressWarnings(polychoric(X, smooth = FALSE, progress = FALSE)))$rho
+  for (u in 1:2) for (v in (u + 1):3) cases[[length(cases) + 1]] <- case("polyp", c(n, k, X[, u], X[, v], 0), pc[u, v], rel = 1e-4, abs = 1e-5)
+}
 emit("psych", "psych", list(cases))
