@@ -1454,3 +1454,104 @@ fn gof_group(a: *mem.Arena, y: []const f64, grp: []const f64, test: usize, metho
     out[2usize] = gf
     ret ok
 }
+
+// enorm(x, ci = TRUE): the mean and standard deviation and the confidence limits of the mean (param 0, t interval) or the variance (param 1, chi-square interval); ci_type 0 two-sided,
+// 1 lower (UCL = Inf), 2 upper (LCL = -Inf, or 0 for the variance); out = (mean, sd, LCL, UCL)
+fn e_norm(x: []const f64, conf: f64, param: usize, ci_type: usize, out: []f64) {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        m += x[i]
+        i += 1usize
+    }
+    m = m / n
+    var ss = 0.0f64
+    i = 0usize
+    while i < x.len {
+        ss += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    let v = ss / (n - 1.0f64)
+    let sd = math.sqrt[f64](v)
+    out[0usize] = m
+    out[1usize] = sd
+    let alpha = 1.0f64 - conf
+    var lcl = 0.0f64
+    var ucl = 0.0f64
+    if param == 0usize {
+        let se = sd / math.sqrt[f64](n)
+        if ci_type == 0usize {
+            let t = nb.qt(1.0f64 - alpha / 2.0f64, n - 1.0f64, true, false)
+            lcl = m - t * se
+            ucl = m + t * se
+        } else if ci_type == 1usize {
+            lcl = m - nb.qt(1.0f64 - alpha, n - 1.0f64, true, false) * se
+            ucl = math.inf64()
+        } else {
+            lcl = 0.0f64 - math.inf64()
+            ucl = m + nb.qt(1.0f64 - alpha, n - 1.0f64, true, false) * se
+        }
+    } else {
+        if ci_type == 0usize {
+            lcl = (n - 1.0f64) * v / nm.qchisq(1.0f64 - alpha / 2.0f64, n - 1.0f64, true, false)
+            ucl = (n - 1.0f64) * v / nm.qchisq(alpha / 2.0f64, n - 1.0f64, true, false)
+        } else if ci_type == 1usize {
+            lcl = (n - 1.0f64) * v / nm.qchisq(1.0f64 - alpha, n - 1.0f64, true, false)
+            ucl = math.inf64()
+        } else {
+            lcl = 0.0f64
+            ucl = (n - 1.0f64) * v / nm.qchisq(alpha, n - 1.0f64, true, false)
+        }
+    }
+    out[2usize] = lcl
+    out[3usize] = ucl
+}
+
+// eexp(x, ci = TRUE): the rate 1 / mean(x) and its exact chi-square limits qchisq(., 2 n) / (2 n mean); ci_type as in e_norm; out = (rate, LCL, UCL)
+fn e_exp(x: []const f64, conf: f64, ci_type: usize, out: []f64) {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        m += x[i]
+        i += 1usize
+    }
+    m = m / n
+    out[0usize] = 1.0f64 / m
+    let alpha = 1.0f64 - conf
+    let d = 2.0f64 * n * m
+    if ci_type == 0usize {
+        out[1usize] = nm.qchisq(alpha / 2.0f64, 2.0f64 * n, true, false) / d
+        out[2usize] = nm.qchisq(1.0f64 - alpha / 2.0f64, 2.0f64 * n, true, false) / d
+    } else if ci_type == 1usize {
+        out[1usize] = nm.qchisq(alpha, 2.0f64 * n, true, false) / d
+        out[2usize] = math.inf64()
+    } else {
+        out[1usize] = 0.0f64
+        out[2usize] = nm.qchisq(1.0f64 - alpha, 2.0f64 * n, true, false) / d
+    }
+}
+
+// epois(x, ci = TRUE): lambda = mean(x) and the exact limits qchisq(alpha / 2, 2 sum) / (2 n) and qchisq(1 - alpha / 2, 2 (sum + 1)) / (2 n); ci_type as in e_norm; out = (lambda, LCL, UCL)
+fn e_pois(x: []const f64, conf: f64, ci_type: usize, out: []f64) {
+    let n = f64(x.len)
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += x[i]
+        i += 1usize
+    }
+    out[0usize] = s / n
+    let alpha = 1.0f64 - conf
+    if ci_type == 0usize {
+        out[1usize] = nm.qchisq(alpha / 2.0f64, 2.0f64 * s, true, false) / (2.0f64 * n)
+        out[2usize] = nm.qchisq(1.0f64 - alpha / 2.0f64, 2.0f64 * (s + 1.0f64), true, false) / (2.0f64 * n)
+    } else if ci_type == 1usize {
+        out[1usize] = nm.qchisq(alpha, 2.0f64 * s, true, false) / (2.0f64 * n)
+        out[2usize] = math.inf64()
+    } else {
+        out[1usize] = 0.0f64
+        out[2usize] = nm.qchisq(1.0f64 - alpha, 2.0f64 * (s + 1.0f64), true, false) / (2.0f64 * n)
+    }
+}
