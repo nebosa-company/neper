@@ -1697,5 +1697,21 @@ fn split_half(a: *mem.Arena, r: []const f64, p: usize, out: []f64) -> bool {
         i += 1usize
     }
     out[5usize] = 1.0f64 - tr / tot + math.sqrt[f64](f64(p) / (f64(p) - 1.0f64) * off2) / tot
+    // lambda1 = 1 - trace / sum(r), lambda3 = p / (p - 1) lambda1 (the standardised alpha) and lambda5 = lambda1 + 2 sqrt(largest row sum of squared off-diagonal entries) / sum(r), as psych::guttman
+    out[6usize] = 1.0f64 - tr / tot
+    out[7usize] = f64(p) / (f64(p) - 1.0f64) * out[6usize]
+    var mx = 0.0f64
+    i = 0usize
+    while i < p {
+        var rs = 0.0f64
+        var j = 0usize
+        while j < p {
+            if i != j { rs += r[i * p + j] * r[i * p + j] }
+            j += 1usize
+        }
+        if rs > mx { mx = rs }
+        i += 1usize
+    }
+    out[8usize] = out[6usize] + 2.0f64 * math.sqrt[f64](mx) / tot
     ret true
 }
