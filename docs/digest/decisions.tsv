@@ -4367,4 +4367,7 @@ D7509	711	ordinal clm with equidistant thresholds
 D7510	880	ordinal clm with symmetric thresholds
 D7511	579	ordinal clm case weights
 D7512	468	ordinal clm predictions
-D7513	476	ordinal clm anova
+D7513	477	ordinal clm anova
+D7514	543	tm stopwords("english")
+D7515	676	tm removePunctuation
+D7516	655	tm stopword lists for the thirteen languages
