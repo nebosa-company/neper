@@ -4,7 +4,7 @@ L358	library	0.2	452	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Par
 L380	library	0.35	828	tm and tidytext: text mining	Partial (D6618).
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
 L407	library	0.93	1406	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
-L409	library	0.55	934	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
+L409	library	0.55	1130	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
 L448	library	0.25	570	mcmc: Metropolis and tempering samplers	Partial (D6610, D7285 initseq and olbm for a scalar chain).
 L450	library	0	289	mediation: causal mediation analysis	Open (CRAN rank 755).
@@ -64,7 +64,7 @@ L508	library	0.99	2162	sampling: survey sampling designs	Partial (D6191).
 L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
 L510	library	0.35	545	gmm: generalized method of moments	Partial (D6479 linear two-step gmm with iid, MDS and D6480 HAC weighting with five kernels at fixed bandwidth, covariance and J agree with gmm on Windows;
 L511	library	0.4	717	QCA: qualitative comparative analysis	Partial (D6482 pof inclusion, PRI, coverage, RoN, D6481 complex and parsimonious minimal models of minimize() on a crisp truth table, as prime-implicant counts, minimum size and model count, equal QCA
-L512	library	0.15	881	poLCA: latent class analysis	D7322: random restarts (nrep) from the R RNG start equal to poLCA under set.seed.
+L512	library	0.15	1003	poLCA: latent class analysis	D7323: standard errors of response probabilities and class sizes equal to poLCA (identified fits away from the boundary).
 L513	library	0.15	704	Epi: epidemiology tools	Partial (D6412, D7253, D7254, D7255 the conditional MLE odds ratio and its exact interval, D7256 clogistic on matched sets).
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
 L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).

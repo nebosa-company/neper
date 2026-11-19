@@ -116,6 +116,38 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "chisq") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 3usize) }
     if str.eq(c.name, "rdf") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 4usize) }
     if str.eq(c.name, "pred") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 5usize) }
+    if str.eq(c.name, "se_probs") || str.eq(c.name, "se_prior") {
+        let (so, soe) = mem.alloc[f64](a, nr * tc + nr)
+        if soe != ok { ret nan }
+        if !pl.se(a, data, n, nj, ncat, nr, probs, prior, so) { ret nan }
+        var ss = 0.0f64
+        if str.eq(c.name, "se_prior") {
+            var t = 0usize
+            while t < nr {
+                ss += so[nr * tc + t] * f64(t + 1usize)
+                t += 1usize
+            }
+            ret ss
+        }
+        var sp = 1usize
+        var soff = 0usize
+        var sv = 0usize
+        while sv < nj {
+            var sr = 0usize
+            while sr < nr {
+                var sk = 0usize
+                while sk < ncat[sv] {
+                    ss += so[sr * tc + soff + sk] * f64(sp)
+                    sp += 1usize
+                    sk += 1usize
+                }
+                sr += 1usize
+            }
+            soff += ncat[sv]
+            sv += 1usize
+        }
+        ret ss
+    }
     var s = 0.0f64
     if str.eq(c.name, "prior") {
         i = 0usize

@@ -5,6 +5,7 @@
 use e.math
 use e.mem
 use e.algo.rand.r as rg
+use e.algo.stat.quantreg as qrb
 
 // data: n by j row-major, categories 0-based; ncat[j] categories for variable j; probs: r classes by (sum ncat) response probabilities, row-major, start in and result out; prior (r) receives the class sizes; returns the log-likelihood
 fn em(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize, nr: usize, probs: []f64, prior: []f64, tol: f64, maxiter: usize) -> f64 {
@@ -265,4 +266,174 @@ fn em_restarts(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []co
         rep += 1usize
     }
     ret best
+}
+
+// poLCA's standard errors (poLCA.se, intercept-only, no covariates): the information is the cross product of the per-case scores of the free response logits (categories 2 .. K_j of each class and variable) and the
+// class logits, the response probability errors follow by the delta method, and the class size errors from the class-logit block. probs, prior at the fit (probs R by sum(ncat) row-major, as `em`).
+// out[0 .. R tc] the standard errors of the response probabilities (class r, variable offset + category at r tc + off + k), then R the standard errors of the class sizes; false when the information is singular
+fn se(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize, nr: usize, probs: []const f64, prior: []const f64, out: []f64) -> bool {
+    var tc = 0usize
+    var v = 0usize
+    while v < nj {
+        tc += ncat[v]
+        v += 1usize
+    }
+    var m = 0usize
+    v = 0usize
+    while v < nj {
+        m += nr * (ncat[v] - 1usize)
+        v += 1usize
+    }
+    let q = m + (nr - 1usize)
+    let (off, e1) = mem.alloc[usize](a, nj)
+    let (sc, e2) = mem.alloc[f64](a, q)
+    let (info, e3) = mem.alloc[f64](a, q * q)
+    let (post, e4) = mem.alloc[f64](a, nr)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret false }
+    var o = 0usize
+    v = 0usize
+    while v < nj {
+        off[v] = o
+        o += ncat[v]
+        v += 1usize
+    }
+    var i = 0usize
+    while i < q * q {
+        info[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var tot = 0.0f64
+        var r = 0usize
+        while r < nr {
+            var pr = prior[r]
+            v = 0usize
+            while v < nj {
+                pr *= probs[r * tc + off[v] + usize(data[i * nj + v])]
+                v += 1usize
+            }
+            post[r] = pr
+            tot += pr
+            r += 1usize
+        }
+        r = 0usize
+        while r < nr {
+            post[r] = post[r] / tot
+            r += 1usize
+        }
+        var c = 0usize
+        r = 0usize
+        while r < nr {
+            v = 0usize
+            while v < nj {
+                var k = 1usize
+                while k < ncat[v] {
+                    var ind = 0.0f64
+                    if usize(data[i * nj + v]) == k { ind = 1.0f64 }
+                    sc[c] = post[r] * (ind - probs[r * tc + off[v] + k])
+                    c += 1usize
+                    k += 1usize
+                }
+                v += 1usize
+            }
+            r += 1usize
+        }
+        r = 1usize
+        while r < nr {
+            sc[c] = post[r] - prior[r]
+            c += 1usize
+            r += 1usize
+        }
+        var j = 0usize
+        while j < q {
+            var l = 0usize
+            while l < q {
+                info[j * q + l] += sc[j] * sc[l]
+                l += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (vce, e5) = mem.alloc[f64](a, q * q)
+    let (mat, e6) = mem.alloc[f64](a, q * q)
+    let (col, e7) = mem.alloc[f64](a, q)
+    if e5 != ok || e6 != ok || e7 != ok { ret false }
+    var cc = 0usize
+    while cc < q {
+        var t = 0usize
+        while t < q * q {
+            mat[t] = info[t]
+            t += 1usize
+        }
+        t = 0usize
+        while t < q {
+            col[t] = 0.0f64
+            t += 1usize
+        }
+        col[cc] = 1.0f64
+        if !qrb.solve_dense(mat, col, q) { ret false }
+        t = 0usize
+        while t < q {
+            vce[t * q + cc] = col[t]
+            t += 1usize
+        }
+        cc += 1usize
+    }
+    // response probabilities: the delta method on blocks of K_j rows with the Jacobian of the softmax without its first logit
+    var rpos = 0usize
+    var cpos = 0usize
+    var r = 0usize
+    while r < nr {
+        v = 0usize
+        while v < nj {
+            let k = ncat[v]
+            var a1 = 0usize
+            while a1 < k {
+                var vr = 0.0f64
+                var b1 = 1usize
+                while b1 < k {
+                    var b2 = 1usize
+                    while b2 < k {
+                        var ja = 0.0f64 - probs[r * tc + off[v] + a1] * probs[r * tc + off[v] + b1]
+                        if a1 == b1 { ja = probs[r * tc + off[v] + a1] * (1.0f64 - probs[r * tc + off[v] + a1]) }
+                        var jb = 0.0f64 - probs[r * tc + off[v] + a1] * probs[r * tc + off[v] + b2]
+                        if a1 == b2 { jb = probs[r * tc + off[v] + a1] * (1.0f64 - probs[r * tc + off[v] + a1]) }
+                        vr += ja * vce[(cpos + b1 - 1usize) * q + cpos + b2 - 1usize] * jb
+                        b2 += 1usize
+                    }
+                    b1 += 1usize
+                }
+                if vr < 0.0f64 { vr = 0.0f64 }
+                out[r * tc + off[v] + a1] = math.sqrt[f64](vr)
+                a1 += 1usize
+            }
+            rpos += k
+            cpos += k - 1usize
+            v += 1usize
+        }
+        r += 1usize
+    }
+    // class sizes
+    var s1 = 0usize
+    while s1 < nr {
+        var vs = 0.0f64
+        var ra = 1usize
+        while ra < nr {
+            var rb = 1usize
+            while rb < nr {
+                var ja = 0.0f64 - prior[s1] * prior[ra]
+                if s1 == ra { ja = prior[s1] * (1.0f64 - prior[s1]) }
+                var jb = 0.0f64 - prior[s1] * prior[rb]
+                if s1 == rb { jb = prior[s1] * (1.0f64 - prior[s1]) }
+                vs += ja * vce[(m + ra - 1usize) * q + m + rb - 1usize] * jb
+                rb += 1usize
+            }
+            ra += 1usize
+        }
+        out[nr * tc + s1] = math.sqrt[f64](vs)
+        s1 += 1usize
+    }
+    ret true
 }
