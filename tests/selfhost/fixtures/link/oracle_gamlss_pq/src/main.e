@@ -27,6 +27,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 6usize { ret gq.pst1(a, x, mu, sg, nu, tau) }
     if which == 7usize { ret gq.pzazipf(x, mu, sg) }
     if which == 8usize { ret gq.pzinbf(x, mu, sg, nu, tau) }
+    if which == 40usize { ret gq.pgu(x, mu, sg) }
     if which == 10usize { ret gq.qbb(x, mu, sg, ex) }
     if which == 11usize { ret gq.qbnb(x, mu, sg, nu, mx) }
     if which == 12usize { ret gq.qgpo(x, mu, sg, mx) }

@@ -1,5 +1,5 @@
 # gamlss.dist distribution and quantile functions written in e.algo.stat.gamlssq: "gq" args (fn, mu, sigma, x, nu, tau, extra); x is p for the quantiles; extra is the trials bd of BB, ZABB, ZIBB.
-# Distribution: 0 pGPO, 1 pLQNO, 2 pNBF (nu), 3 pNET (nu, tau), 4 pNOF (nu), 5 pPIG2, 6 pST1 (nu, tau; integrate, 1e-6), 7 pZAZIPF, 8 pZINBF (nu, tau).
+# Distribution: 0 pGPO, 1 pLQNO, 2 pNBF (nu), 3 pNET (nu, tau), 4 pNOF (nu), 5 pPIG2, 6 pST1 (nu, tau; integrate, 1e-6), 7 pZAZIPF, 8 pZINBF (nu, tau), 40 pGU.
 # Quantile: 10 qBB, 11 qBNB (nu), 12 qGPO, 13 qLQNO, 14 qNBF (nu), 15 qNET (nu, tau), 16 qNOF (nu), 17 qPIG, 18 qPIG2, 19 qSEP1, 20 qSEP2, 21 qST1, 22 qST2 (these four 1e-6), 23 qST4, 24 qST5,
 # 25 qWARING, 26 qZABB (nu, bd), 27 qZABNB (nu, tau), 28 qZALG (mu, sigma), 29 qZAPIG (nu), 30 qZAZIPF, 31 qZIBB (nu, bd), 32 qZIBNB (nu, tau), 33 qZINBF (nu, tau), 34 qZIPF (mu), 35 qZIPIG (nu).
 suppressMessages(library(gamlss.dist))
@@ -23,6 +23,7 @@ for (rep in 1:10) {
   nv <- runif(1, 0, 2)
   add(4, nm, ns, nx, nv, want = pNOF(nx, mu = nm, sigma = ns, nu = nv))
   add(16, nm, ns, p, nv, want = qNOF(p, mu = nm, sigma = ns, nu = nv))
+  add(40, abs(nm) + 0.5, ns, abs(nx) + 0.3, want = pGU(abs(nx) + 0.3, mu = abs(nm) + 0.5, sigma = ns))
   add(5, mu, sg, k, want = pPIG2(k, mu = mu, sigma = sg))
   add(18, mu, sg, p, want = qPIG2(p, mu = mu, sigma = sg))
   add(17, mu, sg, p, want = qPIG(p, mu = mu, sigma = sg))

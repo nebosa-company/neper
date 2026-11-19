@@ -33,6 +33,13 @@ fn fin(p: f64, v: f64, at0: f64, at1: f64) -> f64 {
 
 fn fl(x: f64) -> f64 { ret math.floor[f64](x) }
 
+// pGU as the package ships it: the line `cdf[q >= -Inf] <- 0` follows the Gumbel expression and overwrites every value, so the function is 0 for every finite q and 1 at +Inf
+// (gamlssdist.pgu is the Gumbel distribution the line was meant to leave)
+fn pgu(q: f64, mu: f64, sigma: f64) -> f64 {
+    if q == inf() { ret 1.0f64 }
+    ret 0.0f64
+}
+
 // normal-based
 fn lqno_sd(mu: f64, sigma: f64) -> f64 { ret math.sqrt[f64](mu * (1.0f64 + sigma * mu)) }
 

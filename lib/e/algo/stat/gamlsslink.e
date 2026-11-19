@@ -67,3 +67,15 @@ fn mu_eta(kind: usize, eta: f64) -> f64 {
     if kind == 8usize { ret 0.5f64 * math.pow[f64](eta, 0.0f64 - 0.5f64) }
     ret pmax(eps(), math.exp[f64](eta))
 }
+
+// the default links of the families' mu, sigma, nu and tau (family()$mu.link and so on) for the 116 families in the alphabetical order of e.algo.stat.gamlssr (0 BB ... 115 ZISICHEL), as
+// the kind above that make.link.gamlss gives them: 4 identity, 5 log, 0 logit, 10 logshiftto2; 99 where the family has no such parameter
+fn family_link(fam: usize, which: usize) -> usize {
+    let t = "gl--ili-lli-ililllilililllilgg--ggllggl-ggl-ll--glg-glg-g---lll-gl--lll-llg-ll--illll---ll--lli-gglllllll---g---lli-lli-ll--ll--illlil--ll--ll--ililililg---il--il--gl--il--ll--illlll--ll--lll-lllllll-ll--ll--iliiil--il--ili-l---l---ll--ll--ll--ill-ill-ll--ll--l---il--ill-ilililililililllilllilllilililillli-lli-gl--ili-ill-illsilililililllilllilllililill-ils-ll--ll--ll--ll--l---glg-gg--lllgllg-llg-gg--llg-lg--llg-lliglg--glg-gg--lllglllgllg-lg--lg--l---llg-llig"
+    let c = t[fam * 4usize + which]
+    if c == 105u8 { ret 4usize }
+    if c == 108u8 { ret 5usize }
+    if c == 103u8 { ret 0usize }
+    if c == 115u8 { ret 10usize }
+    ret 99usize
+}
