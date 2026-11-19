@@ -50824,3 +50824,6 @@ activeSet(isomat, "Chebyshev") is kind 9: each block takes the weighted mid-rang
 
 ## D7453 — sampling rhg_strata
 rhg_strata is rhg inside each stratum, so its response probability is `rhg_prob` with the stratum as one more column to match on; equal to sampling on 30 stratified samples (matched by ID_unit, since R returns the rows grouped by stratum). Open for L508: the cube method, strata and cluster with several variables.
+
+## D7454 — sampling strata with several variables
+strata(data, c("a", "b"), size, "srswor") draws within the (a, b) combinations in order of first appearance, so the existing one-label `strata` already answers it when the label is the combination (10 * a + b for small integer codes); equal to sampling on 20 two-variable samples added to oracle_sampling_strata, and no new code was needed. Open for L508: the cube method, cluster with several variables.

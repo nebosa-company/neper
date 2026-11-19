@@ -4303,4 +4303,5 @@ D7449	841	isotone activeSet Chebyshev solver
 D7450	577	isotone gpava with a list response
 D7451	680	isotone gpava list response with secondary and tertiary ties; L520 closed
 D7452	633	sampling Hajekstrata and rhg
-D7453	348	sampling rhg_strata
+D7453	349	sampling rhg_strata
+D7454	457	sampling strata with several variables
