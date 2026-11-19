@@ -4260,4 +4260,5 @@ D7351	468	gamlss.dist: qSEP
 D7352	645	gamlss.dist: random numbers by the quantile function
 D7353	538	gamlss.dist: WEI and EXP random numbers
 D7354	820	performance: performance_pcp and r2_mckelvey
-D7355	635	performance: r2_kullback
+D7355	636	performance: r2_kullback
+D7356	755	performance: performance_score

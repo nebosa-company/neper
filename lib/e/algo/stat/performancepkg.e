@@ -632,6 +632,29 @@ fn logit_pcp(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     if which == 3usize { ret full + z * math.sqrt[f64](full * (1.0f64 - full) / nn) }
     if which == 4usize { ret nul - z * math.sqrt[f64](nul * (1.0f64 - nul) / nn) }
     if which == 5usize { ret nul + z * math.sqrt[f64](nul * (1.0f64 - nul) / nn) }
+    if which >= 11usize {
+        // performance_score of a binomial model: p_y = dbinom(y, size = sum(y), prob = p), logarithmic mean(log p_y), quadratic mean(2 p_y + sum p_y^2), spherical mean(p_y / sqrt(sum p_y^2))
+        var sy = 0.0f64
+        i = 0usize
+        while i < n {
+            sy += y[i]
+            i += 1usize
+        }
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        var lg = 0.0f64
+        i = 0usize
+        while i < n {
+            let py = nbq.dbinom(y[i], sy, pr[i], false)
+            s1 += py
+            s2 += py * py
+            lg += math.log[f64](py)
+            i += 1usize
+        }
+        if which == 11usize { ret lg / nn }
+        if which == 12usize { ret (2.0f64 * s1 + f64(n) * s2) / nn }
+        ret s1 / math.sqrt[f64](s2) / nn
+    }
     if which == 9usize { ret 1.0f64 - (ll / ll0) * (nn - 1.0f64) / (nn - f64(p)) }
     if which == 10usize { ret 1.0f64 - ll / ll0 }
     let chisq = 2.0f64 * (ll - ll0)
