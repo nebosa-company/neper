@@ -564,3 +564,159 @@ fn gamma_shape(y: []const f64, u: []const f64, aw: []const f64, deviance: f64, d
     out[0usize] = alpha
     out[1usize] = math.sqrt[f64](1.0f64 / inf)
 }
+
+// RSS of the least-squares fit of y on an intercept and the columns of x (n by p, row-major) chosen by mask, by Gaussian elimination on the normal equations with partial pivoting
+fn lm_rss(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, mask: []const f64) -> (f64, err) {
+    var q = 1usize
+    var j = 0usize
+    while j < p {
+        if mask[j] != 0.0f64 { q += 1usize }
+        j += 1usize
+    }
+    let (idx, e0) = mem.alloc[usize](a, q)
+    let (m, e1) = mem.alloc[f64](a, q * (q + 1usize))
+    if e0 != ok || e1 != ok { ret (0.0f64, mem.Full) }
+    idx[0usize] = p
+    var c = 1usize
+    j = 0usize
+    while j < p {
+        if mask[j] != 0.0f64 {
+            idx[c] = j
+            c += 1usize
+        }
+        j += 1usize
+    }
+    var r = 0usize
+    while r < q {
+        var s = 0usize
+        while s < q {
+            var v = 0.0f64
+            var i = 0usize
+            while i < n {
+                var xr = 1.0f64
+                if idx[r] < p { xr = x[i * p + idx[r]] }
+                var xs = 1.0f64
+                if idx[s] < p { xs = x[i * p + idx[s]] }
+                v += xr * xs
+                i += 1usize
+            }
+            m[r * (q + 1usize) + s] = v
+            s += 1usize
+        }
+        var v2 = 0.0f64
+        var i2 = 0usize
+        while i2 < n {
+            var xr = 1.0f64
+            if idx[r] < p { xr = x[i2 * p + idx[r]] }
+            v2 += xr * y[i2]
+            i2 += 1usize
+        }
+        m[r * (q + 1usize) + q] = v2
+        r += 1usize
+    }
+    var col = 0usize
+    while col < q {
+        var piv = col
+        var rr = col + 1usize
+        while rr < q {
+            if math.abs[f64](m[rr * (q + 1usize) + col]) > math.abs[f64](m[piv * (q + 1usize) + col]) { piv = rr }
+            rr += 1usize
+        }
+        var cc = 0usize
+        while cc <= q {
+            let t = m[col * (q + 1usize) + cc]
+            m[col * (q + 1usize) + cc] = m[piv * (q + 1usize) + cc]
+            m[piv * (q + 1usize) + cc] = t
+            cc += 1usize
+        }
+        rr = 0usize
+        while rr < q {
+            if rr != col {
+                let f = m[rr * (q + 1usize) + col] / m[col * (q + 1usize) + col]
+                cc = col
+                while cc <= q {
+                    m[rr * (q + 1usize) + cc] -= f * m[col * (q + 1usize) + cc]
+                    cc += 1usize
+                }
+            }
+            rr += 1usize
+        }
+        col += 1usize
+    }
+    var rss = 0.0f64
+    var i3 = 0usize
+    while i3 < n {
+        var fit = 0.0f64
+        r = 0usize
+        while r < q {
+            var xr = 1.0f64
+            if idx[r] < p { xr = x[i3 * p + idx[r]] }
+            fit += xr * m[r * (q + 1usize) + q] / m[r * (q + 1usize) + r]
+            r += 1usize
+        }
+        rss += (y[i3] - fit) * (y[i3] - fit)
+        i3 += 1usize
+    }
+    ret (rss, ok)
+}
+
+fn lm_aic(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, mask: []const f64) -> (f64, err) {
+    let (rss, e) = lm_rss(a, x, n, p, y, mask)
+    if e != ok { ret (0.0f64, e) }
+    var q = 1.0f64
+    var j = 0usize
+    while j < p {
+        if mask[j] != 0.0f64 { q += 1.0f64 }
+        j += 1usize
+    }
+    ret (f64(n) * math.log[f64](rss / f64(n)) + 2.0f64 * q, ok)
+}
+
+// stepAIC(lm) over single-column numeric terms: direction 0 both, 1 backward, 2 forward; scope is every column (upper) down to the intercept only (lower); mask (1 in the model) is the start and receives the final model.
+// Rows are tried as MASS orders them: <none> first, then the drops in term order, then the adds in column order; the step with the smallest AIC is taken, and the search stops when <none> is first or the gain is under 1e-7. The answer is the final AIC.
+fn step_aic_lm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, direction: usize, mask: []f64) -> (f64, err) {
+    var (cur, e) = lm_aic(a, x, n, p, y, mask)
+    if e != ok { ret (0.0f64, e) }
+    var steps = 0usize
+    while steps < 1000usize {
+        var best = cur
+        var bj = p
+        var j = 0usize
+        if direction != 2usize {
+            while j < p {
+                if mask[j] != 0.0f64 {
+                    mask[j] = 0.0f64
+                    let (v, ev) = lm_aic(a, x, n, p, y, mask)
+                    mask[j] = 1.0f64
+                    if ev != ok { ret (0.0f64, ev) }
+                    if v < best {
+                        best = v
+                        bj = j
+                    }
+                }
+                j += 1usize
+            }
+        }
+        j = 0usize
+        if direction != 1usize {
+            while j < p {
+                if mask[j] == 0.0f64 {
+                    mask[j] = 1.0f64
+                    let (v, ev) = lm_aic(a, x, n, p, y, mask)
+                    mask[j] = 0.0f64
+                    if ev != ok { ret (0.0f64, ev) }
+                    if v < best {
+                        best = v
+                        bj = j
+                    }
+                }
+                j += 1usize
+            }
+        }
+        if bj == p || best >= cur - 1.0e-7f64 { break }
+        if mask[bj] != 0.0f64 { mask[bj] = 0.0f64 } else { mask[bj] = 1.0f64 }
+        cur = best
+        steps += 1usize
+    }
+    ret (cur, ok)
+}

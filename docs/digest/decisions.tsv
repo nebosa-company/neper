@@ -4319,4 +4319,5 @@ D7465	677	sm h.select for two covariates (regression)
 D7466	581	sm h.select for two covariates, common and separate structures
 D7467	845	energy.hclust
 D7468	493	MASS negative.binomial family terms
-D7469	578	MASS gamma.shape
+D7469	579	MASS gamma.shape
+D7470	712	MASS stepAIC for lm

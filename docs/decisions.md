@@ -50872,3 +50872,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7469 — MASS gamma.shape
 `gamma_shape` is gamma.shape of a Gamma glm: Newton on the profile score and information from the moment start (6 + 2 Dbar) / (Dbar (6 + Dbar)), stopping at eps^0.25 or ten iterations, over the response, fitted values, prior weights, deviance and residual degrees of freedom the fit supplies; the standard error is the root of the reciprocal information. Equal to MASS on 40 Gamma(log) fits, half weighted, alpha and SE (80 values in oracle_mass_gshape). Open for L306: lqs, cov.rob, the other optimised fitdistr families, isoMDS, sammon, stepAIC.
+
+## D7470 — MASS stepAIC for lm
+`step_aic_lm` is stepAIC(lm, scope = list(lower = ~1, upper = all columns), direction = both / backward / forward) over single-column numeric terms: extractAIC = n log(RSS / n) + 2 edf from a normal-equations least-squares fit (`lm_rss`), the candidate rows ordered as MASS orders them (<none>, the drops in term order, the adds in column order), the smallest AIC taken and the search ended when <none> ties or wins; the final AIC and the chosen terms equal MASS on 60 data sets (120 values in oracle_mass_step). Factor terms, interactions and glm fits are not covered. Open for L306: lqs, cov.rob, the other optimised fitdistr families, isoMDS, sammon (its C source is needed).
