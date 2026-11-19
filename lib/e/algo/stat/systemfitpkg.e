@@ -4,6 +4,8 @@
 
 use e.algo.stat.gparot as gp
 use e.math
+use e.math.nmath as nmg
+use e.math.nmath_beta as nbg
 use e.mem
 
 // xs holds the M design matrices one after the other (equation m is n by ks[m], row-major, constant included); y is M columns of n values equation after equation; passes is the number of GLS passes.
@@ -794,4 +796,69 @@ fn tr_pp(a: *mem.Arena, xi: []const f64, xj: []const f64, n: usize, ki: usize, k
         p += 1usize
     }
     ret tr
+}
+
+// linearHypothesis(fit, R, q) for a systemfit fit: the Wald statistic W = (R b - q)'[R V R']^-1 (R b - q) from the coefficients b (kt), their covariance V (kt by kt, row-major), R (nr by kt, row-major) and q (nr);
+// out[0] = W (the Chisq test), out[1] its chi-square p-value on nr degrees of freedom, out[2] the p-value of the F test W / nr on (nr, df2) degrees of freedom
+fn wald_test(a: *mem.Arena, b: []const f64, v: []const f64, rr: []const f64, qq: []const f64, nr: usize, kt: usize, df2: f64, out: []f64) -> err {
+    let (rv, e0) = mem.alloc[f64](a, nr * kt)
+    let (d, e1) = mem.alloc[f64](a, nr * nr)
+    let (x, e2) = mem.alloc[f64](a, nr)
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    var u = 0usize
+    while u < nr {
+        var w = 0usize
+        while w < kt {
+            var t = 0.0f64
+            var l = 0usize
+            while l < kt {
+                t += rr[u * kt + l] * v[l * kt + w]
+                l += 1usize
+            }
+            rv[u * kt + w] = t
+            w += 1usize
+        }
+        u += 1usize
+    }
+    u = 0usize
+    while u < nr {
+        var w = 0usize
+        while w < nr {
+            var t = 0.0f64
+            var l = 0usize
+            while l < kt {
+                t += rv[u * kt + l] * rr[w * kt + l]
+                l += 1usize
+            }
+            d[u * nr + w] = t
+            w += 1usize
+        }
+        var rb = 0.0f64
+        var l2 = 0usize
+        while l2 < kt {
+            rb += rr[u * kt + l2] * b[l2]
+            l2 += 1usize
+        }
+        x[u] = rb - qq[u]
+        u += 1usize
+    }
+    // solve d z = x, W = x'z
+    let (z, e3) = mem.alloc[f64](a, nr)
+    if e3 != ok { ret mem.Full }
+    u = 0usize
+    while u < nr {
+        z[u] = x[u]
+        u += 1usize
+    }
+    gj_solve(d, nr, z, 1usize)
+    var wst = 0.0f64
+    u = 0usize
+    while u < nr {
+        wst += x[u] * z[u]
+        u += 1usize
+    }
+    out[0usize] = wst
+    out[1usize] = nmg.pchisq(wst, f64(nr), false, false)
+    out[2usize] = nbg.pf(wst / f64(nr), f64(nr), df2, false, false)
+    ret ok
 }
