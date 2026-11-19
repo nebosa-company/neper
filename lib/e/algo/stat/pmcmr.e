@@ -1159,3 +1159,155 @@ fn norm_order(n: usize, out: []f64) {
         r += 1usize
     }
 }
+
+// steelsKSampleTest (kSamples' Steel.test, method "asymptotic"): groups 1 (control) .. k, alt 0 "greater", 1 "less", 2 "two.sided". out = (S, p): S the extreme standardised Mann-Whitney count
+// (max, min or max |.| over the k - 1 comparisons of (W_j - mu_j) / tau_j) and p the smallest of the comparisons' asymptotic p values, each 1 - integral phi(z) prod_i Phi((S tau_i - n_i sig0 z) / sig_i) dz
+// with the continuity correction of 0.5 (0.25 for pairs with ties) applied to W_j, as kSamples' Steelnormal does
+fn steels_k(a: *mem.Arena, x: []const f64, grp: []const usize, k: usize, alt: usize, out: []f64) -> err {
+    let n = x.len
+    let (xs, e0) = mem.alloc[f64](a, n)
+    let (rx, e1) = mem.alloc[f64](a, n)
+    let (sub, e2) = mem.alloc[f64](a, n)
+    let (who, e3) = mem.alloc[usize](a, n)
+    let (rk, e4) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var t = 0usize
+    while t < n {
+        xs[t] = x[t]
+        if alt == 1usize { xs[t] = 0.0f64 - x[t] }
+        t += 1usize
+    }
+    let er = rank_avg(a, xs, rx)
+    if er != ok { ret er }
+    var cnt: [16]f64 = zero
+    t = 0usize
+    while t < n {
+        cnt[grp[t] - 1usize] += 1.0f64
+        t += 1usize
+    }
+    let nf = f64(n)
+    var d2 = 0.0f64
+    var d3 = 0.0f64
+    t = 0usize
+    while t < n {
+        var c = 0.0f64
+        var q = 0usize
+        while q < n {
+            if rx[q] == rx[t] { c += 1.0f64 }
+            q += 1usize
+        }
+        // each member of a tied block of c contributes c - 1 and (c - 1)(c - 2) / ... so the block sums to c (c - 1) and c (c - 1)(c - 2)
+        d2 += (c - 1.0f64)
+        d3 += (c - 1.0f64) * (c - 2.0f64)
+        t += 1usize
+    }
+    let n2 = nf * (nf - 1.0f64)
+    let n3 = n2 * (nf - 2.0f64)
+    let n0 = cnt[0usize]
+    let sig02 = n0 / 12.0f64 * (1.0f64 - d3 / n3)
+    let sig0 = math.sqrt[f64](sig02)
+    var wv: [16]f64 = zero
+    var corr: [16]f64 = zero
+    var mu: [16]f64 = zero
+    var sg: [16]f64 = zero
+    var tau: [16]f64 = zero
+    var g = 1usize
+    while g < k {
+        let ni = cnt[g]
+        var m = 0usize
+        t = 0usize
+        while t < n {
+            if grp[t] == 1usize || grp[t] == g + 1usize {
+                sub[m] = xs[t]
+                who[m] = grp[t]
+                m += 1usize
+            }
+            t += 1usize
+        }
+        let er2 = rank_avg(a, sub[0usize..m], rk[0usize..m])
+        if er2 != ok { ret er2 }
+        var rsum = 0.0f64
+        var tied = false
+        t = 0usize
+        while t < m {
+            if who[t] != 1usize { rsum += rk[t] }
+            var q = t + 1usize
+            while q < m {
+                if sub[q] == sub[t] { tied = true }
+                q += 1usize
+            }
+            t += 1usize
+        }
+        wv[g - 1usize] = rsum - ni * (ni + 1.0f64) / 2.0f64
+        corr[g - 1usize] = 0.5f64
+        if tied { corr[g - 1usize] = 0.25f64 }
+        mu[g - 1usize] = n0 * ni / 2.0f64
+        let s2 = n0 * ni / 12.0f64 * (n0 + 1.0f64 - 3.0f64 * d2 / n2 - (n0 - 2.0f64) * d3 / n3)
+        sg[g - 1usize] = math.sqrt[f64](s2)
+        tau[g - 1usize] = math.sqrt[f64](ni * ni * sig02 + s2)
+        g += 1usize
+    }
+    let m1 = k - 1usize
+    // the statistic and its comparison
+    var best = 0usize
+    var sobs = 0.0f64
+    var j = 0usize
+    while j < m1 {
+        let sj = (wv[j] - mu[j]) / tau[j]
+        var key = sj
+        if alt == 2usize && sj < 0.0f64 { key = 0.0f64 - sj }
+        var bkey = sobs
+        if alt == 2usize && sobs < 0.0f64 { bkey = 0.0f64 - sobs }
+        if j == 0usize || key > bkey {
+            best = j
+            sobs = sj
+        }
+        j += 1usize
+    }
+    // 'less' works on the negated data, so the largest standardised count there is the smallest here
+    var sret = sobs
+    if alt == 1usize { sret = 0.0f64 - sobs }
+    if alt == 2usize && sret < 0.0f64 { sret = 0.0f64 - sret }
+    out[0usize] = sret
+    // the asymptotic p of every comparison (the data were negated for "less", so the greater form applies); the answer is the smallest, as kSamples takes min(Steelnormal(...))
+    var pmin = 2.0f64
+    var cj = 0usize
+    while cj < m1 {
+        var sj2 = (wv[cj] - corr[cj] - mu[cj]) / tau[cj]
+        if alt == 2usize {
+            var aw = wv[cj] - corr[cj] - mu[cj]
+            if aw < 0.0f64 { aw = 0.0f64 - aw }
+            sj2 = aw / tau[cj]
+        }
+        let steps = 4000usize
+        let lo = 0.0f64 - 10.0f64
+        let h = 20.0f64 / f64(steps)
+        var s = 0.0f64
+        var i = 0usize
+        while i <= steps {
+            let z = lo + h * f64(i)
+            var fac = 1.0f64
+            var q = 0usize
+            while q < m1 {
+                let ni = cnt[q + 1usize]
+                let up = dist.pnorm((sj2 * tau[q] - ni * sig0 * z) / sg[q], 0.0f64, 1.0f64, true, false)
+                if alt == 2usize {
+                    fac *= up - dist.pnorm((0.0f64 - sj2 * tau[q] - ni * sig0 * z) / sg[q], 0.0f64, 1.0f64, true, false)
+                } else {
+                    fac *= up
+                }
+                q += 1usize
+            }
+            let f = dist.dnorm(z, 0.0f64, 1.0f64, false) * fac
+            var wgt = 2.0f64
+            if i == 0usize || i == steps { wgt = 1.0f64 } else if i % 2usize == 1usize { wgt = 4.0f64 }
+            s += wgt * f
+            i += 1usize
+        }
+        let pj = 1.0f64 - s * h / 3.0f64
+        if pj < pmin { pmin = pj }
+        cj += 1usize
+    }
+    out[1usize] = pmin
+    ret ok
+}
