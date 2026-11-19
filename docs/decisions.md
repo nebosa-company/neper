@@ -50254,3 +50254,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7375 — sampling UPsampfordpi2
 `up_sampford_pi2` follows sampling's recursion: lambda = p / (1 - n p), the elementary-symmetric-style sequence Lm (alternating power sums of lambda), the constant Kn, and per pair the sequence Lm2 with the (lambda_i + lambda_j) and lambda_i lambda_j recursion, pikl = Kn lambda_i lambda_j sum((m + 1 - n (p_i + p_j)) Lm2[n - m] / n^(m-1)); it refuses a pik whose Lm has a negative entry, as R does, and the oracle skips those draws. Equal to sampling to 1e-9. L508 at 0.55.
+
+## D7376 — sampling strata (one variable)
+`strata` visits the strata in order of first appearance (as `unique(data[, m])` does), draws each from the shared generator (srswor(size_i, N_i), or inclusionprobabilities(w[y], size_i) with UPsystematic or UPpoisson) and writes the selected unit numbers ascending within each stratum, which is the order of R's result rows. Equal to R under set.seed on ten samples for each of the three methods (count and position-weighted ID sum). L508 at 0.6.

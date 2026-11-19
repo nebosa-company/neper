@@ -658,3 +658,69 @@ fn up_sampford_pi2(a: *mem.Arena, pik: []const f64, pi2: []f64) -> err {
     }
     ret ok
 }
+
+// strata(data, stratanames, size, method) for one stratification variable: the strata are visited in order of first appearance, each draws from the shared generator, and the selected
+// unit numbers (1-based, ascending within a stratum) are written to ids; method 0 srswor (size[i] of the stratum), 1 systematic and 2 poisson (pik from inclusionprobabilities(w[y], size[i])).
+// size is per stratum in order of first appearance; the answer is the number of selected units.
+fn strata(a: *mem.Arena, g: *rr.Rng, label: []const f64, w: []const f64, size: []const f64, method: usize, ids: []f64) -> (usize, err) {
+    let n = label.len
+    let (seen, e0) = mem.alloc[f64](a, n)
+    let (y, e1) = mem.alloc[usize](a, n)
+    let (wk, e2) = mem.alloc[f64](a, n)
+    let (pk, e3) = mem.alloc[f64](a, n)
+    let (s, e4) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0usize, mem.Full) }
+    var ns = 0usize
+    var i = 0usize
+    while i < n {
+        var known = false
+        var q = 0usize
+        while q < ns {
+            if seen[q] == label[i] { known = true }
+            q += 1usize
+        }
+        if !known {
+            seen[ns] = label[i]
+            ns += 1usize
+        }
+        i += 1usize
+    }
+    var cnt = 0usize
+    var st = 0usize
+    while st < ns {
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if label[i] == seen[st] {
+                y[m] = i
+                wk[m] = w[i]
+                m += 1usize
+            }
+            i += 1usize
+        }
+        if method == 0usize {
+            let sz = usize(size[st])
+            if m < sz { ret (cnt, mem.Full) }
+            let er = srswor(a, g, sz, m, s[0usize..m])
+            if er != ok { ret (cnt, er) }
+        } else {
+            inclusion(wk[0usize..m], size[st], pk[0usize..m])
+            if method == 1usize {
+                let er = up_systematic(a, g, pk[0usize..m], s[0usize..m])
+                if er != ok { ret (cnt, er) }
+            } else {
+                up_poisson(g, pk[0usize..m], s[0usize..m])
+            }
+        }
+        i = 0usize
+        while i < m {
+            if s[i] == 1.0f64 {
+                ids[cnt] = f64(y[i] + 1usize)
+                cnt += 1usize
+            }
+            i += 1usize
+        }
+        st += 1usize
+    }
+    ret (cnt, ok)
+}
