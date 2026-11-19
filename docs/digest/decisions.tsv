@@ -4545,4 +4545,5 @@ D7644	839	VGAM: beta-binomial regression
 D7645	1046	rugarch: sGARCH(1,1) fit
 D7646	801	rugarch: the variance start is the mean of the squared residuals
 D7647	773	rugarch: gjrGARCH(1,1)
-D7648	741	rugarch: Student t innovations
+D7648	742	rugarch: Student t innovations
+D7649	909	rugarch: eGARCH(1,1)

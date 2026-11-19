@@ -10,6 +10,8 @@ use e.mem
 
 type GCtx = struct { y: []const f64, n: usize, q: []f64 }
 
+fn th(t: f64) -> f64 { ret 2.0f64 / (1.0f64 + math.exp[f64](0.0f64 - 2.0f64 * t)) - 1.0f64 }
+
 fn lg(t: f64) -> f64 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t)) }
 
 // the log-likelihood at the natural parameters
@@ -300,5 +302,89 @@ fn garch11_t(a: *mem.Arena, y: []const f64, n: usize, out: []f64) -> bool {
     out[3usize] = nat[3usize]
     out[4usize] = 2.0f64 + math.exp[f64](x[4usize])
     out[5usize] = garch_t_ll(y, n, nat[0usize], nat[1usize], nat[2usize], nat[3usize], out[4usize])
+    ret true
+}
+
+type ECtx = struct { y: []const f64, n: usize, q: []f64 }
+
+// the eGARCH(1,1) log-likelihood: log h_t = omega + alpha z_{t-1} + gamma (|z_{t-1}| - sqrt(2 / pi)) + beta log h_{t-1} with z = e / sqrt(h) and log h_1 = log mean(e^2)
+fn egarch_ll(y: []const f64, n: usize, mu: f64, om: f64, al: f64, be: f64, ga: f64) -> f64 {
+    var m2 = 0.0f64
+    var i = 0usize
+    while i < n {
+        m2 += (y[i] - mu) * (y[i] - mu)
+        i += 1usize
+    }
+    var lh = math.log[f64](m2 / f64(n))
+    let ez = math.sqrt[f64](2.0f64 / 3.141592653589793238462643383279f64)
+    var ll = 0.0f64
+    i = 0usize
+    while i < n {
+        let e = y[i] - mu
+        ll += 0.0f64 - 0.5f64 * (math.log[f64](2.0f64 * 3.141592653589793238462643383279f64) + lh + e * e * math.exp[f64](0.0f64 - lh))
+        let z = e * math.exp[f64](0.0f64 - lh / 2.0f64)
+        lh = om + al * z + ga * (math.abs[f64](z) - ez) + be * lh
+        i += 1usize
+    }
+    ret ll
+}
+
+// x = (mu, omega, alpha, gamma, atanh beta)
+fn egarch_f(c: *ECtx, x: []const f64) -> f64 {
+    ret 0.0f64 - egarch_ll(c.y, c.n, x[0usize], x[1usize], x[2usize], th(x[4usize]), x[3usize])
+}
+
+fn egarch_g(c: *ECtx, x: []const f64, g: []f64) {
+    var i = 0usize
+    while i < 5usize {
+        c.q[i] = x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < 5usize {
+        let h = 1.0e-6f64
+        c.q[i] = x[i] + h
+        let fp = egarch_f(c, c.q[0usize..5usize])
+        c.q[i] = x[i] - h
+        let fm = egarch_f(c, c.q[0usize..5usize])
+        c.q[i] = x[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// the eGARCH(1,1) fit with a constant mean and normal innovations: out = mu, omega, alpha1, beta1, gamma1, the log-likelihood
+fn egarch11(a: *mem.Arena, y: []const f64, n: usize, out: []f64) -> bool {
+    let (qq, e1) = mem.alloc[f64](a, 5usize)
+    let (scr, e2) = mem.alloc[f64](a, 160usize)
+    if e1 != ok || e2 != ok { ret false }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += y[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    var x: [5]f64 = zero
+    x[0usize] = mean
+    x[1usize] = 0.0f64 - 0.1f64
+    x[2usize] = 0.0f64
+    x[3usize] = 0.1f64
+    x[4usize] = 1.0f64
+    var c = ECtx { y: y, n: n, q: qq }
+    var round = 0usize
+    while round < 3usize {
+        let (r2, e4) = opt.nelder_mead[ECtx](&c, egarch_f, x[0usize..5usize], 0.1f64, 1.0e-16f64, 3000u32, scr)
+        if e4 != ok { ret false }
+        let (r3, e5) = opt.bfgs[ECtx](&c, egarch_f, egarch_g, x[0usize..5usize], 1.0e-12f64, 400u32, scr)
+        if e5 != ok { ret false }
+        round += 1usize
+    }
+    out[0usize] = x[0usize]
+    out[1usize] = x[1usize]
+    out[2usize] = x[2usize]
+    out[3usize] = th(x[4usize])
+    out[4usize] = x[3usize]
+    out[5usize] = egarch_ll(y, n, x[0usize], x[1usize], x[2usize], out[3usize], x[3usize])
     ret true
 }
