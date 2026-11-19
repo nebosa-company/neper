@@ -69,6 +69,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
                 if str.eq(kind, "gh") || str.eq(kind, "ghp") { kg = 1usize }
                 let (ls1, lp1) = pm.lsd_gh_pair(y, grp, k, row, col, kg)
                 if str.eq(kind, "ls") || str.eq(kind, "gh") { vals[pos] = ls1 } else { vals[pos] = lp1 }
+            } else if str.eq(kind, "sn") || str.eq(kind, "snp") || str.eq(kind, "dn") || str.eq(kind, "dnp") {
+                var kr = 0usize
+                if str.eq(kind, "dn") || str.eq(kind, "dnp") { kr = 1usize }
+                let (rs1, rp1) = pm.range_pair(y, grp, k, row, col, kr)
+                if str.eq(kind, "sn") || str.eq(kind, "dn") { vals[pos] = rs1 } else { vals[pos] = rp1 }
             } else if str.eq(kind, "ds") || str.eq(kind, "dsp") {
                 let (ds1, dp1, ed) = pm.dscf_pair(a, y, grp, k, col + 1usize, row + 1usize)
                 if ed != ok { os.exit(11) }

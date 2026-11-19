@@ -54,4 +54,12 @@ for (rep in 1:14) {
   sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
   add("ls", a, sw2(ls$statistic)); add("lsp", a, sw2(ls$p.value)); add("gh", a, sw2(gh$statistic)); add("ghp", a, sw2(gh$p.value))
 }
+# snkTest ("sn", "snp") and duncanTest ("dn", "dnp"): statistics and p values (the lower triangle, position-weighted).
+for (rep in 1:14) {
+  k <- sample(3:5, 1); sz <- sample(5:10, k, replace = TRUE); n <- sum(sz); g <- factor(rep(1:k, sz))
+  x <- round(rnorm(n) + as.numeric(g) * runif(1, 0, 0.7), 4)
+  a <- c(n, k, x, as.numeric(g)); sn <- suppressWarnings(snkTest(x, g)); dn <- suppressWarnings(duncanTest(x, g))
+  sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
+  add("sn", a, sw2(sn$statistic)); add("snp", a, sw2(sn$p.value)); add("dn", a, sw2(dn$statistic)); add("dnp", a, sw2(dn$p.value))
+}
 emit("pmcmr", "PMCMRplus", list(cases))

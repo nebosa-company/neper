@@ -1360,3 +1360,66 @@ fn lsd_gh_pair(x: []const f64, grp: []const usize, k: usize, ri: usize, cj: usiz
     if aq < 0.0f64 { aq = 0.0f64 - aq }
     ret (q, 1.0f64 - nb.ptukey(aq, 1.0f64, kf, df, true, false))
 }
+
+// snkTest (kind 0) and duncanTest (kind 1) on one-way data for the table cell (row group ri, column group cj): the groups are ranked by mean (decreasing), p = 1 + the rank distance
+// of the two, and the p value is the upper Tukey probability of |q| for p means at n - k df. SNK: q = (mean_ri - mean_cj) / sqrt(s2 / 2 (1/n_i + 1/n_j)); Duncan: q = |dif| / sqrt(s2 / r) with
+// r = k / sum(1/n_g), and the probability adjusted to min(1, 1 - (1 - p)^(1 / (p - 1))); answers (q, p)
+fn range_pair(x: []const f64, grp: []const usize, k: usize, ri: usize, cj: usize, kind: usize) -> (f64, f64) {
+    let n = x.len
+    var cnt: [16]f64 = zero
+    var mean: [16]f64 = zero
+    var t = 0usize
+    while t < n {
+        cnt[grp[t] - 1usize] += 1.0f64
+        mean[grp[t] - 1usize] += x[t]
+        t += 1usize
+    }
+    var g = 0usize
+    while g < k {
+        mean[g] = mean[g] / cnt[g]
+        g += 1usize
+    }
+    var ss = 0.0f64
+    t = 0usize
+    while t < n {
+        let d = x[t] - mean[grp[t] - 1usize]
+        ss += d * d
+        t += 1usize
+    }
+    let nf = f64(n)
+    let kf = f64(k)
+    let s2 = ss / (nf - kf)
+    // rank positions in decreasing mean order
+    var pi = 0usize
+    var pj = 0usize
+    g = 0usize
+    while g < k {
+        if mean[g] > mean[ri] { pi += 1usize }
+        if mean[g] > mean[cj] { pj += 1usize }
+        g += 1usize
+    }
+    var dpos = 0usize
+    if pi > pj { dpos = pi - pj } else { dpos = pj - pi }
+    let pm = 1usize + dpos
+    let dif = mean[ri] - mean[cj]
+    if kind == 0usize {
+        let q = dif / math.sqrt[f64](s2 / 2.0f64 * (1.0f64 / cnt[ri] + 1.0f64 / cnt[cj]))
+        var aq = q
+        if aq < 0.0f64 { aq = 0.0f64 - aq }
+        ret (q, 1.0f64 - nb.ptukey(aq, 1.0f64, f64(pm), nf - kf, true, false))
+    }
+    var hs = 0.0f64
+    g = 0usize
+    while g < k {
+        hs += 1.0f64 / cnt[g]
+        g += 1usize
+    }
+    let r = kf / hs
+    var ad = dif
+    if ad < 0.0f64 { ad = 0.0f64 - ad }
+    let tv = ad / math.sqrt[f64](s2 / r)
+    let pu = 1.0f64 - nb.ptukey(tv, 1.0f64, f64(pm), nf - kf, true, false)
+    var pa = 1.0f64 - math.pow[f64](1.0f64 - pu, 1.0f64 / (f64(pm) - 1.0f64))
+    if pa > 1.0f64 { pa = 1.0f64 }
+    ret (tv, pa)
+}
