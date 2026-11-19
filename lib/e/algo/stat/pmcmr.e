@@ -364,6 +364,13 @@ fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: u
     }
     let nf = f64(n)
     let kf = f64(k)
+    if kind == 4usize {
+        // frdManyOneNemenyiTest: the rank-sum difference over sqrt(n k (k + 1) / 6) and its single-step p, 1 - P(all |Z| < |stat|) for k - 1 equicorrelated (1/2) normals
+        let zn = (rs[i] - rs[j]) / math.sqrt[f64](nf * kf * (kf + 1.0f64) / 6.0f64)
+        var azn = zn
+        if azn < 0.0f64 { azn = 0.0f64 - azn }
+        ret (zn, 1.0f64 - mvn_equicorr_half(azn, k - 1usize), ok)
+    }
     if kind == 3usize {
         let zd = (rs[i] - rs[j]) / nf / math.sqrt[f64](kf * (kf + 1.0f64) / (6.0f64 * nf))
         var az = zd
@@ -784,4 +791,27 @@ fn siegel_tukey(a: *mem.Arena, x: []const f64, n1: usize, out: []f64) -> err {
     out[0usize] = w
     out[1usize] = p
     ret ok
+}
+
+// P(-c < Z_i < c for all i) for m standard normals with common correlation 1/2 (the many-to-one structure): the one-dimensional integral over the common factor,
+// integral phi(z) [Phi((c + sqrt(1/2) z) / sqrt(1/2)) - Phi((-c + sqrt(1/2) z) / sqrt(1/2))]^m dz, by Simpson's rule (R's pmvnorm is a Monte Carlo with absolute error 1e-3)
+fn mvn_equicorr_half(c: f64, m: usize) -> f64 {
+    let steps = 4000usize
+    let lo = 0.0f64 - 9.0f64
+    let hi = 9.0f64
+    let h = (hi - lo) / f64(steps)
+    let rs = math.sqrt[f64](0.5f64)
+    var s = 0.0f64
+    var i = 0usize
+    while i <= steps {
+        let z = lo + h * f64(i)
+        let up = dist.pnorm((c + rs * z) / rs, 0.0f64, 1.0f64, true, false)
+        let dn = dist.pnorm((0.0f64 - c + rs * z) / rs, 0.0f64, 1.0f64, true, false)
+        let f = math.exp[f64](0.0f64 - z * z / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64) * math.pow[f64](up - dn, f64(m))
+        var wgt = 2.0f64
+        if i == 0usize || i == steps { wgt = 1.0f64 } else if i % 2usize == 1usize { wgt = 4.0f64 }
+        s += wgt * f
+        i += 1usize
+    }
+    ret s * h / 3.0f64
 }
