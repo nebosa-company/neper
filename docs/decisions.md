@@ -50944,3 +50944,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7489 — gsl coulomb_CL
 `coulomb_cl(L, eta)` is the Coulomb wave function normalisation 2^L exp(-pi eta / 2 + ln |Gamma(L + 1 + i eta)| - ln Gamma(2 L + 2)), the real part of the complex log-gamma (`lngamma_complex`) in the middle term; equal to gsl coulomb_CL at rel 1e-9 on 50 draws (L from -0.9 to 6, eta from -5 to 5). Open for L417: the Coulomb wave functions F and G themselves (coulomb_wave_FG), the error estimates.
+
+## D7490 — gamlss.dist BCCGo
+`dbccgo`, `pbccgo` and `qbccgo` are the original Box-Cox Cole-Green distribution (mu the scale, not the median): the transformed normal truncated at -1 / (sigma |nu|), the density with the pnorm(1 / (sigma |nu|)) normaliser, the distribution as (pnorm(z) - pnorm(-1 / (sigma nu)) [nu > 0]) / pnorm(1 / (sigma |nu|)), and the quantile through qnorm of the matching tail; equal to gamlss.dist on 60 draws of each (nu negative, zero and positive; 180 values in oracle_gamlss_bccgo). Of the 116 gamlss.dist families only MN3, MN4, MN5 (multinomials), SI and ST3C are still without a density. Open for L464: those, r, moments, links.

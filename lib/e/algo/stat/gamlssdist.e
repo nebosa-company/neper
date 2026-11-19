@@ -2444,3 +2444,37 @@ fn qsep(a: *mem.Arena, p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if f1 < f2 { ret val1 }
     ret val2
 }
+
+// BCCGo (the original Box-Cox Cole-Green parametrisation, mu the scale rather than the median): density, distribution and quantile with the truncation of the transformed normal at -1 / (sigma |nu|)
+fn dbccgo(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    var z = math.log[f64](x / mu) / sigma
+    if nu != 0.0f64 { z = (math.pow[f64](x / mu, nu) - 1.0f64) / (nu * sigma) }
+    let ll = nu * math.log[f64](x / mu) - math.log[f64](sigma) - z * z / 2.0f64 - math.log[f64](x) - math.log[f64](2.0f64 * 3.141592653589793238462643383279f64) / 2.0f64 - math.log[f64](dist.pnorm(1.0f64 / (sigma * math.abs[f64](nu)), 0.0f64, 1.0f64, true, false))
+    ret math.exp[f64](ll)
+}
+
+fn pbccgo(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q <= 0.0f64 { ret 0.0f64 }
+    var z = math.log[f64](q / mu) / sigma
+    if nu != 0.0f64 { z = (math.pow[f64](q / mu, nu) - 1.0f64) / (nu * sigma) }
+    let f1 = dist.pnorm(z, 0.0f64, 1.0f64, true, false)
+    var f2 = 0.0f64
+    if nu > 0.0f64 { f2 = dist.pnorm(0.0f64 - 1.0f64 / (sigma * math.abs[f64](nu)), 0.0f64, 1.0f64, true, false) }
+    let f3 = dist.pnorm(1.0f64 / (sigma * math.abs[f64](nu)), 0.0f64, 1.0f64, true, false)
+    ret (f1 - f2) / f3
+}
+
+fn qbccgo(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let pn = dist.pnorm(1.0f64 / (sigma * math.abs[f64](nu)), 0.0f64, 1.0f64, true, false)
+    var z = 0.0f64
+    if nu <= 0.0f64 {
+        z = dist.qnorm(p * pn, 0.0f64, 1.0f64, true, false)
+    } else {
+        z = dist.qnorm(1.0f64 - (1.0f64 - p) * pn, 0.0f64, 1.0f64, true, false)
+    }
+    if nu != 0.0f64 { ret mu * math.pow[f64](nu * sigma * z + 1.0f64, 1.0f64 / nu) }
+    ret mu * math.exp[f64](sigma * z)
+}
