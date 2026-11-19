@@ -100,4 +100,13 @@ for (rep in 1:8) {
     cases[[length(cases) + 1]] <- case("t2", c(14, seed, sd, n1, n2, as.numeric(fst), i - 1), match(as.character(bl[[6]][i]), t2) - 1, rel = 0, abs = 0)
   }
 }
+# design.bib: op 15 (15, seed, sd, v, k, idx) fn "bb" the treatment code at plot idx (r from the package's search)
+invisible(capture.output(suppressMessages({
+  for (cfg in list(c(7, 3), c(6, 3), c(5, 4), c(4, 2), c(7, 4))) for (sd in 0:1) {
+    v <- cfg[1]; k <- cfg[2]; seed <- 900 + v * 10 + k + sd; trt <- letters[1:v]
+    bk <- tryCatch(design.bib(trt, k, seed = seed, kinds = if (sd == 1) "Super-Duper" else "Mersenne-Twister")$book, error = function(e) NULL)
+    if (is.null(bk)) next
+    for (i in seq_len(nrow(bk))) cases[[length(cases) + 1]] <- case("bb", c(15, seed, sd, v, k, i - 1), match(as.character(bk[[3]][i]), trt) - 1, rel = 0, abs = 0)
+  }
+})))
 emit("agricolae_groups", "agricolae", list(cases))

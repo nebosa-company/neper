@@ -41,6 +41,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tot
     }
+    if kind == 15usize {
+        var rg3: rr.Rng = zero
+        if x[2usize] > 0.5f64 { rr.seed_super(&rg3, i64(x[1usize])) } else { rr.seed(&rg3, i64(x[1usize])) }
+        let bv = usize(x[3usize])
+        let bk = usize(x[4usize])
+        let brep = ag.bib_r(bv, bk, 20usize)
+        let (bo, h5) = mem.alloc[usize](a, bv * brep)
+        if h5 != ok { os.exit(19) }
+        let eb2 = ag.design_bib(a, &rg3, bv, bk, brep, bo)
+        if eb2 != ok { os.exit(20) }
+        ret f64(bo[usize(x[5usize])])
+    }
     if kind >= 12usize && kind <= 14usize {
         var rng2: rr.Rng = zero
         if x[2usize] > 0.5f64 { rr.seed_super(&rng2, i64(x[1usize])) } else { rr.seed(&rng2, i64(x[1usize])) }

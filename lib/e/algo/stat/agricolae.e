@@ -7,6 +7,7 @@
 use e.math
 use e.math.nmath_beta as nb
 use e.algo.rand.r as rr
+use e.algo.stat.algdesign_block as blk
 use e.math.nmath as nm
 use e.math.quadpack as qp
 use e.mem
@@ -534,6 +535,91 @@ fn design_split(a: *mem.Arena, rng: *rr.Rng, applied: usize, n1: usize, blocks: 
             s += 1usize
         }
         p += 1usize
+    }
+    ret ok
+}
+
+// design.bib's replication: the first r in 2..maxRep with r (k - 1) / (v - 1) and v r / k both whole numbers (0 when none)
+fn bib_r(v: usize, k: usize, max_rep: usize) -> usize {
+    var i = 2usize
+    while i <= max_rep {
+        if (i * (k - 1usize)) % (v - 1usize) == 0usize && (v * i) % k == 0usize { ret i }
+        i += 1usize
+    }
+    ret 0usize
+}
+
+// design.bib(trt, k): AlgDesign's optBlock (D criterion, five repeats, the within-block treatment-contrast model) finds a balanced incomplete block design from the
+// stream, then the blocks are permuted by sample(1:b, b) and each block's treatments by sample(1:k, k); out holds the 0-based treatments of the b * k plots
+fn design_bib(a: *mem.Arena, rng: *rr.Rng, v: usize, k: usize, r: usize, out: []usize) -> err {
+    let b = v * r / k
+    let (x, e0) = mem.alloc[f64](a, v * (v - 1usize))
+    let (sizes, e1) = mem.alloc[usize](a, b)
+    let (md, e2) = mem.alloc[usize](a, b * k)
+    if e0 != ok || e1 != ok || e2 != ok { ret e0 }
+    var i = 0usize
+    while i < v * (v - 1usize) {
+        x[i] = 0.0f64
+        i += 1usize
+    }
+    i = 1usize
+    while i < v {
+        x[i * (v - 1usize) + (i - 1usize)] = 1.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < b {
+        sizes[i] = k
+        i += 1usize
+    }
+    var none: [1]i64 = zero
+    let (res, eb) = blk.block_optimize(a, rng, x, v, v - 1usize, sizes, none[0usize..0usize], false, 5i64)
+    if eb != ok { ret eb }
+    // the rows of each block sorted, 1-based as optBlock answers them
+    i = 0usize
+    while i < b {
+        var j = 0usize
+        while j < k {
+            let val = res.block_array[i * k + j]
+            var q = j
+            while q > 0usize && res.block_array[i * k + q - 1usize] > val {
+                res.block_array[i * k + q] = res.block_array[i * k + q - 1usize]
+                q -= 1usize
+            }
+            res.block_array[i * k + q] = val
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < b * k {
+        md[i] = usize(res.block_array[i]) - 1usize
+        i += 1usize
+    }
+    let (bp, e3) = rr.sample_int(a, rng, i64(b), i64(b), false)
+    if e3 != ok { ret e3 }
+    let (mp, e4) = mem.alloc[usize](a, b * k)
+    if e4 != ok { ret e4 }
+    i = 0usize
+    while i < b {
+        let src = usize(bp[i]) - 1usize
+        var j = 0usize
+        while j < k {
+            mp[i * k + j] = md[src * k + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < b {
+        let (bi, e5) = rr.sample_int(a, rng, i64(k), i64(k), false)
+        if e5 != ok { ret e5 }
+        var j = 0usize
+        while j < k {
+            out[i * k + j] = mp[i * k + usize(bi[j]) - 1usize]
+            j += 1usize
+        }
+        i += 1usize
     }
     ret ok
 }

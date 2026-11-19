@@ -49990,3 +49990,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.agricolae` gains `design_lsd` (the cyclic Latin square, its columns after the first permuted by `sample(2:r, r - 1)` and, with first, its rows by `sample(1:r, r)`; the plot order is the square read column by column, as `trt[a]` does) and `design_split` (a whole-plot plan from the same stream, an rcbd or an lsd, then `sample(trt2, n2)` for every whole plot in plot order; design.split reseeds inside the design it calls, so the stream is one fresh seed through plan and subplots). The streams are the Mersenne-Twister and the default Super-Duper.
 
 **Result.** `oracle_agricolae_groups` has 2627 values (adding eight Latin squares and eight split-plot designs over each of an rcbd and an lsd, both generators, with and without a first randomised block) and equals agricolae on Windows. Linux pending. L396 stays partial: design.bib, design.alpha, design.lattice and AMMI remain.
+
+## D7323 — agricolae: design.bib
+
+`e.algo.stat.agricolae` gains `design_bib` and `bib_r`: the replication is the first r in 2..maxRep (20) with r (k - 1) / (v - 1) and v r / k both whole; the balanced incomplete block design comes from the existing AlgDesign `optBlock` port (`block_optimize`: D criterion, five repeats, the treatment-contrast model of the factor of v treatments with the intercept removed, rows of each block sorted as optBlock answers them); then the blocks are permuted by `sample(1:b, b)` and each block's treatments by `sample(1:k, k)`, all from one stream (the optimiser's draws come first). Both the Mersenne-Twister and the default Super-Duper streams.
+
+**Result.** `oracle_agricolae_groups` has 2849 values (adding design.bib for 7 by 3, 6 by 3, 5 by 4, 4 by 2 and 7 by 4 designs under both generators) and equals agricolae on Windows. Linux pending. L396 stays partial: design.alpha, design.lattice and AMMI remain.
