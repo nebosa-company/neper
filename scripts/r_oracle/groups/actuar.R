@@ -187,13 +187,13 @@ for (rep in 1:40) {
   mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); pp <- runif(1, 0.02, 0.98)
   cases[[length(cases) + 1]] <- case("iq", c(mu, s, pp), qinvgauss(pp, mu, s), rel = 1e-7, abs = 1e-10)
 }
-# random generators under set.seed: "rg" args (seed, kind 0 rburr 1 rtrgamma 2 rinvgamma 3 rgumbel 4 rlgamma 5 rpareto1, p1, p2, sc, n); the answer is the position-weighted sum of n draws
-for (rep in 1:90) {
-  kd <- rep %% 9; sd <- sample(1:100000, 1); n <- sample(3:12, 1); p1 <- runif(1, 1, 4); p2 <- runif(1, 1, 3); sc <- runif(1, 0.5, 3)
+# random generators under set.seed: "rg" args (seed, kind 0 rburr 1 rtrgamma 2 rinvgamma 3 rgumbel 4 rlgamma 5 rpareto1 6 rinvtrgamma 7 rinvweibull 8 rinvexp 9 rgenbeta, p1, p2, p3, sc, n); the answer is the position-weighted sum of n draws
+for (rep in 1:100) {
+  kd <- rep %% 10; sd <- sample(1:100000, 1); n <- sample(3:12, 1); p1 <- runif(1, 1, 4); p2 <- runif(1, 1, 3); p3 <- runif(1, 0.7, 2.5); sc <- runif(1, 0.5, 3)
   set.seed(sd)
-  v <- switch(kd + 1, rburr(n, p1, p2, scale = sc), rtrgamma(n, p1, p2, scale = sc), rinvgamma(n, p1, scale = sc), rgumbel(n, p1, p2), rlgamma(n, p1, p2 + 2), rpareto1(n, p1, p2), rinvtrgamma(n, p1, p2, scale = sc), rinvweibull(n, p1, scale = sc), rinvexp(n, scale = sc))
+  v <- switch(kd + 1, rburr(n, p1, p2, scale = sc), rtrgamma(n, p1, p2, scale = sc), rinvgamma(n, p1, scale = sc), rgumbel(n, p1, p2), rlgamma(n, p1, p2 + 2), rpareto1(n, p1, p2), rinvtrgamma(n, p1, p2, scale = sc), rinvweibull(n, p1, scale = sc), rinvexp(n, scale = sc), rgenbeta(n, p1, p2, p3, scale = sc))
   if (kd == 4) p2 <- p2 + 2
-  cases[[length(cases) + 1]] <- case("rg", c(sd, kd, p1, p2, sc, n), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("rg", c(sd, kd, p1, p2, p3, sc, n), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
 }
 # transformed beta generators under set.seed: "rt" args (seed, kind 0 burr 1 invburr 2 pareto 3 invpareto 4 llogis 5 paralogis 6 invparalogis, s1, s2, sc, n)
 for (rep in 1:70) {

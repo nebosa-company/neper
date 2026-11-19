@@ -51208,3 +51208,6 @@ epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude
 
 ## D7571 — actuar rinvweibull and rinvexp under set.seed
 `rand_draw` kinds 7 and 8: rinvweibull is scale rexp^(-1/shape) and rinvexp is scale / rexp. The D7550 probe had passed the scale positionally, where actuar's second positional argument is the rate, so those two had looked unmatched. Equal to actuar on 90 seeded runs over the nine kinds (5219 cases in all). rgenpareto and rtrbeta (not a plain gamma ratio) and rgenbeta (scale rbeta^(1/t), which needs R's rbeta) stay open.
+
+## D7572 — actuar rgenbeta under set.seed
+`rand_draw` kind 9 is rgenbeta, scale rbeta(shape1, shape2)^(1/shape3) through the R beta sampler of e.algo.rand.rdist; the function takes the third shape as a new argument (p3) and the oracle layout adds it. Equal to actuar on 100 seeded runs over the ten kinds (5230 cases in all). rgenpareto and rtrbeta stay open: they are not the plain gamma ratio or beta transform of one draw.

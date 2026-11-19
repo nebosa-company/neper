@@ -155,11 +155,11 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "rg") {
         var gg: rr.Rng = zero
         rr.seed(&gg, i64(x[0usize]))
-        let nr = usize(x[5usize])
+        let nr = usize(x[6usize])
         var tr = 0.0f64
         var ir = 0usize
         while ir < nr {
-            tr += ac.rand_draw(&gg, usize(x[1usize]), x[2usize], x[3usize], x[4usize]) * f64(ir + 1usize)
+            tr += ac.rand_draw(&gg, usize(x[1usize]), x[2usize], x[3usize], x[4usize], x[5usize]) * f64(ir + 1usize)
             ir += 1usize
         }
         ret tr

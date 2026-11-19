@@ -4426,4 +4426,5 @@ D7567	618	epiR Sato and Greenland-Robins Mantel-Haenszel risk differences
 D7568	579	epiR Breslow-Day homogeneity statistic
 D7569	562	epiR crude estimates of a stratified table
 D7570	374	actuar rinvtrgamma under set.seed
-D7571	484	actuar rinvweibull and rinvexp under set.seed
+D7571	485	actuar rinvweibull and rinvexp under set.seed
+D7572	428	actuar rgenbeta under set.seed
