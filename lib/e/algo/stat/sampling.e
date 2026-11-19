@@ -9,6 +9,7 @@ use e.algo.stat.gparot as gp
 use e.math
 use e.math.nmath as nm
 use e.mem
+use e.algo.linalg.lapack_gesdd as gesdd
 
 error Malformed
 
@@ -2174,4 +2175,298 @@ fn rhg_prob(status: []const f64, sel: []const f64, c: usize, prob: []f64) {
         if status[i] == 1.0f64 { prob[i] = lr / l }
         i += 1usize
     }
+}
+
+// ---- the cube method (sampling::fastflightcube): the flight phase on the balancing variables x (n by p, row-major) and the inclusion probabilities pik, updated in place.
+// Each jump takes the null vector of the (p + 1) by (p + 1) design (LAPACK gesdd, as svd() calls it) and moves the probabilities to one end of the line through them, chosen with
+// one uniform draw; units whose probability reaches 0 or 1 are replaced by the next unit of the order (sample.int(n, n), the given order, or decreasing pik).
+fn cube_jump(a: *mem.Arena, r: *rr.Rng, b: []const f64, psik: []f64, p: usize) -> err {
+    let m = p + 1usize
+    let eps = 1.0e-11f64
+    let (x1, e1) = mem.alloc[f64](a, m * m)
+    let (s, e2) = mem.alloc[f64](a, m)
+    let (u, e3) = mem.alloc[f64](a, m * m)
+    let (vt, e4) = mem.alloc[f64](a, m * m)
+    let (pk1, e5) = mem.alloc[f64](a, m)
+    let (pk2, e6) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret e1 }
+    var i = 0usize
+    while i < m {
+        var c = 0usize
+        while c < m {
+            if c < p { x1[i + c * m] = b[i * p + c] } else { x1[i + c * m] = 0.0f64 }
+            c += 1usize
+        }
+        i += 1usize
+    }
+    let se = gesdd.svd_all(a, x1, m, m, s, u, vt)
+    if se != ok { ret se }
+    var la1 = 1.0e300f64
+    var la2 = 1.0e300f64
+    i = 0usize
+    while i < m {
+        let kv = u[i + p * m]
+        if math.abs[f64](kv) > eps {
+            let b1 = (1.0f64 - psik[i]) / kv
+            let b2 = 0.0f64 - psik[i] / kv
+            if b1 > 0.0f64 && b1 < la1 { la1 = b1 }
+            if b2 > 0.0f64 && b2 < la1 { la1 = b2 }
+            let c1 = 0.0f64 - (1.0f64 - psik[i]) / kv
+            let c2 = psik[i] / kv
+            if c1 > 0.0f64 && c1 < la2 { la2 = c1 }
+            if c2 > 0.0f64 && c2 < la2 { la2 = c2 }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        pk1[i] = psik[i] + la1 * u[i + p * m]
+        pk2[i] = psik[i] - la2 * u[i + p * m]
+        i += 1usize
+    }
+    let q = la2 / (la1 + la2)
+    let pick1 = rr.unif(r) < q
+    i = 0usize
+    while i < m {
+        if pick1 { psik[i] = pk1[i] } else { psik[i] = pk2[i] }
+        i += 1usize
+    }
+    ret ok
+}
+
+// algofastflightcube: x is n by p (row-major), pik of length n updated in place
+fn cube_algo(a: *mem.Arena, r: *rr.Rng, x: []const f64, pik: []f64, n: usize, p: usize) -> err {
+    let eps = 1.0e-11f64
+    let m = p + 1usize
+    let (aa, e1) = mem.alloc[f64](a, n * p)
+    let (bb, e2) = mem.alloc[f64](a, m * p)
+    let (psik, e3) = mem.alloc[f64](a, m)
+    let (ind, e4) = mem.alloc[usize](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret e1 }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            aa[i * p + c] = x[i * p + c] / pik[i]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        var c = 0usize
+        while c < p {
+            bb[i * p + c] = aa[i * p + c]
+            c += 1usize
+        }
+        psik[i] = pik[i]
+        ind[i] = i
+        i += 1usize
+    }
+    var pp = p + 2usize
+    while pp <= n {
+        let je = cube_jump(a, r, bb, psik, p)
+        if je != ok { ret je }
+        var idx = 0usize
+        while idx <= p && pp <= n {
+            if psik[idx] > 1.0f64 - eps || psik[idx] < eps {
+                pik[ind[idx]] = psik[idx]
+                psik[idx] = pik[pp - 1usize]
+                var c = 0usize
+                while c < p {
+                    bb[idx * p + c] = aa[(pp - 1usize) * p + c]
+                    c += 1usize
+                }
+                ind[idx] = pp - 1usize
+                pp += 1usize
+            }
+            idx += 1usize
+        }
+    }
+    var nfrac = 0usize
+    i = 0usize
+    while i < n {
+        if pik[i] > eps && pik[i] < 1.0f64 - eps { nfrac += 1usize }
+        i += 1usize
+    }
+    if nfrac == m {
+        let je2 = cube_jump(a, r, bb, psik, p)
+        if je2 != ok { ret je2 }
+    }
+    i = 0usize
+    while i < m {
+        pik[ind[i]] = psik[i]
+        i += 1usize
+    }
+    ret ok
+}
+
+// the left singular vectors of the n by p design whose singular value exceeds 1e-11 (reduc), row-major with stride = their number into xr; the answer is that number
+fn cube_reduc(a: *mem.Arena, x: []const f64, n: usize, p: usize, xr: []f64) -> (usize, err) {
+    var k = n
+    if p < n { k = p }
+    let (cm, e1) = mem.alloc[f64](a, n * p)
+    let (s, e2) = mem.alloc[f64](a, k)
+    let (u, e3) = mem.alloc[f64](a, n * k)
+    let (vt, e4) = mem.alloc[f64](a, k * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0usize, e1) }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            cm[i + c * n] = x[i * p + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    let se = gesdd.svd_all(a, cm, n, p, s, u, vt)
+    if se != ok { ret (0usize, se) }
+    var cnt = 0usize
+    var j = 0usize
+    while j < k {
+        if s[j] > 1.0e-11f64 { cnt += 1usize }
+        j += 1usize
+    }
+    cnt = 0usize
+    j = 0usize
+    while j < k {
+        if s[j] > 1.0e-11f64 {
+            i = 0usize
+            while i < n {
+                xr[i * 1usize + cnt * n] = u[i + j * n]
+                i += 1usize
+            }
+            cnt += 1usize
+        }
+        j += 1usize
+    }
+    ret (cnt, ok)
+}
+
+// fastflightcube(X, pik, order): order 1 draws sample.int(n, n) first, 2 keeps the unit order, 3 sorts by decreasing pik; pik is updated in place
+fn fastflightcube(a: *mem.Arena, r: *rr.Rng, x: []const f64, pik: []f64, n: usize, p: usize, order: usize) -> err {
+    let eps = 1.0e-11f64
+    let (o, e0) = mem.alloc[usize](a, n)
+    let (pik0, ep) = mem.alloc[f64](a, n)
+    if e0 != ok || ep != ok { ret e0 }
+    var i = 0usize
+    while i < n {
+        pik0[i] = pik[i]
+        i += 1usize
+    }
+    if order == 1usize {
+        let (draw, de) = rr.sample_int(a, r, i64(n), i64(n), false)
+        if de != ok { ret de }
+        var q = 0usize
+        while q < n {
+            o[q] = usize(draw[q] - 1i64)
+            q += 1usize
+        }
+    } else {
+        var q = 0usize
+        while q < n {
+            o[q] = q
+            q += 1usize
+        }
+        if order == 3usize {
+            var t = 1usize
+            while t < n {
+                let v = o[t]
+                var j = t
+                while j > 0usize && pik[o[j - 1usize]] < pik[v] {
+                    o[j] = o[j - 1usize]
+                    j -= 1usize
+                }
+                o[j] = v
+                t += 1usize
+            }
+        }
+    }
+    let (liste, e1) = mem.alloc[usize](a, n)
+    let (xb, e2) = mem.alloc[f64](a, n * p)
+    let (pb, e3) = mem.alloc[f64](a, n)
+    let (xr, e4) = mem.alloc[f64](a, n * p)
+    let (xs, e5) = mem.alloc[f64](a, n * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
+    var nb = 0usize
+    var q2 = 0usize
+    while q2 < n {
+        let u = o[q2]
+        if pik[u] > eps && pik[u] < 1.0f64 - eps {
+            liste[nb] = u
+            nb += 1usize
+        }
+        q2 += 1usize
+    }
+    i = 0usize
+    while i < nb {
+        pb[i] = pik[liste[i]]
+        var c = 0usize
+        while c < p {
+            xb[i * p + c] = x[liste[i] * p + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    if nb > p {
+        let ae = cube_algo(a, r, xb[0usize..nb * p], pb[0usize..nb], nb, p)
+        if ae != ok { ret ae }
+        i = 0usize
+        while i < nb {
+            pik[liste[i]] = pb[i]
+            i += 1usize
+        }
+    }
+    var pbon = p
+    var go = true
+    while go {
+        nb = 0usize
+        q2 = 0usize
+        while q2 < n {
+            let u = o[q2]
+            if pik[u] > eps && pik[u] < 1.0f64 - eps {
+                liste[nb] = u
+                nb += 1usize
+            }
+            q2 += 1usize
+        }
+        i = 0usize
+        while i < nb {
+            pb[i] = pik[liste[i]]
+            var c = 0usize
+            while c < p {
+                xb[i * p + c] = x[liste[i] * p + c]
+                c += 1usize
+            }
+            i += 1usize
+        }
+        pbon = p
+        if nb > 0usize {
+            let (kk, re) = cube_reduc(a, xb[0usize..nb * p], nb, p, xr)
+            if re != ok { ret re }
+            pbon = kk
+        }
+        if nb > pbon && nb > 0usize {
+            // xr is column-major (nb by pbon); the next flight works on the rows scaled by pikbon / pik0[liste]
+            i = 0usize
+            while i < nb {
+                var c = 0usize
+                while c < pbon {
+                    xs[i * pbon + c] = xr[i + c * nb] / pik0[liste[i]] * pb[i]
+                    c += 1usize
+                }
+                i += 1usize
+            }
+            let ae2 = cube_algo(a, r, xs[0usize..nb * pbon], pb[0usize..nb], nb, pbon)
+            if ae2 != ok { ret ae2 }
+            i = 0usize
+            while i < nb {
+                pik[liste[i]] = pb[i]
+                i += 1usize
+            }
+        } else {
+            go = false
+        }
+    }
+    ret ok
 }
