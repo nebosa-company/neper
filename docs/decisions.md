@@ -50484,4 +50484,4 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 
 **Decision.** `performancepkg.std_params_lm` z-scores the response and the numeric predictors and fits least squares, returning the slopes and their t intervals at the asked level; for an lm with numeric predictors the refit, basic and posthoc methods all give these slopes.
 
-**Result.** `oracle_performancepkg` (1188 cases, 183 new on 15 models) equals `parameters::standardize_parameters` on Windows to 1e-8. Linux pending. L339 stays partial: factor predictors and the interaction-aware methods, bayestestR map_estimate, si and bayesfactor_savagedickey (they need R's density()), Nakagawa R2 and icc (mixed models), other outlier methods.
+**Result.** `oracle_performancepkg` (1188 cases, 114 new) equals `parameters::standardize_parameters` on Windows to 1e-8. Linux pending. L339 stays partial: factor predictors and the interaction-aware methods, bayestestR map_estimate, si and bayesfactor_savagedickey (they need R's density()), Nakagawa R2 and icc (mixed models), other outlier methods.
