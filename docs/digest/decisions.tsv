@@ -4110,4 +4110,5 @@ D7316	974	agricolae: SNK.test and duncan.test comparisons
 D7317	961	agricolae: grouping letters and the Kruskal post-hoc
 D7311	574	betareg: variable dispersion
 D7318	767	agricolae: friedman
-D7319	1008	agricolae: waller.test
+D7319	1009	agricolae: waller.test
+D7320	980	agricolae: design.crd and design.rcbd

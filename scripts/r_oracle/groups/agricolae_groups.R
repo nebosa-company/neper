@@ -53,4 +53,18 @@ for (rep in 1:8) {
   r <- wt$groups
   for (i in seq_len(nrow(r))) { add("wg", i - 1, mask(as.character(r$groups[i])), rel = 0, abs = 0); add("wo", i - 1, as.numeric(rownames(r)[i]), rel = 0, abs = 0) }
 }
+# randomised designs under set.seed(seed, "Mersenne-Twister"): kind 8 design.crd args (8, seed, t, idx, reps[t]) fn "dt" the treatment code (0-based) and "dr" the replicate number of plot idx;
+# kind 9 design.rcbd args (9, seed, t, blocks, first, idx) fn "bt" the treatment code of plot idx
+for (rep in 1:8) {
+  tn <- sample(3:7, 1); reps <- sample(2:5, tn, replace = TRUE); seed <- 500 + rep
+  trt <- letters[1:tn]
+  d <- design.crd(trt, reps, serie = 2, seed = seed, kinds = "Mersenne-Twister")$book
+  for (i in seq_len(nrow(d))) {
+    cases[[length(cases) + 1]] <- case("dt", c(8, seed, tn, i - 1, reps), match(as.character(d[[3]][i]), trt) - 1, rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("dr", c(8, seed, tn, i - 1, reps), d$r[i], rel = 0, abs = 0)
+  }
+  nbk <- sample(2:5, 1); fst <- rep %% 2 == 0
+  b <- design.rcbd(trt, nbk, serie = 2, seed = seed, kinds = "Mersenne-Twister", first = fst)$book
+  for (i in seq_len(nrow(b))) cases[[length(cases) + 1]] <- case("bt", c(9, seed, tn, nbk, as.numeric(fst), i - 1), match(as.character(b[[3]][i]), trt) - 1, rel = 0, abs = 0)
+}
 emit("agricolae_groups", "agricolae", list(cases))

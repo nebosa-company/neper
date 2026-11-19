@@ -6,6 +6,7 @@
 
 use e.math
 use e.math.nmath_beta as nb
+use e.algo.rand.r as rr
 use e.math.nmath as nm
 use e.math.quadpack as qp
 use e.mem
@@ -391,3 +392,69 @@ fn waller_fc(w: OneWay, y: []const f64, mean: []const f64, size: []const f64) ->
 
 // the pairwise verdicts of the Waller-Duncan test: the minimum significant difference of the pair (i, j) is tw sqrt(mse (1 / n_i + 1 / n_j))
 fn waller_msd(w: OneWay, tw: f64, size: []const f64, i: usize, j: usize) -> f64 { ret tw * math.sqrt[f64](w.mse * (1.0f64 / size[i] + 1.0f64 / size[j])) }
+
+// ---- the randomised designs of agricolae under set.seed(seed, kinds = "Mersenne-Twister") (the package's default Super-Duper generator is not available): the
+// treatment of each plot, as 0-based treatment codes in plot order.
+
+// design.crd(trt, r): the treatments in order, repeated r[i] times, then sample(y, length(y)); out has sum(r) entries; rep receives the replicate number of each plot
+// (the plots of a treatment numbered in plot order)
+fn design_crd(a: *mem.Arena, rng: *rr.Rng, r: []const usize, out: []usize, rep: []usize) -> err {
+    var total = 0usize
+    var i = 0usize
+    while i < r.len {
+        total += r[i]
+        i += 1usize
+    }
+    let (y, e1) = mem.alloc[usize](a, total)
+    if e1 != ok { ret e1 }
+    var c = 0usize
+    i = 0usize
+    while i < r.len {
+        var q = 0usize
+        while q < r[i] {
+            y[c] = i
+            c += 1usize
+            q += 1usize
+        }
+        i += 1usize
+    }
+    let (idx, e2) = rr.sample_int(a, rng, i64(total), i64(total), false)
+    if e2 != ok { ret e2 }
+    i = 0usize
+    while i < total {
+        out[i] = y[usize(idx[i]) - 1usize]
+        i += 1usize
+    }
+    let (seen, e3) = mem.alloc[usize](a, r.len)
+    if e3 != ok { ret e3 }
+    i = 0usize
+    while i < r.len {
+        seen[i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < total {
+        seen[out[i]] += 1usize
+        rep[i] = seen[out[i]]
+        i += 1usize
+    }
+    ret ok
+}
+
+// design.rcbd(trt, r, first): r blocks of the ntr treatments, each block sample(trt, ntr); with first FALSE the first block is the treatments in order (its draw
+// is still consumed). out has ntr * r entries in plot order.
+fn design_rcbd(a: *mem.Arena, rng: *rr.Rng, ntr: usize, blocks: usize, first: bool, out: []usize) -> err {
+    var b = 0usize
+    while b < blocks {
+        let (idx, e) = rr.sample_int(a, rng, i64(ntr), i64(ntr), false)
+        if e != ok { ret e }
+        var j = 0usize
+        while j < ntr {
+            out[b * ntr + j] = usize(idx[j]) - 1usize
+            if b == 0usize && !first { out[j] = j }
+            j += 1usize
+        }
+        b += 1usize
+    }
+    ret ok
+}

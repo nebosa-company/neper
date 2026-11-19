@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R agricolae_groups`; the layout is at the top of scripts/r_oracle/groups/agricolae_groups.R.
 
 use e.algo.stat.agricolae as ag
+use e.algo.rand.r as rr
 use e.io
 use e.mem
 use e.os
@@ -39,6 +40,40 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             pp += 1usize
         }
         ret tot
+    }
+    if kind == 8usize || kind == 9usize {
+        var rng: rr.Rng = zero
+        rr.seed(&rng, i64(x[1usize]))
+        if kind == 8usize {
+            // (8, seed, t, idx, reps...)
+            let tn = k
+            let didx = usize(x[3usize])
+            let (reps, g1) = mem.alloc[usize](a, tn)
+            if g1 != ok { os.exit(10) }
+            var total = 0usize
+            var ri = 0usize
+            while ri < tn {
+                reps[ri] = usize(x[4usize + ri])
+                total += reps[ri]
+                ri += 1usize
+            }
+            let (tr, g2) = mem.alloc[usize](a, total)
+            let (rp, g3) = mem.alloc[usize](a, total)
+            if g2 != ok || g3 != ok { os.exit(11) }
+            let ed = ag.design_crd(a, &rng, reps, tr, rp)
+            if ed != ok { os.exit(12) }
+            if str.eq(c.name, "dt") { ret f64(tr[didx]) }
+            ret f64(rp[didx])
+        }
+        // (9, seed, t, blocks, first, idx)
+        let blocks = usize(x[3usize])
+        let first = x[4usize] > 0.5f64
+        let pidx = usize(x[5usize])
+        let (bo, g4) = mem.alloc[usize](a, k * blocks)
+        if g4 != ok { os.exit(13) }
+        let eb = ag.design_rcbd(a, &rng, k, blocks, first, bo)
+        if eb != ok { os.exit(14) }
+        ret f64(bo[pidx])
     }
     if kind == 7usize {
         let wy = x[3usize..3usize + n]
