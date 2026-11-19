@@ -12,6 +12,52 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.starts_with(c.name, "nl_") {
+        let n = usize(z[0usize])
+        let j = usize(z[1usize])
+        let k = usize(z[2usize])
+        let asc = z[3usize] > 0.5f64
+        let nn = usize(z[4usize])
+        let (nest, ne) = mem.alloc[usize](a, j)
+        let (out, oe) = mem.alloc[f64](a, 2usize * j + 2usize * k + 4usize)
+        if ne != ok || oe != ok { ret nan }
+        var t = 0usize
+        while t < j {
+            nest[t] = usize(z[5usize + t])
+            t += 1usize
+        }
+        let chs = z[5usize + j..5usize + j + n]
+        let xs = z[5usize + j + n..5usize + j + n + n * j * k]
+        var q = k
+        if asc { q = j - 1usize + k }
+        if ml.nested_logit(a, xs, chs, n, j, k, asc, nest, nn, out) != ok { ret nan }
+        var nl = 0usize
+        var m = 0usize
+        while m < nn {
+            var cnt = 0usize
+            t = 0usize
+            while t < j {
+                if nest[t] == m { cnt += 1usize }
+                t += 1usize
+            }
+            if cnt > 1usize { nl += 1usize }
+            m += 1usize
+        }
+        if str.eq(c.name, "nl_ll") { ret out[q + nl] }
+        var lo = 0usize
+        var hi = q
+        if str.eq(c.name, "nl_iv") {
+            lo = q
+            hi = q + nl
+        }
+        var s = 0.0f64
+        t = lo
+        while t < hi {
+            s += out[t] * f64(t - lo + 1usize)
+            t += 1usize
+        }
+        ret s
+    }
     if str.starts_with(c.name, "mnl_") {
         let mn = usize(z[0usize])
         let mj = usize(z[1usize])

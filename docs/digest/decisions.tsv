@@ -4232,4 +4232,5 @@ D7330	660	survival: survdiff with strata
 D7331	688	parameters: standardize_parameters of an lm
 D7332	690	bayestestR: map_estimate
 D7333	702	mlogit: shares and marginal effects
-D7334	526	mlogit: likelihood-ratio test
+D7334	527	mlogit: likelihood-ratio test
+D7335	901	mlogit: nested logit

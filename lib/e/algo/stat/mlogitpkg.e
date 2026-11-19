@@ -5,6 +5,7 @@
 use e.algo.stat.gparot as gp
 use e.math
 use e.mem
+use e.math.opt as opt
 
 // x is n choosers by j alternatives by k covariates (row-major in that order); ch[i] is the chosen alternative (0-based); out = coefficients (q), standard errors (q), log-likelihood, q = (asc ? j - 1 : 0) + k
 fn clogit(a: *mem.Arena, x: []const f64, ch: []const f64, n: usize, j: usize, k: usize, asc: bool, out: []f64) -> err {
@@ -298,4 +299,120 @@ fn clogit_effects(x: []const f64, n: usize, j: usize, k: usize, asc: bool, coef:
         }
         a1 += 1usize
     }
+}
+
+type NCtx = struct { x: []const f64, ch: []const f64, n: usize, j: usize, k: usize, na: usize, nest: []const usize, nn: usize, lamidx: []const usize }
+
+// the nested logit negative log-likelihood at par = (alternative constants, covariate coefficients, the inclusive-value coefficient of each nest with two or more alternatives): the probability of j in nest m is
+// exp(V_j / l_m) (sum_{i in m} exp(V_i / l_m))^(l_m - 1) / sum_m' (sum_{i in m'} exp(V_i / l_m'))^l_m'
+fn nested_negll(c: *NCtx, par: []const f64) -> f64 {
+    var ll = 0.0f64
+    var iv: [16]f64 = zero
+    var vv: [16]f64 = zero
+    var sm: [16]f64 = zero
+    var i = 0usize
+    while i < c.n {
+        var a1 = 0usize
+        while a1 < c.j {
+            var v = 0.0f64
+            if c.na > 0usize && a1 > 0usize { v = par[a1 - 1usize] }
+            var cc = 0usize
+            while cc < c.k {
+                v += c.x[(i * c.j + a1) * c.k + cc] * par[c.na + cc]
+                cc += 1usize
+            }
+            vv[a1] = v
+            a1 += 1usize
+        }
+        var m = 0usize
+        while m < c.nn {
+            sm[m] = 0.0f64
+            m += 1usize
+        }
+        a1 = 0usize
+        while a1 < c.j {
+            var lm = 1.0f64
+            if c.lamidx[c.nest[a1]] < 1000usize { lm = par[c.na + c.k + c.lamidx[c.nest[a1]]] }
+            iv[a1] = lm
+            sm[c.nest[a1]] += math.exp[f64](vv[a1] / lm)
+            a1 += 1usize
+        }
+        var den = 0.0f64
+        m = 0usize
+        while m < c.nn {
+            var lm = 1.0f64
+            if c.lamidx[m] < 1000usize { lm = par[c.na + c.k + c.lamidx[m]] }
+            if sm[m] > 0.0f64 { den += math.pow[f64](sm[m], lm) }
+            m += 1usize
+        }
+        let ch = usize(c.ch[i])
+        let lc = iv[ch]
+        ll += vv[ch] / lc + (lc - 1.0f64) * math.log[f64](sm[c.nest[ch]]) - math.log[f64](den)
+        i += 1usize
+    }
+    if ll != ll { ret 1.0e30f64 }
+    ret 0.0f64 - ll
+}
+
+// mlogit(..., nests = ...) fitted by Nelder-Mead from the conditional logit with every inclusive value 1: nest[a] is the nest (0-based, nn of them) of alternative a. out = coefficients (constants then covariates), then the
+// inclusive values of the nests with two or more alternatives in nest order, then the log-likelihood; q + nl + 1 values. Singleton nests carry no inclusive value
+fn nested_logit(a: *mem.Arena, x: []const f64, ch: []const f64, n: usize, j: usize, k: usize, asc: bool, nest: []const usize, nn: usize, out: []f64) -> err {
+    var na = 0usize
+    if asc { na = j - 1usize }
+    let q = na + k
+    let (lamidx, e1) = mem.alloc[usize](a, nn)
+    if e1 != ok { ret e1 }
+    var nl = 0usize
+    var m = 0usize
+    while m < nn {
+        var cnt = 0usize
+        var a1 = 0usize
+        while a1 < j {
+            if nest[a1] == m { cnt += 1usize }
+            a1 += 1usize
+        }
+        lamidx[m] = 1000usize
+        if cnt > 1usize {
+            lamidx[m] = nl
+            nl += 1usize
+        }
+        m += 1usize
+    }
+    let (start, e2) = mem.alloc[f64](a, 2usize * q + 1usize)
+    if e2 != ok { ret e2 }
+    let e3 = clogit(a, x, ch, n, j, k, asc, start)
+    if e3 != ok { ret e3 }
+    let dim = q + nl
+    let (par, e4) = mem.alloc[f64](a, dim)
+    if e4 != ok { ret e4 }
+    var i = 0usize
+    while i < q {
+        par[i] = start[i]
+        i += 1usize
+    }
+    while i < dim {
+        par[i] = 1.0f64
+        i += 1usize
+    }
+    var c = NCtx { x: x, ch: ch, n: n, j: j, k: k, na: na, nest: nest, nn: nn, lamidx: lamidx }
+    let (scr, e5) = mem.alloc[f64](a, (dim + 1usize) * (dim + 1usize) + 4usize * dim)
+    if e5 != ok { ret e5 }
+    var round = 0usize
+    var last = 1.0e30f64
+    var best = 1.0e30f64
+    while round < 20usize {
+        let (r, e6) = opt.nelder_mead[NCtx](&c, nested_negll, par, 0.2f64, 1.0e-15f64, 6000u32, scr)
+        if e6 != ok { ret e6 }
+        best = r.value
+        if math.abs[f64](last - r.value) < 1.0e-12f64 * (1.0f64 + math.abs[f64](r.value)) && round > 2usize { break }
+        last = r.value
+        round += 1usize
+    }
+    i = 0usize
+    while i < dim {
+        out[i] = par[i]
+        i += 1usize
+    }
+    out[dim] = 0.0f64 - best
+    ret ok
 }

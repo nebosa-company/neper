@@ -50503,3 +50503,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** The fixture fits the conditional logit with and without its last covariate and forms 2 (ll1 - ll0) with the chi-square upper tail on one degree of freedom, as `lmtest::lrtest` does for two mlogit fits.
 
 **Result.** `oracle_mlogit` (173 cases, 28 new) equals lrtest on Windows: statistic to 1e-5, p-value to 1e-4. Linux pending. L456 stays partial: nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, Wald tests, predictions on new data.
+
+## D7335 — mlogit: nested logit
+
+**Decision.** `mlogitpkg.nested_logit` fits `mlogit(..., nests = list(...))`: the probability of alternative j in nest m is exp(V_j / l_m) (sum over the nest of exp(V_i / l_m))^(l_m - 1) divided by the sum over nests of (nest sum)^l_m, with one inclusive-value coefficient l_m per nest of two or more alternatives (a singleton nest is unaffected by its coefficient and carries none), maximised by Nelder-Mead from the conditional logit with every l_m = 1.
+
+**Result.** `oracle_mlogit` (203 cases, 30 new on 10 nested models with and without alternative constants) equals mlogit on Windows: coefficients and inclusive values to 5e-3, the log-likelihood to 1e-6. Linux pending. L456 stays partial: standard errors of the nested fit, a common inclusive value, mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, Wald tests, predictions on new data.

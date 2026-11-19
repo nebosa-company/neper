@@ -48,4 +48,25 @@ for (rep in 1:15) {
   cases[[length(cases) + 1]] <- case("mnl_se", a, ws(se), rel = 1e-4, abs = 1e-6)
   cases[[length(cases) + 1]] <- case("mnl_ll", a, as.numeric(logLik(f)), rel = 1e-4, abs = 1e-6)
 }
+# nested logit: "nl_coef" "nl_iv" "nl_ll" args (n, J, k, asc, M, nest[J] 0-based, choice[n] 0-based, x[n*J*k] row-major); coefficients then iv weighted by position, loglik
+for (rep in 1:14) {
+  n <- sample(200:400, 1); J <- 4; k <- sample(1:2, 1); asc <- rep %% 2
+  nestv <- c(0, 0, 1, 1); if (rep %% 3 == 0) nestv <- c(0, 0, 0, 1)
+  X <- array(rnorm(n * J * k), c(n, J, k)); beta <- rnorm(k, 0, 0.7); a0 <- if (asc) c(0, rnorm(J - 1, 0, 0.4)) else rep(0, J)
+  U <- sapply(1:J, function(j) a0[j] + as.vector(matrix(X[, j, ], n, k) %*% beta)) + matrix(-log(-log(runif(n * J))), n)
+  ch <- apply(U, 1, which.max)
+  d <- data.frame(id = rep(1:n, each = J), alt = factor(rep(1:J, n)))
+  for (c in 1:k) d[[paste0("x", c)]] <- as.vector(t(X[, , c]))
+  d$choice <- as.vector(t(outer(ch, 1:J, "==")))
+  m <- dfidx(d, idx = c("id", "alt"))
+  fm <- as.formula(paste("choice ~", paste0("x", 1:k, collapse = " + "), if (asc) "" else "| 0"))
+  nl <- lapply(0:max(nestv), function(g) as.character(which(nestv == g))); names(nl) <- paste0("n", 0:max(nestv))
+  f <- tryCatch(mlogit(fm, m, nests = nl, reltol = 1e-14, tol = 1e-14, iterlim = 500), error = function(e) NULL); if (is.null(f)) next
+  cf <- coef(f); ivn <- grep("^iv", names(cf)); if (length(ivn) == 0) next
+  b <- if (asc) c(cf[grep("Intercept", names(cf))], cf[paste0("x", 1:k)]) else cf[paste0("x", 1:k)]
+  a <- c(n, J, k, asc, max(nestv) + 1, nestv, ch - 1, as.vector(aperm(X, c(3, 2, 1))))
+  cases[[length(cases) + 1]] <- case("nl_coef", a, ws(b), rel = 5e-3, abs = 5e-3)
+  cases[[length(cases) + 1]] <- case("nl_iv", a, ws(cf[ivn]), rel = 5e-3, abs = 5e-3)
+  cases[[length(cases) + 1]] <- case("nl_ll", a, as.numeric(logLik(f)), rel = 1e-6, abs = 1e-6)
+}
 emit("mlogit", "mlogit", list(cases))
