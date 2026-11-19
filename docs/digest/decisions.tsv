@@ -4605,4 +4605,7 @@ D7704	683	bayestestR: the bias-corrected and accelerated interval
 D7705	969	performance: check_outliers by IQR; L339 re-scored
 D7706	1045	psych: splitHalf
 D7707	1101	survival: one concordance and one survSplit
-D7708	1334	two more duplicates removed from this session's work
+D7708	1335	two more duplicates removed from this session's work
+D7709	1179	audit finished: what overlaps and is kept
+D7710	637	psych: splitHalf for odd item counts
+D7711	530	psych: Guttman's lambda2

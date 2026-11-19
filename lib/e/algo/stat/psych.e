@@ -1589,7 +1589,7 @@ fn fa_rms(r: []const f64, ld: []const f64, p: usize, q: usize, dof: f64, out: []
 }
 
 // psych::splitHalf(r, brute = TRUE) for an even number of items p (at most 16) from their correlation matrix: every split of the items into two halves of p / 2 gives Guttman's lambda4 = 4 (sum of the cross correlations) / (sum of all
-// entries of r), and out = the maximum, the minimum, the mean (equal to the standardised alpha) over all C(p, p / 2) splits, then the median of the inter-item correlations (psych's med.r), then Guttman's lambda6 = 1 - sum(1 / diag(r^-1)) / sum(r)
+// entries of r), and out = the maximum, the minimum, the mean (equal to the standardised alpha) over all C(p, p / 2) splits, then the median of the inter-item correlations (psych's med.r), then Guttman's lambda6 = 1 - sum(1 / diag(r^-1)) / sum(r), then lambda2 (psych's lambda2 of splitHalf)
 fn split_half(a: *mem.Arena, r: []const f64, p: usize, out: []f64) -> bool {
     let half = p / 2usize
     let total = 1usize << p
@@ -1684,5 +1684,18 @@ fn split_half(a: *mem.Arena, r: []const f64, p: usize, out: []f64) -> bool {
         i += 1usize
     }
     out[4usize] = 1.0f64 - s2 / tot
+    // Guttman's lambda2 = lambda1 + sqrt(p / (p - 1) sum over i != j of r_ij^2) / sum(r), lambda1 = 1 - trace / sum(r)
+    var tr = 0.0f64
+    var off2 = 0.0f64
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            if i == j { tr += r[i * p + j] } else { off2 += r[i * p + j] * r[i * p + j] }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    out[5usize] = 1.0f64 - tr / tot + math.sqrt[f64](f64(p) / (f64(p) - 1.0f64) * off2) / tot
     ret true
 }

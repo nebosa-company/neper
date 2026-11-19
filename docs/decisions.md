@@ -51756,3 +51756,6 @@ The rest of the D7707 audit, by grep over lib/e for each capability this session
 
 ## D7710 — psych: splitHalf for odd item counts
 `split_half` already took halves of p / 2 rounded down, which for an odd number of items is what psych does (for 5 items psych's raw values are the ten lambda4 values of the splits into 2 and 3 items, each once, where for an even count every split appears twice). The oracle now draws p from 4 to 10: the maximum, minimum, mean, median inter-item correlation and lambda6 equal psych::splitHalf on the new matrices too, to 1e-9, with no code change (60 values regenerated in oracle_psychfa, 1374 in all, one minute). The confidence intervals and the other lambda coefficients stay open.
+
+## D7711 — psych: Guttman's lambda2
+`split_half` also returns lambda2 = lambda1 + sqrt(p / (p - 1) sum over i != j of r_ij^2) / sum(r) with lambda1 = 1 - trace / sum(r), the formula behind psych::splitHalf's lambda2 (it reproduced 0.7774204 for the matrix of D7706 before being written into the function). Equal to s$lambda2 on the matrices of D7710 to 1e-9, 12 values added to oracle_psychfa (1386 in all), on the first run. The confidence intervals of splitHalf and the other lambda coefficients (lambda3, lambda5) stay open.
