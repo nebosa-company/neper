@@ -4603,4 +4603,5 @@ D7702	467	unmarked: standard errors for occuRN
 D7703	931	bayestestR: p_map and p_significance
 D7704	683	bayestestR: the bias-corrected and accelerated interval
 D7705	969	performance: check_outliers by IQR; L339 re-scored
-D7706	1044	psych: splitHalf
+D7706	1045	psych: splitHalf
+D7707	1100	survival: one concordance and one survSplit
