@@ -260,4 +260,11 @@ for (v in bt2) {
   if (is.null(r) || any(is.nan(r)) || !is.finite(r[1])) next
   for (w in 0:2) if (is.finite(r[w + 1])) cases[[length(cases) + 1]] <- case("ob", c(v, w), r[w + 1], rel = 1e-8, abs = 1e-11)
 }
+# the Koopman risk-ratio interval on every kind of table: "kb" args (a, b, c, d, which 0 est 1 lower 2 upper); finite values only
+bt3 <- list(c(0, 40, 12, 100), c(5, 40, 0, 100), c(0, 30, 0, 50), c(20, 0, 8, 60), c(10, 30, 15, 0), c(25, 0, 12, 0), c(0, 35, 14, 0), c(9, 0, 3, 17), c(7, 33, 10, 0), c(12, 0, 5, 0), c(6, 14, 3, 20), c(40, 100, 25, 80))
+for (v in bt3) {
+  r <- tryCatch(suppressWarnings(epiR:::zRRkoopman(c(v[1], v[3], v[2], v[4]), 0.95)), error = function(e) NULL)
+  if (is.null(r) || any(is.nan(r))) next
+  for (w in 0:2) if (is.finite(r[w + 1])) cases[[length(cases) + 1]] <- case("kb", c(v, w), r[w + 1], rel = 1e-8, abs = 1e-11)
+}
 emit("epir", "epiR", list(cases))

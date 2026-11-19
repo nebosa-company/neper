@@ -77,6 +77,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if wob == 1usize { ret ol2 }
         ret oh2
     }
+    if str.eq(c.name, "kb") {
+        let tk = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
+        let (ke2, kl2, kh2) = ep.rr_koopman_all(tk, 0.95f64)
+        let wk = usize(x[4usize])
+        if wk == 0usize { ret ke2 }
+        if wk == 1usize { ret kl2 }
+        ret kh2
+    }
     if str.eq(c.name, "rb") {
         let tb = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
         let (be, bl, bh) = ep.rr_score_all(tb, 0.95f64)

@@ -1326,3 +1326,159 @@ fn or_score_all(t: Table2, level: f64) -> (f64, f64, f64) {
     let hi = or_zlimit(x1, n1, x2, n2, level, base * 1.1f64, true)
     ret (est, lo, hi)
 }
+
+// the two inner roots of the cubic of the score risk-ratio interval for x of m and y of n (p0 low and up)
+fn koop_p0(x: f64, y: f64, m: f64, n: f64, z: f64) -> (f64, f64) {
+    let z2 = z * z
+    let a1 = n * (n * (n + m) * x + m * (n + x) * z2)
+    let a2 = 0.0f64 - n * (n * m * (y + x) + 2.0f64 * (n + m) * y * x + m * (n + y + 2.0f64 * x) * z2)
+    let a3 = 2.0f64 * n * m * y * (y + x) + (n + m) * y * y * x + n * m * (y + x) * z2
+    let a4 = 0.0f64 - m * y * y * (y + x)
+    let b1 = a2 / a1
+    let b2 = a3 / a1
+    let b3 = a4 / a1
+    let c1 = b2 - b1 * b1 / 3.0f64
+    let c2 = b3 - b1 * b2 / 3.0f64 + 2.0f64 * b1 * b1 * b1 / 27.0f64
+    let ceta = math.acos[f64](math.sqrt[f64](27.0f64) * c2 / (2.0f64 * c1 * math.sqrt[f64](0.0f64 - c1)))
+    let pi = 3.141592653589793f64
+    let s = 2.0f64 * math.sqrt[f64](0.0f64 - c1 / 3.0f64)
+    let p01 = 0.0f64 - s * math.cos[f64](pi / 3.0f64 - ceta / 3.0f64) - b1 / 3.0f64
+    let p02 = 0.0f64 - s * math.cos[f64](pi / 3.0f64 + ceta / 3.0f64) - b1 / 3.0f64
+    let p03 = s * math.cos[f64](ceta / 3.0f64) - b1 / 3.0f64
+    let up = math.min[f64](p01, math.min[f64](p02, p03))
+    let low = p01 + p02 + p03 - up - math.max[f64](p01, math.max[f64](p02, p03))
+    ret (low, up)
+}
+
+type KoopCtx0 = struct { m: f64, n: f64, x2: f64 }
+
+fn koop_u0(c: *KoopCtx0, a: f64) -> f64 {
+    if a <= 1.0f64 { ret c.m * (1.0f64 - a) / a - c.x2 }
+    ret c.n * (a - 1.0f64) - c.x2
+}
+
+// epiR zRRkoopman for every table, following its sequential branches (each later branch overwrites the earlier ends): the uniroot brackets, the closed forms from the cubic, and
+// the 1.0001-step searches; the table is read as in `rr_koopman` (x = a, m = a + c, y = b, n = b + d); (est, lower, upper)
+fn rr_koopman_all(t: Table2, level: f64) -> (f64, f64, f64) {
+    let inf = 1.0f64 / 0.0f64
+    let z = z_of(level)
+    let x = t.a
+    let m = t.a + t.c
+    let y = t.b
+    let n = t.b + t.d
+    let x2 = nm.qchisq(level, 1.0f64, true, false)
+    let tol = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    if x == 0.0f64 && y == 0.0f64 { ret (0.0f64, 0.0f64, inf) }
+    let (p0low, p0up) = koop_p0(x, y, m, n, z)
+    var c = KoopCtx { m: m, n: n, x: x, y: y, x2: x2 }
+    var c0 = KoopCtx0 { m: m, n: n, x2: x2 }
+    let est = (x / m) / (y / n)
+    var nrat = est
+    var varhat = 1.0f64 / x - 1.0f64 / m + 1.0f64 / y - 1.0f64 / n
+    if x == 0.0f64 && y != 0.0f64 {
+        nrat = ((x + 0.5f64) / m) / (y / n)
+        varhat = 1.0f64 / (x + 0.5f64) - 1.0f64 / m + 1.0f64 / y - 1.0f64 / n
+    }
+    if y == 0.0f64 && x != 0.0f64 {
+        nrat = (x / m) / ((y + 0.5f64) / n)
+        varhat = 1.0f64 / x - 1.0f64 / m + 1.0f64 / (y + 0.5f64) - 1.0f64 / n
+    }
+    if y == n && x == m {
+        nrat = 1.0f64
+        varhat = 1.0f64 / (m - 0.5f64) - 1.0f64 / m + 1.0f64 / (n - 0.5f64) - 1.0f64 / n
+    }
+    let la = nrat * math.exp[f64](0.0f64 - z * math.sqrt[f64](varhat)) / 4.0f64
+    let lb = nrat
+    let ha = nrat
+    let hb = nrat * math.exp[f64](z * math.sqrt[f64](varhat)) * 4.0f64
+    var lower = 0.0f64
+    var upper = 0.0f64
+    if x != 0.0f64 && y == 0.0f64 {
+        if x == m {
+            lower = (1.0f64 - (m - x) * (1.0f64 - p0low) / (y + m - (n + m) * p0low)) / p0low
+            upper = inf
+        } else {
+            lower = pw.zeroin[KoopCtx](&c, koop_u, la, lb, tol, 1000i64)
+            upper = inf
+        }
+    }
+    if x == 0.0f64 && y != n {
+        upper = pw.zeroin[KoopCtx](&c, koop_u, ha, hb, tol, 1000i64)
+        lower = 0.0f64
+    }
+    if (x == m || y == n) && y != 0.0f64 {
+        if x == m && y == n {
+            lower = pw.zeroin[KoopCtx0](&c0, koop_u0, la, est, tol, 1000i64)
+            upper = pw.zeroin[KoopCtx0](&c0, koop_u0, est, hb, tol, 1000i64)
+        }
+        if x == m && y != n {
+            let phihat = (y / n) / (x / m)
+            var phiu = 1.1f64 * phihat
+            var r = 0.0f64
+            var phiu1 = phiu
+            var it = 0usize
+            while r >= 0.0f64 - z && it < 200000usize {
+                let aa = (m + n) * phiu
+                let bb = 0.0f64 - ((x + n) * phiu + y + m)
+                let cc = x + y
+                let p1hat = (0.0f64 - bb - math.sqrt[f64](bb * bb - 4.0f64 * aa * cc)) / (2.0f64 * aa)
+                let p2hat = p1hat * phiu
+                let q2hat = 1.0f64 - p2hat
+                let vr = (m * n * p2hat) / (n * (phiu - p2hat) + m * q2hat)
+                r = ((y - n * p2hat) / q2hat) / math.sqrt[f64](vr)
+                phiu1 = phiu
+                phiu = 1.0001f64 * phiu1
+                it += 1usize
+            }
+            upper = (1.0f64 - (m - x) * (1.0f64 - p0up) / (y + m - (n + m) * p0up)) / p0up
+            lower = 1.0f64 / phiu1
+        }
+        if y == n && x != m {
+            let phihat = (x / m) / (y / n)
+            var phil = 0.95f64 * phihat
+            var r = 0.0f64
+            if x != 0.0f64 {
+                var it = 0usize
+                while r <= z && it < 200000usize {
+                    let aa = (n + m) * phil
+                    let bb = 0.0f64 - ((y + m) * phil + x + n)
+                    let cc = y + x
+                    let p1hat = (0.0f64 - bb - math.sqrt[f64](bb * bb - 4.0f64 * aa * cc)) / (2.0f64 * aa)
+                    let p2hat = p1hat * phil
+                    let q2hat = 1.0f64 - p2hat
+                    let vr = (n * m * p2hat) / (m * (phil - p2hat) + n * q2hat)
+                    r = ((x - m * p2hat) / q2hat) / math.sqrt[f64](vr)
+                    lower = phil
+                    phil = lower / 1.0001f64
+                    it += 1usize
+                }
+            }
+            var phiu = 1.1f64 * phihat
+            if x == 0.0f64 {
+                lower = 0.0f64
+                if n < 100.0f64 { phiu = 0.01f64 } else { phiu = 0.001f64 }
+            }
+            r = 0.0f64
+            var phiu1 = phiu
+            var it2 = 0usize
+            while r >= 0.0f64 - z && it2 < 200000usize {
+                let aa = (n + m) * phiu
+                let bb = 0.0f64 - ((y + m) * phiu + x + n)
+                let cc = y + x
+                let p1hat = (0.0f64 - bb - math.sqrt[f64](bb * bb - 4.0f64 * aa * cc)) / (2.0f64 * aa)
+                let p2hat = p1hat * phiu
+                let q2hat = 1.0f64 - p2hat
+                let vr = (n * m * p2hat) / (m * (phiu - p2hat) + n * q2hat)
+                r = ((x - m * p2hat) / q2hat) / math.sqrt[f64](vr)
+                phiu1 = phiu
+                phiu = 1.0001f64 * phiu1
+                it2 += 1usize
+            }
+            upper = phiu1
+        }
+    } else if y != n && x != m && x != 0.0f64 && y != 0.0f64 {
+        lower = pw.zeroin[KoopCtx](&c, koop_u, la, lb, tol, 1000i64)
+        upper = pw.zeroin[KoopCtx](&c, koop_u, ha, hb, tol, 1000i64)
+    }
+    ret (est, lower, upper)
+}

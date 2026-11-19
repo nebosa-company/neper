@@ -4469,4 +4469,5 @@ D7611	967	epiR epi.conf proportion contrasts and epi.tests for every interval me
 D7612	879	epiR epi.2by2 for person-time cohorts (cohort.time)
 D7613	1033	epiR case-control population attributable fraction
 D7614	761	epiR score risk-ratio interval on boundary tables
-D7615	756	epiR score odds-ratio interval on boundary tables
+D7615	757	epiR score odds-ratio interval on boundary tables
+D7616	1062	epiR Koopman risk-ratio interval on every table
