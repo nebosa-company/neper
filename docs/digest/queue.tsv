@@ -56,7 +56,7 @@ L460	library	0.25	621	epiR: epidemiology	Partial (D6187).
 L461	library	0.25	671	systemfit: equation systems	Partial (D6622).
 L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L486	library	0.25	473	mixtools: mixture models by EM	Partial (D6194).
-L487	library	0.99	3197	PMCMRplus: nonparametric post-hoc tests	Partial (D6407), p.adjust six methods (D6193).
+L487	library	0.99	3465	PMCMRplus: nonparametric post-hoc tests	Partial (D6407), p.adjust six methods (D6193).
 L488	library	0.2	475	drc: dose-response models	Partial (D6411).
 L489	library	0.15	799	osqp and clarabel: quadratic and conic solvers	Partial (D6643).
 L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
@@ -94,7 +94,7 @@ L490	library	0.15	657	timereg: Aalen additive and Cox-Aalen hazard models	Partia
 L491	library	0.15	673	riskRegression: risk prediction scoring	Partial (D6642).
 L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
 L440	library	0.15	855	flexsurv and rstpm2: flexible parametric survival models	Partial (D6640).
-L312	library	0.15	1343	psych: reliability, factor analysis and correlation tools	D7320: fa with principal axis factoring (unrotated) equal to psych.
+L312	library	0.15	1428	psych: reliability, factor analysis and correlation tools	D7321: scoreItems (scores, alpha, average r, G6, scale correlations) equal to psych.
 L313	library	0.12	1071	emmeans: estimated marginal means and contrasts	Partly done (D6058): e.algo.stat.emmeans gives lm EMMs, SEs, pairwise contrasts and Tukey, Holm, Bonferroni, Sidak adjustments equal to emmeans on 8 models on Windows (oracle_emmeans);
 L341	library	0.15	785	multcomp: general linear hypotheses	Partial (D6631).
 L318	library	0.05	735	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partly done (D6063): e.algo.stat.fcast has BoxCox, InvBoxCox and BoxCox.lambda by loglik, equal to forecast on 171 cases on Windows (oracle_fcast);

@@ -40,6 +40,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ps.principal_varimax(a, x[2usize..2usize + vp * vp], vp, vf, vo) != ok { ret 0.0f64 / 0.0f64 }
         ret vo[usize(x[2usize + vp * vp])]
     }
+    if str.eq(c.name, "score") {
+        let sn = usize(x[0usize])
+        let sp = usize(x[1usize])
+        let sS = usize(x[2usize])
+        let (so, se) = mem.alloc[f64](a, sn * sS + 3usize * sS + sS * sS)
+        if se != ok { ret 0.0f64 / 0.0f64 }
+        let xs = x[5usize..5usize + sn * sp]
+        let ks = x[5usize + sn * sp..5usize + sn * sp + sp * sS]
+        if ps.score_items(a, xs, sn, sp, ks, sS, x[3usize], x[4usize], so) != ok { ret 0.0f64 / 0.0f64 }
+        ret so[usize(x[5usize + sn * sp + sp * sS])]
+    }
     if str.eq(c.name, "fapa") {
         let fp = usize(x[0usize])
         let ff = usize(x[1usize])

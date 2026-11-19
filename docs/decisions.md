@@ -50407,3 +50407,9 @@ kSamples' Steel.test is not only compiled code: its asymptotic p is the R functi
 
 ## D7414 — PMCMRplus lsdTest and gamesHowellTest
 `lsd_gh_pair` gives the least significant difference test (t = dif / sqrt(pooled s2 (1/n_i + 1/n_j)), unadjusted two-sided p at n - k df) and the Games-Howell test (q = sqrt(2) dif / sqrt(v_i/n_i + v_j/n_j), Welch-Satterthwaite df, upper Tukey probability of |q| at k means) for a table cell. Equal to R on 14 one-way data sets (unequal variances for Games-Howell), statistics and p values as position-weighted sums. L487 stays at 0.99; the step-down range tests and the Tamhane-Dunnett T2 and T3 variants remain of its ANOVA post-hoc family.
+
+## D7321 — psych: scoreItems
+
+**Decision.** `psych.score_items` gives the mean scale scores of keyed items (negative keys reversed as max + min - x), alpha, the average inter-item r, Guttman's lambda 6 and the correlations of the scale scores. Lambda 6 follows psych's code: the squared multiple correlations come from the covariance matrix of all items (reversed where a key says so), not of each scale alone, and G6 = (var scale - sum item var + sum smc) / var scale.
+
+**Result.** `oracle_psych` (3552 cases, 1358 new) equals psych on Windows to 1e-8, for complete data and non-overlapping keys. Linux pending. L312 stays partial: missing data and overlapping keys in scoreItems, minres, ml, wls and gls extraction, oblique rotations, smoothing, omega, fa.parallel, VSS, describeBy.

@@ -104,4 +104,19 @@ for (rep in 1:14) {
   for (q in 0:(p * nf - 1)) cases[[length(cases) + 1]] <- case("fapa", c(p, nf, R, q), L[(q %% p) + 1, (q %/% p) + 1], rel = 1e-7, abs = 1e-8)
   for (i in 1:p) cases[[length(cases) + 1]] <- case("fapa", c(p, nf, R, p * nf + i - 1), fa1$communality[i], rel = 1e-7, abs = 1e-8)
 }
+# scoreItems, complete data, totals = FALSE: "score" (n, p, S, min, max, X[n*p], keys[p*S], q) q < n*S score; n*S + s alpha s; + S av.r s; + 2S G6 s; + 3S + u + v*S correlation of scale scores u, v
+for (rep in 1:10) {
+  n <- sample(40:100, 1); p <- sample(5:9, 1); f <- rnorm(n); X <- sapply(1:p, function(j) round(f * runif(1, 0.3, 1) + rnorm(n), 2)); colnames(X) <- paste0("V", 1:p)
+  S <- 2; keys <- matrix(0, p, S); h <- p %/% 2; keys[1:h, 1] <- 1; keys[(h + 1):p, 2] <- sample(c(1, -1), p - h, TRUE); if (all(keys[, 2] <= 0)) keys[h + 1, 2] <- 1
+  kl <- list(a = which(keys[, 1] != 0) * keys[keys[, 1] != 0, 1], b = which(keys[, 2] != 0) * keys[keys[, 2] != 0, 2])
+  s <- suppressMessages(suppressWarnings(scoreItems(kl, X, totals = FALSE, min = -6, max = 6, impute = "none")))
+  base <- c(n, p, S, -6, 6, X, keys)
+  for (q in 0:(n * S - 1)) cases[[length(cases) + 1]] <- case("score", c(base, q), s$scores[(q %% n) + 1, (q %/% n) + 1], rel = 1e-8, abs = 1e-10)
+  for (u in 1:S) {
+    cases[[length(cases) + 1]] <- case("score", c(base, n * S + u - 1), s$alpha[1, u], rel = 1e-8, abs = 1e-10)
+    cases[[length(cases) + 1]] <- case("score", c(base, n * S + S + u - 1), s$av.r[u], rel = 1e-8, abs = 1e-10)
+    if (is.finite(s$G6[1, u])) cases[[length(cases) + 1]] <- case("score", c(base, n * S + 2 * S + u - 1), s$G6[1, u], rel = 1e-8, abs = 1e-10)
+  }
+  for (u in 1:S) for (v in 1:S) cases[[length(cases) + 1]] <- case("score", c(base, n * S + 3 * S + (u - 1) + (v - 1) * S), s$cor[u, v], rel = 1e-8, abs = 1e-10)
+}
 emit("psych", "psych", list(cases))

@@ -809,3 +809,194 @@ fn fa_pa(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []f64) -> err 
     }
     ret ok
 }
+
+// psych::scoreItems(keys, x, totals = FALSE, min, max, impute = "none") for complete data: x is n by p column-major, keys p by S column-major with entries -1, 0, 1 (negative keys are reversed as max + min - x).
+// out[0 .. n S] the scale scores (the mean of the keyed items; scale s, case i at i + s n), then S alpha, S average r, S Guttman lambda 6, then the S by S correlations of the scores (column-major)
+fn score_items(a: *mem.Arena, x: []const f64, n: usize, p: usize, keys: []const f64, ns: usize, minv: f64, maxv: f64, out: []f64) -> err {
+    let nn = f64(n)
+    let (xr, ex1) = mem.alloc[f64](a, n * p)
+    let (fc, ex2) = mem.alloc[f64](a, p * p)
+    let (fi, ex3) = mem.alloc[f64](a, p * p)
+    if ex1 != ok { ret ex1 }
+    if ex2 != ok { ret ex2 }
+    if ex3 != ok { ret ex3 }
+    var fj = 0usize
+    while fj < p {
+        var neg = false
+        var fs = 0usize
+        while fs < ns {
+            if keys[fj + fs * p] < 0.0f64 { neg = true }
+            fs += 1usize
+        }
+        var fr = 0usize
+        while fr < n {
+            xr[fr + fj * n] = x[fr + fj * n]
+            if neg { xr[fr + fj * n] = maxv + minv - x[fr + fj * n] }
+            fr += 1usize
+        }
+        fj += 1usize
+    }
+    fj = 0usize
+    while fj < p {
+        var fl = 0usize
+        while fl < p {
+            var m1 = 0.0f64
+            var m2 = 0.0f64
+            var fr = 0usize
+            while fr < n {
+                m1 += xr[fr + fj * n]
+                m2 += xr[fr + fl * n]
+                fr += 1usize
+            }
+            m1 = m1 / nn
+            m2 = m2 / nn
+            var cxy = 0.0f64
+            fr = 0usize
+            while fr < n {
+                cxy += (xr[fr + fj * n] - m1) * (xr[fr + fl * n] - m2)
+                fr += 1usize
+            }
+            fc[fj * p + fl] = cxy / (nn - 1.0f64)
+            fl += 1usize
+        }
+        fj += 1usize
+    }
+    var sc = 0usize
+    while sc < ns {
+        var k = 0usize
+        var i = 0usize
+        while i < p {
+            if keys[i + sc * p] != 0.0f64 { k += 1usize }
+            i += 1usize
+        }
+        let (it, e1) = mem.alloc[f64](a, n * k)
+        let (cv, e2) = mem.alloc[f64](a, k * k)
+        let (iv, e3) = mem.alloc[f64](a, k * k)
+        if e1 != ok { ret e1 }
+        if e2 != ok { ret e2 }
+        if e3 != ok { ret e3 }
+        var c = 0usize
+        i = 0usize
+        while i < p {
+            let ky = keys[i + sc * p]
+            if ky != 0.0f64 {
+                var r = 0usize
+                while r < n {
+                    var v = x[r + i * n]
+                    if ky < 0.0f64 { v = maxv + minv - v }
+                    it[r + c * n] = v
+                    r += 1usize
+                }
+                c += 1usize
+            }
+            i += 1usize
+        }
+        var r = 0usize
+        while r < n {
+            var t = 0.0f64
+            c = 0usize
+            while c < k {
+                t += it[r + c * n]
+                c += 1usize
+            }
+            out[r + sc * n] = t / f64(k)
+            r += 1usize
+        }
+        var j = 0usize
+        while j < k {
+            var mj = 0.0f64
+            r = 0usize
+            while r < n {
+                mj += it[r + j * n]
+                r += 1usize
+            }
+            mj = mj / nn
+            var l = 0usize
+            while l < k {
+                var ml = 0.0f64
+                r = 0usize
+                while r < n {
+                    ml += it[r + l * n]
+                    r += 1usize
+                }
+                ml = ml / nn
+                var sxy = 0.0f64
+                r = 0usize
+                while r < n {
+                    sxy += (it[r + j * n] - mj) * (it[r + l * n] - ml)
+                    r += 1usize
+                }
+                cv[j * k + l] = sxy / (nn - 1.0f64)
+                l += 1usize
+            }
+            j += 1usize
+        }
+        var tot = 0.0f64
+        var dg = 0.0f64
+        j = 0usize
+        while j < k * k {
+            tot += cv[j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < k {
+            dg += cv[j * k + j]
+            j += 1usize
+        }
+        let al = (f64(k) / (f64(k) - 1.0f64)) * (1.0f64 - dg / tot)
+        out[n * ns + sc] = al
+        out[n * ns + ns + sc] = al / (f64(k) - (f64(k) - 1.0f64) * al)
+        var g6 = 0.0f64 / 0.0f64
+        if invert(a, fc, p, fi) {
+            var vs = 0.0f64
+            var sis = 0.0f64
+            var ssm = 0.0f64
+            var ia = 0usize
+            while ia < p {
+                if keys[ia + sc * p] != 0.0f64 {
+                    sis += fc[ia * p + ia]
+                    ssm += fc[ia * p + ia] - 1.0f64 / fi[ia * p + ia]
+                    var ib = 0usize
+                    while ib < p {
+                        if keys[ib + sc * p] != 0.0f64 { vs += fc[ia * p + ib] }
+                        ib += 1usize
+                    }
+                }
+                ia += 1usize
+            }
+            g6 = (vs - sis + ssm) / vs
+        }
+        out[n * ns + 2usize * ns + sc] = g6
+        sc += 1usize
+    }
+    var u = 0usize
+    while u < ns {
+        var v = 0usize
+        while v < ns {
+            var mu = 0.0f64
+            var mv = 0.0f64
+            var r = 0usize
+            while r < n {
+                mu += out[r + u * n]
+                mv += out[r + v * n]
+                r += 1usize
+            }
+            mu = mu / nn
+            mv = mv / nn
+            var suv = 0.0f64
+            var suu = 0.0f64
+            var svv = 0.0f64
+            r = 0usize
+            while r < n {
+                suv += (out[r + u * n] - mu) * (out[r + v * n] - mv)
+                suu += (out[r + u * n] - mu) * (out[r + u * n] - mu)
+                svv += (out[r + v * n] - mv) * (out[r + v * n] - mv)
+                r += 1usize
+            }
+            out[n * ns + 3usize * ns + u + v * ns] = suv / math.sqrt[f64](suu * svv)
+            v += 1usize
+        }
+        u += 1usize
+    }
+    ret ok
+}
