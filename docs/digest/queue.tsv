@@ -106,10 +106,10 @@ L398	library	0.1	1064	rugarch: the GARCH family	Started (D7645 to D7650: sGARCH(
 L441	library	0.35	1116	msm and mstate: multi-state models	Partial (D7352).
 L442	library	0.2	1006	phangorn: phylogenetic inference	Started (D7630 to D7639: the Robinson-Foulds distance of two trees, optimised edge lengths under Jukes-Cantor (optim.pml optEdge), the Jukes-Cantor and general time-reversible (with discrete gamma rat
 L466	library	0.3	2928	EnvStats: environmental statistics	D6723: e.algo.stat.envstats has rosnerTest, tolIntNormK (one-sided content, Wald-Wolfowitz, expectation) and predIntNormK (one future mean, Bonferroni), equal to EnvStats on 1852 values on Windows (or
-L495	library	0.1	720	mirt: item response theory	Started (D7653 to D7655: the unidimensional 2PL, Rasch (free latent variance) and graded response models on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows;
+L495	library	0.1	721	mirt: item response theory	Started (D7653 to D7655: the unidimensional 2PL, Rasch (free latent variance) and graded response models on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows;
 L496	library	0.42	838	fda: functional data analysis	Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda;
 L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
-L515	library	0.08	666	unmarked: occupancy and abundance models	Started (D7651, D7652: occu, the single-season occupancy model, and pcount, the Poisson N-mixture model, with covariates on occupancy and on detection (site-level), coefficients to 0.3 percent and the
+L515	library	0.08	667	unmarked: occupancy and abundance models	Started (D7651, D7652: occu, the single-season occupancy model, and pcount, the Poisson N-mixture model, with covariates on occupancy and on detection (site-level), coefficients to 0.3 percent and the
 L353	library	0.34	2182	mgcv: generalized additive models	Partial (D7340).
 L354	library	0.15	1475	lavaan: structural equation models	D7375: path analysis of an observed outcome on observed predictors (slopes, residual variance, standard errors) equal to lavaan.
 L381	library	0.42	591	ade4: multivariate analysis of ecological data	Partial (D7148 to D7152, D7158, D7160, D7161: as.dudi, dudi.pca, dudi.coa, dudi.acm with its correlation ratios, bca, wca, coinertia (main branch), procuste with rotations, dudi.fca, rlq and dudi.mix 

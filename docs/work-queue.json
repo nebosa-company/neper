@@ -1189,7 +1189,7 @@
       "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Started (D7653 to D7655: the unidimensional 2PL, Rasch (free latent variance) and graded response models on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows; oracle_mirt, 63 values; Linux pending). Open: 3PL and 4PL, partial credit, generalized partial credit and nominal items, several factors, a free latent variance, missing data, standard errors, scores (EAP, MAP), item and person fit, DIF, multiple groups. Was: Open (CRAN rank 841). Large. Acceptance, equal to mirt: mirt for Rasch, 1PL to 4PL, graded response, generalized partial credit, nominal and multidimensional models by EM, itemfit, personfit, fscores, multipleGroup, DIF, anova and the fit statistics M2 and C2."
+      "evidence": "Started (D7653 to D7655: the unidimensional 2PL, Rasch (free latent variance) and graded response models on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows; oracle_mirt, 112 values; Linux pending). Open: 3PL and 4PL, partial credit, generalized partial credit and nominal items, several factors, a free latent variance, missing data, standard errors, scores (EAP, MAP), item and person fit, DIF, multiple groups. Was: Open (CRAN rank 841). Large. Acceptance, equal to mirt: mirt for Rasch, 1PL to 4PL, graded response, generalized partial credit, nominal and multidimensional models by EM, itemfit, personfit, fscores, multipleGroup, DIF, anova and the fit statistics M2 and C2."
     },
     {
       "id": "L496",
@@ -1222,7 +1222,7 @@
       "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Started (D7651, D7652: occu, the single-season occupancy model, and pcount, the Poisson N-mixture model, with covariates on occupancy and on detection (site-level), coefficients to 0.3 percent and the log-likelihood to 1e-6 of unmarked on Windows; oracle_unmarked, 75 values; Linux pending). Open: visit-level detection covariates and missing visits, standard errors, colext, distsamp, occuRN, predict, goodness of fit. Was: Open (CRAN rank 905). Large. Acceptance, equal to unmarked: occu, occuRN, pcount, distsamp, colext, gmultmix, multinomPois with detection and abundance submodels, standard errors, predict, parboot under set.seed, fitList and model selection."
+      "evidence": "Started (D7651, D7652: occu, the single-season occupancy model, and pcount, the Poisson N-mixture model, with covariates on occupancy and on detection (site-level), coefficients to 0.3 percent and the log-likelihood to 1e-6 of unmarked on Windows; oracle_unmarked, 100 values; Linux pending). Open: visit-level detection covariates and missing visits, standard errors, colext, distsamp, occuRN, predict, goodness of fit. Was: Open (CRAN rank 905). Large. Acceptance, equal to unmarked: occu, occuRN, pcount, distsamp, colext, gmultmix, multinomPois with detection and abundance submodels, standard errors, predict, parboot under set.seed, fitList and model selection."
     },
     {
       "id": "L353",

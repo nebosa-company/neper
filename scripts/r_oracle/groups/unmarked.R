@@ -14,8 +14,8 @@ for (rep in 1:10) {
   for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("occu", c(m, J, 2, 2, as.vector(t(y)), as.vector(t(X)), as.vector(t(Z)), k - 1), as.numeric(v[k]), rel = if (k == length(v)) 1e-6 else 3e-3, abs = if (k == length(v)) 1e-4 else 1e-3)
 }
 # pcount(~ z ~ x, K): "pcnt" args (m, j, p1, p2, K, y[m * j] counts row-major, x, z as above, k) the same coefficient layout, then the log-likelihood
-for (rep in 1:5) {
-  m <- sample(35:50, 1); J <- sample(3:4, 1); x <- round(rnorm(m), 3); z <- round(rnorm(m), 3); K <- 25
+for (rep in 1:10) {
+  m <- sample(60:100, 1); J <- sample(3:4, 1); x <- round(rnorm(m), 3); z <- round(rnorm(m), 3); K <- 40
   lam <- exp(0.5 + 0.3 * x); p <- plogis(0.2 + 0.5 * z); N <- rpois(m, lam)
   y <- matrix(rbinom(m * J, rep(N, J), rep(p, J)), m, J)
   umf <- unmarkedFramePCount(y = y, siteCovs = data.frame(x = x, z = z))

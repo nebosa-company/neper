@@ -2,8 +2,8 @@
 suppressMessages(library(VGAM))
 cases <- list()
 set.seed(20271216)
-for (rep in 1:5) {
-  n <- sample(40:80, 1); p <- sample(1:2, 1); X <- matrix(round(rnorm(n * p), 3), n, p); m <- sample(8:30, n, TRUE)
+for (rep in 1:10) {
+  n <- sample(60:150, 1); p <- sample(1:2, 1); X <- matrix(round(rnorm(n * p), 3), n, p); m <- sample(8:30, n, TRUE)
   mu <- plogis(-0.2 + as.vector(X %*% runif(p, -0.8, 0.8))); rho <- runif(1, 0.05, 0.4); s <- (1 - rho) / rho
   y <- rbinom(n, m, rbeta(n, mu * s, (1 - mu) * s))
   d <- as.data.frame(X); names(d) <- paste0("x", 1:p); d$y <- y; d$m <- m
