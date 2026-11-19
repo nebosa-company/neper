@@ -24,6 +24,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nt = usize(z[0usize])
     let ns = usize(z[1usize])
     let ne = usize(z[2usize])
+    if c.name.len == 9usize {
+        let o = 3usize + 3usize * ne
+        ret pg.gtr_loglik(a, z[3usize..3usize + ne], z[3usize + ne..3usize + 2usize * ne], z[3usize + 2usize * ne..o], ne, nt, z[o + 10usize..o + 10usize + nt * ns], ns, z[o..o + 4usize], z[o + 4usize..o + 10usize])
+    }
     if c.name.len == 8usize {
         ret pg.jc_loglik(a, z[3usize..3usize + ne], z[3usize + ne..3usize + 2usize * ne], z[3usize + 2usize * ne..3usize + 3usize * ne], ne, nt, z[3usize + 3usize * ne..3usize + 3usize * ne + nt * ns], ns)
     }

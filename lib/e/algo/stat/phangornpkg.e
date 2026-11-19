@@ -234,3 +234,173 @@ fn jc_loglik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64,
     }
     ret ll
 }
+
+fn mul4(x: []const f64, y: []const f64, o: []f64) {
+    var i = 0usize
+    while i < 4usize {
+        var j = 0usize
+        while j < 4usize {
+            var t = 0.0f64
+            var k = 0usize
+            while k < 4usize {
+                t += x[i * 4usize + k] * y[k * 4usize + j]
+                k += 1usize
+            }
+            o[i * 4usize + j] = t
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// the 4 by 4 transition matrix exp(Q t) by scaling and squaring of a Taylor series
+fn expm4(q: []const f64, t: f64, o: []f64) {
+    var m: [16]f64 = zero
+    var nrm = 0.0f64
+    var i = 0usize
+    while i < 16usize {
+        m[i] = q[i] * t
+        if math.abs[f64](m[i]) > nrm { nrm = math.abs[f64](m[i]) }
+        i += 1usize
+    }
+    var sq = 0usize
+    while nrm > 0.25f64 {
+        nrm = nrm / 2.0f64
+        sq += 1usize
+    }
+    let sc = 1.0f64 / f64(1usize << sq)
+    i = 0usize
+    while i < 16usize {
+        m[i] = m[i] * sc
+        i += 1usize
+    }
+    var term: [16]f64 = zero
+    var nx: [16]f64 = zero
+    var sum: [16]f64 = zero
+    i = 0usize
+    while i < 4usize {
+        term[i * 5usize] = 1.0f64
+        sum[i * 5usize] = 1.0f64
+        i += 1usize
+    }
+    var k = 1usize
+    while k <= 16usize {
+        mul4(term[0usize..16usize], m[0usize..16usize], nx[0usize..16usize])
+        i = 0usize
+        while i < 16usize {
+            term[i] = nx[i] / f64(k)
+            sum[i] += term[i]
+            i += 1usize
+        }
+        k += 1usize
+    }
+    var s2 = 0usize
+    while s2 < sq {
+        mul4(sum[0usize..16usize], sum[0usize..16usize], nx[0usize..16usize])
+        i = 0usize
+        while i < 16usize {
+            sum[i] = nx[i]
+            i += 1usize
+        }
+        s2 += 1usize
+    }
+    i = 0usize
+    while i < 16usize {
+        o[i] = sum[i]
+        i += 1usize
+    }
+}
+
+// the log-likelihood phangorn::pml(tree, data, model = "GTR", bf, Q) gives: base frequencies bf (A C G T) and the six exchangeabilities rates (AC AG AT CG CT GT), the rate matrix scaled to one expected change per unit length
+fn gtr_loglik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bf: []const f64, rates: []const f64) -> f64 {
+    var q: [16]f64 = zero
+    var r: [16]f64 = zero
+    r[1usize] = rates[0usize]
+    r[2usize] = rates[1usize]
+    r[3usize] = rates[2usize]
+    r[6usize] = rates[3usize]
+    r[7usize] = rates[4usize]
+    r[11usize] = rates[5usize]
+    var i = 0usize
+    while i < 4usize {
+        var j = i + 1usize
+        while j < 4usize {
+            r[j * 4usize + i] = r[i * 4usize + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var rate = 0.0f64
+    i = 0usize
+    while i < 4usize {
+        var rs = 0.0f64
+        var j = 0usize
+        while j < 4usize {
+            if j != i {
+                q[i * 4usize + j] = r[i * 4usize + j] * bf[j]
+                rs += q[i * 4usize + j]
+            }
+            j += 1usize
+        }
+        q[i * 5usize] = 0.0f64 - rs
+        rate += bf[i] * rs
+        i += 1usize
+    }
+    i = 0usize
+    while i < 16usize {
+        q[i] = q[i] / rate
+        i += 1usize
+    }
+    let nn = ne + 1usize
+    let (lv, e1) = mem.alloc[f64](a, nn * 4usize)
+    let (pm, e2) = mem.alloc[f64](a, ne * 16usize)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    while k < ne {
+        expm4(q[0usize..16usize], bl[k], pm[k * 16usize..k * 16usize + 16usize])
+        k += 1usize
+    }
+    var ll = 0.0f64
+    var s = 0usize
+    while s < ns {
+        i = 0usize
+        while i < nn {
+            var st = 0usize
+            while st < 4usize {
+                lv[i * 4usize + st] = 1.0f64
+                if i < nt {
+                    let m = u32(data[i * ns + s])
+                    if (m & (1u32 << u32(st))) == 0u32 { lv[i * 4usize + st] = 0.0f64 }
+                }
+                st += 1usize
+            }
+            i += 1usize
+        }
+        k = ne
+        while k > 0usize {
+            k -= 1usize
+            let p = usize(par[k])
+            let c = usize(chd[k])
+            var st = 0usize
+            while st < 4usize {
+                var t2 = 0.0f64
+                var t = 0usize
+                while t < 4usize {
+                    t2 += pm[k * 16usize + st * 4usize + t] * lv[c * 4usize + t]
+                    t += 1usize
+                }
+                lv[p * 4usize + st] = lv[p * 4usize + st] * t2
+                st += 1usize
+            }
+        }
+        var site = 0.0f64
+        var st = 0usize
+        while st < 4usize {
+            site += bf[st] * lv[nt * 4usize + st]
+            st += 1usize
+        }
+        ll += math.log[f64](site)
+        s += 1usize
+    }
+    ret ll
+}

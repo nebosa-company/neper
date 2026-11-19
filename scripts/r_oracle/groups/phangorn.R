@@ -52,4 +52,13 @@ for (rep in 1:30) {
   ll <- pml(tr, d, model = "JC")$logLik
   cases[[length(cases) + 1]] <- case("jcloglik", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, tr$edge.length, as.vector(t(matrix(bits[M], nt, ns)))), as.numeric(ll), rel = 1e-9, abs = 1e-9)
 }
+# pml(tree, data, model = "GTR", bf, Q) log-likelihood ("gtrloglik": nt, ns, ne, parent, child, edge length, bf[4], rates[6] AC AG AT CG CT GT, data row-major bit masks)
+for (rep in 1:30) {
+  nt <- sample(4:12, 1); ns <- sample(10:80, 1)
+  tr <- reorder(rtree(nt), "cladewise"); tr$edge.length <- round(runif(nrow(tr$edge), 0.01, 0.8), 4)
+  M <- matrix(sample(codes, nt * ns, TRUE), nt, ns, dimnames = list(tr$tip.label, NULL)); d <- phyDat(M, type = "DNA")
+  bf <- runif(4, 0.1, 0.5); bf <- round(bf / sum(bf), 5); bf[4] <- 1 - sum(bf[1:3]); rt <- round(runif(6, 0.3, 4), 3)
+  ll <- pml(tr, d, model = "GTR", bf = bf, Q = rt)$logLik
+  cases[[length(cases) + 1]] <- case("gtrloglik", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, tr$edge.length, bf, rt, as.vector(t(matrix(bits[M], nt, ns)))), as.numeric(ll), rel = 1e-8, abs = 1e-8)
+}
 emit("phangorn", "phangorn", list(cases))
