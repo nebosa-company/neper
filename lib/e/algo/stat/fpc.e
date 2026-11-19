@@ -1350,10 +1350,21 @@ fn bhattacharyya_dist(a: *mem.Arena, mu1: []const f64, mu2: []const f64, s1: []c
     ret (mh / 8.0f64 + 0.5f64 * lds - 0.25f64 * lds1 - 0.25f64 * lds2, ok)
 }
 
-// mergenormals(xdata, clustering, probs, muarray, Sigmaarray, z, method = "bhat", cutoff): merge Gaussian mixture components while the largest exp(-Bhattacharyya distance) among the live pairs reaches the cutoff.
+// fpc confusion(z, pro, i, j): the share of component j'"'"'s weight sitting on the points that the pair (i, j) assigns to i (the larger z, ties to i)
+fn zconfusion(z: []const f64, n: usize, k: usize, probs: []const f64, i: usize, j: usize) -> f64 {
+    var s = 0.0f64
+    var r = 0usize
+    while r < n {
+        if z[r * k + i] >= z[r * k + j] { s += z[r * k + j] }
+        r += 1usize
+    }
+    ret s / (f64(n) * probs[j])
+}
+
+// mergenormals(xdata, clustering, probs, muarray, Sigmaarray, z, method = "bhat" or (demp = true) "demp", cutoff): merge Gaussian mixture components while the largest exp(-Bhattacharyya distance) among the live pairs reaches the cutoff.
 // x is n by d (row-major), mu is k by d (row j the mean of component j), sg is k blocks of d by d, z is n by k; probs, mu, sg and z are updated in place by the merges (mergeparameters: summed z weights, weighted ML mean and covariance of the data).
 // map receives mergedtonumbers (1-based, renumbered to 1..m in increasing order of the surviving numbers, as renumber = TRUE does when every component owns some data) and vals the decision values valuemerged; the answer is how many values.
-fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs: []f64, mu: []f64, sg: []f64, z: []f64, cutoff: f64, map: []usize, vals: []f64) -> (usize, err) {
+fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs: []f64, mu: []f64, sg: []f64, z: []f64, cutoff: f64, map: []usize, vals: []f64, demp: bool) -> (usize, err) {
     let (bm, e0) = mem.alloc[f64](a, k * k)
     let (dead, e1) = mem.alloc[bool](a, k)
     let (dec, e2) = mem.alloc[f64](a, k * k)
@@ -1376,7 +1387,12 @@ fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs
             while q < k {
                 var need = all
                 if !all && ((p == upi && q != upi) || (q == upi && p != upi)) { need = true }
-                if need && !dead[p] && !dead[q] {
+                if need && !dead[p] && !dead[q] && demp {
+                    let c1 = zconfusion(z, n, k, probs, p, q)
+                    let c2 = zconfusion(z, n, k, probs, q, p)
+                    bm[p * k + q] = c1
+                    if c2 > c1 { bm[p * k + q] = c2 }
+                } else if need && !dead[p] && !dead[q] {
                     let (bd, eb) = bhattacharyya_dist(a, mu[p * d..p * d + d], mu[q * d..q * d + d], sg[p * d * d..(p + 1usize) * d * d], sg[q * d * d..(q + 1usize) * d * d], d)
                     if eb != ok { ret (0usize, eb) }
                     bm[p * k + q] = math.exp[f64](0.0f64 - bd)

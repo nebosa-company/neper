@@ -46,7 +46,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             q += 1usize
         }
         o += n * k
-        let (nv, em) = fp.merge_bhat(a, z[o..o + n * d], n, d, k, pr, mu, sg, zz, cut, mp, vl)
+        let (nv, em) = fp.merge_bhat(a, z[o..o + n * d], n, d, k, pr, mu, sg, zz, cut, mp, vl, c.name[2usize] == 100u8)
         if em != ok { ret 0.0f64 / 0.0f64 }
         let stat = usize(z[o + n * d])
         var t = 0.0f64
