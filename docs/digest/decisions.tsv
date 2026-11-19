@@ -4230,4 +4230,5 @@ D7328	914	survival: coxph exact ties
 D7329	870	survival: robust variance for counting-process Breslow fits
 D7330	660	survival: survdiff with strata
 D7331	688	parameters: standardize_parameters of an lm
-D7332	689	bayestestR: map_estimate
+D7332	690	bayestestR: map_estimate
+D7333	701	mlogit: shares and marginal effects

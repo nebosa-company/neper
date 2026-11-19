@@ -21,6 +21,8 @@ for (rep in 1:20) {
   se <- sqrt(diag(vcov(f))); se <- if (asc) c(se[grep("Intercept", names(se))], se[paste0("x", 1:k)]) else se
   a <- c(n, J, k, asc, ch - 1, as.vector(aperm(X, c(3, 2, 1))))
   add("coef", a, ws(cf)); add("se", a, ws(se)); add("ll", a, as.numeric(logLik(f)))
+  sh <- colMeans(fitted(f, outcome = FALSE)); cases[[length(cases) + 1]] <- case("shares", a, ws(sh), rel = 1e-5, abs = 1e-7)
+  ef <- effects(f, covariate = "x1"); cases[[length(cases) + 1]] <- case("effects", a, ws(as.vector(t(ef))), rel = 1e-4, abs = 1e-6)
 }
 # individual-specific covariates (the multinomial logit): "mnl_coef", "mnl_se", "mnl_ll" args (n, J, q, choice[n] 0-based, Z[n*q] row-major); the coefficient order is the intercepts of alternatives 2..J, then for alternatives 2..J each covariate
 for (rep in 1:15) {

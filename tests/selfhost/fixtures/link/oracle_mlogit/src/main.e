@@ -60,6 +60,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (out, e1) = mem.alloc[f64](a, 2usize * q + 1usize)
     if e1 != ok { ret nan }
     if ml.clogit(a, z[4usize + n..4usize + n + n * j * k], z[4usize..4usize + n], n, j, k, asc, out) != ok { ret nan }
+    if str.eq(c.name, "shares") || str.eq(c.name, "effects") {
+        let xs = z[4usize + n..4usize + n + n * j * k]
+        let (mo, me) = mem.alloc[f64](a, j * j)
+        if me != ok { ret nan }
+        var ws = 0.0f64
+        if str.eq(c.name, "shares") {
+            ml.clogit_shares(xs, n, j, k, asc, out[0usize..q], mo[0usize..j])
+            var t = 0usize
+            while t < j {
+                ws += mo[t] * f64(t + 1usize)
+                t += 1usize
+            }
+            ret ws
+        }
+        ml.clogit_effects(xs, n, j, k, asc, out[0usize..q], 0usize, mo)
+        var t2 = 0usize
+        while t2 < j * j {
+            ws += mo[t2] * f64(t2 + 1usize)
+            t2 += 1usize
+        }
+        ret ws
+    }
     if str.eq(c.name, "ll") { ret out[2usize * q] }
     var lo = 0usize
     if str.eq(c.name, "se") { lo = q }

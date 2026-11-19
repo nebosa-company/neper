@@ -210,3 +210,92 @@ fn clogit(a: *mem.Arena, x: []const f64, ch: []const f64, n: usize, j: usize, k:
     out[2usize * q] = ll
     ret ok
 }
+
+// the fitted choice probabilities of chooser i (utility a_j + x_ij beta, a_0 = 0 as the reference): p[0 .. j]
+fn clogit_probs(x: []const f64, i: usize, j: usize, k: usize, asc: bool, coef: []const f64, p: []f64) {
+    var na = 0usize
+    if asc { na = j - 1usize }
+    var tot = 0.0f64
+    var a1 = 0usize
+    while a1 < j {
+        var v = 0.0f64
+        if asc && a1 > 0usize { v = coef[a1 - 1usize] }
+        var c = 0usize
+        while c < k {
+            v += x[(i * j + a1) * k + c] * coef[na + c]
+            c += 1usize
+        }
+        p[a1] = math.exp[f64](v)
+        tot += p[a1]
+        a1 += 1usize
+    }
+    a1 = 0usize
+    while a1 < j {
+        p[a1] = p[a1] / tot
+        a1 += 1usize
+    }
+}
+
+// the mean over choosers of the fitted probabilities, colMeans(fitted(f, outcome = FALSE)) of mlogit: out[0 .. j]
+fn clogit_shares(x: []const f64, n: usize, j: usize, k: usize, asc: bool, coef: []const f64, out: []f64) {
+    var pr: [16]f64 = zero
+    var a1 = 0usize
+    while a1 < j {
+        out[a1] = 0.0f64
+        a1 += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        clogit_probs(x, i, j, k, asc, coef, pr[0usize..j])
+        a1 = 0usize
+        while a1 < j {
+            out[a1] += pr[a1] / f64(n)
+            a1 += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// effects(f, covariate = c) of mlogit ("aa", at the sample means of the covariates): the j by j matrix whose (a, b) entry is beta_c P_a (delta_ab - P_b), the change in the probability of a for a unit change of
+// covariate c of alternative b, the probabilities taken at the means of the covariates by alternative (row-major out)
+fn clogit_effects(x: []const f64, n: usize, j: usize, k: usize, asc: bool, coef: []const f64, cov: usize, out: []f64) {
+    var na = 0usize
+    if asc { na = j - 1usize }
+    var pr: [16]f64 = zero
+    var tot = 0.0f64
+    var a1 = 0usize
+    while a1 < j {
+        var v = 0.0f64
+        if asc && a1 > 0usize { v = coef[a1 - 1usize] }
+        var c = 0usize
+        while c < k {
+            var m = 0.0f64
+            var i = 0usize
+            while i < n {
+                m += x[(i * j + a1) * k + c]
+                i += 1usize
+            }
+            v += m / f64(n) * coef[na + c]
+            c += 1usize
+        }
+        pr[a1] = math.exp[f64](v)
+        tot += pr[a1]
+        a1 += 1usize
+    }
+    a1 = 0usize
+    while a1 < j {
+        pr[a1] = pr[a1] / tot
+        a1 += 1usize
+    }
+    a1 = 0usize
+    while a1 < j {
+        var b1 = 0usize
+        while b1 < j {
+            var dl = 0.0f64
+            if a1 == b1 { dl = 1.0f64 }
+            out[a1 * j + b1] = coef[na + cov] * pr[a1] * (dl - pr[b1])
+            b1 += 1usize
+        }
+        a1 += 1usize
+    }
+}

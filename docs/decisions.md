@@ -50491,3 +50491,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `bayestestr.map_estimate` evaluates R's `density` (Gaussian kernel, the Sheather-Jones bandwidth of `bwsel.bw_sj`) at 1024 points between min(x) and max(x), as `estimate_density(method = "kernel", precision = 2^10, bw = "SJ")` does, and returns the first point of the highest density with that density.
 
 **Result.** `oracle_bayestestr` (440 cases, 40 new) equals bayestestR on Windows to 1e-6 for samples up to 400 values (the bandwidth port is the n <= 500 one). Linux pending. L339 stays partial: si and bayesfactor_savagedickey, factor predictors in standardize_parameters, Nakagawa R2 and icc (mixed models), other outlier methods.
+
+## D7333 — mlogit: shares and marginal effects
+
+**Decision.** `mlogitpkg.clogit_probs`, `clogit_shares` and `clogit_effects` give the fitted choice probabilities of a chooser, their mean over choosers (`colMeans(fitted(f, outcome = FALSE))`) and `effects(f, covariate = c)` (the "aa" matrix beta_c P_a (delta_ab - P_b) at the sample means of the covariates by alternative).
+
+**Result.** `oracle_mlogit` (145 cases, 40 new) equals mlogit on Windows to 1e-5 for the shares and 1e-4 for the effects (they inherit the coefficient tolerance). Linux pending. L456 stays partial: nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, hypothesis tests, predictions on new data.
