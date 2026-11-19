@@ -1491,5 +1491,28 @@ fn fa_resid(a: *mem.Arena, r: []const f64, p: usize, q: usize, fm: usize, out: [
         i += 1usize
     }
     out[p] = fa_r_f(&c, u)
+    // the loadings of the q largest eigenpairs of R with 1 - psi on the diagonal (left in w and z by that last evaluation), each column signed to a positive sum: item i of factor k at p + 1 + i + k p
+    var k = 0usize
+    while k < q {
+        let col = p - 1usize - k
+        var ev = c.w[col]
+        if ev < 0.0f64 { ev = 0.0f64 }
+        let sq = math.sqrt[f64](ev)
+        var sum = 0.0f64
+        i = 0usize
+        while i < p {
+            out[p + 1usize + i + k * p] = c.z[col * p + i] * sq
+            sum += out[p + 1usize + i + k * p]
+            i += 1usize
+        }
+        if sum < 0.0f64 {
+            i = 0usize
+            while i < p {
+                out[p + 1usize + i + k * p] = 0.0f64 - out[p + 1usize + i + k * p]
+                i += 1usize
+            }
+        }
+        k += 1usize
+    }
     ret true
 }

@@ -53,6 +53,7 @@ for (rep in 1:10) {
     f <- tryCatch(suppressWarnings(fa(R, nfactors = q, n.obs = N, fm = fmn[fm + 1], rotate = "none")), error = function(e) NULL)
     if (is.null(f) || any(f$uniquenesses < 0.02)) next
     for (k in 1:p) cases[[length(cases) + 1]] <- case("faresidual", c(p, q, fm, as.vector(t(R)), k - 1), as.numeric(f$uniquenesses[k]), rel = 5e-3, abs = 2e-3)
+    Ld <- unclass(f$loadings); for (kk in 1:q) for (ii in 1:p) cases[[length(cases) + 1]] <- case("faresidual", c(p, q, fm, as.vector(t(R)), p + 1 + (ii - 1) + (kk - 1) * p), as.numeric(Ld[ii, kk]), rel = 1e-2, abs = 3e-3)
   }
 }
 emit("psychfa", "psych", list(cases))

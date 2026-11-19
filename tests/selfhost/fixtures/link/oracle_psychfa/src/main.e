@@ -13,7 +13,7 @@ fn fit_case(a: *mem.Arena, c: *const oracle.Case, cached: []f64) -> bool {
     let p = usize(z[0usize])
     let q = usize(z[1usize])
     if c.name.len == 10usize {
-        let o5 = cached[0usize..p + 1usize]
+        let o5 = cached[0usize..p + 1usize + p * q]
         ret ps.fa_resid(a, z[3usize..3usize + p * p], p, q, usize(z[2usize]), o5)
     }
     if c.name.len == 11usize {
