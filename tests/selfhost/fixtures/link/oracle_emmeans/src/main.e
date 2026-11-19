@@ -237,6 +237,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret math.sqrt[f64](em.variance(&m, rd))
     }
     grid_row(r1, na, nb, li, xbar)
+    if str.starts_with(c.name, "rst_") {
+        var rt: [4]f64 = zero
+        em.backtransform(lj, em.estimate(&m, r1), math.sqrt[f64](em.variance(&m, r1)), m.df, 0.95f64, rt[0usize..4usize])
+        if str.eq(c.name, "rst_est") { ret rt[0usize] }
+        if str.eq(c.name, "rst_se") { ret rt[1usize] }
+        if str.eq(c.name, "rst_lo") { ret rt[2usize] }
+        ret rt[3usize]
+    }
     if str.starts_with(c.name, "rsp_") {
         var ro: [4]f64 = zero
         em.backtransform_log(em.estimate(&m, r1), math.sqrt[f64](em.variance(&m, r1)), m.df, 0.95f64, ro[0usize..4usize])

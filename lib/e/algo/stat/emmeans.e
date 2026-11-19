@@ -244,3 +244,26 @@ fn backtransform_log(emm: f64, se: f64, df: f64, level: f64, out: []f64) {
     out[2usize] = math.exp[f64](emm - tq * se)
     out[3usize] = math.exp[f64](emm + tq * se)
 }
+
+// the same for other transformations of the response that emmeans recognises: kind 0 log, 1 sqrt (the mean emm^2 with standard error 2 emm se and limits (emm +- t se)^2), 2 log10 (10^emm, standard error 10^emm ln(10) se)
+fn backtransform(kind: usize, emm: f64, se: f64, df: f64, level: f64, out: []f64) {
+    if kind == 0usize {
+        backtransform_log(emm, se, df, level, out)
+        ret
+    }
+    let tq = nb.qt(1.0f64 - (1.0f64 - level) / 2.0f64, df, true, false)
+    let lo = emm - tq * se
+    let hi = emm + tq * se
+    if kind == 1usize {
+        out[0usize] = emm * emm
+        out[1usize] = 2.0f64 * emm * se
+        out[2usize] = lo * lo
+        out[3usize] = hi * hi
+        ret
+    }
+    let r = math.pow[f64](10.0f64, emm)
+    out[0usize] = r
+    out[1usize] = r * 2.302585092994046f64 * se
+    out[2usize] = math.pow[f64](10.0f64, lo)
+    out[3usize] = math.pow[f64](10.0f64, hi)
+}

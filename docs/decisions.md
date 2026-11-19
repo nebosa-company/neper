@@ -50674,3 +50674,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `emmeans.backtransform_log` gives, for `lm(log(y) ~ ...)`, what `emmeans(m, specs, type = "response")` reports: the mean exp(emm), its delta-method standard error exp(emm) se and the interval exp(emm +- t se) at the model's residual degrees of freedom.
 
 **Result.** `oracle_emmeans` (1056 cases, 112 of them response-scale values (estimate, SE and both limits for 28 means) on 8 models; the new generator draws also reshuffled the other cases' data, which still equal emmeans) equals emmeans on Windows to 1e-6. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, other transformations (logit, sqrt) and `regrid`, joint_tests with interactions.
+
+## D7360 — emmeans: sqrt and log10 response transformations
+
+**Decision.** `emmeans.backtransform` adds the sqrt transformation (mean emm^2, delta-method standard error 2 emm se, limits (emm +- t se)^2) and log10 (10^emm, standard error 10^emm ln(10) se, limits 10^(emm +- t se)) to the log case of D7359.
+
+**Result.** `oracle_emmeans` (1152 cases, 96 new response-scale values for sqrt and log10 on 10 models, reshuffled draws aside) equals emmeans on Windows to 1e-6. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, logit and other link-based back-transformations, regrid, joint_tests with interactions.

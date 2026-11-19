@@ -44,6 +44,20 @@ for (rep in 1:8) {
     cases[[length(cases) + 1]] <- case("rsp_hi", c(base, i - 1, 0), e$upper.CL[i], rel = 1e-6, abs = 1e-9)
   }
 }
+# the other transformations: "rst_est" "rst_se" "rst_lo" "rst_hi" args (n, a, b, transformed y[n], A, B, x, level index, kind 1 sqrt 2 log10)
+for (rep in 1:10) {
+  kind <- 1 + rep %% 2; a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(40:70, 1)
+  A <- c(0:(a - 1), sample(0:(a - 1), n - a, TRUE)); B <- c(sample(0:(b - 1), a, TRUE), sample(0:(b - 1), n - a, TRUE)); B[1:b] <- 0:(b - 1)
+  x <- round(rnorm(n), 3); ty <- round(2 + A * 0.3 + B * 0.2 + 0.4 * x + rnorm(n, 0, 0.4), 3)
+  if (kind == 1) { y <- ty^2; m <- lm(sqrt(y) ~ A + B + x, data.frame(y = y, A = factor(A), B = factor(B), x = x)); ys <- sqrt(y) } else { y <- 10^ty; m <- lm(log10(y) ~ A + B + x, data.frame(y = y, A = factor(A), B = factor(B), x = x)); ys <- log10(y) }
+  e <- summary(emmeans(m, "A", type = "response")); base <- c(n, a, b, ys, A, B, x)
+  for (i in 1:a) {
+    cases[[length(cases) + 1]] <- case("rst_est", c(base, i - 1, kind), e$response[i], rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("rst_se", c(base, i - 1, kind), e$SE[i], rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("rst_lo", c(base, i - 1, kind), e$lower.CL[i], rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("rst_hi", c(base, i - 1, kind), e$upper.CL[i], rel = 1e-6, abs = 1e-9)
+  }
+}
 # contrast families (adjust = "none"): "ctr_est" and "ctr_se" with args (base..., type, idx): type 0 trt.vs.ctrl (level idx vs level 0, idx from 1), 1 revpairwise (pair idx in emmeans' order), 2 consec (idx from 1), 3 eff (level idx, from 0), 4 poly (degree idx from 1)
 for (rep in 1:8) {
   a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(40:70, 1)

@@ -94,7 +94,7 @@ L491	library	0.15	673	riskRegression: risk prediction scoring	Partial (D6642).
 L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
 L440	library	0.15	855	flexsurv and rstpm2: flexible parametric survival models	Partial (D6640).
 L312	library	0.15	1584	psych: reliability, factor analysis and correlation tools	D7342: fa.parallel (principal components, resampled and simulated eigenvalues under set.seed) equal to psych.
-L313	library	0.12	1433	emmeans: estimated marginal means and contrasts	D7359: response-scale means of a log-response lm (type = response: estimate, delta-method SE, interval) equal to emmeans.
+L313	library	0.12	1523	emmeans: estimated marginal means and contrasts	D7360: response-scale means for sqrt and log10 response transformations equal to emmeans.
 L341	library	0.15	785	multcomp: general linear hypotheses	Partial (D6631).
 L318	library	0.05	735	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partly done (D6063): e.algo.stat.fcast has BoxCox, InvBoxCox and BoxCox.lambda by loglik, equal to forecast on 171 cases on Windows (oracle_fcast);
 L319	library	0.08	803	nlme: gls, correlation structures and variance functions	Partly done (D6064): e.algo.stat.gls has gls at a fixed AR1, compound-symmetry or exponential correlation, REML and ML, equal to nlme on 492 values on Windows (oracle_gls);
