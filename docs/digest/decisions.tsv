@@ -4317,4 +4317,5 @@ D7463	414	sm h.select cv, common 2-d structure
 D7464	433	sm h.select cv, separate 2-d structure
 D7465	677	sm h.select for two covariates (regression)
 D7466	581	sm h.select for two covariates, common and separate structures
-D7467	536	energy.hclust
+D7467	845	energy.hclust
+D7468	492	MASS negative.binomial family terms

@@ -14,6 +14,7 @@ use e.algo.rand.r as rng
 use e.algo.sort
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nm
 use e.mem
 
 error NotPositive
@@ -518,4 +519,18 @@ fn mvrnorm(a: *mem.Arena, r: *rng.Rng, n: usize, p: usize, mu: []const f64, sigm
         i += 1usize
     }
     ret ok
+}
+
+// MASS negative.binomial(theta): the family's variance, deviance residual and aic term at one observation
+fn nb_variance(mu: f64, theta: f64) -> f64 { ret mu + mu * mu / theta }
+
+fn nb_dev_resid(y: f64, mu: f64, wt: f64, theta: f64) -> f64 {
+    var m = 1.0f64
+    if y > 1.0f64 { m = y }
+    ret 2.0f64 * wt * (y * math.log[f64](m / mu) - (y + theta) * math.log[f64]((y + theta) / (mu + theta)))
+}
+
+// the contribution of one observation to the family's aic: 2 w ((y + theta) log(mu + theta) - y log mu + lgamma(y + 1) - theta log theta + lgamma(theta) - lgamma(theta + y))
+fn nb_aic_term(y: f64, mu: f64, wt: f64, theta: f64) -> f64 {
+    ret 2.0f64 * wt * ((y + theta) * math.log[f64](mu + theta) - y * math.log[f64](mu) + nm.lgammafn(y + 1.0f64) - theta * math.log[f64](theta) + nm.lgammafn(theta) - nm.lgammafn(theta + y))
 }
