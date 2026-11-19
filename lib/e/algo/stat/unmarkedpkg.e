@@ -250,3 +250,121 @@ fn pcount_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: u
     var c = PcCtx { x: x, z: z, y: y, m: m, j: j, p1: p1, p2: p2, kk: kk, lf: lf, q: qq }
     ret nh.hessian_se[PcCtx](a, &c, pc_f, est, p1 + p2, out)
 }
+
+type RnCtx = struct { x: []const f64, z: []const f64, y: []const f64, m: usize, j: usize, p1: usize, p2: usize, kk: usize, lf: []const f64, q: []f64 }
+
+// minus the Royle-Nichols log-likelihood: site abundance N ~ Poisson(exp(x' b)), each visit detects the species with probability 1 - (1 - r)^N where r = logistic(z' a) is the per-individual detection, summed over N up to kk;
+// the detection design is per site or per visit as in `occ_f`, and a response below zero is a missing visit
+fn rn_f(c: *RnCtx, par: []const f64) -> f64 {
+    let visit = c.z.len == c.m * c.j * c.p2 && c.j > 1usize
+    var ll = 0.0f64
+    var i = 0usize
+    while i < c.m {
+        var e1 = 0.0f64
+        var t = 0usize
+        while t < c.p1 {
+            e1 += c.x[i * c.p1 + t] * par[t]
+            t += 1usize
+        }
+        let lam = math.exp[f64](e1)
+        var best = 0.0f64 - 1.0e300f64
+        var s = 0.0f64
+        var pass = 0usize
+        while pass < 2usize {
+            var n = 0usize
+            while n <= c.kk {
+                let nf = f64(n)
+                var term = nf * e1 - lam - c.lf[n]
+                var v = 0usize
+                while v < c.j {
+                    let yv = c.y[i * c.j + v]
+                    if yv >= 0.0f64 {
+                        var row = i
+                        if visit { row = i * c.j + v }
+                        var e2 = 0.0f64
+                        t = 0usize
+                        while t < c.p2 {
+                            e2 += c.z[row * c.p2 + t] * par[c.p1 + t]
+                            t += 1usize
+                        }
+                        let rr = lg(e2)
+                        // log(1 - (1 - r)^N) for the detected visits, N log(1 - r) for the others
+                        let lq = nf * math.log[f64](1.0f64 - rr)
+                        if yv > 0.5f64 {
+                            if n == 0usize { term = 0.0f64 - 1.0e300f64 } else { term += math.log[f64](1.0f64 - math.exp[f64](lq)) }
+                        } else {
+                            term += lq
+                        }
+                    }
+                    v += 1usize
+                }
+                if pass == 0usize {
+                    if term > best { best = term }
+                } else {
+                    s += math.exp[f64](term - best)
+                }
+                n += 1usize
+            }
+            pass += 1usize
+        }
+        ll += best + math.log[f64](s)
+        i += 1usize
+    }
+    ret 0.0f64 - ll
+}
+
+fn rn_g(c: *RnCtx, par: []const f64, g: []f64) {
+    let n = par.len
+    var i = 0usize
+    while i < n {
+        c.q[i] = par[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        let h = 1.0e-6f64
+        c.q[i] = par[i] + h
+        let fp = rn_f(c, c.q[0usize..n])
+        c.q[i] = par[i] - h
+        let fm = rn_f(c, c.q[0usize..n])
+        c.q[i] = par[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// unmarked::occuRN(~ z ~ x, K = kk): out = the p1 abundance coefficients (log link), the p2 per-individual detection coefficients (logit), the log-likelihood
+fn occurn(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: usize, j: usize, p1: usize, p2: usize, kk: usize, out: []f64) -> bool {
+    let k = p1 + p2
+    let (par, e1) = mem.alloc[f64](a, k)
+    let (qq, e2) = mem.alloc[f64](a, k)
+    let (scr, e3) = mem.alloc[f64](a, k * k + 6usize * k + 16usize)
+    let (lf, e5) = mem.alloc[f64](a, kk + 2usize)
+    if e1 != ok || e2 != ok || e3 != ok || e5 != ok { ret false }
+    lf[0usize] = 0.0f64
+    var i = 1usize
+    while i <= kk + 1usize {
+        lf[i] = lf[i - 1usize] + math.log[f64](f64(i))
+        i += 1usize
+    }
+    var t = 0usize
+    while t < k {
+        par[t] = 0.0f64
+        t += 1usize
+    }
+    par[0usize] = 0.0f64
+    var c = RnCtx { x: x, z: z, y: y, m: m, j: j, p1: p1, p2: p2, kk: kk, lf: lf, q: qq }
+    var round = 0usize
+    while round < 2usize {
+        let (r, e4) = opt.bfgs[RnCtx](&c, rn_f, rn_g, par, 1.0e-11f64, 300u32, scr)
+        if e4 != ok { ret false }
+        round += 1usize
+    }
+    t = 0usize
+    while t < k {
+        out[t] = par[t]
+        t += 1usize
+    }
+    out[k] = 0.0f64 - rn_f(&c, par)
+    ret true
+}

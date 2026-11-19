@@ -109,7 +109,7 @@ L466	library	0.3	2928	EnvStats: environmental statistics	D6723: e.algo.stat.envs
 L495	library	0.1	721	mirt: item response theory	Started (D7653 to D7655: the unidimensional 2PL, Rasch (free latent variance) and graded response models on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows;
 L496	library	0.42	838	fda: functional data analysis	Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda;
 L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
-L515	library	0.14	721	unmarked: occupancy and abundance models	Started (D7651 to D7700: occu, the single-season occupancy model (with visit-level detection covariates and missing visits), and pcount, the Poisson N-mixture model, both with their standard errors, t
+L515	library	0.14	741	unmarked: occupancy and abundance models	Started (D7651 to D7701: occu, the single-season occupancy model (with visit-level detection covariates and missing visits), pcount, the Poisson N-mixture model, and occuRN, the Royle-Nichols model, w
 L353	library	0.34	2182	mgcv: generalized additive models	Partial (D7340).
 L354	library	0.15	1475	lavaan: structural equation models	D7375: path analysis of an observed outcome on observed predictors (slopes, residual variance, standard errors) equal to lavaan.
 L381	library	0.42	591	ade4: multivariate analysis of ecological data	Partial (D7148 to D7152, D7158, D7160, D7161: as.dudi, dudi.pca, dudi.coa, dudi.acm with its correlation ratios, bca, wca, coinertia (main branch), procuste with rotations, dudi.fca, rlq and dudi.mix 
