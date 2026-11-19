@@ -587,7 +587,7 @@ fn cox_resid(a: *mem.Arena, time: []const f64, status: []const f64, strat: []con
 
 // survival::coxph(Surv(start, stop, status) ~ x + strata) with counting-process data: the risk set at an event time t of a stratum is {i : start_i < t <= stop_i}; Breslow or Efron ties. Newton-Raphson on the exact
 // partial likelihood from beta = 0 until the log-likelihood moves by less than 1e-13 relatively; coef and se (the inverse information) of length p; ll receives the log-likelihoods at beta = 0 and at the fit
-fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []const f64, strat: []const usize, x: []const f64, n: usize, p: usize, efron: bool, coef: []f64, se: []f64, ll: []f64) -> err {
+fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []const f64, strat: []const usize, x: []const f64, n: usize, p: usize, tiemode: usize, coef: []f64, se: []f64, ll: []f64) -> err {
     let (u, e1) = mem.alloc[f64](a, p)
     let (info, e2) = mem.alloc[f64](a, p * p)
     let (s1, e3) = mem.alloc[f64](a, p)
@@ -608,6 +608,15 @@ fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []cons
     if e8 != ok { ret e8 }
     if e9 != ok { ret e9 }
     if e10 != ok { ret e10 }
+    let efron = tiemode == 1usize
+    let exact = tiemode == 2usize
+    let maxd = n + 1usize
+    let (ek, e11) = mem.alloc[f64](a, maxd)
+    let (ak, e12) = mem.alloc[f64](a, maxd * p)
+    let (bk, e13) = mem.alloc[f64](a, maxd * p * p)
+    if e11 != ok { ret e11 }
+    if e12 != ok { ret e12 }
+    if e13 != ok { ret e13 }
     var j = 0usize
     while j < p {
         coef[j] = 0.0f64
@@ -697,7 +706,60 @@ fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []cons
                     }
                     k += 1usize
                 }
+                if exact {
+                    // elementary symmetric polynomials of the risk-set weights up to degree d with their first and second derivatives in beta
+                    let dd = usize(d)
+                    var q0 = 0usize
+                    while q0 <= dd {
+                        ek[q0] = 0.0f64
+                        var a0 = 0usize
+                        while a0 < p {
+                            ak[q0 * p + a0] = 0.0f64
+                            var b0 = 0usize
+                            while b0 < p {
+                                bk[(q0 * p + a0) * p + b0] = 0.0f64
+                                b0 += 1usize
+                            }
+                            a0 += 1usize
+                        }
+                        q0 += 1usize
+                    }
+                    ek[0usize] = 1.0f64
+                    var r = 0usize
+                    while r < n {
+                        if strat[r] == sg && start[r] < t && stop[r] >= t {
+                            var kk = dd
+                            while kk >= 1usize {
+                                var a3 = 0usize
+                                while a3 < p {
+                                    var b3 = 0usize
+                                    while b3 < p {
+                                        bk[(kk * p + a3) * p + b3] += w[r] * x[a3 * n + r] * x[b3 * n + r] * ek[kk - 1usize] + w[r] * x[a3 * n + r] * ak[(kk - 1usize) * p + b3] + w[r] * x[b3 * n + r] * ak[(kk - 1usize) * p + a3] + w[r] * bk[((kk - 1usize) * p + a3) * p + b3]
+                                        b3 += 1usize
+                                    }
+                                    ak[kk * p + a3] += w[r] * x[a3 * n + r] * ek[kk - 1usize] + w[r] * ak[(kk - 1usize) * p + a3]
+                                    a3 += 1usize
+                                }
+                                ek[kk] += w[r] * ek[kk - 1usize]
+                                kk -= 1usize
+                            }
+                        }
+                        r += 1usize
+                    }
+                    llv -= math.log[f64](ek[dd])
+                    var a4 = 0usize
+                    while a4 < p {
+                        u[a4] -= ak[dd * p + a4] / ek[dd]
+                        var b4 = 0usize
+                        while b4 < p {
+                            info[a4 * p + b4] += bk[(dd * p + a4) * p + b4] / ek[dd] - ak[dd * p + a4] * ak[dd * p + b4] / (ek[dd] * ek[dd])
+                            b4 += 1usize
+                        }
+                        a4 += 1usize
+                    }
+                }
                 var m = 0usize
+                if exact { m = usize(d) }
                 while m < usize(d) {
                     var frac = 0.0f64
                     if efron { frac = f64(m) / d }

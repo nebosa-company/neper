@@ -52,7 +52,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             cg[cq] = usize(x[3usize + 3usize * cn + cq])
             cq += 1usize
         }
-        let cfe = cs.coxph_cp(a, x[3usize..3usize + cn], x[3usize + cn..3usize + 2usize * cn], x[3usize + 2usize * cn..3usize + 3usize * cn], cg, x[3usize + 4usize * cn..3usize + 4usize * cn + cn * cpp], cn, cpp, x[2usize] != 0.0f64, ccf, cse, cll)
+        let cfe = cs.coxph_cp(a, x[3usize..3usize + cn], x[3usize + cn..3usize + 2usize * cn], x[3usize + 2usize * cn..3usize + 3usize * cn], cg, x[3usize + 4usize * cn..3usize + 4usize * cn + cn * cpp], cn, cpp, usize(x[2usize]), ccf, cse, cll)
         if cfe != ok { ret 0.0f64 / 0.0f64 }
         let cqq = usize(x[3usize + 4usize * cn + cn * cpp])
         if cqq < cpp { ret ccf[cqq] }

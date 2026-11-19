@@ -4225,4 +4225,5 @@ D7323	881	poLCA: standard errors
 D7324	826	gamlss.dist: DPO and DBI
 D7325	565	gamlss.dist: GAF and the ZISICHEL density
 D7326	462	gamlss.dist: SEP and ZASICHEL densities
-D7327	806	survival: coxph with counting-process data
+D7327	807	survival: coxph with counting-process data
+D7328	913	survival: coxph exact ties
