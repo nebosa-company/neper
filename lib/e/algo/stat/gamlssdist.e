@@ -2652,6 +2652,21 @@ fn family_moment2(fam: usize, which: usize, mu: f64, sigma: f64, nu: f64, tau: f
         if which == 0usize { ret (1.0f64 - sigma) * al * mu / (1.0f64 - mu) }
         ret (1.0f64 - sigma) * al * mu * (1.0f64 - (1.0f64 - sigma) * al * mu) / ((1.0f64 - mu) * (1.0f64 - mu))
     }
+    if fam == 31usize {
+        let ez = 2.0f64 * math.sqrt[f64](tau) * (nu - 1.0f64 / nu) / ((tau - 1.0f64) * math.exp[f64](nb.lbeta(0.5f64, tau / 2.0f64)))
+        if which == 0usize { if tau > 1.0f64 { ret mu + sigma * ez } else { ret 0.0f64 / 0.0f64 } }
+        if tau > 2.0f64 { ret s2 * (tau / (tau - 2.0f64) * (nu * nu + 1.0f64 / (nu * nu) - 1.0f64) - ez * ez) } else { ret 0.0f64 / 0.0f64 }
+    }
+    if fam == 32usize || fam == 33usize {
+        let bq = gs.bessel_knu(nu + 1.0f64, 1.0f64 / sigma) / gs.bessel_knu(nu, 1.0f64 / sigma)
+        let gq = 2.0f64 * sigma * (nu + 1.0f64) / bq + 1.0f64 / (bq * bq) - 1.0f64
+        if fam == 32usize {
+            if which == 0usize { ret bq * mu }
+            ret bq * mu + bq * bq * mu * mu * gq
+        }
+        if which == 0usize { ret mu }
+        ret mu + mu * mu * gq
+    }
     if which == 0usize { ret mu }
     ret mu + mu * mu * sigma * (1.0f64 - nu) * (1.0f64 - nu)
 }

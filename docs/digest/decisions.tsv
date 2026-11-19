@@ -4527,4 +4527,5 @@ D7639	779	phangorn: edge length optimisation
 D7704	799	gamlss.dist family moments, second set
 D7640	818	VGAM: adjacent categories model
 D7705	529	gamlss.dist zero-adjusted family moments
-D7641	838	VGAM: continuation-ratio models
+D7641	839	VGAM: continuation-ratio models
+D7706	586	gamlss.dist moments with Bessel and beta terms
