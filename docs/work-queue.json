@@ -1164,10 +1164,10 @@
       "group": "CRAN parity",
       "order": 816,
       "title": "phangorn: phylogenetic inference",
-      "score": 0,
+      "score": 0.04,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 666). Large. Needs L350. Acceptance, equal to phangorn: parsimony and pratchet, pml with JC, F81, K80, HKY, GTR and Gamma and invariant-site rate models, optim.pml, bootstrap.pml, modelTest, NJ and UPGMA from distances, tree and network operations."
+      "evidence": "Started (D7630: Fitch parsimony score of a binary tree on a DNA alignment with ambiguity codes equal to phangorn::parsimony on Windows; oracle_phangorn, 40 trees; Linux pending). Open: sankoff costs, non-binary trees, pratchet and the search, pml and the models, modelTest, bootstrap, UPGMA. Was: Open (CRAN rank 666). Large. Needs L350. Acceptance, equal to phangorn: parsimony and pratchet, pml with JC, F81, K80, HKY, GTR and Gamma and invariant-site rate models, optim.pml, bootstrap.pml, modelTest, NJ and UPGMA from distances, tree and network operations."
     },
     {
       "id": "L466",

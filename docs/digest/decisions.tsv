@@ -4494,4 +4494,5 @@ D7628	689	VGAM: non-parallel cumulative model
 D7683	648	strucchange BIC of the segmented model
 D7704	789	dbscan extractXi
 D7629	234	performance: r2_xu of an lm
-D7684	1167	segmented davies.test for a linear model
+D7684	1168	segmented davies.test for a linear model
+D7630	586	phangorn: Fitch parsimony
