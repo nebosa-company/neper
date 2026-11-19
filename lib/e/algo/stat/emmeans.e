@@ -109,6 +109,9 @@ fn p_t(t: f64, df: f64) -> f64 { ret 2.0f64 * nb.pt(0.0f64 - math.abs[f64](t), d
 // Tukey-adjusted p of a pairwise t among k means
 fn p_tukey(t: f64, k: f64, df: f64) -> f64 { ret 1.0f64 - nb.ptukey(math.abs[f64](t) * math.sqrt[f64](2.0f64), 1.0f64, k, df, true, false) }
 
+// adjust = "scheffe": the F statistic t^2 / rank on (rank, df) degrees of freedom, rank the rank of the contrast matrix (the number of levels less one for pairwise comparisons of one factor)
+fn p_scheffe(t: f64, rank: f64, df: f64) -> f64 { ret nb.pf(t * t / rank, rank, df, false, false) }
+
 fn p_bonferroni(p: f64, m: f64) -> f64 { ret math.min[f64](1.0f64, p * m) }
 
 fn p_sidak(p: f64, m: f64) -> f64 { ret 1.0f64 - math.pow[f64](1.0f64 - p, m) }

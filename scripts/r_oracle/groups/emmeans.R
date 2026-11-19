@@ -13,12 +13,12 @@ for (rep in 1:8) {
   s <- summary(e); base <- c(n, a, b, y, A, B, x)
   for (i in 1:a) { add("emm", c(base, i - 1, 0), s$emmean[i]); add("se", c(base, i - 1, 0), s$SE[i]) }
   add("df", c(base, 0, 0), s$df[1])
-  pt <- summary(pairs(e, adjust = "tukey")); ph <- summary(pairs(e, adjust = "holm")); pb <- summary(pairs(e, adjust = "bonferroni"))
+  pt <- summary(pairs(e, adjust = "tukey")); ph <- summary(pairs(e, adjust = "holm")); pb <- summary(pairs(e, adjust = "bonferroni")); ps <- summary(pairs(e, adjust = "scheffe"))
   r <- 0
   for (i in 1:(a - 1)) for (j in (i + 1):a) {
     r <- r + 1; ar <- c(base, i - 1, j - 1)
     add("pair_est", ar, pt$estimate[r]); add("pair_se", ar, pt$SE[r]); add("pair_t", ar, pt$t.ratio[r])
-    add("p_tukey", ar, pt$p.value[r]); add("p_holm", ar, ph$p.value[r]); add("p_bonf", ar, pb$p.value[r])
+    add("p_scheffe", ar, ps$p.value[r]); add("p_tukey", ar, pt$p.value[r]); add("p_holm", ar, ph$p.value[r]); add("p_bonf", ar, pb$p.value[r])
   }
 }
 # contrast families (adjust = "none"): "ctr_est" and "ctr_se" with args (base..., type, idx): type 0 trt.vs.ctrl (level idx vs level 0, idx from 1), 1 revpairwise (pair idx in emmeans' order), 2 consec (idx from 1), 3 eff (level idx, from 0), 4 poly (degree idx from 1)

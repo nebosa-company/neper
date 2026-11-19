@@ -50530,3 +50530,9 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 **Decision.** `mcmcpkg.morph_metrop` runs the Metropolis chain on the morphed density, lud(inverse(state)) plus the log Jacobian, from the transformed initial state, and records the states mapped back to the original coordinates. The transformations are mcmc's: the isotropic exponential map (r, p = 3, closed-form inverse) and subexponential map (b), alone or composed (exponential after subexponential), applied to the distance from `center`.
 
 **Result.** `oracle_mcmc` (412 cases, 72 new) equals `morph.metrop` under `set.seed` on Windows to 1e-9: batch means, acceptance rates and the final state, on three targets in one to three dimensions with each map and their composition. mcmc's `morph.metrop` accepts `nspac` but does not hand it to `metrop`, so its chain always runs with nspac = 1; the port does the same (an oracle with nspac > 1 first failed on exactly this). Linux pending. L448 stays partial: user densities and outfun (the fixture fixes three targets), temper, p other than 3.
+
+## D7338 — emmeans: scheffe adjustment
+
+**Decision.** `emmeans.p_scheffe` is the p value of F = t^2 / rank on (rank, df) degrees of freedom, with rank the number of factor levels less one for the pairwise comparisons of one factor, as `adjust = "scheffe"` uses.
+
+**Result.** `oracle_emmeans` (702 cases, 38 new on the pairwise contrasts of 8 models) equals emmeans on Windows to 1e-6. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, scheffe for other contrast families, joint_tests, eff_size, regrid.
