@@ -30,6 +30,20 @@ for (rep in 1:8) {
   m <- lm(y ~ A + B + x, d); jt <- as.data.frame(joint_tests(m)); base <- c(n, a, b, y, A, B, x)
   for (t in 0:2) { cases[[length(cases) + 1]] <- case("jt_F", c(base, t, 0), jt$F.ratio[t + 1], rel = 1e-4, abs = 6e-4); cases[[length(cases) + 1]] <- case("jt_p", c(base, t, 0), jt$p.value[t + 1], rel = 1e-3, abs = 6e-4) }
 }
+# response-scale means of a log-response model: "rsp_est" "rsp_se" "rsp_lo" "rsp_hi" args (n, a, b, log y[n], A, B, x, level index, 0) for lm(log(y) ~ A + B + x), emmeans(.., "A", type = "response")
+for (rep in 1:8) {
+  a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(40:70, 1)
+  A <- c(0:(a - 1), sample(0:(a - 1), n - a, TRUE)); B <- c(sample(0:(b - 1), a, TRUE), sample(0:(b - 1), n - a, TRUE)); B[1:b] <- 0:(b - 1)
+  x <- round(rnorm(n), 3); ly <- round(0.5 + A * 0.3 + B * 0.2 + 0.4 * x + rnorm(n, 0, 0.5), 3); y <- exp(ly)
+  d <- data.frame(y = y, A = factor(A), B = factor(B), x = x)
+  m <- lm(log(y) ~ A + B + x, d); e <- summary(emmeans(m, "A", type = "response")); base <- c(n, a, b, log(y), A, B, x)
+  for (i in 1:a) {
+    cases[[length(cases) + 1]] <- case("rsp_est", c(base, i - 1, 0), e$response[i], rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("rsp_se", c(base, i - 1, 0), e$SE[i], rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("rsp_lo", c(base, i - 1, 0), e$lower.CL[i], rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("rsp_hi", c(base, i - 1, 0), e$upper.CL[i], rel = 1e-6, abs = 1e-9)
+  }
+}
 # contrast families (adjust = "none"): "ctr_est" and "ctr_se" with args (base..., type, idx): type 0 trt.vs.ctrl (level idx vs level 0, idx from 1), 1 revpairwise (pair idx in emmeans' order), 2 consec (idx from 1), 3 eff (level idx, from 0), 4 poly (degree idx from 1)
 for (rep in 1:8) {
   a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(40:70, 1)

@@ -50668,3 +50668,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `coxext.coxph_cp_schoenfeld` gives the Schoenfeld residuals of a Breslow counting-process fit: for each death, its covariates less the weighted mean over its risk set {start < t <= stop} in its stratum; the function returns the column sums of squares and the column sums (the score, zero at the maximum) and the number of deaths.
 
 **Result.** `oracle_coxph` (1122 cases, 26 new) equals `residuals(f, type = "schoenfeld")` on Windows to 1e-6, compared as the sum of squares of each column (the rows are in survival's sorted order, the sums do not depend on it). Linux pending. L311 stays partial: Schoenfeld residuals for Efron ties and scaled residuals, robust variance for Efron and exact fits and by shared ids, frailty, tmerge, interval and left censoring.
+
+## D7359 — emmeans: response-scale means for a log response
+
+**Decision.** `emmeans.backtransform_log` gives, for `lm(log(y) ~ ...)`, what `emmeans(m, specs, type = "response")` reports: the mean exp(emm), its delta-method standard error exp(emm) se and the interval exp(emm +- t se) at the model's residual degrees of freedom.
+
+**Result.** `oracle_emmeans` (1056 cases, 32 of them response-scale values on 8 models; the new generator draws also reshuffled the other cases' data, which still equal emmeans) equals emmeans on Windows to 1e-6. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, other transformations (logit, sqrt) and `regrid`, joint_tests with interactions.

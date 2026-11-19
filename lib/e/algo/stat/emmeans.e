@@ -233,3 +233,14 @@ fn eff_size(est: f64, se: f64, sigma: f64, edf: f64, level: f64, out: []f64) {
     out[2usize] = d - tq * sed
     out[3usize] = d + tq * sed
 }
+
+// emmeans(m, specs, type = "response") for a model of log(y): the mean on the response scale exp(emm), its delta-method standard error exp(emm) se, and the interval exp(emm +- t se) at `level` on df degrees of freedom.
+// out[0] response, out[1] SE, out[2] lower, out[3] upper
+fn backtransform_log(emm: f64, se: f64, df: f64, level: f64, out: []f64) {
+    let tq = nb.qt(1.0f64 - (1.0f64 - level) / 2.0f64, df, true, false)
+    let r = math.exp[f64](emm)
+    out[0usize] = r
+    out[1usize] = r * se
+    out[2usize] = math.exp[f64](emm - tq * se)
+    out[3usize] = math.exp[f64](emm + tq * se)
+}
