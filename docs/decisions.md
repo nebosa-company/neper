@@ -50521,3 +50521,6 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `mlogitpkg.nested_se` inverts the Hessian of the nested negative log-likelihood, taken by central second differences with step 1e-4 (1 + |par|), at the fitted parameters.
 
 **Result.** `oracle_mlogit` (213 cases, 10 new) equals mlogit's standard errors on Windows to 8e-2 relative as weighted sums over the coefficients and inclusive values: they inherit the 5e-3 accuracy of the Nelder-Mead fit and the finite-difference step, so this is the loosest tolerance in the file. Linux pending. L456 stays partial: an analytic Hessian for tighter standard errors, a common inclusive value, mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, Wald tests, predictions on new data.
+
+## D7421 — pscl geometric counts
+The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` gained a `geom` flag that fixes theta in the likelihood and drops it from the parameter vector; `zeroinfl_geom` and `hurdle_geom` reuse the BFGS fits of D7419 and D7420 on beta and gamma only. Equal to pscl to 2e-3 (log-likelihoods and position-weighted count coefficients) on six simulated sets each for zeroinfl and hurdle. L412 at 0.6.

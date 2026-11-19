@@ -20,6 +20,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let y = z[3usize..3usize + n]
     let x = z[3usize + n..3usize + n + n * p]
     let zz = z[3usize + n + n * p..3usize + n + n * p + n * q]
+    if str.eq(c.name, "gzll") || str.eq(c.name, "gzc") || str.eq(c.name, "ghll") || str.eq(c.name, "ghc") {
+        var lg = 0.0f64
+        if str.eq(c.name, "gzll") || str.eq(c.name, "gzc") { lg = ps.zeroinfl_geom(a, x, zz, y, n, p, q, par) } else { lg = ps.hurdle_geom(a, x, zz, y, n, p, q, par) }
+        if str.eq(c.name, "gzll") || str.eq(c.name, "ghll") { ret lg }
+        ret par[0usize] + 2.0f64 * par[1usize]
+    }
     if str.eq(c.name, "hnbll") || str.eq(c.name, "hnbtheta") {
         let lh = ps.hurdle_nb(a, x, zz, y, n, p, q, par)
         if str.eq(c.name, "hnbll") { ret lh }

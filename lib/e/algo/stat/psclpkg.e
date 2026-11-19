@@ -1,6 +1,6 @@
 // R pscl: zero-inflated Poisson (zeroinfl, logit zero part) and the Poisson hurdle model (hurdle, zero-truncated count part and logit zero part), fitted by Newton's method with step halving on the exact Hessian (R uses BFGS from glm starting values; the likelihood optimum is what is compared). Matrices are row-major with their own constant columns.
 //
-// Not here: geometric counts, the other zero links, offsets and weights, prediction types beyond response, count and zero.
+// Not here: the other zero links, offsets and weights, prediction types beyond response, count and zero.
 
 use e.algo.stat.gparot as gp
 use e.math
@@ -424,11 +424,12 @@ fn vuong_zip_poisson(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f
 
 // zeroinfl(y ~ x | z, dist = "negbin"): the zero-inflated negative binomial (logit zero part, theta on the log scale as the last parameter) by BFGS on the exact log-likelihood with central-difference
 // gradients, started from the zero-inflated Poisson fit. par receives beta (p), gamma (q), log theta; returns the log-likelihood (NaN on failure)
-type NbCtx = struct { x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize }
+type NbCtx = struct { x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, geom: bool }
 
 fn nb_loglik(c: *NbCtx, par: []const f64) -> f64 {
     var ll = 0.0f64
-    let theta = math.exp[f64](par[c.p + c.q])
+    var theta = 1.0f64
+    if !c.geom { theta = math.exp[f64](par[c.p + c.q]) }
     var i = 0usize
     while i < c.n {
         var eta = 0.0f64
@@ -491,7 +492,7 @@ fn zeroinfl_nb(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n:
     let l0 = zeroinfl(a, x, z, y, n, p, q, par[0usize..p + q])
     if l0 != l0 { ret nan }
     par[p + q] = 0.0f64
-    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: q }
+    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: q, geom: false }
     let (scr, e0) = mem.alloc[f64](a, m * m + 6usize * m)
     if e0 != ok { ret nan }
     var round = 0usize
@@ -507,7 +508,8 @@ fn zeroinfl_nb(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n:
 // the zero-truncated negative binomial count part of hurdle(dist = "negbin"): the log-likelihood over the positive rows, parameters beta (p) and log theta
 fn nbt_loglik(c: *NbCtx, par: []const f64) -> f64 {
     var ll = 0.0f64
-    let theta = math.exp[f64](par[c.p])
+    var theta = 1.0f64
+    if !c.geom { theta = math.exp[f64](par[c.p]) }
     var i = 0usize
     while i < c.n {
         if c.y[i] > 0.0f64 {
@@ -528,7 +530,7 @@ fn nbt_loglik(c: *NbCtx, par: []const f64) -> f64 {
 
 fn nbt_neg(c: *NbCtx, par: []const f64) -> f64 {
     var j = 0usize
-    while j <= c.p {
+    while j < par.len {
         if math.abs[f64](par[j]) > 12.0f64 { ret 1.0e300f64 }
         j += 1usize
     }
@@ -581,7 +583,7 @@ fn hurdle_nb(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: u
         j += 1usize
     }
     bt[p] = 0.0f64
-    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: 0usize }
+    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: 0usize, geom: false }
     let (scr, e4) = mem.alloc[f64](a, m * m + 6usize * m)
     if e4 != ok { ret nan }
     var round = 0usize
@@ -610,4 +612,48 @@ fn hurdle_nb(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: u
     }
     par[p + q] = bt[p]
     ret nbt_loglik(&c, bt) + lz
+}
+
+// zeroinfl(y ~ x | z, dist = "geometric") is the negative binomial with theta = 1 fixed: BFGS on beta (p) and gamma (q) from the zero-inflated Poisson fit; returns the log-likelihood
+fn zeroinfl_geom(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let m = p + q
+    if m > 32usize { ret nan }
+    let l0 = zeroinfl(a, x, z, y, n, p, q, par[0usize..m])
+    if l0 != l0 { ret nan }
+    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: q, geom: true }
+    let (scr, e0) = mem.alloc[f64](a, m * m + 6usize * m)
+    if e0 != ok { ret nan }
+    var round = 0usize
+    while round < 2usize {
+        let (r, e1) = opt.bfgs[NbCtx](&c, nb_neg, nb_grad, par[0usize..m], 1.0e-8f64, 400u32, scr)
+        let _ = r
+        if e1 != ok { ret nan }
+        round += 1usize
+    }
+    ret nb_loglik(&c, par[0usize..m])
+}
+
+// hurdle(y ~ x | z, dist = "geometric"): the exact logit zero part plus the zero-truncated geometric count part (BFGS on beta from the truncated Poisson fit); par receives beta (p) then gamma (q);
+// returns the total log-likelihood
+fn hurdle_geom(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    if p > 32usize { ret nan }
+    let l0 = hurdle(a, x, z, y, n, p, q, par[0usize..p + q])
+    if l0 != l0 { ret nan }
+    let (gr, e1) = mem.alloc[f64](a, q)
+    let (hh, e2) = mem.alloc[f64](a, q * q)
+    if e1 != ok || e2 != ok { ret nan }
+    let lz = lik(3usize, x, z, y, n, p, q, par[p..p + q], gr, hh, false)
+    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: 0usize, geom: true }
+    let (scr, e4) = mem.alloc[f64](a, p * p + 6usize * p)
+    if e4 != ok { ret nan }
+    var round = 0usize
+    while round < 2usize {
+        let (r, e5) = opt.bfgs[NbCtx](&c, nbt_neg, nbt_grad, par[0usize..p], 1.0e-8f64, 400u32, scr)
+        let _ = r
+        if e5 != ok { ret nan }
+        round += 1usize
+    }
+    ret nbt_loglik(&c, par[0usize..p]) + lz
 }
