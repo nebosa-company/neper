@@ -27,7 +27,7 @@ L342	library	0.42	1013	lmerTest: Satterthwaite and Kenward-Roger tests for mixed
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L334	library	0.75	1455	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
 L394	library	0.05	448	ipred: bagging and error estimation	Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred;
-L338	library	0.2	578	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
+L338	library	0.2	756	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
 L339	library	0.16	1649	bayestestR, performance and parameters: model summary indices	D7357: performance_score of a Poisson regression equal to performance.
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 

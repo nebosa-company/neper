@@ -22,6 +22,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if rb.adj_outlyingness(a, &g, x[4usize..4usize + an * ap], an, ap, usize(x[1usize]), ao) != ok { os.exit(6) }
         ret ao[usize(x[4usize + an * ap])]
     }
+    if str.eq(k, "mcd") {
+        let mn = usize(x[0usize])
+        var mo: [4]f64 = zero
+        if rb.cov_mcd_1d(a, x[1usize..1usize + mn], x[1usize + mn], mo[0usize..4usize]) != ok { os.exit(7) }
+        ret mo[usize(x[2usize + mn])]
+    }
     let n = usize(x[0usize])
     let v = x[1usize..1usize + n]
     if str.eq(k, "qn") { ret rb.qn(a, v) }

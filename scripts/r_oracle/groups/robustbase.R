@@ -30,4 +30,11 @@ for (rep in 1:60) {
   n <- sample(c(7, 9, 11, 15, 21, 25), 1); x <- rnorm(n); x <- x - median(x)
   add("mc", c(n, x), as.numeric(mc(x, doReflect = TRUE, doScale = TRUE)))
 }
+# covMcd of one variable: "mcd" args (n, x[n], alpha, which) with which 0 raw center 1 raw variance 2 center 3 variance
+for (rep in 1:40) {
+  n <- sample(12:80, 1); x <- round(rnorm(n, 2, 3), 3); if (rep %% 2 == 0) x[sample(n, max(1, n %/% 8))] <- x[sample(n, max(1, n %/% 8))] + 15; alpha <- c(0.5, 0.6, 0.75, 0.9)[1 + rep %% 4]
+  r <- tryCatch(suppressWarnings(covMcd(x, alpha = alpha)), error = function(e) NULL); if (is.null(r)) next
+  w <- c(r$raw.center, r$raw.cov, r$center, r$cov)
+  for (k in 1:4) cases[[length(cases) + 1]] <- case("mcd", c(n, x, alpha, k - 1), w[k], rel = 1e-8, abs = 1e-10)
+}
 emit("robustbase", "robustbase", list(cases))

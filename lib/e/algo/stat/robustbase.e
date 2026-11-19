@@ -7,6 +7,7 @@ use e.math
 use e.algo.rand.r as rng
 use e.algo.stat.gparot as gp
 use e.math.dist as dist
+use e.math.nmath as nmm
 
 use e.mem
 
@@ -474,5 +475,102 @@ fn adj_outlyingness(a: *mem.Arena, g: *rng.Rng, x: []const f64, n: usize, p: usi
         out[t] = best
         t += 1usize
     }
+    ret ok
+}
+
+// robustbase .MCDcons for p = 1: 1 / (pgamma(qchisq(alpha, 1) / 2, 3 / 2) / alpha)
+fn mcd_cons1(alpha: f64) -> f64 {
+    let qa = nmm.qchisq(alpha, 1.0f64, true, false)
+    ret alpha / nmm.pgamma(qa / 2.0f64, 1.5f64, 1.0f64, true, false)
+}
+
+// the finite sample factor of .MCDcnp2 (rew = false) and .MCDcnp2.rew (rew = true) for p = 1: 1 / (the interpolation between the 0.5 and 0.875 curves)
+fn mcd_cnp2_1(n: f64, alpha: f64, rew: bool) -> f64 {
+    var f5 = 1.0f64 - math.exp[f64](0.262024211897096f64) / math.pow[f64](n, 0.604756680630497f64)
+    var f875 = 1.0f64 - math.exp[f64](0.0f64 - 0.351584646688712f64) / math.pow[f64](n, 1.01646567502486f64)
+    if rew {
+        f5 = 1.0f64 - math.exp[f64](1.11098143415027f64) / math.pow[f64](n, 1.5182890270453f64)
+        f875 = 1.0f64 - math.exp[f64](0.0f64 - 0.66046776772861f64) / math.pow[f64](n, 0.88939595831888f64)
+    }
+    var fa = f5 + (f875 - f5) / 0.375f64 * (alpha - 0.5f64)
+    if alpha > 0.875f64 { fa = f875 + (1.0f64 - f875) / 0.125f64 * (alpha - 0.875f64) }
+    ret 1.0f64 / fa
+}
+
+// robustbase::covMcd for one variable (the exact univariate MCD): the h = floor(2 n2 - n + 2 (n - n2) alpha) consecutive sorted values of smallest variance give the raw center and the raw
+// variance (divisor h) times the consistency factor and the small sample factor; the observations within sqrt(chi2_0.975) raw scales are reweighted (mean, variance with divisor sum w - 1),
+// the variance multiplied by the factors of the reweighting when some observation is dropped. out = (raw center, raw variance, center, variance)
+fn cov_mcd_1d(a: *mem.Arena, x: []const f64, alpha: f64, out: []f64) -> err {
+    let n = x.len
+    let (s, e0) = sort_copy(a, x)
+    if e0 != ok { ret e0 }
+    let n2 = (n + 2usize) / 2usize
+    let h = usize(math.floor[f64](2.0f64 * f64(n2) - f64(n) + 2.0f64 * f64(n - n2) * alpha))
+    var best = 1.0e308f64
+    var bi = 0usize
+    var i = 0usize
+    while i + h <= n {
+        var m = 0.0f64
+        var j = 0usize
+        while j < h {
+            m += s[i + j]
+            j += 1usize
+        }
+        m /= f64(h)
+        var v = 0.0f64
+        j = 0usize
+        while j < h {
+            v += (s[i + j] - m) * (s[i + j] - m)
+            j += 1usize
+        }
+        v /= f64(h - 1usize)
+        if v < best {
+            best = v
+            bi = i
+        }
+        i += 1usize
+    }
+    var cen = 0.0f64
+    i = 0usize
+    while i < h {
+        cen += s[bi + i]
+        i += 1usize
+    }
+    cen /= f64(h)
+    var ss = 0.0f64
+    i = 0usize
+    while i < h {
+        ss += (s[bi + i] - cen) * (s[bi + i] - cen)
+        i += 1usize
+    }
+    let calpha = mcd_cons1(f64(h) / f64(n))
+    let corr = mcd_cnp2_1(f64(n), alpha, false)
+    let rawv = calpha * corr * ss / f64(h)
+    let cm = nmm.qchisq(0.975f64, 1.0f64, true, false)
+    var sw = 0.0f64
+    var sx = 0.0f64
+    i = 0usize
+    while i < n {
+        let z = (x[i] - cen) * (x[i] - cen) / rawv
+        if z < cm {
+            sw += 1.0f64
+            sx += x[i]
+        }
+        i += 1usize
+    }
+    let mw = sx / sw
+    var sv = 0.0f64
+    i = 0usize
+    while i < n {
+        let z = (x[i] - cen) * (x[i] - cen) / rawv
+        if z < cm { sv += (x[i] - mw) * (x[i] - mw) }
+        i += 1usize
+    }
+    var cv = sv / (sw - 1.0f64)
+    if sw != f64(n) { cv = cv * mcd_cons1(0.975f64) * mcd_cnp2_1(f64(n), alpha, true) }
+    out[0usize] = cen
+    out[1usize] = rawv
+    out[2usize] = mw
+    out[3usize] = cv
     ret ok
 }

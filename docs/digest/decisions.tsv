@@ -4532,4 +4532,5 @@ D7706	587	gamlss.dist moments with Bessel and beta terms
 D7707	404	gamlss.dist GG moments
 D7708	846	gamlss.dist multinomial families
 D7709	985	pcubature in one dimension
-D7710	1088	hcubature with vector integrands
+D7710	1089	hcubature with vector integrands
+D7711	1317	robustbase covMcd for one variable
