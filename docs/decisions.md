@@ -51205,3 +51205,6 @@ epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude
 
 ## D7570 — actuar rinvtrgamma under set.seed
 `rand_draw` kind 6 is rinvtrgamma, scale times rgamma(shape1)^(-1/shape2); an earlier probe (D7550) had tried scale divided by the root, which is not the same thing. Equal to actuar on 10 seeded runs added to the 70 of the generator block (5201 cases in all). rgenpareto, rtrbeta, rgenbeta, rinvweibull and rinvexp stay open.
+
+## D7571 — actuar rinvweibull and rinvexp under set.seed
+`rand_draw` kinds 7 and 8: rinvweibull is scale rexp^(-1/shape) and rinvexp is scale / rexp. The D7550 probe had passed the scale positionally, where actuar's second positional argument is the rate, so those two had looked unmatched. Equal to actuar on 90 seeded runs over the nine kinds (5219 cases in all). rgenpareto and rtrbeta (not a plain gamma ratio) and rgenbeta (scale rbeta^(1/t), which needs R's rbeta) stay open.
