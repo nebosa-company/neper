@@ -17,6 +17,26 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = usize(z[2usize])
     let (par, e1) = mem.alloc[f64](a, p + q + 1usize)
     if e1 != ok { ret nan }
+    if str.eq(c.name, "hnbse") || str.eq(c.name, "hnbset") || str.eq(c.name, "hgse") {
+        let yh = z[3usize..3usize + n]
+        let xh = z[3usize + n..3usize + n + n * p]
+        let zh = z[3usize + n + n * p..3usize + n + n * p + n * q]
+        let isg = str.eq(c.name, "hgse")
+        var lh = 0.0f64
+        if isg { lh = ps.hurdle_geom(a, xh, zh, yh, n, p, q, par) } else { lh = ps.hurdle_nb(a, xh, zh, yh, n, p, q, par) }
+        if lh != lh { ret nan }
+        let (se, e6) = mem.alloc[f64](a, p + q + 1usize)
+        if e6 != ok { ret nan }
+        if ps.hurdle_nb_se(a, xh, zh, yh, n, p, q, isg, par, se) != ok { ret nan }
+        if str.eq(c.name, "hnbset") { ret se[p + q] }
+        var t = 0.0f64
+        var u = 0usize
+        while u < p + q {
+            t += se[u] * f64(u + 1usize)
+            u += 1usize
+        }
+        ret t
+    }
     if str.eq(c.name, "hwl") || str.eq(c.name, "hwc") || str.eq(c.name, "hwz") || str.eq(c.name, "hwse") {
         let lnk = usize(z[3usize])
         let y2 = z[5usize..5usize + n]

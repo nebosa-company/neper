@@ -78,4 +78,13 @@ for (rep in 1:8) {
   cases[[length(cases) + 1]] <- case("hwl", a, as.numeric(logLik(f)), rel = 2e-3, abs = 2e-3); cases[[length(cases) + 1]] <- case("hwc", a, sum(cc * 1:2), rel = 5e-3, abs = 5e-3)
   cases[[length(cases) + 1]] <- case("hwz", a, sum(zc * 1:2), rel = 5e-3, abs = 5e-3); cases[[length(cases) + 1]] <- case("hwse", a, sum(sv * seq_along(sv)), rel = 2e-2, abs = 2e-3)
 }
+# standard errors of the negative binomial ("hnbse", the beta and gamma block, and "hnbset" Log(theta)) and geometric ("hgse") hurdles, 2e-2.
+for (rep in 1:6) {
+  n <- sample(220:300, 1); x <- cbind(1, rnorm(n)); z <- cbind(1, rnorm(n)); b <- c(0.8, rnorm(1, 0, .3)); g <- c(-0.7, rnorm(1, 0, .5)); lam <- exp(as.vector(x %*% b)); pz <- plogis(as.vector(z %*% g)); th <- runif(1, 1.5, 5)
+  y <- rnbinom(n, mu = lam, size = th); y[runif(n) < pz] <- 0; d <- data.frame(y = y, x1 = x[, 2], z1 = z[, 2]); a <- c(n, 2, 2, y, as.vector(t(x)), as.vector(t(z)))
+  f <- tryCatch(suppressWarnings(hurdle(y ~ x1 | z1, data = d, dist = "negbin", control = hurdle.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
+  if (!is.null(f) && is.finite(f$theta) && f$theta < 1e3) { sv <- sqrt(diag(vcov(f))); cases[[length(cases) + 1]] <- case("hnbse", a, sum(sv * seq_along(sv)), rel = 2e-2, abs = 2e-3); cases[[length(cases) + 1]] <- case("hnbset", a, unname(summary(f)$coefficients$count["Log(theta)", 2]), rel = 2e-2, abs = 2e-3) }
+  f2 <- tryCatch(suppressWarnings(hurdle(y ~ x1 | z1, data = d, dist = "geometric", control = hurdle.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
+  if (!is.null(f2)) { sv <- sqrt(diag(vcov(f2))); cases[[length(cases) + 1]] <- case("hgse", a, sum(sv * seq_along(sv)), rel = 2e-2, abs = 2e-3) }
+}
 emit("pscl_nb", "pscl", list(cases))

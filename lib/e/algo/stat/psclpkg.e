@@ -1022,3 +1022,45 @@ fn hurdle_full(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, w:
     if num_hessian_se[LkCtx](a, &cz, lk_neg, gam[0usize..q], se[p..p + q]) != ok { ret nan }
     ret lk_loglik(&cc, par[0usize..p]) + lk_loglik(&cz, gam[0usize..q])
 }
+
+// the standard errors of the negative binomial (geom = false, par = beta, gamma, log theta) or geometric (geom = true, par = beta, gamma) hurdle fit: the count block (beta and, for the negative
+// binomial, log theta) from the truncated count likelihood and the zero block (gamma, logit) from the binomial one, each by num_hessian_se; se receives p + q (+ 1 for log theta)
+fn hurdle_nb_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, geom: bool, par: []const f64, se: []f64) -> err {
+    var cn = NbCtx { x: x, z: z, y: y, n: n, p: p, q: 0usize, geom: geom }
+    var m = p
+    if !geom { m = p + 1usize }
+    let (cs, e0) = mem.alloc[f64](a, m)
+    let (cp, e1) = mem.alloc[f64](a, m)
+    if e0 != ok || e1 != ok { ret mem.Full }
+    var j = 0usize
+    while j < p {
+        cp[j] = par[j]
+        j += 1usize
+    }
+    if !geom { cp[p] = par[p + q] }
+    if num_hessian_se[NbCtx](a, &cn, nbt_neg, cp[0usize..m], cs[0usize..m]) != ok { ret mem.Full }
+    let (wv, e2) = mem.alloc[f64](a, n)
+    let (ov, e3) = mem.alloc[f64](a, n)
+    let (zs, e4) = mem.alloc[f64](a, q)
+    if e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var u = 0usize
+    while u < n {
+        wv[u] = 1.0f64
+        ov[u] = 0.0f64
+        u += 1usize
+    }
+    var cz = LkCtx { x: x, z: z, y: y, n: n, p: p, q: q, link: 0usize, part: 1usize, w: wv, off: ov }
+    if num_hessian_se[LkCtx](a, &cz, lk_neg, par[p..p + q], zs) != ok { ret mem.Full }
+    j = 0usize
+    while j < p {
+        se[j] = cs[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < q {
+        se[p + j] = zs[j]
+        j += 1usize
+    }
+    if !geom { se[p + q] = cs[p] }
+    ret ok
+}
