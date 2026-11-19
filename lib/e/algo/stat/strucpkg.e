@@ -724,3 +724,110 @@ fn davies_lm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, n
     out[2usize] = f64(cnt)
     ret ok
 }
+
+// segmented::pscore.test for an lm (one break): the score of the term mean_k pmax(z - psi_k, 0), psi = seq(min z, max z, length = k), after the n by p design xreg; stat = sc / (sigma sqrt(v)), sigma^2 the
+// residual variance of the model, p from t with n - p degrees of freedom (alt 0 two-sided, 1 less, 2 greater); out = (stat, p)
+fn pscore_lm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, n: usize, p: usize, k: usize, alt: usize, out: []f64) -> err {
+    var zmin = z[0usize]
+    var zmax = z[0usize]
+    var i = 0usize
+    while i < n {
+        if z[i] < zmin { zmin = z[i] }
+        if z[i] > zmax { zmax = z[i] }
+        i += 1usize
+    }
+    let (pm, e0) = mem.alloc[f64](a, n)
+    let (xtx, e1) = mem.alloc[f64](a, p * p)
+    if e0 != ok || e1 != ok { ret e0 }
+    i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            let psi = zmin + (zmax - zmin) * f64(j) / f64(k - 1usize)
+            var v = z[i] - psi
+            if v < 0.0f64 { v = 0.0f64 }
+            s += v
+            j += 1usize
+        }
+        pm[i] = s / f64(k)
+        i += 1usize
+    }
+    var r = 0usize
+    while r < p * p {
+        xtx[r] = 0.0f64
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var c1 = 0usize
+        while c1 < p {
+            var c2 = 0usize
+            while c2 < p {
+                xtx[c1 * p + c2] += xreg[i * p + c1] * xreg[i * p + c2]
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        i += 1usize
+    }
+    let (inv, ie) = gp.invert(a, xtx, p)
+    if ie != ok { ret ie }
+    let (resy, e2) = mem.alloc[f64](a, n)
+    let (resp, e3) = mem.alloc[f64](a, n)
+    if e2 != ok || e3 != ok { ret e2 }
+    var pass = 0usize
+    while pass < 2usize {
+        var xt: [64]f64 = zero
+        i = 0usize
+        while i < n {
+            var c = 0usize
+            while c < p {
+                if pass == 0usize { xt[c] += xreg[i * p + c] * y[i] } else { xt[c] += xreg[i * p + c] * pm[i] }
+                c += 1usize
+            }
+            i += 1usize
+        }
+        var bh: [64]f64 = zero
+        var c1 = 0usize
+        while c1 < p {
+            var c2 = 0usize
+            while c2 < p {
+                bh[c1] += inv[c1 * p + c2] * xt[c2]
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var fit = 0.0f64
+            var c = 0usize
+            while c < p {
+                fit += bh[c] * xreg[i * p + c]
+                c += 1usize
+            }
+            if pass == 0usize { resy[i] = y[i] - fit } else { resp[i] = pm[i] - fit }
+            i += 1usize
+        }
+        pass += 1usize
+    }
+    var sc = 0.0f64
+    var vs = 0.0f64
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        sc += resp[i] * y[i]
+        vs += resp[i] * pm[i]
+        rss += resy[i] * resy[i]
+        i += 1usize
+    }
+    let df = f64(n) - f64(p)
+    let sg = math.sqrt[f64](rss / df)
+    let st = sc / (sg * math.sqrt[f64](vs))
+    var pv = 2.0f64 * nb.pt(math.abs[f64](st), df, false, false)
+    if alt == 1usize { pv = nb.pt(st, df, true, false) }
+    if alt == 2usize { pv = nb.pt(st, df, false, false) }
+    out[0usize] = st
+    out[1usize] = pv
+    ret ok
+}
