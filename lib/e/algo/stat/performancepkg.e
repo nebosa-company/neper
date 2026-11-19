@@ -671,3 +671,44 @@ fn logit_pcp(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     sv = sv / nn
     ret sv / (sv + 3.141592653589793f64 * 3.141592653589793f64 / 3.0f64)
 }
+
+// performance_score of a Poisson regression of counts y on x (n by p row-major, intercept included): p_y = dpois(y, mu), then which 0 logarithmic mean(log p_y), 1 quadratic mean(2 p_y + sum p_y^2), 2 spherical
+// mean(p_y / sqrt(sum p_y^2))
+fn poisson_score(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, which: usize) -> f64 {
+    let (xc, e1) = mem.alloc[f64](a, n * p)
+    let (w, e2) = mem.alloc[f64](a, n)
+    let (b, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xc[c * n + i] = x[i * p + c]
+            c += 1usize
+        }
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    if fx.pois_glm(a, xc, n, p, y, w, b, false) != ok { ret 0.0f64 / 0.0f64 }
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var lg = 0.0f64
+    i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var c = 0usize
+        while c < p {
+            t += xc[c * n + i] * b[c]
+            c += 1usize
+        }
+        let py = nm.dpois(y[i], math.exp[f64](t), false)
+        s1 += py
+        s2 += py * py
+        lg += math.log[f64](py)
+        i += 1usize
+    }
+    let nn = f64(n)
+    if which == 0usize { ret lg / nn }
+    if which == 1usize { ret (2.0f64 * s1 + nn * s2) / nn }
+    ret s1 / math.sqrt[f64](s2) / nn
+}

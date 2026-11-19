@@ -50656,3 +50656,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `logit_pcp` also returns the proper scoring rules of `performance_score` for a binomial model: with p_y = dbinom(y, size = sum(y), prob = p) (the package uses the sum of the responses as the binomial size), logarithmic = mean(log p_y), quadratic = mean(2 p_y + sum p_y^2) and spherical = mean(p_y / sqrt(sum p_y^2)).
 
 **Result.** `oracle_performancepkg` (1468 cases, 60 new) equals performance on Windows to 1e-6. Linux pending. L339 stays partial: scores for Poisson, negative binomial and zero-inflated models, bayesfactor_savagedickey and si (they need the uninstalled logspline package), factor predictors in standardize_parameters, Nakagawa R2 and icc (mixed models), other outlier methods.
+
+## D7357 — performance: performance_score for Poisson regression
+
+**Decision.** `performancepkg.poisson_score` takes p_y = dpois(y, mu) at the fitted means of a Poisson regression and forms the logarithmic, quadratic and spherical scores as for the binomial model.
+
+**Result.** `oracle_performancepkg` (1543 cases, 75 on 25 models) equals performance on Windows to 1e-7. Linux pending. L339 stays partial: scores for negative binomial and zero-inflated models, bayesfactor_savagedickey and si (they need the uninstalled logspline package), factor predictors in standardize_parameters, Nakagawa R2 and icc (mixed models), other outlier methods.

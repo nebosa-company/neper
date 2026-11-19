@@ -56,6 +56,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let pn = usize(x[1usize])
             let pp = usize(x[2usize])
             got = pf.poisson_checks(a, x[3usize + pn..3usize + pn + pn * pp], x[3usize..3usize + pn], pn, pp, usize(x[0usize]))
+        } else if str.eq(c.name, "psc") {
+            let qn = usize(x[1usize])
+            let qp = usize(x[2usize])
+            got = pf.poisson_score(a, x[3usize + qn..3usize + qn + qn * qp], x[3usize..3usize + qn], qn, qp, usize(x[0usize]))
         } else if str.eq(c.name, "hl") {
             let hb = usize(x[0usize])
             let hn = usize(x[1usize])

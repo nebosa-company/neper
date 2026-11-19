@@ -77,6 +77,8 @@ for (rep in 1:25) {
   od <- suppressMessages(check_overdispersion(m)); zi <- suppressMessages(check_zeroinflation(m))
   v <- c(od$dispersion_ratio, od$chisq_statistic, od$p_value, zi$observed.zeros, zi$predicted.zeros, zi$ratio)
   for (w in 0:5) cases[[length(cases) + 1]] <- case("pchk", c(w, n, p, y, as.vector(t(X))), as.numeric(v[w + 1]), rel = 1e-7, abs = 1e-10)
+  sc <- unlist(suppressMessages(performance_score(m)))
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("psc", c(w, n, p, y, as.vector(t(X))), as.numeric(sc[w + 1]), rel = 1e-7, abs = 1e-10)
 }
 # standardize_parameters of an lm (numeric predictors): "stdp" (n, p, level, j, which 0 slope 1 lower 2 upper, y[n], x row-major n by p)
 suppressMessages(library(parameters)); suppressMessages(library(effectsize))
