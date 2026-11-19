@@ -74,6 +74,22 @@ for (rep in 1:8) {
     cases[[length(cases) + 1]] <- case("gl_hi", c(base, i - 1, 0), er$asymp.UCL[i], rel = 1e-4, abs = 1e-6)
   }
 }
+# Poisson regression glm(y ~ A + B + x, poisson): "gp_link" "gp_se" "gp_est" "gp_rse" "gp_lo" "gp_hi", args (n, a, b, y[n], A, B, x, level index, 0); tolerance 1e-4 as for the logistic glm
+for (rep in 1:8) {
+  a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(80:150, 1)
+  A <- c(0:(a - 1), sample(0:(a - 1), n - a, TRUE)); B <- c(sample(0:(b - 1), a, TRUE), sample(0:(b - 1), n - a, TRUE)); B[1:b] <- 0:(b - 1)
+  x <- round(rnorm(n), 3); y <- rpois(n, exp(0.3 + A * 0.2 + B * 0.15 + 0.3 * x))
+  d <- data.frame(y = y, A = factor(A), B = factor(B), x = x)
+  m <- glm(y ~ A + B + x, poisson, d); el <- summary(emmeans(m, "A")); er <- summary(emmeans(m, "A", type = "response")); base <- c(n, a, b, y, A, B, x)
+  for (i in 1:a) {
+    cases[[length(cases) + 1]] <- case("gp_link", c(base, i - 1, 0), el$emmean[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gp_se", c(base, i - 1, 0), el$SE[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gp_est", c(base, i - 1, 0), er$rate[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gp_rse", c(base, i - 1, 0), er$SE[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gp_lo", c(base, i - 1, 0), er$asymp.LCL[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gp_hi", c(base, i - 1, 0), er$asymp.UCL[i], rel = 1e-4, abs = 1e-6)
+  }
+}
 # contrast families (adjust = "none"): "ctr_est" and "ctr_se" with args (base..., type, idx): type 0 trt.vs.ctrl (level idx vs level 0, idx from 1), 1 revpairwise (pair idx in emmeans' order), 2 consec (idx from 1), 3 eff (level idx, from 0), 4 poly (degree idx from 1)
 for (rep in 1:8) {
   a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(40:70, 1)

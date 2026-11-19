@@ -186,6 +186,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (gm, ge) = em.logit_glm(a, d, y, n, p)
         m = gm
         fe = ge
+    } else if str.starts_with(c.name, "gp_") {
+        let (pm, pe) = em.pois_glm_lm(a, d, y, n, p)
+        m = pm
+        fe = pe
     } else {
         let (lm0, le0) = em.fit(a, d, y, n, p)
         m = lm0
@@ -247,6 +251,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret math.sqrt[f64](em.variance(&m, rd))
     }
     grid_row(r1, na, nb, li, xbar)
+    if str.starts_with(c.name, "gp_") {
+        let pemm = em.estimate(&m, r1)
+        let pse = math.sqrt[f64](em.variance(&m, r1))
+        if str.eq(c.name, "gp_link") { ret pemm }
+        if str.eq(c.name, "gp_se") { ret pse }
+        var pt: [4]f64 = zero
+        let pz = 1.959963984540054f64
+        pt[0usize] = math.exp[f64](pemm)
+        pt[1usize] = pt[0usize] * pse
+        pt[2usize] = math.exp[f64](pemm - pz * pse)
+        pt[3usize] = math.exp[f64](pemm + pz * pse)
+        if str.eq(c.name, "gp_est") { ret pt[0usize] }
+        if str.eq(c.name, "gp_rse") { ret pt[1usize] }
+        if str.eq(c.name, "gp_lo") { ret pt[2usize] }
+        ret pt[3usize]
+    }
     if str.starts_with(c.name, "gl_") {
         let gemm = em.estimate(&m, r1)
         let gse = math.sqrt[f64](em.variance(&m, r1))

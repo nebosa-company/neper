@@ -329,3 +329,49 @@ fn backtransform_logit(emm: f64, se: f64, level: f64, out: []f64) {
     out[2usize] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - (emm - z * se)))
     out[3usize] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - (emm + z * se)))
 }
+
+// the Lm of a Poisson regression of the counts y on the design x (n by p column-major): IRLS coefficients and the covariance (X' W X)^-1 with W = mu; df infinite as for a glm with known dispersion
+fn pois_glm_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (Lm, err) {
+    let (beta, e1) = mem.alloc[f64](a, p)
+    let (w, e2) = mem.alloc[f64](a, n)
+    let (xwx, e3) = mem.alloc[f64](a, p * p)
+    let (inv, e4) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret (zero, e1) }
+    if e2 != ok { ret (zero, e2) }
+    if e3 != ok { ret (zero, e3) }
+    if e4 != ok { ret (zero, e4) }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let e5 = fxg.pois_glm(a, x, n, p, y, w, beta, false)
+    if e5 != ok { ret (zero, e5) }
+    var j = 0usize
+    while j < p * p {
+        xwx[j] = 0.0f64
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        j = 0usize
+        while j < p {
+            eta += x[j * n + i] * beta[j]
+            j += 1usize
+        }
+        let mu = math.exp[f64](eta)
+        j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                xwx[j * p + k] += mu * x[j * n + i] * x[k * n + i]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !ps.invert(a, xwx, p, inv) { ret (zero, Singular) }
+    ret (Lm { beta: beta, cov: inv, df: 1.0e300f64, p: p }, ok)
+}
