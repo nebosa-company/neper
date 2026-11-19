@@ -4565,4 +4565,5 @@ D7664	1077	psych: Promax rotation of the maximum likelihood fit
 D7665	879	psych: oblimin rotation of the maximum likelihood fit
 D7666	713	psych: factor correlations of the oblimin fit
 D7667	940	emmeans: contrast coefficient matrices
-D7668	796	emmeans: one-way contrast estimates and tests
+D7668	797	emmeans: one-way contrast estimates and tests
+D7669	792	emmeans: p value adjustments on the one-way contrasts

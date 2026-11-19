@@ -544,8 +544,9 @@ fn contrast_coefs(kind: usize, k: usize, out: []f64) -> usize {
     ret m
 }
 
-// contrast(emmeans(lm(y ~ g), "g"), method, adjust = "none") for a one-way layout: grp holds the level (0 .. k - 1) of each of the n observations, kind as in `contrast_coefs`. For contrast j out[6 j ..] = the estimate, its standard
-// error, the degrees of freedom n - k, the t ratio, the unadjusted p and the Tukey-adjusted p (for the pairwise kinds 0 and 1, NaN otherwise); returns the number of contrasts, 0 when the fit fails
+// contrast(emmeans(lm(y ~ g), "g"), method, adjust = "none") for a one-way layout: grp holds the level (0 .. k - 1) of each of the n observations, kind as in `contrast_coefs`. For contrast j out[10 j ..] = the estimate, its standard
+// error, the degrees of freedom n - k, the t ratio, the unadjusted p, the Tukey-adjusted p (for the pairwise kinds 0 and 1, NaN otherwise), then the Scheffe (rank k - 1), Bonferroni, Sidak and Holm adjusted p over the m contrasts;
+// returns the number of contrasts, 0 when the fit fails
 fn contrast_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usize, k: usize, kind: usize, out: []f64) -> usize {
     let (x, e1) = mem.alloc[f64](a, n * k)
     let (cf, e2) = mem.alloc[f64](a, k * k * k)
@@ -576,13 +577,28 @@ fn contrast_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usize, k:
         let est = estimate(&fm, l)
         let se = math.sqrt[f64](variance(&fm, l))
         let t = est / se
-        out[6usize * j] = est
-        out[6usize * j + 1usize] = se
-        out[6usize * j + 2usize] = df
-        out[6usize * j + 3usize] = t
-        out[6usize * j + 4usize] = p_t(t, df)
-        out[6usize * j + 5usize] = 0.0f64 / 0.0f64
-        if kind <= 1usize { out[6usize * j + 5usize] = p_tukey(t, f64(k), df) }
+        out[10usize * j] = est
+        out[10usize * j + 1usize] = se
+        out[10usize * j + 2usize] = df
+        out[10usize * j + 3usize] = t
+        out[10usize * j + 4usize] = p_t(t, df)
+        out[10usize * j + 5usize] = 0.0f64 / 0.0f64
+        if kind <= 1usize { out[10usize * j + 5usize] = p_tukey(t, f64(k), df) }
+        j += 1usize
+    }
+    var pv: [64]f64 = zero
+    j = 0usize
+    while j < m {
+        pv[j] = out[10usize * j + 4usize]
+        out[10usize * j + 6usize] = p_scheffe(out[10usize * j + 3usize], f64(k - 1usize), df)
+        out[10usize * j + 7usize] = p_bonferroni(pv[j], f64(m))
+        out[10usize * j + 8usize] = p_sidak(pv[j], f64(m))
+        j += 1usize
+    }
+    holm(pv[0usize..m])
+    j = 0usize
+    while j < m {
+        out[10usize * j + 9usize] = pv[j]
         j += 1usize
     }
     ret m
