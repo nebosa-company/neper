@@ -18,4 +18,14 @@ for (rep in 1:12) {
     for (cc in seq_len(nrow(s))) { v <- c(s$estimate[cc], s$SE[cc], s$df[cc], s$t.ratio[cc], s$p.value[cc], st[cc], sa[[1]][cc], sa[[2]][cc], sa[[3]][cc], sa[[4]][cc]); for (ff in 0:9) if (is.finite(v[ff + 1])) cases[[length(cases) + 1]] <- case("emmoneway", c(kind, k, n, g, y, cc - 1, ff), as.numeric(v[ff + 1]), rel = 1e-8, abs = 1e-10) }
   }
 }
+# the same with a covariate, lm(y ~ g + x): "emmancova" args (kind, k, n, g[n], y[n], x[n], c, f), the means taken at the mean of x
+for (rep in 1:8) {
+  k <- sample(3:5, 1); ns <- sample(5:12, k, TRUE); g <- rep(0:(k - 1), ns); n <- length(g); x <- round(rnorm(n, 1, 1), 3); y <- round(c(0, 0.5, 1, 0.3, 0.8)[g + 1] + 0.7 * x + rnorm(n), 3)
+  d <- data.frame(g = factor(g), y = y, x = x); e <- emmeans(lm(y ~ g + x, d), "g")
+  for (kind in 0:7) {
+    s <- summary(contrast(e, meth[kind + 1], adjust = "none")); st <- if (kind <= 1) summary(contrast(e, meth[kind + 1], adjust = "tukey"))$p.value else rep(NaN, nrow(s))
+    sa <- lapply(c("scheffe", "bonferroni", "sidak", "holm"), function(ad) summary(contrast(e, meth[kind + 1], adjust = ad))$p.value)
+    for (cc in seq_len(nrow(s))) { v <- c(s$estimate[cc], s$SE[cc], s$df[cc], s$t.ratio[cc], s$p.value[cc], st[cc], sa[[1]][cc], sa[[2]][cc], sa[[3]][cc], sa[[4]][cc]); for (ff in 0:9) if (is.finite(v[ff + 1])) cases[[length(cases) + 1]] <- case("emmancovar", c(kind, k, n, g, y, x, cc - 1, ff), as.numeric(v[ff + 1]), rel = 1e-8, abs = 1e-10) }
+  }
+}
 emit("emmeanscontr", "emmeans", list(cases))

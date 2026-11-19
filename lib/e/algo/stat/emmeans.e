@@ -547,31 +547,35 @@ fn contrast_coefs(kind: usize, k: usize, out: []f64) -> usize {
 // contrast(emmeans(lm(y ~ g), "g"), method, adjust = "none") for a one-way layout: grp holds the level (0 .. k - 1) of each of the n observations, kind as in `contrast_coefs`. For contrast j out[10 j ..] = the estimate, its standard
 // error, the degrees of freedom n - k, the t ratio, the unadjusted p, the Tukey-adjusted p (for the pairwise kinds 0 and 1, NaN otherwise), then the Scheffe (rank k - 1), Bonferroni, Sidak and Holm adjusted p over the m contrasts;
 // returns the number of contrasts, 0 when the fit fails
-fn contrast_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usize, k: usize, kind: usize, out: []f64) -> usize {
-    let (x, e1) = mem.alloc[f64](a, n * k)
+fn contrast_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, xc: []const f64, n: usize, k: usize, kind: usize, out: []f64) -> usize {
+    var q = k
+    if xc.len > 0usize { q = k + 1usize }
+    let (x, e1) = mem.alloc[f64](a, n * q)
     let (cf, e2) = mem.alloc[f64](a, k * k * k)
-    let (l, e3) = mem.alloc[f64](a, k)
+    let (l, e3) = mem.alloc[f64](a, q)
     if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
     var z = 0usize
-    while z < n * k {
+    while z < n * q {
         x[z] = 0.0f64
         z += 1usize
     }
     var i = 0usize
     while i < n {
         x[usize(grp[i]) * n + i] = 1.0f64
+        if xc.len > 0usize { x[k * n + i] = xc[i] }
         i += 1usize
     }
-    let (fm, fe) = fit(a, x, y, n, k)
+    let (fm, fe) = fit(a, x, y, n, q)
     if fe != ok { ret 0usize }
     let m = contrast_coefs(kind, k, cf)
     if m == 0usize { ret 0usize }
-    let df = f64(n - k)
+    let df = f64(n - q)
     var j = 0usize
     while j < m {
         var lv = 0usize
-        while lv < k {
-            l[lv] = cf[lv * m + j]
+        while lv < q {
+            l[lv] = 0.0f64
+            if lv < k { l[lv] = cf[lv * m + j] }
             lv += 1usize
         }
         let est = estimate(&fm, l)
