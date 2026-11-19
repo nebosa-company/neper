@@ -17,6 +17,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let link = usize(z[3usize])
     let (par, e1) = mem.alloc[f64](a, nk - 1usize + p)
     if e1 != ok { ret nan }
+    if c.name.len >= 3usize && c.name[0usize] == 115u8 && c.name[1usize] == 121u8 {
+        let (tm, etm) = mem.alloc[f64](a, (nk - 1usize) * nk)
+        if etm != ok { ret nan }
+        let nas = od.thr_map(2usize, nk - 1usize, tm)
+        let lls = od.clm_lin(a, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], n, p, nk, link, tm, nas, par)
+        if str.eq(c.name, "syll") { ret lls }
+        var ss = 0.0f64
+        var is = 0usize
+        if str.eq(c.name, "syth") {
+            while is < nk - 1usize {
+                ss += par[is] * f64(is + 1usize)
+                is += 1usize
+            }
+            ret ss
+        }
+        while is < p {
+            ss += par[nk - 1usize + is] * f64(is + 1usize)
+            is += 1usize
+        }
+        ret ss
+    }
     if c.name.len >= 3usize && c.name[0usize] == 101u8 && c.name[1usize] == 113u8 {
         let lle = od.clm_equi(a, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], n, p, nk, link, par)
         if str.eq(c.name, "eqll") { ret lle }

@@ -46,4 +46,18 @@ for (rep in 1:18) {
   a <- c(n, p, K, lk, y, as.vector(t(x)))
   add("eqll", a, as.numeric(logLik(f))); add("eqa", a, unname(f$alpha[1])); add("eqb", a, unname(f$alpha[2])); add("eqbeta", a, sum(f$beta * seq_along(f$beta)))
 }
+# threshold = "symmetric" (links 0 .. 2, K 3 .. 7): "syll", "syth" (the full thresholds weighted by position), "sybeta"; args as "ll"
+set.seed(20262482)
+for (rep in 1:24) {
+  n <- sample(200:400, 1); p <- sample(1:3, 1); K <- 3 + (rep - 1) %% 5; lk <- (rep - 1) %% 3
+  x <- matrix(rnorm(n * p), n); b <- rnorm(p) * 0.7; th <- seq(-1.5, 1.5, length.out = K - 1) + rnorm(K - 1, 0, 0.15)
+  eta <- as.vector(x %*% b); u <- if (lk == 0) rlogis(n) else if (lk == 1) rnorm(n) else log(-log(runif(n)))
+  y <- findInterval(eta + u, th)
+  if (length(unique(y)) < K) next
+  d <- as.data.frame(x); names(d) <- paste0("v", seq_len(p)); d$y <- factor(y, ordered = TRUE)
+  f <- tryCatch(clm(y ~ ., data = d, link = links[lk + 1], threshold = "symmetric", control = clm.control(gradTol = 1e-10, maxIter = 500)), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, p, K, lk, y, as.vector(t(x)))
+  add("syll", a, as.numeric(logLik(f))); add("syth", a, sum(as.numeric(f$Theta) * seq_along(f$Theta))); add("sybeta", a, sum(f$beta * seq_along(f$beta)))
+}
 emit("ordinal", "ordinal", list(cases))
