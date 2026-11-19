@@ -20,6 +20,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         w[i] = 1.0f64
         i += 1usize
     }
+    if str.eq(c.name, "ssdf") {
+        let mm = usize(z[2usize])
+        let sp = sm.fit_df(a, z[3usize..3usize + n], z[3usize + n..3usize + 2usize * n], w, z[1usize], &f)
+        let ix = usize(z[3usize + 2usize * n + mm])
+        if ix < mm { ret sm.predict(a, &f, z[3usize + 2usize * n + ix]) }
+        if ix == mm { ret sp }
+        if ix == mm + 1usize { ret f.lambda }
+        ret f.df
+    }
+    if str.eq(c.name, "dfat") {
+        if sm.fit(a, z[2usize..2usize + n], z[2usize + n..2usize + 2usize * n], w, z[1usize], &f) != ok { ret nan }
+        ret f.df
+    }
     if str.eq(c.name, "lam") {
         if sm.fit(a, z[2usize..2usize + n], z[2usize + n..2usize + 2usize * n], w, z[1usize], &f) != ok { ret nan }
         ret f.lambda

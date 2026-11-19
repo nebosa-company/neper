@@ -416,10 +416,10 @@
       "group": "CRAN parity",
       "order": 711,
       "title": "gam: backfitting generalized additive models",
-      "score": 0,
+      "score": 0.03,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 388). Mid. mgcv is L353. Acceptance, equal to gam: gam with s and lo terms (smoothing spline and loess), the Gaussian, binomial and Poisson families, backfitting convergence, step.Gam, anova and predict with standard errors."
+      "evidence": "Started (D7686: smooth.spline with a target df, the smoother s() of gam rests on: the trace of the smoother and R's Brent search for spar equal to smooth.spline(x, y, df) to about 1e-4 in the fit and 1e-3 in the df, 635 values in oracle_smspline; Linux pending). Open: the backfitting itself, lo() on loess, families, step.Gam, anova and predict with standard errors. Was: Open (CRAN rank 388). Mid. mgcv is L353. Acceptance, equal to gam: gam with s and lo terms (smoothing spline and loess), the Gaussian, binomial and Poisson families, backfitting convergence, step.Gam, anova and predict with standard errors."
     },
     {
       "id": "L378",

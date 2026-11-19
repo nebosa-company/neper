@@ -3,12 +3,15 @@
 //
 // The penalty Gram matrix integrates the products of the second derivatives with the package own quadrature (the quadratic term weighted 0.3330, not 1/3).
 //
-// Not here: lambda chosen by df or cross-validation, tied x values (the weights are used as given), more than 49 distinct x (the package thins the knots).
+// The effective degrees of freedom (the trace of the smoother, `df`) are computed, and `fit_df` chooses spar for a target df by R's search (Brent on 3 + (df - trace)^2 over [-1.5, 1.5], tol 1e-4).
+//
+// Not here: lambda chosen by cross-validation, tied x values (the weights are used as given), more than 49 distinct x (the package thins the knots).
 
 use e.math
 use e.mem
+use e.algo.stat.fdrtool as fd
 
-type SmSpline = struct { knots: []f64, nk: usize, coef: []f64, lo: f64, range: f64, lambda: f64 }
+type SmSpline = struct { knots: []f64, nk: usize, coef: []f64, lo: f64, range: f64, lambda: f64, df: f64 }
 
 // the values of the q + 1 non-zero B-splines of degree q on the knot span l at x (Piegl and Tiller BasisFuns)
 fn basis_funs(t: []const f64, l: usize, x: f64, q: usize, out: []f64) {
@@ -248,13 +251,82 @@ fn fit(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, spar: f64,
         }
         cf[i] = v / m[i * nk + i]
     }
+    // the trace of the smoother: sum of w_i B_i' (hs + lambda sg)^-1 B_i, each solve through the factor in m
+    let (zz, e10) = mem.alloc[f64](a, nk)
+    if e10 != ok { ret mem.Full }
+    var trace = 0.0f64
+    i = 0usize
+    while i < nx {
+        let l2 = find_span(kn, nk, xb[i])
+        basis_funs(kn, l2, xb[i], 3usize, nv[0usize..4usize])
+        var r2 = 0usize
+        while r2 < nk {
+            zz[r2] = 0.0f64
+            r2 += 1usize
+        }
+        var p2 = 0usize
+        while p2 < 4usize {
+            zz[l2 - 3usize + p2] = nv[p2]
+            p2 += 1usize
+        }
+        r2 = 0usize
+        while r2 < nk {
+            var v = zz[r2]
+            var t = 0usize
+            while t < r2 {
+                v -= m[t * nk + r2] * zz[t]
+                t += 1usize
+            }
+            zz[r2] = v / m[r2 * nk + r2]
+            r2 += 1usize
+        }
+        r2 = nk
+        while r2 > 0usize {
+            r2 -= 1usize
+            var v = zz[r2]
+            var t = r2 + 1usize
+            while t < nk {
+                v -= m[r2 * nk + t] * zz[t]
+                t += 1usize
+            }
+            zz[r2] = v / m[r2 * nk + r2]
+        }
+        var lev = 0.0f64
+        p2 = 0usize
+        while p2 < 4usize {
+            lev += nv[p2] * zz[l2 - 3usize + p2]
+            p2 += 1usize
+        }
+        trace += w[i] * lev
+        i += 1usize
+    }
     out.knots = kn
     out.nk = nk
     out.coef = cf
     out.lo = lo
     out.range = range
     out.lambda = lambda
+    out.df = trace
     ret ok
+}
+
+type DfCtx = struct { a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, df: f64 }
+
+fn df_crit(c: *DfCtx, spar: f64) -> f64 {
+    let mk = mem.mark(c.a)
+    var f: SmSpline = zero
+    var v = 1.0e300f64
+    if fit(c.a, c.x, c.y, c.w, spar, &f) == ok { v = 3.0f64 + (c.df - f.df) * (c.df - f.df) }
+    mem.reset(c.a, mk)
+    ret v
+}
+
+// smooth.spline(x, y, w, df = df): spar found by Brent's method on 3 + (df - trace)^2 over [-1.5, 1.5] with tolerance 1e-4 (R's control.spar defaults), then the fit at it; returns the spar
+fn fit_df(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, df: f64, out: *SmSpline) -> f64 {
+    var c = DfCtx { a: a, x: x, y: y, w: w, df: df }
+    let spar = fd.brent_min_tol[DfCtx](&c, df_crit, 0.0f64 - 1.5f64, 1.5f64, 1.0e-4f64)
+    if fit(a, x, y, w, spar, out) != ok { ret 0.0f64 / 0.0f64 }
+    ret spar
 }
 
 // predict(fit, x): the fitted value, extending linearly outside the data range from the end value and slope

@@ -4582,4 +4582,5 @@ D7681	522	psych: loadings of the minres, uls and ols fits
 D7682	943	psych: rotations of the minres fit
 D7683	1008	psych: fit statistics of the maximum likelihood fit
 D7684	835	psych: RMSEA, TLI, CFI and the null chi-square
-D7685	1157	psych: rms and crms; scores re-set
+D7685	1158	psych: rms and crms; scores re-set
+D7686	1239	smooth.spline with a target df
