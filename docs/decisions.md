@@ -50086,3 +50086,9 @@ L478 stays partial: instrumentalVariables (the exact rule of dagitty's condition
 lpSolve's own integer answers turned out to be unreliable: on 3 of 60 random mixed and binary problems `lp(..., int.vec)` returned a value below the true optimum (for one, 16.9875 with x3 = 3 where x3 = 2 gives 18.2 and is feasible). The oracle's expected value is therefore the true optimum, found in R by enumerating the integer variables and solving the continuous remainder with `lp()`, with lpSolve's value asserted to be a lower bound; the port reproduces the optimum, not lpSolve's early stops.
 
 **Result.** `oracle_lpsolve` (equality rows) and `oracle_lpsolve_int` (60 integer and binary problems, true optima) pass on Windows. Linux pending. L367 stays partial: transportation, sensitivity output, lpSolveAPI model building and the other clue methods remain.
+
+## D7337 — lpSolve: lp.transport
+
+`e.algo.stat.lpsolvepkg` gains `transport`: the transportation problem over m supply rows and n demand columns with per-row and per-column signs (<=, >=, =), minimising or maximising the cost, solved as a linear program by the simplex of `e.math.opt` (an equality is a <= row and a negated >= row). It answers the optimal cost and the shipments.
+
+**Result.** `oracle_lpsolve_int` now includes 30 transportation problems (balanced with equalities, supply-limited and demand-covering, minimising and maximising) whose optimal values equal `lp.transport` on Windows. Linux pending. L367 stays partial: sensitivity output, lpSolveAPI model building and the other clue methods remain.

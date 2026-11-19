@@ -5,10 +5,38 @@ use e.algo.stat.lpsolvepkg as lp
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "tr") {
+        let tm = usize(x[0usize])
+        let tn = usize(x[1usize])
+        let mx = x[2usize] > 0.5f64
+        let co = 3usize
+        let rso = co + tm * tn
+        let rro = rso + tm
+        let cso = rro + tm
+        let cro = cso + tn
+        let (rsg, g1) = mem.alloc[usize](a, tm)
+        let (csg, g2) = mem.alloc[usize](a, tn)
+        let (shp, g3) = mem.alloc[f64](a, tm * tn)
+        if g1 != ok || g2 != ok || g3 != ok { os.exit(7) }
+        var q = 0usize
+        while q < tm {
+            rsg[q] = usize(x[rso + q])
+            q += 1usize
+        }
+        q = 0usize
+        while q < tn {
+            csg[q] = usize(x[cso + q])
+            q += 1usize
+        }
+        let (tv, te) = lp.transport(a, x[co..co + tm * tn], tm, tn, mx, rsg, x[rro..rro + tm], csg, x[cro..cro + tn], shp)
+        if te != ok { os.exit(8) }
+        ret tv
+    }
     let m = usize(x[0usize])
     let n = usize(x[1usize])
     let ra = 2usize + n

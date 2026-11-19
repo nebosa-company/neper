@@ -33,6 +33,24 @@ for (rep in 1:300) {
   ok <- ok + 1
   if (ok >= 60) break
 }
+# lp.transport: fn "tr" args (m, n, maximise, cost[m n] row-major, rsign[m], rrhs[m], csign[n], crhs[n]) the optimal value (signs 0 <=, 1 >=, 2 =)
+nt <- 0
+for (rep in 1:200) {
+  m <- sample(2:4, 1); n <- sample(2:5, 1)
+  cost <- matrix(sample(1:20, m * n, replace = TRUE), m, n)
+  sup <- sample(5:20, m, replace = TRUE); dem <- sample(3:15, n, replace = TRUE)
+  mode <- rep %% 3
+  rs <- if (mode == 0) rep("=", m) else rep("<=", m); cs <- if (mode == 1) rep(">=", n) else rep("=", n)
+  if (mode == 0) { tot <- sum(sup); dem <- round(dem / sum(dem) * tot); dem[1] <- dem[1] + tot - sum(dem) }
+  if (mode == 2) { sup <- sup + 20 }
+  dirn <- if (rep %% 2 == 0) "max" else "min"
+  s <- tryCatch(lp.transport(cost, dirn, rs, sup, cs, dem), error = function(e) NULL)
+  if (is.null(s) || s$status != 0) next
+  code <- function(v) match(v, c("<=", ">=", "=")) - 1
+  cases[[length(cases) + 1]] <- case("tr", c(m, n, as.numeric(dirn == "max"), as.vector(t(cost)), code(rs), sup, code(cs), dem), s$objval, rel = 1e-8, abs = 1e-8)
+  nt <- nt + 1
+  if (nt >= 30) break
+}
 cat("lpSolve below the true optimum in", nsub, "of", ok, "problems
 ")
 emit("lpsolve_int", "lpSolve", list(cases))

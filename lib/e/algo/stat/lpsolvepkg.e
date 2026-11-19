@@ -125,3 +125,86 @@ fn lp_int(a: *mem.Arena, cc: []const f64, am: []const f64, b: []const f64, m: us
     if !best.found { ret (0.0f64, Malformed) }
     ret (best.obj, ok)
 }
+
+// lp.transport(cost.mat, direction, row.signs, row.rhs, col.signs, col.rhs): the transportation problem over m supply rows and n demand columns, every shipment x_ij >= 0;
+// a sign is 0 for <=, 1 for >=, 2 for =. Solved as a linear program with the simplex (an equality is a <= row and a negated >= row). Answers the optimal cost (the maximum
+// when maximise); the shipments go to x (m by n, row-major). Infeasible problems answer an error.
+fn transport(a: *mem.Arena, cost: []const f64, m: usize, n: usize, maximise: bool, rsign: []const usize, rrhs: []const f64, csign: []const usize, crhs: []const f64, x: []f64) -> (f64, err) {
+    let nv = m * n
+    var rows = 0usize
+    var i = 0usize
+    while i < m {
+        rows += 1usize
+        if rsign[i] == 2usize { rows += 1usize }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < n {
+        rows += 1usize
+        if csign[j] == 2usize { rows += 1usize }
+        j += 1usize
+    }
+    let (am, e0) = mem.alloc[f64](a, rows * nv)
+    let (b, e1) = mem.alloc[f64](a, rows)
+    let (cc, e2) = mem.alloc[f64](a, nv)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0.0f64, mem.Full) }
+    var k = 0usize
+    while k < rows * nv {
+        am[k] = 0.0f64
+        k += 1usize
+    }
+    k = 0usize
+    while k < nv {
+        cc[k] = cost[k]
+        if !maximise { cc[k] = 0.0f64 - cost[k] }
+        k += 1usize
+    }
+    var r = 0usize
+    i = 0usize
+    while i < m {
+        var pass = 0usize
+        let eq = rsign[i] == 2usize
+        while pass < 2usize {
+            var sg = 1.0f64
+            if rsign[i] == 1usize { sg = 0.0f64 - 1.0f64 }
+            if eq && pass == 1usize { sg = 0.0f64 - 1.0f64 }
+            var q = 0usize
+            while q < n {
+                am[r * nv + i * n + q] = sg
+                q += 1usize
+            }
+            b[r] = sg * rrhs[i]
+            r += 1usize
+            pass += 1usize
+            if !eq { pass = 2usize }
+        }
+        i += 1usize
+    }
+    j = 0usize
+    while j < n {
+        var pass = 0usize
+        let eq = csign[j] == 2usize
+        while pass < 2usize {
+            var sg = 1.0f64
+            if csign[j] == 1usize { sg = 0.0f64 - 1.0f64 }
+            if eq && pass == 1usize { sg = 0.0f64 - 1.0f64 }
+            var q = 0usize
+            while q < m {
+                am[r * nv + q * n + j] = sg
+                q += 1usize
+            }
+            b[r] = sg * crhs[j]
+            r += 1usize
+            pass += 1usize
+            if !eq { pass = 2usize }
+        }
+        j += 1usize
+    }
+    let (tab, e3) = mem.alloc[f64](a, (rows + 2usize) * (nv + rows + 2usize))
+    let (bas, e4) = mem.alloc[usize](a, rows)
+    if e3 != ok || e4 != ok { ret (0.0f64, mem.Full) }
+    let (v, es) = opt.simplex(cc, am, b, rows, nv, x, tab, bas)
+    if es != ok { ret (0.0f64, es) }
+    if maximise { ret (v, ok) }
+    ret (0.0f64 - v, ok)
+}

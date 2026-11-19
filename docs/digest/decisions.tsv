@@ -4128,4 +4128,5 @@ D7332	1061	dagitty: every adjustment set, the canonical set and path enumeration
 D7333	688	dagitty: equivalentDAGs
 D7334	717	dagitty: impliedConditionalIndependencies
 D7335	1294	dagitty: instrumentalVariables is not ported (an unresolved rule)
-D7336	1273	lpSolve: equality rows and integer programs
+D7336	1274	lpSolve: equality rows and integer programs
+D7337	716	lpSolve: lp.transport
