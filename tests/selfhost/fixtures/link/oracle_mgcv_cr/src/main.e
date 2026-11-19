@@ -25,6 +25,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if ep != ok { os.exit(6) }
     mg.cr_basis(x, xk, k, f, xm)
     mg.scale_penalty(xm, n, k, s)
+    if what >= 3usize {
+        let (xz, g0) = mem.alloc[f64](a, n * (k - 1usize))
+        let (sz, g1) = mem.alloc[f64](a, (k - 1usize) * (k - 1usize))
+        if g0 != ok || g1 != ok { os.exit(7) }
+        let ea = mg.absorb_sum_zero(a, xm, n, k, s, xz, sz)
+        if ea != ok { os.exit(8) }
+        if what == 3usize { ret xz[idx] }
+        ret sz[idx]
+    }
     if what == 0usize { ret xk[idx] }
     if what == 1usize { ret xm[idx] }
     ret s[idx]

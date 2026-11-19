@@ -4133,4 +4133,5 @@ D7337	717	lpSolve: lp.transport
 D7313	553	betareg: identity and sqrt precision links
 D7338	1164	clue: the other partition agreements and dissimilarities
 D7339	1092	clue: Gordon-Vichi and Boorman-Arabie dissimilarities
-D7340	1100	mgcv: the cubic regression spline basis and its penalty
+D7340	1101	mgcv: the cubic regression spline basis and its penalty
+D7341	913	mgcv: sum-to-zero constraint absorption

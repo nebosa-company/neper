@@ -210,3 +210,97 @@ fn scale_penalty(x: []const f64, n: usize, k: usize, s: []f64) {
         i += 1usize
     }
 }
+
+// absorb the sum-to-zero constraint (smoothCon's default): with c the column sums of X, the Householder reflection H = I - u u' / u[0] of LINPACK's dqrdc2 (u = c / nrmxl with
+// nrmxl carrying the sign of c[0], then u[0] += 1) maps c to a multiple of e1; Z is H without its first column, X becomes X Z (n by k - 1) and S becomes Z' S Z (k - 1 square).
+// xz and sz receive the results (n * (k - 1) and (k - 1) * (k - 1) row-major); x and s are as built (the penalty already scaled).
+fn absorb_sum_zero(a: *mem.Arena, x: []const f64, n: usize, k: usize, s: []const f64, xz: []f64, sz: []f64) -> err {
+    let (c, e0) = mem.alloc[f64](a, k)
+    let (z, e1) = mem.alloc[f64](a, k * (k - 1usize))
+    let (sz0, e2) = mem.alloc[f64](a, k * (k - 1usize))
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    var j = 0usize
+    while j < k {
+        var cs = 0.0f64
+        var i = 0usize
+        while i < n {
+            cs += x[i * k + j]
+            i += 1usize
+        }
+        c[j] = cs
+        j += 1usize
+    }
+    var nrm = 0.0f64
+    j = 0usize
+    while j < k {
+        nrm += c[j] * c[j]
+        j += 1usize
+    }
+    nrm = math.sqrt[f64](nrm)
+    if c[0usize] < 0.0f64 { nrm = 0.0f64 - nrm }
+    j = 0usize
+    while j < k {
+        c[j] = c[j] / nrm
+        j += 1usize
+    }
+    c[0usize] += 1.0f64
+    // H = I - u u' / u[0]; Z is columns 1..k - 1
+    var r = 0usize
+    while r < k {
+        var q = 1usize
+        while q < k {
+            var h = 0.0f64
+            if r == q { h = 1.0f64 }
+            z[r * (k - 1usize) + q - 1usize] = h - c[r] * c[q] / c[0usize]
+            q += 1usize
+        }
+        r += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var cc = 0usize
+        while cc < k - 1usize {
+            var v = 0.0f64
+            var q = 0usize
+            while q < k {
+                v += x[i * k + q] * z[q * (k - 1usize) + cc]
+                q += 1usize
+            }
+            xz[i * (k - 1usize) + cc] = v
+            cc += 1usize
+        }
+        i += 1usize
+    }
+    // Z' S Z
+    r = 0usize
+    while r < k {
+        var cc = 0usize
+        while cc < k - 1usize {
+            var v = 0.0f64
+            var q = 0usize
+            while q < k {
+                v += s[r * k + q] * z[q * (k - 1usize) + cc]
+                q += 1usize
+            }
+            sz0[r * (k - 1usize) + cc] = v
+            cc += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < k - 1usize {
+        var cc = 0usize
+        while cc < k - 1usize {
+            var v = 0.0f64
+            var q = 0usize
+            while q < k {
+                v += z[q * (k - 1usize) + r] * sz0[q * (k - 1usize) + cc]
+                q += 1usize
+            }
+            sz[r * (k - 1usize) + cc] = v
+            cc += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
