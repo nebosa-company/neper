@@ -2124,3 +2124,54 @@ fn post_estimator2(y: []const f64, pik: []const f64, stratum: []const f64, post:
     }
     ret total
 }
+
+// Hajekstrata: the Hajek mean of each stratum (labels 1 .. ns, strata[i]) scaled by its population size nh, summed; the mean divides by the total size
+fn hajek_strata(y: []const f64, pik: []const f64, lab: []const f64, nh: []const f64, total: bool) -> f64 {
+    var s = 0.0f64
+    var tot = 0.0f64
+    var h = 0usize
+    while h < nh.len {
+        var num = 0.0f64
+        var den = 0.0f64
+        var i = 0usize
+        while i < y.len {
+            if usize(lab[i]) == h + 1usize {
+                num += y[i] / pik[i]
+                den += 1.0f64 / pik[i]
+            }
+            i += 1usize
+        }
+        s += num / den * nh[h]
+        tot += nh[h]
+        h += 1usize
+    }
+    if total { ret s }
+    ret s / tot
+}
+
+// rhg: the response probability of each unit, the share of respondents among the units with the same values of the c selection columns (row-major sel), zero for nonrespondents
+fn rhg_prob(status: []const f64, sel: []const f64, c: usize, prob: []f64) {
+    let n = status.len
+    var i = 0usize
+    while i < n {
+        var l = 0.0f64
+        var lr = 0.0f64
+        var j = 0usize
+        while j < n {
+            var same = true
+            var k = 0usize
+            while k < c {
+                if sel[i * c + k] != sel[j * c + k] { same = false }
+                k += 1usize
+            }
+            if same {
+                l += 1.0f64
+                if status[j] == 1.0f64 { lr += 1.0f64 }
+            }
+            j += 1usize
+        }
+        prob[i] = 0.0f64
+        if status[i] == 1.0f64 { prob[i] = lr / l }
+        i += 1usize
+    }
+}
