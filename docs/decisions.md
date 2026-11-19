@@ -50191,3 +50191,6 @@ New `e.algo.stat.mgcvpkg` starts the mgcv item with the `bs = "cr"` smooth: `pla
 
 ## D7354 — mstate msfit without covariates
 For `coxph(Surv(Tstart, Tstop, status) ~ strata(trans), method = "breslow")` the msfit hazards are the Nelson-Aalen estimates, increments d/n with n the rows of that transition at risk (Tstart < t <= Tstop), evaluated at every unique event time of any transition and, as survfit adds, at the largest follow-up time even when censored (the first run missed it: 69 times against R's 70). Equal to R on five random four-state data sets. Cox with covariates (through `e.algo.stat.cox`) is the next step for L441, which is at 0.3.
+
+## D7355 — mstate probtrans fixedhorizon
+`probtrans_fixed` builds the suffix products of (I + dA) over the event times up to predt with later factors on the right: row 0 holds all of them, row k the product over the times after t_k, the last row the identity, plus one more identity row when predt is not an event time. Equal to R on six hand-built four-state models with predt on and off an event time. L441 at 0.35; variance and covariance forms remain.

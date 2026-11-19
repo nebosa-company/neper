@@ -206,3 +206,94 @@ fn msfit_nelson_aalen(a: *mem.Arena, nrows: usize, rows: []const f64, ntrans: us
     }
     ret cnt
 }
+
+// probtrans with direction = "fixedhorizon" (no variance): the matrices P(t, predt) for t = 0 and each event time t_k <= predt, row 0 the product of every (I + dA) up to predt (later
+// factors on the right), row k the product over the times after t_k, row TT the identity at the last time; when predt is not an event time one more identity row follows (at predt).
+// The answer is the number of rows.
+fn probtrans_fixed(a: *mem.Arena, s: usize, ntrans: usize, from: []const usize, to: []const usize, nt: usize, times: []const f64, cum: []const f64, predt: f64, out: []f64) -> (usize, err) {
+    var tt = 0usize
+    var t = 0usize
+    while t < nt {
+        if times[t] <= predt { tt += 1usize }
+        t += 1usize
+    }
+    let (p, e0) = mem.alloc[f64](a, s * s)
+    let (q, e1) = mem.alloc[f64](a, s * s)
+    let (d, e2) = mem.alloc[f64](a, s * s)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0usize, mem.Full) }
+    var i = 0usize
+    while i < s * s {
+        p[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < s {
+        p[i * s + i] = 1.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < s * s {
+        out[tt * s * s + i] = p[i]
+        i += 1usize
+    }
+    var k = tt
+    while k > 0usize {
+        let ti = k - 1usize
+        i = 0usize
+        while i < s * s {
+            d[i] = 0.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < s {
+            d[i * s + i] = 1.0f64
+            i += 1usize
+        }
+        var m = 0usize
+        while m < ntrans {
+            var prev = 0.0f64
+            if ti > 0usize { prev = cum[m * nt + ti - 1usize] }
+            let dh = cum[m * nt + ti] - prev
+            d[from[m] * s + to[m]] = dh
+            d[from[m] * s + from[m]] = d[from[m] * s + from[m]] - dh
+            m += 1usize
+        }
+        var r = 0usize
+        while r < s {
+            var c = 0usize
+            while c < s {
+                var v = 0.0f64
+                var z = 0usize
+                while z < s {
+                    v += d[r * s + z] * p[z * s + c]
+                    z += 1usize
+                }
+                q[r * s + c] = v
+                c += 1usize
+            }
+            r += 1usize
+        }
+        i = 0usize
+        while i < s * s {
+            p[i] = q[i]
+            out[(k - 1usize) * s * s + i] = p[i]
+            i += 1usize
+        }
+        k -= 1usize
+    }
+    var rows = tt + 1usize
+    if tt == 0usize || times[tt - 1usize] != predt {
+        i = 0usize
+        while i < s * s {
+            out[rows * s * s + i] = 0.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < s {
+            out[rows * s * s + i * s + i] = 1.0f64
+            i += 1usize
+        }
+        rows += 1usize
+    }
+    ret (rows, ok)
+}
