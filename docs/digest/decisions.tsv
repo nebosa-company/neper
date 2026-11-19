@@ -4455,4 +4455,5 @@ D7597	554	single-byte decoding equals ICU
 D7598	621	single-byte encoding equals ICU
 D7599	731	ICU Any-Hex transliteration
 D7600	1040	full lower- and upper-casing of strings
-D7601	791	ICU Latin-ASCII transliteration over the common ranges
+D7601	792	ICU Latin-ASCII transliteration over the common ranges
+D7602	1003	energy kgroups equal to R, closing L459

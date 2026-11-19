@@ -796,3 +796,91 @@ fn energy_hclust(a: *mem.Arena, x: []const f64, n: usize, d: usize, alpha: f64) 
     ret (tr, eh)
 }
 
+
+// energy::kgroups (Li and Rizzo's k-groups) from a given start: each pass visits the points in order and moves a point at once to the cluster with the smallest energy distance
+// 2 mean_j(d(i, .)) - mean_j(d(., .)) (its own cluster counted with the point in it; an empty cluster is never chosen; the first minimum wins), until a pass moves nothing or iter_max passes
+// have run. cluster (0-based labels, updated in place) is the start; the answer is (passes, moves in the last pass, W = the sum over clusters of the within energy sum d / (2 n_j)).
+fn kgroups(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, iter_max: usize, cluster: []usize) -> (usize, usize, f64, err) {
+    let (dm, e1) = mem.alloc[f64](a, n * n)
+    let (cnt, e2) = mem.alloc[f64](a, k)
+    let (rowsum, e3) = mem.alloc[f64](a, k)
+    let (within, e4) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0usize, 0usize, 0.0f64, e1) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            dm[i * n + j] = dist_pow(x, n, d, i, j, 1.0f64)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var passes = 0usize
+    var moved = 0usize
+    while passes < iter_max {
+        passes += 1usize
+        moved = 0usize
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < k {
+                cnt[j] = 0.0f64
+                rowsum[j] = 0.0f64
+                within[j] = 0.0f64
+                j += 1usize
+            }
+            var b = 0usize
+            while b < n {
+                let cb = cluster[b]
+                cnt[cb] += 1.0f64
+                rowsum[cb] += dm[i * n + b]
+                var c = 0usize
+                while c < n {
+                    if cluster[c] == cb { within[cb] += dm[b * n + c] }
+                    c += 1usize
+                }
+                b += 1usize
+            }
+            var best = k
+            var bv = 0.0f64
+            j = 0usize
+            while j < k {
+                if cnt[j] > 0.0f64 {
+                    let v = 2.0f64 * rowsum[j] / cnt[j] - within[j] / (cnt[j] * cnt[j])
+                    if best == k || v < bv {
+                        best = j
+                        bv = v
+                    }
+                }
+                j += 1usize
+            }
+            if best != cluster[i] {
+                cluster[i] = best
+                moved += 1usize
+            }
+            i += 1usize
+        }
+        if moved == 0usize { break }
+    }
+    var w = 0.0f64
+    var j2 = 0usize
+    while j2 < k {
+        var nj = 0.0f64
+        var sm = 0.0f64
+        var b2 = 0usize
+        while b2 < n {
+            if cluster[b2] == j2 {
+                nj += 1.0f64
+                var c2 = 0usize
+                while c2 < n {
+                    if cluster[c2] == j2 { sm += dm[b2 * n + c2] }
+                    c2 += 1usize
+                }
+            }
+            b2 += 1usize
+        }
+        if nj > 0.0f64 { w += sm / (2.0f64 * nj) }
+        j2 += 1usize
+    }
+    ret (passes, moved, w, ok)
+}
