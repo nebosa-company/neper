@@ -393,3 +393,8 @@ fn cm_buhlmann_straub(ns: []const usize, x: []const f64, w: []const f64, out: []
     out[2usize] = k
     out[3usize] = zx / zs
 }
+
+// actuar ruin() with exponential claims (rate beta) and exponential waiting times (rate lambda) at premium rate c: the Cramer-Lundberg ruin probability psi(u) = lambda / (c beta) exp(-(beta - lambda / c) u)
+fn ruin_exp_exp(u: f64, beta: f64, lambda: f64, c: f64) -> f64 {
+    ret lambda / (c * beta) * math.exp[f64](0.0f64 - (beta - lambda / c) * u)
+}

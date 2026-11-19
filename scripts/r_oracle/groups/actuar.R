@@ -100,6 +100,12 @@ for (rep in 1:30) {
   vals <- c(f$unbiased[2], f$unbiased[1], f$unbiased[2] / f$unbiased[1], f$means[[1]], f$cred[1])
   for (st in 0:4) cases[[length(cases) + 1]] <- case("cm", c(I, ns, x, w, st), unname(vals[st + 1]), rel = 1e-9, abs = 1e-12)
 }
+# ruin(): exponential claims and waiting times: "rx" args (beta, lambda, c, u)
+for (rep in 1:40) {
+  b <- runif(1, 0.5, 3); cc <- runif(1, 0.5, 2); l <- runif(1, 0.1, 0.95) * b * cc; u <- runif(1, 0, 8)
+  f <- ruin(claims = "exponential", par.claims = list(rate = b), wait = "exponential", par.wait = list(rate = l), premium.rate = cc)
+  cases[[length(cases) + 1]] <- case("rx", c(b, l, cc, u), f(u), rel = 1e-9, abs = 1e-13)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

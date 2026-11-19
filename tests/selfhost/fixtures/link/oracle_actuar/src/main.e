@@ -88,6 +88,7 @@ fn answer(c: *const oracle.Case) -> f64 {
         }
         ret w0 / (w0 + ov[2usize])
     }
+    if str.eq(c.name, "rx") { ret ac.ruin_exp_exp(x[3usize], x[0usize], x[1usize], x[2usize]) }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])
