@@ -50332,3 +50332,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7399 — PMCMRplus welchManyOneTTest
 `welch_pair` is t.test(x = group j, y = group 1, var.equal = FALSE): t = (mean_j - mean_1) / sqrt(v_j/n_j + v_1/n_1) with the Welch-Satterthwaite df and the two-sided p; the comparison across groups is Holm-adjusted by the existing `p_adjust`. Equal to R on twelve unequal-variance data sets. L487 at 0.8.
+
+## D7400 — PMCMRplus siegelTukeyTest (no ties)
+`siegel_tukey` builds R's alternating rank sequence (1, 4, 5, 8, 9, ... from the low end and the matching ... 7, 6, 3, 2 from the high end) by position in the sorted pooled sample, W = R1 - n1 (n1 + 1)/2 and the exact two-sided p from the Wilcoxon distribution (2 min(1/2, the tail on W's side)). Equal to R on 30 samples without ties; the tied-data normal approximation is not ported. L487 at 0.82.

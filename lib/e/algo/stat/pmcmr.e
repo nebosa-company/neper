@@ -684,3 +684,67 @@ fn welch_pair(x: []const f64, grp: []const usize, j: usize) -> (f64, f64) {
     if at < 0.0f64 { at = 0.0f64 - at }
     ret (tv, 2.0f64 * nb.pt(0.0f64 - at, df, true, false))
 }
+
+// siegelTukeyTest (no ties, two-sided): the pooled sample is sorted, the ranks 1, 4, 5, 8, 9, ... from the low end and ..., 7, 6, 3, 2 from the high end are assigned by position, W = R1 -
+// n1 (n1 + 1) / 2 and the exact p is 2 min(1/2, the Wilcoxon tail on the side of W); answers (W, p). x holds the first sample then the second
+fn siegel_tukey(a: *mem.Arena, x: []const f64, n1: usize, out: []f64) -> err {
+    let n = x.len
+    let n2 = n - n1
+    let (r, e0) = mem.alloc[f64](a, n)
+    let (ord, e1) = mem.alloc[usize](a, n)
+    if e0 != ok || e1 != ok { ret mem.Full }
+    let nup = (n + 1usize) / 2usize
+    let ndown = n / 2usize
+    var m = 1usize
+    r[0usize] = 1.0f64
+    while m < nup {
+        // the low-end ranks: c(1, a * 4 + b) with a = ceil(m / 2) and b alternating 0, 1 (R's rep(seq(ceiling(N / 4)), each = 2) and rep(c(0, 1)))
+        let aa = (m + 1usize) / 2usize
+        let bb = (m + 1usize) % 2usize
+        r[m] = f64(aa * 4usize + bb)
+        m += 1usize
+    }
+    // the high-end ranks: rev((a * 4 + b - 2)[1:floor(N / 2)]), written back to front
+    var kk = 1usize
+    while kk <= ndown {
+        let aa = (kk + 1usize) / 2usize
+        let bb = (kk + 1usize) % 2usize
+        r[nup + (ndown - kk)] = f64(aa * 4usize + bb - 2usize)
+        kk += 1usize
+    }
+    // order of the pooled sample
+    var i = 0usize
+    while i < n {
+        ord[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let t = ord[i]
+        var j = i
+        while j > 0usize && x[ord[j - 1usize]] > x[t] {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = t
+        i += 1usize
+    }
+    var r1 = 0.0f64
+    i = 0usize
+    while i < n {
+        if ord[i] < n1 { r1 += r[i] }
+        i += 1usize
+    }
+    let n1f = f64(n1)
+    let n2f = f64(n2)
+    let w = r1 - n1f * (n1f + 1.0f64) / 2.0f64
+    var p = 0.0f64
+    if w > n1f * n2f / 2.0f64 {
+        p = 2.0f64 * math.min[f64](0.5f64, nb.pwilcox(a, w - 1.0f64, n1f, n2f, false, false))
+    } else {
+        p = 2.0f64 * math.min[f64](0.5f64, nb.pwilcox(a, w, n1f, n2f, true, false))
+    }
+    out[0usize] = w
+    out[1usize] = p
+    ret ok
+}
