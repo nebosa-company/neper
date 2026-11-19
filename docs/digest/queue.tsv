@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L332	library	0.55	882	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
+L332	library	0.55	881	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
 L358	library	0.2	473	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
 L380	library	0.35	1159	tm and tidytext: text mining	Partial (D6618).
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
@@ -114,7 +114,7 @@ L515	library	0	241	unmarked: occupancy and abundance models	Open (CRAN rank 905)
 L353	library	0.34	2182	mgcv: generalized additive models	Partial (D7340).
 L354	library	0.15	1475	lavaan: structural equation models	D7375: path analysis of an observed outcome on observed predictors (slopes, residual variance, standard errors) equal to lavaan.
 L381	library	0.42	591	ade4: multivariate analysis of ecological data	Partial (D7148 to D7152, D7158, D7160, D7161: as.dudi, dudi.pca, dudi.coa, dudi.acm with its correlation ratios, bca, wca, coinertia (main branch), procuste with rotations, dudi.fca, rlq and dudi.mix 
-L382	library	0.05	469	VGAM: vector generalized linear and additive models	Started (D7625: cumulative logit with parallel slopes, coefficients, log-likelihood and standard errors equal to vglm on Windows;
+L382	library	0.05	502	VGAM: vector generalized linear and additive models	Started (D7625, D7626: cumulative logit, probit and cloglog links with parallel slopes, coefficients, log-likelihood and standard errors equal to vglm on Windows;
 L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).
 L384	library	0	415	spatstat: point pattern analysis	Open (CRAN ranks 304, 314, 316, 323).
 L516	library	0	273	tgp: Bayesian treed Gaussian processes	Open (CRAN rank 909).

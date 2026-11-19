@@ -1,0 +1,71 @@
+# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>
+# name: cc
+# type: cell
+# rows: 2
+# columns: 3
+# name: <cell-element>
+# type: string
+# elements: 1
+# length: 4
+vpbm
+# name: <cell-element>
+# type: matrix
+# rows: 2
+# columns: 2
+ 0.1219 -0.283
+ -0.489 -0.6157
+
+# name: <cell-element>
+# type: string
+# elements: 1
+# length: 4
+vpbm
+# name: <cell-element>
+# type: string
+# elements: 1
+# length: 4
+vpbm
+
+# name: <cell-element>
+# type: scalar
+0.4122
+# name: <cell-element>
+# type: complex scalar
+(4,6)
+
+# name: ll
+# type: list
+# length: 2
+# name: <cell-element>
+# type: string
+# elements: 1
+# length: 4
+vpbm
+# name: <cell-element>
+# type: scalar
+-1.54
+# name: ss
+# type: struct
+# length: 2
+# name: a
+# type: scalar
+2.5
+# name: b
+# type: matrix
+# rows: 1
+# columns: 3
+ 1 2 3
+# name: after
+# type: scalar
+7
+# name: sq
+# type: scalar struct
+# ndims: 2
+ 1 1
+# length: 1
+# name: k
+# type: scalar
+9
+# name: last
+# type: scalar
+3

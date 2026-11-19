@@ -5,8 +5,7 @@
 // has the elements read.octave's seq.int gives. An integer type is unknown to read.octave, which returns NULL for it: here it is a variable with no elements.
 //
 // An N-d array ("# ndims: d", the dimensions, then the numbers one per line) and a string array (several "# elements") are read as well.
-//
-// Not here: cells, structs and lists (read.octave reads them; this reader does not).
+// Lists, structs (the old "# type: struct") and cells are read recursively. An unknown type skips to the next "# name:" line as read.octave does.
 
 use e.mem
 use e.str
@@ -14,7 +13,7 @@ use e.str
 error Malformed
 error TooMany
 
-// kind: 0 scalar, 1 matrix, 2 string, 3 no elements (an unknown type)
+// kind: 0 scalar, 1 matrix, 2 string, 3 no elements (an unknown type), 4 list, struct or cell (count its elements, sum and isum those of everything inside)
 type Var = struct { kind: u8, rows: usize, cols: usize, count: usize, sum: f64, isum: f64 }
 
 type Octave = struct { nvars: usize, vars: []Var }
@@ -101,6 +100,237 @@ fn range_line(t: str, s: usize, e: usize) -> (f64, f64, f64) {
     ret (x0, x1, x2)
 }
 
+// the start of the next "# name: " line at or after at, or the end of the text (read.octave's skip_lines_to_next_item)
+fn skip_to_name(t: str, at: usize) -> usize {
+    var c = at
+    while c < t.len {
+        if starts(t, c, "# name: ") { ret c }
+        c = line_end(t, c) + 1usize
+    }
+    ret t.len
+}
+
+// the item whose "# type: " line starts at i, and the offset just after it
+fn read_item(t: str, i: usize) -> (Var, usize) {
+    let le = line_end(t, i)
+    var v: Var = zero
+    let ts = i + 8usize
+    var cur = le + 1usize
+    if is_line(t, ts, le, "scalar") || is_line(t, ts, le, "bool") {
+        v.kind = 0u8
+        let l2 = line_end(t, cur)
+        var s = cur
+        while s < l2 && is_space(t[s]) { s += 1usize }
+        var e = l2
+        while e > s && is_space(t[e - 1usize]) { e -= 1usize }
+        v.rows = 1usize
+        v.cols = 1usize
+        v.count = 1usize
+        v.sum = number(t, s, e)
+        cur = l2 + 1usize
+    } else if is_line(t, ts, le, "matrix") && starts(t, cur, "# ndims:") {
+        // an N-d array: the dimensions on one line, then prod(dims) numbers, one per line (read.octave scans them across lines)
+        v.kind = 1u8
+        var l2 = line_end(t, cur)
+        cur = l2 + 1usize
+        l2 = line_end(t, cur)
+        var total = 1usize
+        var p = cur
+        while p < l2 {
+            while p < l2 && is_space(t[p]) { p += 1usize }
+            var q = p
+            while q < l2 && !is_space(t[q]) { q += 1usize }
+            if q > p { total = total * usize(number(t, p, q)) }
+            p = q
+        }
+        cur = l2 + 1usize
+        var got = 0usize
+        var s = 0.0f64
+        while got < total && cur < t.len {
+            l2 = line_end(t, cur)
+            p = cur
+            while p < l2 && got < total {
+                while p < l2 && is_space(t[p]) { p += 1usize }
+                var q = p
+                while q < l2 && !is_space(t[q]) { q += 1usize }
+                if q > p {
+                    s += number(t, p, q)
+                    got += 1usize
+                }
+                p = q
+            }
+            cur = l2 + 1usize
+        }
+        v.rows = total
+        v.cols = 1usize
+        v.count = total
+        v.sum = s
+    } else if is_line(t, ts, le, "matrix") || is_line(t, ts, le, "bool matrix") {
+        v.kind = 1u8
+        var l2 = line_end(t, cur)
+        v.rows = read_uint(t, cur + 8usize, l2)
+        cur = l2 + 1usize
+        l2 = line_end(t, cur)
+        v.cols = read_uint(t, cur + 11usize, l2)
+        cur = l2 + 1usize
+        v.count = v.rows * v.cols
+        var r = 0usize
+        var s = 0.0f64
+        while r < v.rows {
+            l2 = line_end(t, cur)
+            var p = cur
+            while p < l2 {
+                while p < l2 && is_space(t[p]) { p += 1usize }
+                var q = p
+                while q < l2 && !is_space(t[q]) { q += 1usize }
+                if q > p { s += number(t, p, q) }
+                p = q
+            }
+            cur = l2 + 1usize
+            r += 1usize
+        }
+        v.sum = s
+    } else if is_line(t, ts, le, "complex scalar") {
+        let l2 = line_end(t, cur)
+        var s = cur
+        while s < l2 && is_space(t[s]) { s += 1usize }
+        var e = l2
+        while e > s && is_space(t[e - 1usize]) { e -= 1usize }
+        v.rows = 1usize
+        v.cols = 1usize
+        v.count = 1usize
+        let (re, im) = complex_tok(t, s, e)
+        v.sum = re
+        v.isum = im
+        cur = l2 + 1usize
+    } else if is_line(t, ts, le, "complex matrix") {
+        var l2 = line_end(t, cur)
+        v.rows = read_uint(t, cur + 8usize, l2)
+        cur = l2 + 1usize
+        l2 = line_end(t, cur)
+        v.cols = read_uint(t, cur + 11usize, l2)
+        cur = l2 + 1usize
+        v.count = v.rows * v.cols
+        var r = 0usize
+        var s = 0.0f64
+        var im = 0.0f64
+        while r < v.rows {
+            l2 = line_end(t, cur)
+            var p = cur
+            while p < l2 {
+                while p < l2 && is_space(t[p]) { p += 1usize }
+                var q = p
+                while q < l2 && !is_space(t[q]) { q += 1usize }
+                if q > p {
+                    let (re, ci) = complex_tok(t, p, q)
+                    s += re
+                    im += ci
+                }
+                p = q
+            }
+            cur = l2 + 1usize
+            r += 1usize
+        }
+        v.sum = s
+        v.isum = im
+    } else if is_line(t, ts, le, "range") {
+        // the "# base, limit, increment" comment line, then the three numbers
+        cur = line_end(t, cur) + 1usize
+        let l2 = line_end(t, cur)
+        let (base, limit, inc) = range_line(t, cur, l2)
+        let tol = 0.0000000001f64
+        var k = 0usize
+        while k < 10000000usize {
+            let x = base + f64(k) * inc
+            var inside = x <= limit + tol
+            if inc < 0.0f64 { inside = x >= limit - tol }
+            if inc == 0.0f64 { inside = false }
+            if !inside { break }
+            k += 1usize
+        }
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += base + f64(j) * inc
+            j += 1usize
+        }
+        v.rows = 1usize
+        v.cols = k
+        v.count = k
+        v.sum = s
+        cur = l2 + 1usize
+    } else if is_line(t, ts, le, "string") || is_line(t, ts, le, "string array") {
+        // "# elements: k", then for each element a "# length: n" line and its text line; the sum counts the code units of all of them
+        v.kind = 2u8
+        var l2 = line_end(t, cur)
+        let k = read_uint(t, cur + 12usize, l2)
+        cur = l2 + 1usize
+        var s = 0.0f64
+        var e = 0usize
+        while e < k {
+            l2 = line_end(t, cur)
+            let len = read_uint(t, cur + 9usize, l2)
+            cur = l2 + 1usize
+            l2 = line_end(t, cur)
+            var c = 0usize
+            while c < len && cur + c < l2 {
+                s += f64(t[cur + c])
+                c += 1usize
+            }
+            cur = l2 + 1usize
+            e += 1usize
+        }
+        v.rows = 1usize
+        v.cols = 1usize
+        v.count = k
+        v.sum = s
+    } else if is_line(t, ts, le, "list") || is_line(t, ts, le, "struct") {
+        // "# length: n", then n elements, each a name line and an item
+        v.kind = 4u8
+        let l2 = line_end(t, cur)
+        let k = read_uint(t, cur + 10usize, l2)
+        cur = l2 + 1usize
+        var e = 0usize
+        while e < k && cur < t.len {
+            cur = line_end(t, cur) + 1usize
+            let (c, nc) = read_item(t, cur)
+            v.sum += c.sum
+            v.isum += c.isum
+            cur = nc
+            e += 1usize
+        }
+        v.count = k
+    } else if is_line(t, ts, le, "cell") {
+        // "# rows: r", "# columns: c", then the elements by column, each a name line and an item; read.octave skips to the next "# name:" line after every column
+        v.kind = 4u8
+        var l2 = line_end(t, cur)
+        let nr = read_uint(t, cur + 8usize, l2)
+        cur = l2 + 1usize
+        l2 = line_end(t, cur)
+        let nc = read_uint(t, cur + 11usize, l2)
+        cur = l2 + 1usize
+        var j = 0usize
+        while j < nc {
+            var r = 0usize
+            while r < nr && cur < t.len {
+                cur = line_end(t, cur) + 1usize
+                let (c, nx) = read_item(t, cur)
+                v.sum += c.sum
+                v.isum += c.isum
+                cur = nx
+                r += 1usize
+            }
+            cur = skip_to_name(t, cur)
+            j += 1usize
+        }
+        v.count = nr * nc
+    } else {
+        v.kind = 3u8
+        cur = skip_to_name(t, cur)
+    }
+    ret (v, cur)
+}
+
 fn parse(a: *mem.Arena, t: str) -> (Octave, err) {
     var out: Octave = zero
     let (vars, e1) = mem.alloc[Var](a, 64usize)
@@ -111,180 +341,7 @@ fn parse(a: *mem.Arena, t: str) -> (Octave, err) {
         let le = line_end(t, i)
         if starts(t, i, "# type: ") {
             if n >= 64usize { ret (out, TooMany) }
-            var v: Var = zero
-            let ts = i + 8usize
-            var cur = le + 1usize
-            if is_line(t, ts, le, "scalar") || is_line(t, ts, le, "bool") {
-                v.kind = 0u8
-                let l2 = line_end(t, cur)
-                var s = cur
-                while s < l2 && is_space(t[s]) { s += 1usize }
-                var e = l2
-                while e > s && is_space(t[e - 1usize]) { e -= 1usize }
-                v.rows = 1usize
-                v.cols = 1usize
-                v.count = 1usize
-                v.sum = number(t, s, e)
-                cur = l2 + 1usize
-            } else if is_line(t, ts, le, "matrix") && starts(t, cur, "# ndims:") {
-                // an N-d array: the dimensions on one line, then prod(dims) numbers, one per line (read.octave scans them across lines)
-                v.kind = 1u8
-                var l2 = line_end(t, cur)
-                cur = l2 + 1usize
-                l2 = line_end(t, cur)
-                var total = 1usize
-                var p = cur
-                while p < l2 {
-                    while p < l2 && is_space(t[p]) { p += 1usize }
-                    var q = p
-                    while q < l2 && !is_space(t[q]) { q += 1usize }
-                    if q > p { total = total * usize(number(t, p, q)) }
-                    p = q
-                }
-                cur = l2 + 1usize
-                var got = 0usize
-                var s = 0.0f64
-                while got < total && cur < t.len {
-                    l2 = line_end(t, cur)
-                    p = cur
-                    while p < l2 && got < total {
-                        while p < l2 && is_space(t[p]) { p += 1usize }
-                        var q = p
-                        while q < l2 && !is_space(t[q]) { q += 1usize }
-                        if q > p {
-                            s += number(t, p, q)
-                            got += 1usize
-                        }
-                        p = q
-                    }
-                    cur = l2 + 1usize
-                }
-                v.rows = total
-                v.cols = 1usize
-                v.count = total
-                v.sum = s
-            } else if is_line(t, ts, le, "matrix") || is_line(t, ts, le, "bool matrix") {
-                v.kind = 1u8
-                var l2 = line_end(t, cur)
-                v.rows = read_uint(t, cur + 8usize, l2)
-                cur = l2 + 1usize
-                l2 = line_end(t, cur)
-                v.cols = read_uint(t, cur + 11usize, l2)
-                cur = l2 + 1usize
-                v.count = v.rows * v.cols
-                var r = 0usize
-                var s = 0.0f64
-                while r < v.rows {
-                    l2 = line_end(t, cur)
-                    var p = cur
-                    while p < l2 {
-                        while p < l2 && is_space(t[p]) { p += 1usize }
-                        var q = p
-                        while q < l2 && !is_space(t[q]) { q += 1usize }
-                        if q > p { s += number(t, p, q) }
-                        p = q
-                    }
-                    cur = l2 + 1usize
-                    r += 1usize
-                }
-                v.sum = s
-            } else if is_line(t, ts, le, "complex scalar") {
-                let l2 = line_end(t, cur)
-                var s = cur
-                while s < l2 && is_space(t[s]) { s += 1usize }
-                var e = l2
-                while e > s && is_space(t[e - 1usize]) { e -= 1usize }
-                v.rows = 1usize
-                v.cols = 1usize
-                v.count = 1usize
-                let (re, im) = complex_tok(t, s, e)
-                v.sum = re
-                v.isum = im
-                cur = l2 + 1usize
-            } else if is_line(t, ts, le, "complex matrix") {
-                var l2 = line_end(t, cur)
-                v.rows = read_uint(t, cur + 8usize, l2)
-                cur = l2 + 1usize
-                l2 = line_end(t, cur)
-                v.cols = read_uint(t, cur + 11usize, l2)
-                cur = l2 + 1usize
-                v.count = v.rows * v.cols
-                var r = 0usize
-                var s = 0.0f64
-                var im = 0.0f64
-                while r < v.rows {
-                    l2 = line_end(t, cur)
-                    var p = cur
-                    while p < l2 {
-                        while p < l2 && is_space(t[p]) { p += 1usize }
-                        var q = p
-                        while q < l2 && !is_space(t[q]) { q += 1usize }
-                        if q > p {
-                            let (re, ci) = complex_tok(t, p, q)
-                            s += re
-                            im += ci
-                        }
-                        p = q
-                    }
-                    cur = l2 + 1usize
-                    r += 1usize
-                }
-                v.sum = s
-                v.isum = im
-            } else if is_line(t, ts, le, "range") {
-                // the "# base, limit, increment" comment line, then the three numbers
-                cur = line_end(t, cur) + 1usize
-                let l2 = line_end(t, cur)
-                let (base, limit, inc) = range_line(t, cur, l2)
-                let tol = 0.0000000001f64
-                var k = 0usize
-                while k < 10000000usize {
-                    let x = base + f64(k) * inc
-                    var inside = x <= limit + tol
-                    if inc < 0.0f64 { inside = x >= limit - tol }
-                    if inc == 0.0f64 { inside = false }
-                    if !inside { break }
-                    k += 1usize
-                }
-                var s = 0.0f64
-                var j = 0usize
-                while j < k {
-                    s += base + f64(j) * inc
-                    j += 1usize
-                }
-                v.rows = 1usize
-                v.cols = k
-                v.count = k
-                v.sum = s
-                cur = l2 + 1usize
-            } else if is_line(t, ts, le, "string") || is_line(t, ts, le, "string array") {
-                // "# elements: k", then for each element a "# length: n" line and its text line; the sum counts the code units of all of them
-                v.kind = 2u8
-                var l2 = line_end(t, cur)
-                let k = read_uint(t, cur + 12usize, l2)
-                cur = l2 + 1usize
-                var s = 0.0f64
-                var e = 0usize
-                while e < k {
-                    l2 = line_end(t, cur)
-                    let len = read_uint(t, cur + 9usize, l2)
-                    cur = l2 + 1usize
-                    l2 = line_end(t, cur)
-                    var c = 0usize
-                    while c < len && cur + c < l2 {
-                        s += f64(t[cur + c])
-                        c += 1usize
-                    }
-                    cur = l2 + 1usize
-                    e += 1usize
-                }
-                v.rows = 1usize
-                v.cols = 1usize
-                v.count = k
-                v.sum = s
-            } else {
-                v.kind = 3u8
-            }
+            let (v, cur) = read_item(t, i)
             vars[n] = v
             n += 1usize
             i = cur

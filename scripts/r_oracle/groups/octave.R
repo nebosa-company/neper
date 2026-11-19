@@ -68,4 +68,26 @@ for (i in 10:11) {
   add("nvars", c(i, 0), length(d))
   for (j in seq_along(d)) { v <- d[[j]]; add("count", c(i, j - 1), length(v)); add("sum", c(i, j - 1), if (is.character(v)) sum(sapply(v, function(z) sum(utf8ToInt(z)))) else sum(as.numeric(v))); add("isum", c(i, j - 1), 0) }
 }
+# lists, old-style structs and cells (files 12 and 13); sum is recursive
+rs <- function(v) if (is.list(v)) sum(vapply(v, rs, 0)) else if (is.character(v)) sum(sapply(v, function(z) sum(utf8ToInt(z)))) else sum(as.numeric(suppressWarnings(v)))
+ri <- function(v) if (is.list(v)) sum(vapply(v, ri, 0)) else if (is.complex(v)) sum(Im(v)) else 0
+sc <- function(x) c("# name: <cell-element>", "# type: scalar", sprintf("%.15g", x))
+mt <- function(m) c("# name: <cell-element>", "# type: matrix", sprintf("# rows: %d", nrow(m)), sprintf("# columns: %d", ncol(m)), apply(m, 1, function(row) paste0(" ", paste(sprintf("%.15g", row), collapse = " "))))
+st <- function(s) c("# name: <cell-element>", "# type: string", "# elements: 1", sprintf("# length: %d", nchar(s)), s)
+cz <- function(z) c("# name: <cell-element>", "# type: complex scalar", sprintf("(%g,%g)", Re(z), Im(z)))
+for (i in 12:13) {
+  nr <- sample(1:3, 1); nc <- sample(1:3, 1); w <- paste(sample(letters, 4), collapse = "")
+  cellel <- unlist(lapply(seq_len(nc), function(j) c(unlist(lapply(seq_len(nr), function(r) switch(sample(1:4, 1), sc(round(rnorm(1), 4)), mt(matrix(round(rnorm(4), 4), 2, 2)), st(w), cz(complex(real = sample(1:9, 1), imaginary = sample(1:9, 1)))))), ""))) 
+  n3 <- sample(2:4, 1)
+  lines <- c("# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>",
+             "# name: cc", "# type: cell", sprintf("# rows: %d", nr), sprintf("# columns: %d", nc), cellel,
+             "# name: ll", "# type: list", sprintf("# length: %d", n3), unlist(lapply(1:n3, function(k) if (k %% 2 == 0) sc(round(rnorm(1), 4)) else st(w))),
+             "# name: ss", "# type: struct", "# length: 2", "# name: a", "# type: scalar", "2.5", "# name: b", "# type: matrix", "# rows: 1", "# columns: 3", " 1 2 3",
+             "# name: after", "# type: scalar", "7", "# name: sq", "# type: scalar struct", "# ndims: 2", " 1 1", "# length: 1", "# name: k", "# type: scalar", "9",
+             "# name: last", "# type: scalar", "3")
+  writeLines(lines, file.path(root, sprintf("tests/oracle/data/octave_%d.txt", i)))
+  d <- suppressWarnings(read.octave(file.path(root, sprintf("tests/oracle/data/octave_%d.txt", i))))
+  add("nvars", c(i, 0), length(d))
+  for (j in seq_along(d)) { v <- d[[j]]; add("count", c(i, j - 1), length(v)); add("sum", c(i, j - 1), rs(v)); add("isum", c(i, j - 1), ri(v)) }
+}
 emit("octave", "foreign", list(cases))
