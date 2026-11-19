@@ -6,7 +6,7 @@ cases <- list()
 add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-7, abs = 1e-9)
 set.seed(20261206)
 for (rep in 1:20) {
-  n <- sample(40:90, 1); p <- sample(1:2, 1); m <- sample(1:3, 1)
+  n <- sample(90:140, 1); p <- sample(1:7, 1); m <- sample(1:2, 1)
   x <- cbind(1, matrix(rnorm(n * (p - 1)), n)); nb <- sample(1:2, 1)
   cut <- sort(sample(12:(n - 12), nb)); seg <- findInterval(seq_len(n), cut + 1) + 1
   beta <- matrix(rnorm(p * (nb + 1), 0, 2), p)
@@ -18,7 +18,7 @@ for (rep in 1:20) {
   bm <- breakpoints(b, breaks = m)
   e <- efp(y ~ x - 1, type = "OLS-CUSUM"); s <- sctest(e)
   add("cus", a, unname(s$statistic)); add("cusp", a, unname(s$p.value))
-  if (p <= 5) {
+  if (p <= 40) {
     for (ty in c("supF", "aveF", "expF")) { sf <- sctest(f, type = ty); add(paste0("pf", match(ty, c("supF", "aveF", "expF"))), a, unname(sf$p.value)); add(paste0("sf", match(ty, c("supF", "aveF", "expF"))), a, unname(sf$statistic)) }
   }
   er <- efp(y ~ x - 1, type = "Rec-CUSUM"); sr <- sctest(er)
