@@ -1289,3 +1289,117 @@ fn ht_strata(y: []const f64, pik: []const f64, labels: []const f64) -> f64 {
     }
     ret total
 }
+
+// varest(Ys, Xs, pik, w): the variance estimator of the total from first-order probabilities alone; with p = 0 covariates it works on y, otherwise on the residuals of the weighted regression
+// beta = (X' W X)^-1 X' W y (xs is n by p row-major)
+fn var_est(a: *mem.Arena, y: []const f64, xs: []const f64, p: usize, pik: []const f64, w: []const f64) -> (f64, err) {
+    let n = y.len
+    let (e, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret (0.0f64, e0) }
+    var i = 0usize
+    while i < n {
+        e[i] = y[i]
+        i += 1usize
+    }
+    if p > 0usize {
+        let (am, e1) = mem.alloc[f64](a, p * p)
+        let (rhs, e2) = mem.alloc[f64](a, p)
+        if e1 != ok || e2 != ok { ret (0.0f64, mem.Full) }
+        var r = 0usize
+        while r < p {
+            var c = 0usize
+            while c < p {
+                var v = 0.0f64
+                i = 0usize
+                while i < n {
+                    v += xs[i * p + r] * w[i] * xs[i * p + c]
+                    i += 1usize
+                }
+                am[r * p + c] = v
+                c += 1usize
+            }
+            var t = 0.0f64
+            i = 0usize
+            while i < n {
+                t += xs[i * p + r] * w[i] * y[i]
+                i += 1usize
+            }
+            rhs[r] = t
+            r += 1usize
+        }
+        let (inv, ie) = gp.invert(a, am, p)
+        if ie != ok { ret (0.0f64, ie) }
+        i = 0usize
+        while i < n {
+            var fit = 0.0f64
+            r = 0usize
+            while r < p {
+                var b = 0.0f64
+                var c = 0usize
+                while c < p {
+                    b += inv[r * p + c] * rhs[c]
+                    c += 1usize
+                }
+                fit += xs[i * p + r] * b
+                r += 1usize
+            }
+            e[i] = y[i] - fit
+            i += 1usize
+        }
+    }
+    var s1 = 0.0f64
+    i = 0usize
+    while i < n {
+        s1 += 1.0f64 - pik[i]
+        i += 1usize
+    }
+    var aa = 0.0f64
+    var a2 = 0.0f64
+    i = 0usize
+    while i < n {
+        let ai = (1.0f64 - pik[i]) / s1
+        aa += ai * e[i] / pik[i]
+        a2 += ai * ai
+        i += 1usize
+    }
+    var v = 0.0f64
+    i = 0usize
+    while i < n {
+        let d = e[i] / pik[i] - aa
+        v += (1.0f64 - pik[i]) * d * d
+        i += 1usize
+    }
+    ret (v / (1.0f64 - a2), ok)
+}
+
+// vartaylor_ratio(Ys, Xs, pikls): the ratio sum(y / pik) / sum(x / pik) and the Taylor linearisation variance estimate from the joint inclusion matrix (diagonal pik); out = (ratio, estvar)
+fn var_taylor_ratio(y: []const f64, x: []const f64, pikl: []const f64, out: []f64) {
+    let n = y.len
+    var xhat = 0.0f64
+    var yhat = 0.0f64
+    var i = 0usize
+    while i < n {
+        let pi = pikl[i * n + i]
+        xhat += x[i] / pi
+        yhat += y[i] / pi
+        i += 1usize
+    }
+    let r = yhat / xhat
+    var s = 0.0f64
+    i = 0usize
+    while i < n {
+        let pi = pikl[i * n + i]
+        let zi = (y[i] - r * x[i]) / xhat
+        var j = i + 1usize
+        while j < n {
+            let pj = pikl[j * n + j]
+            let zj = (y[j] - r * x[j]) / xhat
+            s += 2.0f64 * (1.0f64 - pi * pj / pikl[i * n + j]) * zi * zj / (pi * pj)
+            j += 1usize
+        }
+        s += (1.0f64 - pi) * zi * zi / (pi * pi)
+        i += 1usize
+    }
+    out[0usize] = r
+    out[1usize] = s
+}

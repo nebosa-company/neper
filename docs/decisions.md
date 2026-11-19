@@ -50272,3 +50272,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7381 — sampling design-based estimators
 `hajek_estimator` (total N sum(y/pik)/sum(1/pik), or the mean), `ratio_estimator`, `inclusion_strata` (nh[stratum]/Nh[stratum]) and `ht_strata` (the stratum sums of y/pik, whose total is the overall sum) equal sampling on twenty random samples. R's Hajekestimator with type = "mean" and a given N stops with 'object est not found' (no branch), so the mean case is called with N = NULL, which is the documented default path. L508 at 0.85.
+
+## D7382 — sampling varest and vartaylor_ratio
+`var_est` is varest on y or, with covariates, on the residuals of the weighted regression (X' W X)^-1 X' W y, with a_i = (1 - pik_i)/sum(1 - pik) and the divisor 1 - sum(a^2); `var_taylor_ratio` is vartaylor_ratio: the ratio of the Horvitz-Thompson totals and the linearised variance from the joint inclusion matrix. Equal to sampling to 1e-9 on twenty samples (the matrix from UPtillepi2). L508 at 0.9.
