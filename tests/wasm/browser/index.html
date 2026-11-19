@@ -9,7 +9,7 @@
   // ?module=URL&args=A,B runs the module and sets window.neperResult = {exitCode, stdout, stderr, isolated} (D5678);
   // a run that throws (a threaded module on a page that is not isolated, D5679) gives exitCode -1 and error: the message.
   // ?messages=1 makes a threaded module's threads ping the page instead of the page waiting with Atomics.waitAsync.
-  import { run } from '../../../lib/wasm/neper-host.js'
+  import { run } from '../../../tools/wasm/neper-host.js'
   const query = new URLSearchParams(location.search)
   const out = { exitCode: null, stdout: '', stderr: '', isolated: crossOriginIsolated }
   const sink = (key) => { const d = new TextDecoder(); return (bytes) => { if (bytes) out[key] += d.decode(bytes, { stream: true }) } }

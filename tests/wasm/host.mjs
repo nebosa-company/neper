@@ -1,4 +1,4 @@
-// The API of lib/wasm/neper-host.js under Node (C206, D5678):
+// The API of tools/wasm/neper-host.js under Node (C206, D5678):
 //   node --no-warnings tests/wasm/host.mjs FILES.wasm DEBUG.wasm RELEASE.wasm [THREADS.wasm THREAD_OPS.wasm]
 // FILES is tests/wasm/browser/host_files, DEBUG and RELEASE are wasm_release built without and with --release.
 // THREADS is link/wasm_threads and THREAD_OPS is wasm_thread_ops, both built with --threads (C207, D5679).
@@ -7,8 +7,8 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
-import { run } from '../../lib/wasm/neper-host.js'
-import { addLines } from '../../lib/wasm/source-map.js'
+import { run } from '../../tools/wasm/neper-host.js'
+import { addLines } from '../../tools/wasm/source-map.js'
 
 const [filesPath, debugPath, releasePath, threadsPath, threadOpsPath] = process.argv.slice(2)
 const text = (bytes) => new TextDecoder().decode(bytes)
@@ -22,7 +22,7 @@ const options = { args: ['hello'], env: { HOSTVAR: 'v1' }, files: { '/input.txt'
 // sidecars promptly, so a trap report cannot leave a runner spinning in its decoder.
 const mapText = (mappings) => JSON.stringify({ version: 3, sources: ['source.e'], names: [], mappings })
 assert.equal(addLines('RuntimeError: wasm-function[3]:0x4)', mapText('IAAA')), 'RuntimeError: wasm-function[3]:0x4) [source.e:1]')
-const sourceMapUrl = new URL('../../lib/wasm/source-map.js', import.meta.url).href
+const sourceMapUrl = new URL('../../tools/wasm/source-map.js', import.meta.url).href
 for (const [label, mappings] of [
   ['invalid digit', '?AAAA'],
   ['unterminated continuation', 'g'],

@@ -3,10 +3,10 @@
 <title>webgl2_present</title>
 <pre id="out">running</pre>
 <script type="module">
-  // lib/wasm/window.js's WebGL2 presentation (L179, D5895), checked in a real browser: random RGBA frames at three sizes
+  // tools/wasm/window.js's WebGL2 presentation (L179, D5895), checked in a real browser: random RGBA frames at three sizes
   // are drawn through webgl2() and read back with readPixels, and every byte must be the frame's (rows bottom-up in GL).
   // Prints "webgl2 present ok", or which size differed, or that this browser has no WebGL2.
-  import { webgl2 } from '../../../lib/wasm/window.js'
+  import { webgl2 } from '../../../tools/wasm/window.js'
   const out = document.getElementById('out')
   const lines = []
   for (const [w, h] of [[64, 48], [97, 61], [480, 320]]) {

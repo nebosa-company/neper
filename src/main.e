@@ -1784,9 +1784,9 @@ fn find_node(a: *mem.Arena) -> (str, err) {
 }
 
 // `run ... wasm32 wasi OUT`: the module just written, run by the runner under the toolchain's
-// `lib/wasm/` and reported as a native run is (the `run` record, then the result).
+// `tools/wasm/` and reported as a native run is (the `run` record, then the result).
 fn wasm_run(a: *mem.Arena, report: *Sink, args: []str, node: str, loaded: *graph.Graph, checker: *check.Checker) -> err {
-    let (runner, runner_error) = with_suffix(a, args[3usize], "/lib/wasm/run-wasm.mjs")
+    let (runner, runner_error) = with_suffix(a, args[3usize], "/tools/wasm/run-wasm.mjs")
     if runner_error != ok { ret runner_error }
     let program = program_arguments(args)
     let (arguments, arguments_error) = mem.alloc[str](a, program.len + 3usize)

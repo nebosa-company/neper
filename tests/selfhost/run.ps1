@@ -9097,6 +9097,8 @@ $shortRoot = Join-Path $repo 'build\windows\short'
 if (Test-Path -LiteralPath $shortRoot) { Remove-Item -Recurse -Force -LiteralPath $shortRoot }
 [void](New-Item -ItemType Directory -Force -Path $shortRoot)
 Copy-Item -Recurse -LiteralPath (Join-Path $repo 'lib') -Destination (Join-Path $shortRoot 'lib')
+New-Item -ItemType Directory -Force -Path (Join-Path $shortRoot 'tools') | Out-Null
+Copy-Item -Recurse -LiteralPath (Join-Path $repo 'tools/wasm') -Destination (Join-Path $shortRoot 'tools/wasm')
 $shortCompiler = Join-Path $shortRoot 'neper-self-short.exe'
 Copy-Item -LiteralPath $compiler -Destination $shortCompiler -Force
 $buildShortActual = Join-Path $testBuild 'conformance-tools-build-short.jsonl'
@@ -11573,7 +11575,7 @@ foreach ($extraLine in (Get-Content (Join-Path $PSScriptRoot 'extra-fixtures.txt
     try { & $extraPath | Out-Null } finally { Pop-Location }
     if ($LASTEXITCODE -ne 0) { throw "a $extraFixture check failed: exit $LASTEXITCODE" }
 }
-# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by lib/wasm/run-wasm.mjs from the repo
+# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by tools/wasm/run-wasm.mjs from the repo
 # root; `--release` drops the debug-only rows and keeps the bounds row; neper.wasm emits what this compiler emits.
 $wasmNode = Get-Command node -ErrorAction SilentlyContinue
 if ($wasmNode) {
@@ -11598,7 +11600,7 @@ if ($wasmNode) {
         # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
         if ($wasmFixture -in 'os_socket', 'os_resolve', 'macos_poller_loss', 'net', 'wasm_net', 'proc_sys_wasm') { continue }
         $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
-        if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through lib/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
+        if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through tools/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
     # (D5671, D5672, C201) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
     # and the seven instructions of the "wasm" library answer as a plain and as a threaded module should.
@@ -11704,11 +11706,11 @@ if ($wasmNode) {
     try { $wasmRunText = (cmd /c "`"$shortCompiler`" run `"$wasmReleaseSource`" --target wasm32-wasi -o `"$wasmRunPath`"") -join "`n"; $wasmRunStatus = $LASTEXITCODE } finally { $env:PATH = $previousPath }
     if ($wasmRunStatus -ne 2 -or $wasmRunText -notmatch [regex]::Escape('running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE')) { throw "neper run --target wasm32-wasi without node did not say what to install: $wasmRunText" }
     if ((Get-Item $wasmReleasePath).Length -ge (Get-Item $wasmDebugPath).Length) { throw 'the wasm32-wasi release module is not smaller than the debug one' }
-    # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
+    # (D5678) what a page passes to tools/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'
     if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
     $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath, $wasmOpsThreads) (Join-Path $repo 'tests\wasm\host.mjs')
-    if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
+    if ($wasmApi.Status -ne 0) { throw "the tools/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
     $wasmProcCleanup = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs') @() (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs')
     if ($wasmProcCleanup.Status -ne 0) { throw "the WASM process-host cleanup check failed: $($wasmProcCleanup.Output)" }
     $wasmPreopenSymlink = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_preopen_symlink.mjs') @() (Join-Path $repo 'tests\wasm\host_preopen_symlink.mjs')
@@ -11719,7 +11721,7 @@ if ($wasmNode) {
     if ($wasmHostImportRanges.Status -ne 0) { throw "the WASM host-import guest-range check failed: $($wasmHostImportRanges.Output)" }
     $wasmWindowRanges = Invoke-Wasm (Join-Path $repo 'tests\wasm\window_ranges.mjs') @() (Join-Path $repo 'tests\wasm\window_ranges.mjs')
     if ($wasmWindowRanges.Status -ne 0) { throw "the WASM window guest-range check failed: $($wasmWindowRanges.Output)" }
-    # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
+    # (C208, D5680) the window of tools/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
     $wasmCounterPath = Join-Path $wasmBuild 'ui_counter.wasm'
     $wasmCounterThreads = Join-Path $wasmBuild 'ui_counter.threads.wasm'
     $wasmCounterSource = Join-Path $repo 'tests\wasm\browser\ui_counter\src\main.e'
@@ -11728,9 +11730,9 @@ if ($wasmNode) {
     $wasmGalleryPath = Join-Path $wasmBuild 'ui_gallery.wasm'
     if ((& $compiler emit-executable (Join-Path $repo 'examples\ui\main.e') $repo 'wasm32' 'wasi' $wasmGalleryPath) -ne 'executable written') { throw 'examples/ui did not emit as WebAssembly' }
     $wasmWindow = Invoke-Wasm $wasmCounterPath @($wasmCounterThreads, $wasmGalleryPath) (Join-Path $repo 'tests\wasm\window.mjs')
-    if ($wasmWindow.Status -ne 0) { throw "the lib/wasm/window.js check failed: $($wasmWindow.Output)" }
+    if ($wasmWindow.Status -ne 0) { throw "the tools/wasm/window.js check failed: $($wasmWindow.Output)" }
     $wasmEdits = Invoke-Wasm (Join-Path $repo 'tests\wasm\window_edits.mjs') @() (Join-Path $repo 'tests\wasm\window_edits.mjs')
-    if ($wasmEdits.Status -ne 0) { throw "the lib/wasm/window.js edit check failed: $($wasmEdits.Output)" }
+    if ($wasmEdits.Status -ne 0) { throw "the tools/wasm/window.js edit check failed: $($wasmEdits.Output)" }
     # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
     $wasmNullSource = Join-Path $repo 'tests\wasm\null_call\src\main.e'

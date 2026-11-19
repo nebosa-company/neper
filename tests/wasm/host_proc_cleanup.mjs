@@ -4,7 +4,7 @@
 // needed host record.
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { BASE, FUNCTIONS, NetHost, context } from '../../lib/wasm/run-wasm-host.mjs'
+import { BASE, FUNCTIONS, NetHost, context } from '../../tools/wasm/run-wasm-host.mjs'
 
 const saved = { cwd: context.cwd, tmp: context.tmp, preopens: context.preopens, env: context.env, runner: context.runner }
 const data = new Uint8Array(65536)

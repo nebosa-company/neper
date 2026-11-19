@@ -2098,7 +2098,7 @@ fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Uns
 // (e.gpu's device lock), which would then re-lock a mutex it already holds and deadlock.
 fn current_thread_id() -> usize { ret usize(wasm_thread_id()) + 1usize }
 // (D2168/D2169, C110) The native-window surface e.ui.window compiles against, as os.neperos.e has it. A window exists only
-// where the host has one (lib/wasm/window.js in a page, D5680); under Node, which answers ENOSYS to window_open, there is
+// where the host has one (tools/wasm/window.js in a page, D5680); under Node, which answers ENOSYS to window_open, there is
 // none and open answers Unsupported, the answer the window fixtures print "unsupported" for.
 const SURFACE_W: usize = 1280usize
 const SURFACE_H: usize = 2856usize
@@ -2199,7 +2199,7 @@ fn window_events_dropped() -> usize {
     ret 0usize
 }
 
-// A page's window gives one record of eight u32s (the ring of lib/wasm/window.js): kind | button << 8 |
+// A page's window gives one record of eight u32s (the ring of tools/wasm/window.js): kind | button << 8 |
 // modifiers << 16 | repeat << 24, x, y, width, height, key, delta, codepoint.
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
     var event: WindowEvent = zero

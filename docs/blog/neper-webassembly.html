@@ -261,7 +261,7 @@
       <p>The target is <code>wasm32-wasi</code>: WebAssembly with WASI preview 1, the interface that Node and most runtimes already implement. It is one more argument to the command that writes native files.</p>
 <pre><code><span class="prompt">$</span> neper emit-executable hello.e . wasm32 wasi hello.wasm --release
 executable written
-<span class="prompt">$</span> node lib/wasm/run-wasm.mjs hello.wasm
+<span class="prompt">$</span> node tools/wasm/run-wasm.mjs hello.wasm
 hello, neper</code></pre>
       <p>Three runs on a Windows machine took 497, 409 and 339 ms and wrote 18,250 bytes. The same program is 12,600 bytes as a native Windows executable. Nothing else was installed for it: no <code>clang</code>, no <code>wasm-ld</code>, no SDK. The only thing that has to exist at run time is a WebAssembly engine, which Node 24 and every current browser provide.</p>
 
@@ -335,7 +335,7 @@ hello, neper</code></pre>
       <pre><code><span class="prompt">$</span> neper emit-executable app.e . wasm32 wasi app.wasm --release
 <span class="prompt">$</span> neper emit-executable app.e . wasm32 wasi app.wasm --release --threads
 <span class="prompt">$</span> node scripts/serve-wasm.mjs --isolated    <span class="com"># a page with the headers threads need</span></code></pre>
-      <p>Node 24 or a current browser runs the result. The window page is <code>tests/wasm/browser/ui_counter.html</code>, and <code>lib/wasm/neper-host.js</code> is the host a page of your own passes the module to.</p>
+      <p>Node 24 or a current browser runs the result. The window page is <code>tests/wasm/browser/ui_counter.html</code>, and <code>tools/wasm/neper-host.js</code> is the host a page of your own passes the module to.</p>
 
       <h2>Honest limits of these numbers</h2>
       <ul>
@@ -349,7 +349,7 @@ hello, neper</code></pre>
       <h2>Sources</h2>
       <ul>
         <li>The emitter: <code>src/wasm.e</code>, <code>src/wasm_code.e</code>. The host half of the runtime: <code>lib/e/os.wasi.e</code>, <code>lib/e/proc/sys/host.wasi.e</code>.</li>
-        <li>The runners: <code>lib/wasm/run-wasm.mjs</code>, <code>lib/wasm/run-wasm-host.mjs</code> (Node) and <code>lib/wasm/neper-host.js</code>, <code>lib/wasm/window.js</code> (a page).</li>
+        <li>The runners: <code>tools/wasm/run-wasm.mjs</code>, <code>tools/wasm/run-wasm-host.mjs</code> (Node) and <code>tools/wasm/neper-host.js</code>, <code>tools/wasm/window.js</code> (a page).</li>
         <li>The checks: <code>scripts/wasm-sweep.sh</code>, <code>scripts/wasm-compiler.sh</code>, <code>tests/wasm/sweep-expected.tsv</code>, <code>tests/wasm/window_edits.mjs</code>, <code>.github/workflows/ios-sim.yml</code>.</li>
         <li>The decisions behind it are in <code>docs/decisions.md</code>, D5213 (the design), D5640 (the compiler as WebAssembly), D5835 and D5872 (what stays different), D5890 and D5891 (the phone keyboard and touch), and D5900 (the iPhone simulator).</li>
       </ul>

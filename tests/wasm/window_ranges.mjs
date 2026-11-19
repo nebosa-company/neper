@@ -1,6 +1,6 @@
 // Guest memory ranges passed to the window imports return WASI EINVAL instead of leaking a JavaScript RangeError.
 import assert from 'node:assert/strict'
-import { imports, RING_BYTES } from '../../lib/wasm/window.js'
+import { imports, RING_BYTES } from '../../tools/wasm/window.js'
 
 const EINVAL = 28
 const memory = new WebAssembly.Memory({ initial: 1 })

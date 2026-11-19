@@ -14,7 +14,7 @@
 #   scripts/wasm-sweep.sh                 # every fixture
 #   scripts/wasm-sweep.sh -j 4 NAME...    # these, four at a time
 #   scripts/wasm-sweep.sh --release       # both builds with --release
-#   scripts/wasm-sweep.sh --host neper-host   # run the modules through lib/wasm/neper-host.js (D5678), not run-wasm.mjs
+#   scripts/wasm-sweep.sh --host neper-host   # run the modules through tools/wasm/neper-host.js (D5678), not run-wasm.mjs
 #   scripts/wasm-sweep.sh --host both         # through both, building once; the second runner's verdicts go to results-second.tsv
 #   scripts/wasm-sweep.sh --threads       # the WebAssembly build as the threaded module shape (D5671)
 #
@@ -96,7 +96,7 @@ one() {
     # With --host both the first runner's verdict goes to standard output, the second's to $out/results-second.tsv.
     first=1
     for run_with in $runners; do
-        case $run_with in neper-host) runner_path="$repo/lib/wasm/neper-host.js" ;; *) runner_path="$repo/lib/wasm/run-wasm.mjs" ;; esac
+        case $run_with in neper-host) runner_path="$repo/tools/wasm/neper-host.js" ;; *) runner_path="$repo/tools/wasm/run-wasm.mjs" ;; esac
         limited 120 node --no-warnings "$runner_path" "$wasm" $work > "$out/$name.wasm.out" 2> "$out/$name.wasm.err" < /dev/null
         wasm_status=$?
         if [ "$wasm_status" -eq 125 ]; then

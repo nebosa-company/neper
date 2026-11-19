@@ -1,4 +1,4 @@
-// Runs the browser app's wasm32-wasi build under `lib/wasm/neper-host.js`, so the third target of the app can be
+// Runs the browser app's wasm32-wasi build under `tools/wasm/neper-host.js`, so the third target of the app can be
 // checked without a display: the module loads, WASI runs, the app finds its fonts in the seeded file system, and it
 // then exits cleanly because this host has no windows (the message on stdout). Without the fonts the app exits 4
 // (`added == 0` in examples/browser/main.e) before it gets that far, which is the signal used here.
@@ -9,7 +9,7 @@
 // this seeds those with the real Jost files and stands the test font in for the rest. The point is the startup path,
 // not the glyph shapes.
 import fs from 'node:fs'
-import { run } from '../lib/wasm/neper-host.js'
+import { run } from '../tools/wasm/neper-host.js'
 
 const modulePath = process.argv[2] || 'build/app-wasi.wasm'
 const bundled = {

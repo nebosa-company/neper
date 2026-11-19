@@ -2,7 +2,7 @@
 // before it wakes NetHost, and address zero remains a valid output destination.
 import assert from 'node:assert/strict'
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads'
-import { BASE, hostImports, serve } from '../../lib/wasm/run-wasm-host.mjs'
+import { BASE, hostImports, serve } from '../../tools/wasm/run-wasm-host.mjs'
 
 const EINVAL = 28
 

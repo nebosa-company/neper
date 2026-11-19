@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { chmodSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { FUNCTIONS, NetHost, context } from '../../lib/wasm/run-wasm-host.mjs'
+import { FUNCTIONS, NetHost, context } from '../../tools/wasm/run-wasm-host.mjs'
 
 const saved = { cwd: context.cwd, tmp: context.tmp, preopens: context.preopens, env: context.env, runner: context.runner }
 const data = new Uint8Array(65536)

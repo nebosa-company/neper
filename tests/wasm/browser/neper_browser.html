@@ -13,7 +13,7 @@
 <script type="module">
   // The Neper browser (examples/browser, built as build/wasm-sweep/neper_browser.wasm) in a window on a canvas.
   // ?url=ADDRESS is the page it opens (a data: URL needs no network; the wasm host has no sockets), ?module=URL overrides the module.
-  import { run } from '../../../lib/wasm/neper-host.js'
+  import { run } from '../../../tools/wasm/neper-host.js'
   const query = new URLSearchParams(location.search)
   const out = { exitCode: null, stdout: '', error: null, isolated: crossOriginIsolated }
   window.neperResult = out
