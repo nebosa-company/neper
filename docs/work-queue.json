@@ -427,10 +427,10 @@
       "group": "CRAN parity",
       "order": 712,
       "title": "uwot and Rtsne: embeddings equal to R",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN ranks 311, 315). Mid. e.ml.reduce has t-SNE and UMAP; verify against R under set.seed first. Acceptance, equal to R: uwot umap and umap_transform with its nearest-neighbour graph, spectral and random initialization, optimizer epochs; Rtsne Barnes-Hut and exact, with perplexity, theta and PCA preprocessing."
+      "evidence": "Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases; Linux pending). Open: the Barnes-Hut tree, distance input, the random start and PCA step, uwot. Was: Open (CRAN ranks 311, 315). Mid. e.ml.reduce has t-SNE and UMAP; verify against R under set.seed first. Acceptance, equal to R: uwot umap and umap_transform with its nearest-neighbour graph, spectral and random initialization, optimizer epochs; Rtsne Barnes-Hut and exact, with perplexity, theta and PCA preprocessing."
     },
     {
       "id": "L393",
