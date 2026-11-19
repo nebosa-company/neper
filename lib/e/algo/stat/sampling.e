@@ -1706,3 +1706,233 @@ fn up_multinomial(g: *rr.Rng, a: *mem.Arena, pik: []const f64, s: []f64) -> err 
     s[n - 1usize] = left
     ret ok
 }
+
+// UPMEqfromw(w, n): the conditional inclusion probabilities q (N by n, row-major, 1-based in the comments) of the maximum entropy design with odds w
+fn me_q_from_w(a: *mem.Arena, w: []const f64, n: usize, q: []f64) -> err {
+    let nn = w.len
+    let (ex, e0) = mem.alloc[f64](a, nn * n)
+    if e0 != ok { ret mem.Full }
+    var i = 0usize
+    while i < nn * n {
+        ex[i] = 0.0f64
+        q[i] = 0.0f64
+        i += 1usize
+    }
+    // expa[i, 1] = sum(w[i:N]) (0-based row r)
+    var r = 0usize
+    while r < nn {
+        var sm = 0.0f64
+        var j = r
+        while j < nn {
+            sm += w[j]
+            j += 1usize
+        }
+        ex[r * n] = sm
+        r += 1usize
+    }
+    // expa[i, N - i + 1] = exp(sum(log(w[i:N]))) for i = N - n + 1 .. N
+    r = nn - n
+    while r < nn {
+        var sl = 0.0f64
+        var j = r
+        while j < nn {
+            sl += math.log[f64](w[j])
+            j += 1usize
+        }
+        ex[r * n + (nn - r - 1usize)] = math.exp[f64](sl)
+        r += 1usize
+    }
+    // expa[i, z] = w[i] expa[i + 1, z - 1] + expa[i + 1, z], i = N - 2 .. 1, z = 2 .. min(N - i, n)
+    if nn >= 3usize {
+        var ii = nn - 2usize
+        while ii >= 1usize {
+            var lim = nn - ii
+            if n < lim { lim = n }
+            var z = 2usize
+            while z <= lim {
+                ex[(ii - 1usize) * n + (z - 1usize)] = w[ii - 1usize] * ex[ii * n + (z - 2usize)] + ex[ii * n + (z - 1usize)]
+                z += 1usize
+            }
+            ii -= 1usize
+        }
+    }
+    r = 0usize
+    while r < nn {
+        q[r * n] = w[r] / ex[r * n]
+        r += 1usize
+    }
+    r = nn - n
+    while r < nn {
+        q[r * n + (nn - r - 1usize)] = 1.0f64
+        r += 1usize
+    }
+    if nn >= 3usize {
+        var ii = nn - 2usize
+        while ii >= 1usize {
+            var lim = nn - ii
+            if n < lim { lim = n }
+            var z = 2usize
+            while z <= lim {
+                q[(ii - 1usize) * n + (z - 1usize)] = w[ii - 1usize] * ex[ii * n + (z - 2usize)] / ex[(ii - 1usize) * n + (z - 1usize)]
+                z += 1usize
+            }
+            ii -= 1usize
+        }
+    }
+    ret ok
+}
+
+// UPMEpikfromq(q): the first-order inclusion probabilities implied by q (N by n)
+fn me_pik_from_q(a: *mem.Arena, q: []const f64, nn: usize, n: usize, out: []f64) -> err {
+    let (pro, e0) = mem.alloc[f64](a, nn * n)
+    if e0 != ok { ret mem.Full }
+    var i = 0usize
+    while i < nn * n {
+        pro[i] = 0.0f64
+        i += 1usize
+    }
+    pro[n - 1usize] = 1.0f64
+    var r = 2usize
+    while r <= nn {
+        var c = 2usize
+        while c <= n {
+            let pv = pro[(r - 2usize) * n + (c - 1usize)]
+            pro[(r - 1usize) * n + (c - 1usize)] = pro[(r - 1usize) * n + (c - 1usize)] + pv * (1.0f64 - q[(r - 2usize) * n + (c - 1usize)])
+            pro[(r - 1usize) * n + (c - 2usize)] = pro[(r - 1usize) * n + (c - 2usize)] + pv * q[(r - 2usize) * n + (c - 1usize)]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 2usize
+    while r <= nn {
+        pro[(r - 1usize) * n] = pro[(r - 1usize) * n] + pro[(r - 2usize) * n] * (1.0f64 - q[(r - 2usize) * n])
+        r += 1usize
+    }
+    r = 0usize
+    while r < nn {
+        var sm = 0.0f64
+        var c = 0usize
+        while c < n {
+            sm += pro[r * n + c] * q[r * n + c]
+            c += 1usize
+        }
+        out[r] = sm
+        r += 1usize
+    }
+    ret ok
+}
+
+// UPMEpiktildefrompik(pik): the tilde probabilities by the fixed-point iteration (eps 1e-6); n = round(sum(pik)); out is pikt
+fn me_pikt_from_pik(a: *mem.Arena, pik: []const f64, out: []f64) -> err {
+    let nn = pik.len
+    var tot = 0.0f64
+    var i = 0usize
+    while i < nn {
+        tot += pik[i]
+        i += 1usize
+    }
+    let n = usize(math.floor[f64](tot + 0.5f64))
+    let (w, e0) = mem.alloc[f64](a, nn)
+    let (q, e1) = mem.alloc[f64](a, nn * n)
+    let (pf, e2) = mem.alloc[f64](a, nn)
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    i = 0usize
+    while i < nn {
+        out[i] = pik[i]
+        i += 1usize
+    }
+    var arr = 1.0f64
+    var guard = 0usize
+    while arr > 1.0e-6f64 && guard < 100000usize {
+        i = 0usize
+        while i < nn {
+            w[i] = out[i] / (1.0f64 - out[i])
+            i += 1usize
+        }
+        let m = mem.mark(a)
+        let eq = me_q_from_w(a, w, n, q)
+        if eq != ok { ret eq }
+        let ep = me_pik_from_q(a, q, nn, n, pf)
+        mem.reset(a, m)
+        if ep != ok { ret ep }
+        arr = 0.0f64
+        i = 0usize
+        while i < nn {
+            let p1 = out[i] + pik[i] - pf[i]
+            arr += math.abs[f64](out[i] - p1)
+            out[i] = p1
+            i += 1usize
+        }
+        guard += 1usize
+    }
+    ret ok
+}
+
+// UPmaxentropy(pik): the maximum entropy (conditional Poisson) sample; s receives 0 or 1
+fn up_maxentropy(g: *rr.Rng, a: *mem.Arena, pik: []const f64, s: []f64) -> err {
+    let nt = pik.len
+    var tot = 0.0f64
+    var i = 0usize
+    while i < nt {
+        tot += pik[i]
+        i += 1usize
+    }
+    var n = usize(math.floor[f64](tot + 0.5f64))
+    i = 0usize
+    while i < nt {
+        s[i] = 0.0f64
+        i += 1usize
+    }
+    if n == 0usize { ret ok }
+    if n == 1usize { ret up_multinomial(g, a, pik, s) }
+    var m2 = 0usize
+    i = 0usize
+    while i < nt {
+        if pik[i] != 1.0f64 { m2 += 1usize } else { s[i] = 1.0f64 }
+        i += 1usize
+    }
+    let (p2, e0) = mem.alloc[f64](a, m2)
+    let (pt, e1) = mem.alloc[f64](a, m2)
+    let (w, e2) = mem.alloc[f64](a, m2)
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    var c = 0usize
+    var s2sum = 0.0f64
+    i = 0usize
+    while i < nt {
+        if pik[i] != 1.0f64 {
+            p2[c] = pik[i]
+            s2sum += pik[i]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    n = usize(math.floor[f64](s2sum + 0.5f64))
+    let ep = me_pikt_from_pik(a, p2, pt)
+    if ep != ok { ret ep }
+    i = 0usize
+    while i < m2 {
+        w[i] = pt[i] / (1.0f64 - pt[i])
+        i += 1usize
+    }
+    let (q, e3) = mem.alloc[f64](a, m2 * n)
+    if e3 != ok { ret mem.Full }
+    let eq = me_q_from_w(a, w, n, q)
+    if eq != ok { ret eq }
+    // UPMEsfromq: one uniform per unit while the count is not exhausted
+    var left = n
+    var k = 0usize
+    var pos = 0usize
+    while k < nt {
+        if pik[k] != 1.0f64 {
+            if left != 0usize {
+                if rr.unif(g) < q[pos * n + (left - 1usize)] {
+                    s[k] = 1.0f64
+                    left -= 1usize
+                }
+            }
+            pos += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}
