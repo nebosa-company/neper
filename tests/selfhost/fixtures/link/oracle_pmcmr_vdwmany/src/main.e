@@ -31,6 +31,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let _ = pt
         if e7 != ok { os.exit(7) }
         if kind == 0usize && t == jj { ret tv }
+        if kind == 3usize && t == jj {
+            var g3 = 0usize
+            while g3 < k {
+                rn[g3] = 0.0f64
+                g3 += 1usize
+            }
+            var u3 = 0usize
+            while u3 < n {
+                rn[grp[u3]] += 1.0f64
+                u3 += 1usize
+            }
+            ret pm.t_single_step_p(tv, rn, k, f64(n) - f64(k))
+        }
         ps[t - 1usize] = p
         t += 1usize
     }

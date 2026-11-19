@@ -1005,3 +1005,26 @@ fn t_single_step_p(t: f64, rn: []const f64, k: usize, df: f64) -> f64 {
     if at < 0.0f64 { at = 0.0f64 - at }
     ret 1.0f64 - mvt_one_factor_upper(at, lam[0usize..k - 1usize], df, true)
 }
+
+// dunnettTest one-sided: alt 0 "greater" p = pDunnett(t, upper) = 1 - P(T_i < t for all i), alt 1 "less" p = pDunnett(t, lower) = 1 - P(T_i > t for all i); t as in dunnett_many
+fn dunnett_one_sided(x: []const f64, grp: []const usize, k: usize, j: usize, alt: usize) -> f64 {
+    let (tv, p2) = dunnett_many(x, grp, k, j)
+    let _ = p2
+    let n = x.len
+    var cnt: [16]f64 = zero
+    var u = 0usize
+    while u < n {
+        cnt[grp[u] - 1usize] += 1.0f64
+        u += 1usize
+    }
+    var lam: [16]f64 = zero
+    var g = 1usize
+    while g < k {
+        lam[g - 1usize] = math.sqrt[f64](cnt[g] / (cnt[g] + cnt[0usize]))
+        g += 1usize
+    }
+    let df = f64(n) - f64(k)
+    if alt == 0usize { ret 1.0f64 - mvt_one_factor_upper(tv, lam[0usize..k - 1usize], df, false) }
+    // pDunnett(lower.tail = TRUE) = 1 - P(all T_i > t) = 1 - P(all -T_i < -t)
+    ret 1.0f64 - mvt_one_factor_upper(0.0f64 - tv, lam[0usize..k - 1usize], df, false)
+}

@@ -22,6 +22,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         grp[t] = usize(z[4usize + n + t])
         t += 1usize
     }
+    if kind == 2usize { ret pm.dunnett_one_sided(x, grp, k, jj, 0usize) }
+    if kind == 3usize { ret pm.dunnett_one_sided(x, grp, k, jj, 1usize) }
     let (tv, p) = pm.dunnett_many(x, grp, k, jj)
     if kind == 0usize { ret tv }
     ret p
