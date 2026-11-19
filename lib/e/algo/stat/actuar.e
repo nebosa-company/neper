@@ -525,3 +525,35 @@ fn gu_d(x: f64, al: f64, sc: f64) -> f64 {
 fn gu_p(x: f64, al: f64, sc: f64) -> f64 { ret math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - (x - al) / sc)) }
 
 fn gu_q(p: f64, al: f64, sc: f64) -> f64 { ret al - sc * math.log[f64](0.0f64 - math.log[f64](p)) }
+
+// ---- zero-truncated and zero-modified counts over a base law: kind 0 Poisson(a), 1 negative binomial(size a, prob b)
+fn cnt_d(kind: usize, x: f64, a: f64, b: f64) -> f64 {
+    if kind == 0usize { ret nm.dpois(x, a, false) }
+    ret nb.dnbinom(x, a, b, false)
+}
+
+fn cnt_p(kind: usize, x: f64, a: f64, b: f64) -> f64 {
+    if kind == 0usize { ret nm.ppois(x, a, true, false) }
+    ret nb.pnbinom(x, a, b, true, false)
+}
+
+fn zt_d(kind: usize, x: f64, a: f64, b: f64) -> f64 {
+    if x < 1.0f64 { ret 0.0f64 }
+    ret cnt_d(kind, x, a, b) / (1.0f64 - cnt_d(kind, 0.0f64, a, b))
+}
+
+fn zt_p(kind: usize, x: f64, a: f64, b: f64) -> f64 {
+    if x < 1.0f64 { ret 0.0f64 }
+    let f0 = cnt_d(kind, 0.0f64, a, b)
+    ret (cnt_p(kind, x, a, b) - f0) / (1.0f64 - f0)
+}
+
+fn zm_d(kind: usize, x: f64, a: f64, b: f64, p0: f64) -> f64 {
+    if x == 0.0f64 { ret p0 }
+    ret (1.0f64 - p0) * zt_d(kind, x, a, b)
+}
+
+fn zm_p(kind: usize, x: f64, a: f64, b: f64, p0: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret p0 + (1.0f64 - p0) * zt_p(kind, x, a, b)
+}

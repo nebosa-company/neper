@@ -51115,3 +51115,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7540 — actuar loggamma and Gumbel
 `lg_d`, `lg_p`, `lg_q`, `lg_m` (loggamma: F = pgamma(log x, shapelog, rate ratelog) on x > 1, raw moment (r / (r - k))^a) and `gu_d`, `gu_p`, `gu_q` (Gumbel) equal actuar on 30 draws each of the loggamma and Gumbel laws (210 values added to oracle_actuar, 4118 in all). Limited moments of the loggamma, the Gumbel moments, the inverse Gaussian, generalised beta, zero-modified and zero-truncated families stay open.
+
+## D7541 — actuar zero-truncated and zero-modified counts
+`zt_d`, `zt_p`, `zm_d`, `zm_p` take a base law (kind 0 Poisson, 1 negative binomial) and give the zero-truncated and zero-modified mass and cdf: zt f(x) / (1 - f(0)), zm p0 at zero and (1 - p0) times the zero-truncated mass elsewhere. Equal to actuar dztpois, pztpois, dzmpois, pzmpois and the negative binomial pairs on 40 draws (160 values added to oracle_actuar, 4278 in all). The geometric, binomial and logarithmic members, the quantiles and the generators stay open.

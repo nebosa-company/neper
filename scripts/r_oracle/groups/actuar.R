@@ -131,6 +131,13 @@ for (rep in 1:30) {
   cases[[length(cases) + 1]] <- case("lf", c(1, al, sc, x2, 1), pgumbel(x2, al, sc), rel = 1e-9, abs = 1e-13)
   cases[[length(cases) + 1]] <- case("lf", c(1, al, sc, pp, 2), qgumbel(pp, al, sc), rel = 1e-9, abs = 1e-12)
 }
+# zero-truncated and zero-modified Poisson and negative binomial: "zc" args (kind 0 Poisson 1 nbinom, a, b, p0, x, stat 0 zt d 1 zt p 2 zm d 3 zm p)
+for (rep in 1:40) {
+  kd <- rep %% 2; a <- if (kd == 0) runif(1, 0.3, 6) else runif(1, 0.5, 5); b <- runif(1, 0.2, 0.9); p0 <- runif(1, 0.05, 0.8); xx <- sample(0:12, 1)
+  zt <- if (kd == 0) c(dztpois(xx, a), pztpois(xx, a)) else c(dztnbinom(xx, a, b), pztnbinom(xx, a, b))
+  zm <- if (kd == 0) c(dzmpois(xx, a, p0), pzmpois(xx, a, p0)) else c(dzmnbinom(xx, a, b, p0), pzmnbinom(xx, a, b, p0))
+  for (st in 0:3) cases[[length(cases) + 1]] <- case("zc", c(kd, a, b, p0, xx, st), c(zt, zm)[st + 1], rel = 1e-9, abs = 1e-13)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)
