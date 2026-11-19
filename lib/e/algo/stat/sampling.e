@@ -1073,3 +1073,165 @@ fn calib_truncated(a: *mem.Arena, xs: []const f64, d: []const f64, total: []cons
     }
     ret 500usize
 }
+
+// calib(..., method = "logit", bounds = c(low, upp)): the g-weights F(lambda) = (low (upp - 1) + upp (1 - low) u) / (upp - 1 + (1 - low) u), u = exp(A q X lambda), A = (upp - low) /
+// ((1 - low) (upp - 1)), by Newton steps on the units inside the bounds with the clamped ones held at their bound (as calib_truncated does). It starts from g = 1 (u = 1) and returns at
+// once when that already calibrates the totals. The answer is the iteration count (0 on failure); g receives the weights.
+fn calib_logit(a: *mem.Arena, xs: []const f64, d: []const f64, total: []const f64, q: []const f64, n: usize, p: usize, low: f64, upp: f64, g: []f64) -> usize {
+    let aa = (upp - low) / ((1.0f64 - low) * (upp - 1.0f64))
+    let (list, e0) = mem.alloc[usize](a, n)
+    let (t2, e1) = mem.alloc[f64](a, p)
+    let (am, e2) = mem.alloc[f64](a, p * p)
+    let (rhs, e3) = mem.alloc[f64](a, p)
+    let (lam, e4) = mem.alloc[f64](a, p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0usize }
+    var i = 0usize
+    while i < n {
+        g[i] = 1.0f64
+        list[i] = i
+        i += 1usize
+    }
+    var r = 0usize
+    while r < p {
+        lam[r] = 0.0f64
+        t2[r] = total[r]
+        r += 1usize
+    }
+    var worst = 0.0f64
+    r = 0usize
+    while r < p {
+        var tr = 0.0f64
+        i = 0usize
+        while i < n {
+            tr += xs[i * p + r] * d[i]
+            i += 1usize
+        }
+        let dv = math.abs[f64](tr - total[r]) / total[r]
+        if dv > worst { worst = dv }
+        r += 1usize
+    }
+    if worst <= 1.0e-6f64 { ret 1usize }
+    var m = n
+    var l = 1usize
+    while l <= 500usize {
+        var outside = false
+        i = 0usize
+        while i < n {
+            if g[i] < low || g[i] > upp { outside = true }
+            i += 1usize
+        }
+        if outside {
+            i = 0usize
+            while i < n {
+                if g[i] < low { g[i] = low }
+                if g[i] > upp { g[i] = upp }
+                i += 1usize
+            }
+            var cnt = 0usize
+            i = 0usize
+            while i < n {
+                if g[i] > low && g[i] < upp { cnt += 1usize }
+                i += 1usize
+            }
+            if cnt == 0usize { ret l }
+            m = 0usize
+            i = 0usize
+            while i < n {
+                if g[i] > low && g[i] < upp {
+                    list[m] = i
+                    m += 1usize
+                }
+                i += 1usize
+            }
+            r = 0usize
+            while r < p {
+                var t = total[r]
+                i = 0usize
+                while i < n {
+                    if !(g[i] > low && g[i] < upp) { t -= g[i] * d[i] * xs[i * p + r] }
+                    i += 1usize
+                }
+                t2[r] = t
+                r += 1usize
+            }
+        }
+        if m < 2usize { ret 0usize }
+        // phi = X1' (d1 g1) - t1; the Newton step lambda -= ginv(X1' diag(d1 g1) X1) (phi - t2 + t1)
+        r = 0usize
+        while r < p {
+            var c = 0usize
+            while c < p {
+                var v = 0.0f64
+                var k = 0usize
+                while k < m {
+                    let u = list[k]
+                    v += xs[u * p + r] * d[u] * g[u] * xs[u * p + c]
+                    k += 1usize
+                }
+                am[r * p + c] = v
+                c += 1usize
+            }
+            var phi = 0.0f64
+            var t1 = 0.0f64
+            var k = 0usize
+            while k < m {
+                let u = list[k]
+                phi += xs[u * p + r] * d[u] * g[u]
+                t1 += xs[u * p + r] * d[u]
+                k += 1usize
+            }
+            rhs[r] = (phi - t1) - t2[r] + t1
+            r += 1usize
+        }
+        let (inv, ie) = gp.invert(a, am, p)
+        if ie != ok { ret 0usize }
+        r = 0usize
+        while r < p {
+            var v = 0.0f64
+            var c = 0usize
+            while c < p {
+                v += inv[r * p + c] * rhs[c]
+                c += 1usize
+            }
+            lam[r] = lam[r] - v
+            r += 1usize
+        }
+        var k = 0usize
+        while k < m {
+            let u = list[k]
+            var e = 0.0f64
+            r = 0usize
+            while r < p {
+                e += xs[u * p + r] * lam[r]
+                r += 1usize
+            }
+            let ex = math.exp[f64](aa * (e * q[u]))
+            let gv = (low * (upp - 1.0f64) + upp * (1.0f64 - low) * ex) / (upp - 1.0f64 + (1.0f64 - low) * ex)
+            if gv != gv { ret 0usize }
+            g[u] = gv
+            k += 1usize
+        }
+        worst = 0.0f64
+        r = 0usize
+        while r < p {
+            var tr = 0.0f64
+            i = 0usize
+            while i < n {
+                tr += xs[i * p + r] * g[i] * d[i]
+                i += 1usize
+            }
+            let dv = math.abs[f64](tr - total[r]) / total[r]
+            if dv > worst { worst = dv }
+            r += 1usize
+        }
+        var inside = true
+        i = 0usize
+        while i < n {
+            if g[i] < low || g[i] > upp { inside = false }
+            i += 1usize
+        }
+        if worst < 1.0e-6f64 && inside { ret l }
+        l += 1usize
+    }
+    ret 0usize
+}

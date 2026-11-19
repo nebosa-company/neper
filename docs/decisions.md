@@ -50266,3 +50266,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7379 — sampling calib truncated
 `calib_truncated` follows the method step by step: the linear g, then per iteration clamp the g outside [low, upp], recalibrate the strictly inside units against the total reduced by the clamped part (a stage with no inside unit returns, as R's `else break` does), and stop when the relative total error is below 1e-6 with every g in the bounds. Equal to R on the data sets where R converges (174 weights); data sets where R reports no convergence are not in the golden. The linear and raking cases are unchanged because the new draws were appended after them. L508 at 0.75; the logit method remains.
+
+## D7380 — sampling calib logit
+`calib_logit` starts from g = 1 (u = 1 in F), returns at once if that calibrates the totals, and otherwise runs R's Newton iteration on the units inside [low, upp] with the clamped ones held at their bound: lambda -= (X1' diag(d1 g1) X1)^-1 (phi - t2 + t1), g = F(A q X lambda) with A = (upp - low) / ((1 - low)(upp - 1)). Where R reports no convergence the golden has no case. Equal to R on 150 weights. All four calib methods now agree; L508 at 0.8.
