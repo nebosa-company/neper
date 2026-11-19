@@ -254,7 +254,7 @@ fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, xo: []const f64, p1: 
     let n = z.len
     let na = ia.len
     var i = 0usize
-    if na == 0usize && kind < 3u8 {
+    if na == 0usize && (kind < 3u8 || kind == 9u8) {
         while i < n {
             y[i] = z[i]
             gy[i] = 0.0f64
@@ -348,7 +348,64 @@ fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, xo: []const f64, p1: 
             root += 1usize
         }
     }
-    if kind >= 3u8 { f = fsolve(a, z, w, xo, lab, kind, aw, bw, y, gy) }
+    if kind >= 3u8 && kind < 9u8 { f = fsolve(a, z, w, xo, lab, kind, aw, bw, y, gy) }
+    if kind == 9u8 {
+        // the Chebyshev solver (isotone mSolver): each block takes the weighted mid-range of its values, the objective is the largest weighted deviation, and the gradient puts its weight on the largest and smallest
+        var root = 0usize
+        while root < n {
+            var s = 0.0f64
+            var i0 = root
+            var j0 = root
+            var cnt = 0usize
+            i = 0usize
+            while i < n {
+                if lab[i] == root {
+                    cnt += 1usize
+                    var j = i + 1usize
+                    while j < n {
+                        if lab[j] == root {
+                            let t = w[i] * w[j] * math.abs[f64](z[i] - z[j]) / (w[i] + w[j])
+                            if t > s {
+                                s = t
+                                i0 = i
+                                j0 = j
+                            }
+                        }
+                        j += 1usize
+                    }
+                }
+                i += 1usize
+            }
+            if cnt > 0usize {
+                var mid = z[i0]
+                if cnt > 1usize { mid = (w[i0] * z[i0] + w[j0] * z[j0]) / (w[i0] + w[j0]) }
+                i = 0usize
+                while i < n {
+                    if lab[i] == root { y[i] = mid }
+                    i += 1usize
+                }
+            }
+            root += 1usize
+        }
+        var i1 = 0usize
+        var i2 = 0usize
+        i = 0usize
+        while i < n {
+            let dv = w[i] * (y[i] - z[i])
+            if dv > w[i1] * (y[i1] - z[i1]) { i1 = i }
+            if dv < w[i2] * (y[i2] - z[i2]) { i2 = i }
+            i += 1usize
+        }
+        f = math.abs[f64](w[i1] * (y[i1] - z[i1]))
+        if math.abs[f64](w[i2] * (y[i2] - z[i2])) > f { f = math.abs[f64](w[i2] * (y[i2] - z[i2])) }
+        i = 0usize
+        while i < n {
+            gy[i] = 0.0f64
+            i += 1usize
+        }
+        gy[i1] = w[i2] * w[i1] / (w[i1] + w[i2])
+        gy[i2] = gy[i2] - w[i1] * w[i2] / (w[i1] + w[i2])
+    }
     i = 0usize
     while i < n && kind < 3u8 {
         if kind == 1u8 {
