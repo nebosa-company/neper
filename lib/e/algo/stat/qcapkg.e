@@ -131,3 +131,57 @@ fn pof(d: []const f64, y: []const f64, n: usize, nv: usize, spec: []const f64, r
     if which == 1usize { ret s1x / s1m }
     ret smin / sx
 }
+
+// truthTable(): for each of the 2^k configurations of the k condition columns of d (n rows by nv columns, the conditions in columns 0 .. k - 1; the first condition is the most
+// significant bit of the row number, row 0 = all conditions absent) the number of cases with membership above 0.5, the sufficiency inclusion and PRI of the configuration's membership
+// (the minimum of its literals) against y, and the output: 1 when n >= n_cut, incl >= incl_cut and PRI >= pri_cut, 0 when it has enough cases but fails, -1 (the "?" row) when it has fewer than n_cut cases.
+// out receives 4 values per configuration: n, incl, PRI, OUT (incl and PRI are NaN for an empty configuration).
+fn truth_table(d: []const f64, y: []const f64, n: usize, nv: usize, k: usize, incl_cut: f64, n_cut: f64, pri_cut: f64, out: []f64) {
+    let nan = 0.0f64 / 0.0f64
+    let rows = usize(1u64 << u64(k))
+    var c = 0usize
+    while c < rows {
+        var sx = 0.0f64
+        var smin = 0.0f64
+        var sminn = 0.0f64
+        var cnt = 0.0f64
+        var r = 0usize
+        while r < n {
+            var x = 1.0f64
+            var j = 0usize
+            while j < k {
+                var v = d[r * nv + j]
+                let bit = (c >> (k - 1usize - j)) & 1usize
+                if bit == 0usize { v = 1.0f64 - v }
+                if v < x { x = v }
+                j += 1usize
+            }
+            if x > 0.5f64 { cnt += 1.0f64 }
+            let yy = y[r]
+            var mn = x
+            if yy < mn { mn = yy }
+            var mm = mn
+            if 1.0f64 - yy < mm { mm = 1.0f64 - yy }
+            sx += x
+            smin += mn
+            sminn += mm
+            r += 1usize
+        }
+        out[c * 4usize] = cnt
+        if cnt == 0.0f64 {
+            out[c * 4usize + 1usize] = nan
+            out[c * 4usize + 2usize] = nan
+            out[c * 4usize + 3usize] = -1.0f64
+        } else {
+            let incl = smin / sx
+            let pri = (smin - sminn) / (sx - sminn)
+            out[c * 4usize + 1usize] = incl
+            out[c * 4usize + 2usize] = pri
+            var o = 0.0f64
+            if cnt < n_cut { o = -1.0f64 }
+            if cnt >= n_cut && incl >= incl_cut && pri >= pri_cut { o = 1.0f64 }
+            out[c * 4usize + 3usize] = o
+        }
+        c += 1usize
+    }
+}

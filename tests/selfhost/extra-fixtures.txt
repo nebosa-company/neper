@@ -533,3 +533,4 @@ oracle_sampling_post
 oracle_sampling_srswr
 oracle_sampling_mult
 oracle_sampling_maxent
+oracle_qca_tt
