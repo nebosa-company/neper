@@ -17,6 +17,36 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let m = usize(z[2usize])
     let y = z[3usize..3usize + n]
     let x = z[3usize + n..3usize + n + n * p]
+    if str.eq(c.name, "pf1") || str.eq(c.name, "pf2") || str.eq(c.name, "pf3") || str.eq(c.name, "sf1") || str.eq(c.name, "sf2") || str.eq(c.name, "sf3") {
+        let fr = usize(math.floor[f64](0.15f64 * f64(n)))
+        let tt = n - fr
+        let (fv, ef) = mem.alloc[f64](a, tt - fr + 1usize)
+        if ef != ok { ret nan }
+        sc.fstats(a, y, x, n, p, fr, tt, fv)
+        var mx = fv[0usize]
+        var sm = 0.0f64
+        var se = 0.0f64
+        var q = 0usize
+        while q < fv.len {
+            if fv[q] > mx { mx = fv[q] }
+            sm += fv[q]
+            se += math.exp[f64](0.5f64 * fv[q])
+            q += 1usize
+        }
+        let nf = f64(fv.len)
+        var st = mx
+        var ty = 0usize
+        if str.eq(c.name, "pf2") || str.eq(c.name, "sf2") {
+            st = sm / nf
+            ty = 1usize
+        }
+        if str.eq(c.name, "pf3") || str.eq(c.name, "sf3") {
+            st = math.log[f64](se / nf)
+            ty = 2usize
+        }
+        if c.name[0usize] == 115u8 { ret st }
+        ret sc.pvalue_fstats(ty, st, p, f64(fr) / f64(n))
+    }
     if str.eq(c.name, "cus") || str.eq(c.name, "cusp") {
         let (cs, cp) = sc.ols_cusum(a, y, x, n, p)
         if str.eq(c.name, "cus") { ret cs }

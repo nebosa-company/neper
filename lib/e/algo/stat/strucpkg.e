@@ -5,7 +5,10 @@
 use e.algo.stat.gparot as gp
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nm
 use e.mem
+use e.algo.stat.strucpkg_tables as tb
+use e.str
 
 // the residual sum of squares of y on x over the rows lo .. hi - 1 (hi exclusive); NaN when singular
 fn seg_rss(a: *mem.Arena, y: []const f64, x: []const f64, p: usize, lo: usize, hi: usize) -> f64 {
@@ -310,4 +313,64 @@ fn rec_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) 
         pv = 2.0f64 * (1.0f64 - pn1 + math.exp[f64](-4.0f64 * peak * peak) * (pn2 + pn3 - 1.0f64) - math.exp[f64](-16.0f64 * peak * peak) * (1.0f64 - pn2))
     }
     ret (peak, pv)
+}
+
+// the idx-th (0-based) number of a semicolon-separated table
+fn table_value(t: str, idx: usize) -> f64 {
+    var start = 0usize
+    var seen = 0usize
+    var i = 0usize
+    while i < t.len {
+        if t[i] == 59u8 {
+            if seen == idx {
+                let (v, e) = str.parse_f64(t[start..i])
+                if e != ok { ret 0.0f64 / 0.0f64 }
+                ret v
+            }
+            seen += 1usize
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    let (v2, e2) = str.parse_f64(t[start..t.len])
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    ret v2
+}
+
+
+// strucchange sctest(Fstats) p value for the statistic x of regression count k <= 5 and trimming tau (type 0 supF, 1 aveF, 2 expF): the table row of beta evaluated as a polynomial
+// of x, clipped at zero, then 1 - pchisq against the tabulated degrees of freedom, interpolated between the two rows next to tau
+fn pvalue_fstats(ty: usize, x: f64, k: usize, tau: f64) -> f64 {
+    var nc = 5usize
+    if ty == 0usize { nc = 3usize }
+    let m = nc - 1usize
+    var pp: [25]f64 = zero
+    var r = 0usize
+    while r < 25usize {
+        let row = ((k - 1usize) * 25usize + r) * nc
+        var dummy = 0.0f64
+        var xp = 1.0f64
+        var j = 0usize
+        while j < m {
+            var cf = table_value(tb.sc_sup(), row + j)
+            if ty == 1usize { cf = table_value(tb.sc_ave(), row + j) }
+            if ty == 2usize { cf = table_value(tb.sc_exp(), row + j) }
+            dummy += cf * xp
+            xp = xp * x
+            j += 1usize
+        }
+        if dummy < 0.0f64 { dummy = 0.0f64 }
+        var dfv = table_value(tb.sc_sup(), row + m)
+        if ty == 1usize { dfv = table_value(tb.sc_ave(), row + m) }
+        if ty == 2usize { dfv = table_value(tb.sc_exp(), row + m) }
+        pp[r] = 1.0f64 - nm.pchisq(dummy, dfv, true, false)
+        r += 1usize
+    }
+    if tau == 0.5f64 { ret 1.0f64 - nm.pchisq(x, f64(k), true, false) }
+    if tau <= 0.01f64 { ret pp[24usize] }
+    if tau >= 0.49f64 { ret ((0.5f64 - tau) * pp[0usize] + (tau - 0.49f64) * (1.0f64 - nm.pchisq(x, f64(k), true, false))) * 100.0f64 }
+    let taua = (0.51f64 - tau) * 50.0f64
+    let tau1 = math.floor[f64](taua)
+    let i1 = usize(tau1)
+    ret (tau1 + 1.0f64 - taua) * pp[i1 - 1usize] + (taua - tau1) * pp[i1]
 }
