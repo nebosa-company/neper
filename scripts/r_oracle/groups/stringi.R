@@ -61,4 +61,14 @@ for (rep in 1:60) {
     cases[[length(cases) + 1]] <- case("hex", c(n, cp, st, 1), sum(u * seq_along(u)), rel = 0, abs = 0)
   }
 }
+# full case conversion of strings: "lc" args (n, cp[n], 0 lower 1 upper, what 0 length 1 weighted code-point sum); the pool has sharp s, ligatures, capital sigma, dotted I, apostrophes and combining marks
+cpool <- c(0x41, 0x61, 0x42, 0x20, 0x27, 0x3A3, 0x3C3, 0x3C2, 0x391, 0x3B1, 0x130, 0x49, 0x69, 0xDF, 0xFB01, 0xFB02, 0x149, 0x1F0, 0x390, 0x1F80, 0x301, 0x2E, 0xE9, 0xC9, 0x1E9E, 0x3AC, 0x44F, 0x42F, 0x31)
+for (rep in 1:100) {
+  n <- sample(1:10, 1); cp <- sample(cpool, n, TRUE); s <- intToUtf8(cp)
+  for (md in 0:1) {
+    r <- utf8ToInt(if (md == 0) stri_trans_tolower(s) else stri_trans_toupper(s))
+    cases[[length(cases) + 1]] <- case("lc", c(n, cp, md, 0), length(r), rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("lc", c(n, cp, md, 1), sum(r * seq_along(r)), rel = 0, abs = 0)
+  }
+}
 emit("stringi", "stringi", list(cases))

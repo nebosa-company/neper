@@ -389,3 +389,114 @@ fn any_hex(a: *mem.Arena, text: str, style: usize) -> (str, err) {
     }
     ret (out[0usize..n], ok)
 }
+
+fn is_cased(c: u32) -> bool {
+    let k = category(c)
+    if k == .Lu || k == .Ll || k == .Lt { ret true }
+    ret to_lower_simple(c) != c || to_upper_simple(c) != c
+}
+
+// Case_Ignorable approximated by category (Mn Me Cf Lm Sk) and the Word_Break mid-letter scalars
+fn is_case_ignorable(c: u32) -> bool {
+    let k = category(c)
+    if k == .Mn || k == .Me || k == .Cf || k == .Lm || k == .Sk { ret true }
+    ret c == 39u32 || c == 46u32 || c == 58u32 || c == 183u32 || c == 903u32 || c == 1375u32 || c == 1524u32 || c == 8216u32 || c == 8217u32 || c == 8228u32 || c == 8231u32 || c == 65043u32 || c == 65106u32 || c == 65109u32 || c == 65287u32 || c == 65294u32 || c == 65306u32
+}
+
+// Full lower-casing of a UTF-8 string as ICU does it: the simple mapping per scalar, U+0130 as i followed by U+0307, and a capital sigma as the final sigma U+03C2 when it follows a
+// cased letter (case-ignorable scalars skipped) and no cased letter follows it.
+fn to_lower(a: *mem.Arena, s: str) -> (str, err) {
+    let (out, e) = mem.alloc[u8](a, s.len * 2usize + 4usize)
+    if e != ok { ret ("", e) }
+    var n = 0usize
+    var at = 0usize
+    while at < s.len {
+        let (cp, w) = read_utf8(s, at)
+        if cp == 304u32 {
+            n = write_utf8(105u32, out, n)
+            n = write_utf8(775u32, out, n)
+        } else if cp == 931u32 {
+            var before = false
+            var p = at
+            var scanning = true
+            while scanning && p > 0usize {
+                var q = p - 1usize
+                while q > 0usize && (s[q] & 192u8) == 128u8 { q -= 1usize }
+                let (pc, pw) = read_utf8(s, q)
+                let _ = pw
+                p = q
+                if !is_case_ignorable(pc) {
+                    before = is_cased(pc)
+                    scanning = false
+                }
+            }
+            var after = false
+            var r = at + w
+            scanning = true
+            while scanning && r < s.len {
+                let (rc, rw) = read_utf8(s, r)
+                if is_case_ignorable(rc) {
+                    r += rw
+                } else {
+                    after = is_cased(rc)
+                    scanning = false
+                }
+            }
+            if before && !after { n = write_utf8(962u32, out, n) } else { n = write_utf8(963u32, out, n) }
+        } else {
+            n = write_utf8(to_lower_simple(cp), out, n)
+        }
+        at += w
+    }
+    ret (out[0usize..n], ok)
+}
+
+// Generated from stri_trans_toupper over every scalar below U+20000 (SpecialCasing: the scalars whose upper case is more than one scalar), as cp:u1,u2;...
+fn upper_multi_table() -> str { ret "223:83,83;329:700,78;496:74,780;912:921,776,769;944:933,776,769;1415:1333,1362;7830:72,817;7831:84,776;7832:87,778;7833:89,778;7834:65,702;8016:933,787;8018:933,787,768;8020:933,787,769;8022:933,787,834;8064:7944,921;8065:7945,921;8066:7946,921;8067:7947,921;8068:7948,921;8069:7949,921;8070:7950,921;8071:7951,921;8072:7944,921;8073:7945,921;8074:7946,921;8075:7947,921;8076:7948,921;8077:7949,921;8078:7950,921;8079:7951,921;8080:7976,921;8081:7977,921;8082:7978,921;8083:7979,921;8084:7980,921;8085:7981,921;8086:7982,921;8087:7983,921;8088:7976,921;8089:7977,921;8090:7978,921;8091:7979,921;8092:7980,921;8093:7981,921;8094:7982,921;8095:7983,921;8096:8040,921;8097:8041,921;8098:8042,921;8099:8043,921;8100:8044,921;8101:8045,921;8102:8046,921;8103:8047,921;8104:8040,921;8105:8041,921;8106:8042,921;8107:8043,921;8108:8044,921;8109:8045,921;8110:8046,921;8111:8047,921;8114:8122,921;8115:913,921;8116:902,921;8118:913,834;8119:913,834,921;8124:913,921;8130:8138,921;8131:919,921;8132:905,921;8134:919,834;8135:919,834,921;8140:919,921;8146:921,776,768;8147:921,776,769;8150:921,834;8151:921,776,834;8162:933,776,768;8163:933,776,769;8164:929,787;8166:933,834;8167:933,776,834;8178:8186,921;8179:937,921;8180:911,921;8182:937,834;8183:937,834,921;8188:937,921;64256:70,70;64257:70,73;64258:70,76;64259:70,70,73;64260:70,70,76;64261:83,84;64262:83,84;64275:1348,1350;64276:1348,1333;64277:1348,1339;64278:1358,1350;64279:1348,1341" }
+
+// The multi-scalar upper-case mapping of `cp` into out at n (returns the new length and whether there was one).
+fn upper_multi(cp: u32, out: []u8, n: usize) -> (usize, bool) {
+    let t = upper_multi_table()
+    var i = 0usize
+    while i < t.len {
+        var key = 0u32
+        while i < t.len && t[i] != 58u8 {
+            key = key * 10u32 + u32(t[i] - 48u8)
+            i += 1usize
+        }
+        i += 1usize
+        if key == cp {
+            var k = n
+            var v = 0u32
+            while i < t.len && t[i] != 59u8 {
+                if t[i] == 44u8 {
+                    k = write_utf8(v, out, k)
+                    v = 0u32
+                } else {
+                    v = v * 10u32 + u32(t[i] - 48u8)
+                }
+                i += 1usize
+            }
+            k = write_utf8(v, out, k)
+            ret (k, true)
+        }
+        while i < t.len && t[i] != 59u8 { i += 1usize }
+        i += 1usize
+    }
+    ret (n, false)
+}
+
+// Full upper-casing of a UTF-8 string: the multi-scalar special mappings (sharp s as SS, ligatures, the Greek iota-subscript forms), the simple mapping otherwise.
+fn to_upper(a: *mem.Arena, s: str) -> (str, err) {
+    let (out, e) = mem.alloc[u8](a, s.len * 4usize + 8usize)
+    if e != ok { ret ("", e) }
+    var n = 0usize
+    var at = 0usize
+    while at < s.len {
+        let (cp, w) = read_utf8(s, at)
+        let (m, found) = upper_multi(cp, out, n)
+        if found { n = m } else { n = write_utf8(to_upper_simple(cp), out, n) }
+        at += w
+    }
+    ret (out[0usize..n], ok)
+}
