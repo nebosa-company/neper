@@ -26,6 +26,22 @@ fn mcl_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "mcl") { ret mcl_case(a, c) }
+    if str.eq(c.name, "bl") {
+        let bx = c.args
+        let bn = usize(bx[0usize])
+        let bg = usize(bx[1usize])
+        let bf = usize(bx[2usize])
+        let (bo, be) = mem.alloc[f64](a, bg)
+        if be != ok { os.exit(7) }
+        if ts.box_ljung(a, bx[3usize..3usize + bn], bg, bf, bo) != ok { os.exit(8) }
+        var bs = 0.0f64
+        var bi = bf
+        while bi < bg {
+            bs += bo[bi] * f64(bi + 1usize)
+            bi += 1usize
+        }
+        ret bs
+    }
     if str.eq(c.name, "eacf") {
         let ex = c.args
         let en = usize(ex[0usize])

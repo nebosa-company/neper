@@ -51073,3 +51073,6 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7526 — dbscan extractDBSCAN
 `e.ml.cluster.optics_cut` (written after sklearn's cluster_optics_dbscan) is the same rule as dbscan extractDBSCAN: along the OPTICS order a point whose reachability exceeds eps_cl opens a cluster when its core distance is within eps_cl and is noise otherwise, the rest join the open cluster (cluster 0 before any is open meaning noise); it had no oracle against R. Fed the order, reachability and core distances of dbscan optics, it equals extractDBSCAN on 40 random point sets with random minPts and eps_cl (the position-weighted cluster ids and the cluster count, 80 values in oracle_dbscan_ext). No library change. Open for L358: hdbscan, sNNclust, extractXi, jpclust.
+
+## D7527 — TSA tsdiag Ljung-Box statistics
+`box_ljung` is Box.test(x, lag, type = "Ljung-Box", fitdf) at every lag 1 .. gof (the same statistic `mcleod_li` forms on squares, here on the series itself, on lag - fitdf degrees of freedom; the lags up to fitdf have none and answer NaN), the p-value row tsdiag draws for an Arima fit (fitdf 0 there); equal to Box.test on 30 series (AR(1) and white noise, 8 to 20 lags, fitdf 0 to 3; lag-weighted sums of the p-values, 30 values added to oracle_tsa). Open for L452: armasubsets, arimax, the BIC table.

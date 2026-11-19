@@ -20,4 +20,12 @@ for (rep in 1:20) {
   n <- sample(80:200, 1); arm <- sample(3:6, 1); mam <- sample(4:9, 1); z <- as.numeric(arima.sim(list(ar = 0.5, ma = 0.3), n)); e <- suppressWarnings(eacf(z, ar.max = arm, ma.max = mam))$eacf
   for (r in 0:arm) for (cc in 0:mam) add("eacf", c(n, arm, mam, r * (mam + 1) + cc, z), e[r + 1, cc + 1])
 }
+# Box.test Ljung-Box p-values (tsdiag): "bl" args (n, gof, fitdf, x[n]); the p-values at lags fitdf + 1 .. gof weighted by lag
+set.seed(20262499)
+for (rep in 1:30) {
+  n <- sample(60:300, 1); gl <- sample(8:20, 1); fd <- sample(0:3, 1)
+  x <- if (rep %% 2 == 0) as.numeric(arima.sim(list(ar = runif(1, 0.1, 0.7)), n)) else rnorm(n)
+  pv <- sapply((fd + 1):gl, function(i) Box.test(x, lag = i, type = "Ljung-Box", fitdf = fd)$p.value)
+  cases[[length(cases) + 1]] <- case("bl", c(n, gl, fd, x), sum(pv * ((fd + 1):gl)), rel = 1e-9, abs = 1e-12)
+}
 emit("tsa", "TSA", list(cases))

@@ -397,3 +397,28 @@ fn cpgram(a: *mem.Arena, series: []const f64, p: f64, cum: []f64) -> (usize, f64
     let crit = 1.358f64 / (math.sqrt[f64](mm) + 0.12f64 + 0.11f64 / math.sqrt[f64](mm))
     ret (len, crit, ok)
 }
+
+// Box.test(x, lag = 1 .. gof, type = "Ljung-Box", fitdf): the Ljung-Box p-value at each lag on lag - fitdf degrees of freedom (the lags up to fitdf have none and answer NaN), which is what tsdiag of an Arima fit draws with fitdf 0; out holds gof values
+fn box_ljung(a: *mem.Arena, x: []const f64, gof: usize, fitdf: usize, out: []f64) -> err {
+    let n = x.len
+    let (r, e2) = mem.alloc[f64](a, gof + 1usize)
+    if e2 != ok { ret e2 }
+    var lag = 1usize
+    while lag <= gof {
+        acf_upto(x, lag, r)
+        var s = 0.0f64
+        var k = 1usize
+        while k <= lag {
+            s += r[k] * r[k] / (f64(n) - f64(k))
+            k += 1usize
+        }
+        let stat = f64(n) * (f64(n) + 2.0f64) * s
+        if lag > fitdf {
+            out[lag - 1usize] = 1.0f64 - nm.pchisq(stat, f64(lag - fitdf), true, false)
+        } else {
+            out[lag - 1usize] = 0.0f64 / 0.0f64
+        }
+        lag += 1usize
+    }
+    ret ok
+}

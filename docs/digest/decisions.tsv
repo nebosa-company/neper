@@ -4381,4 +4381,5 @@ D7522	512	marginaleffects predictions at new rows
 D7523	648	marginaleffects hypotheses with equality constraints
 D7524	586	marginaleffects unit-change comparisons
 D7525	809	marginaleffects ratio, lnratio and lift comparisons
-D7526	707	dbscan extractDBSCAN
+D7526	708	dbscan extractDBSCAN
+D7527	550	TSA tsdiag Ljung-Box statistics
