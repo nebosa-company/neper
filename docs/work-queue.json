@@ -1332,7 +1332,7 @@
       "score": 0.04,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D$N). The cubic regression spline smooth (bs = cr): mgcv's place.knots, the basis matrix and the scaled penalty equal smoothCon on Windows (oracle_mgcv_cr, 4605 values; Linux pending). Open: constraint absorption, the other smooths (ps, tp, te), penalised IRLS fitting, GCV and REML smoothing-parameter selection, gam, predict, summary and anova. Was: Open (CRAN rank 239). Very large (about 90k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to mgcv: gam with tp, cr, ps, cc and te and ti smooths, REML, ML and GCV smoothing selection, families, predict, summary tests, gam.check and gamm."
+      "evidence": "Partial (D7340). The cubic regression spline smooth (bs = cr): mgcv's place.knots, the basis matrix and the scaled penalty equal smoothCon on Windows (oracle_mgcv_cr, 4605 values; Linux pending). Open: constraint absorption, the other smooths (ps, tp, te), penalised IRLS fitting, GCV and REML smoothing-parameter selection, gam, predict, summary and anova. Was: Open (CRAN rank 239). Very large (about 90k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to mgcv: gam with tp, cr, ps, cc and te and ti smooths, REML, ML and GCV smoothing selection, families, predict, summary tests, gam.check and gamm."
     },
     {
       "id": "L354",
