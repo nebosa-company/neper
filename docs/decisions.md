@@ -50869,3 +50869,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7468 — MASS negative.binomial family terms
 `nb_variance`, `nb_dev_resid` and `nb_aic_term` are the variance, dev.resids and aic of MASS negative.binomial(theta) at one observation; equal to MASS on 200 draws each (600 values in oracle_mass_nbfam). The aic needs the real lgamma for a non-integer theta (`nm.lgammafn`), not the integer-only `lgam` the Poisson log-likelihood uses. Open for L306: lqs, cov.rob, the other optimised fitdistr families, isoMDS, sammon, stepAIC, gamma.shape.
+
+## D7469 — MASS gamma.shape
+`gamma_shape` is gamma.shape of a Gamma glm: Newton on the profile score and information from the moment start (6 + 2 Dbar) / (Dbar (6 + Dbar)), stopping at eps^0.25 or ten iterations, over the response, fitted values, prior weights, deviance and residual degrees of freedom the fit supplies; the standard error is the root of the reciprocal information. Equal to MASS on 40 Gamma(log) fits, half weighted, alpha and SE (80 values in oracle_mass_gshape). Open for L306: lqs, cov.rob, the other optimised fitdistr families, isoMDS, sammon, stepAIC.

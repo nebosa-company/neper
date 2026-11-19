@@ -565,3 +565,4 @@ oracle_sampling_hr
 oracle_lpsolve_sens
 oracle_energy_hc
 oracle_mass_nbfam
+oracle_mass_gshape

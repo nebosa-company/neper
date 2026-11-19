@@ -12,6 +12,7 @@ use e.algo.linalg.decomp as decomp
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.rand.r as rng
 use e.algo.sort
+use e.algo.stat as sx
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
@@ -533,4 +534,33 @@ fn nb_dev_resid(y: f64, mu: f64, wt: f64, theta: f64) -> f64 {
 // the contribution of one observation to the family's aic: 2 w ((y + theta) log(mu + theta) - y log mu + lgamma(y + 1) - theta log theta + lgamma(theta) - lgamma(theta + y))
 fn nb_aic_term(y: f64, mu: f64, wt: f64, theta: f64) -> f64 {
     ret 2.0f64 * wt * ((y + theta) * math.log[f64](mu + theta) - y * math.log[f64](mu) + nm.lgammafn(y + 1.0f64) - theta * math.log[f64](theta) + nm.lgammafn(theta) - nm.lgammafn(theta + y))
+}
+
+// gamma.shape of a Gamma glm: the maximum-likelihood shape alpha by Newton from the moment start, from the response y, the fitted values u, the prior weights A, the deviance and its residual degrees of freedom; alpha and its standard error go to out[0], out[1]
+fn gamma_shape(y: []const f64, u: []const f64, aw: []const f64, deviance: f64, dfres: f64, itlim: usize, out: []f64) {
+    let dbar = deviance / dfres
+    var alpha = (6.0f64 + 2.0f64 * dbar) / (dbar * (6.0f64 + dbar))
+    let n = y.len
+    let epsmax = math.sqrt[f64](math.sqrt[f64](2.220446049250313e-16f64))
+    var eps = 1.0f64
+    var itr = 0usize
+    var inf = 0.0f64
+    while math.abs[f64](eps) > epsmax && itr < itlim {
+        itr += 1usize
+        var sc = 0.0f64
+        inf = 0.0f64
+        var i = 0usize
+        while i < n {
+            var yz = 0.0f64
+            if y[i] == 0.0f64 { yz = 1.0f64 }
+            let fixed = 0.0f64 - y[i] / u[i] - math.log[f64](u[i]) + math.log[f64](aw[i]) + 1.0f64 + math.log[f64](y[i] + yz)
+            sc += aw[i] * (fixed + math.log[f64](alpha) - sx.digamma(aw[i] * alpha))
+            inf += aw[i] * (aw[i] * sx.trigamma(aw[i] * alpha) - 1.0f64 / alpha)
+            i += 1usize
+        }
+        eps = sc / inf
+        alpha += eps
+    }
+    out[0usize] = alpha
+    out[1usize] = math.sqrt[f64](1.0f64 / inf)
 }
