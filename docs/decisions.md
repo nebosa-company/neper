@@ -51418,3 +51418,6 @@ e.ml.cluster.density.optics_xi is extractXi(optics(x, eps, minPts), xi, minimum,
 
 ## D7630 — phangorn: Fitch parsimony
 L442 starts. `e.algo.stat.phangornpkg.fitch` scores a binary tree (ape's cladewise edge list, 0-based) on a DNA alignment, ambiguity codes as bit sets, by the Fitch rule: intersection when non-empty, else union and one change. Equal to phangorn::parsimony(method = "fitch") on 40 random trees (4 to 20 tips, 5 to 60 sites, about 4 percent ambiguous cells), exactly. The walk takes the edge list backwards and settles a node at its first child edge, which in cladewise order comes after every edge below it. Everything else in phangorn stays open.
+
+## D7631 — phangorn: upgma and wpgma
+`phangornpkg.upgma(d, n, weighted)` merges the closest pair, height half the distance, updating by the size-weighted mean (UPGMA) or the plain mean (WPGMA); it returns the merge heights in order and the total edge length. Equal to phangorn::upgma and wpgma on 30 random distance matrices (4 to 14 taxa), the sorted branching times and the tree length, 582 values to 1e-9 (622 in oracle_phangorn). Topology itself is not exported, only what it determines.

@@ -55,3 +55,63 @@ fn fitch(a: *mem.Arena, par: []const f64, chd: []const f64, ne: usize, nt: usize
     }
     ret f64(total)
 }
+
+// phangorn::upgma (weighted false) and wpgma (true) from a full n by n distance matrix d: out receives the n - 1 merge heights in merge order (half the merged distance), then the total edge length of the tree
+fn upgma(a: *mem.Arena, d: []const f64, n: usize, weighted: bool, out: []f64) -> err {
+    let (dm, e1) = mem.alloc[f64](a, n * n)
+    let (sz, e2) = mem.alloc[f64](a, n)
+    let (ht, e3) = mem.alloc[f64](a, n)
+    let (alive, e4) = mem.alloc[bool](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret e1 }
+    var i = 0usize
+    while i < n * n {
+        dm[i] = d[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        sz[i] = 1.0f64
+        ht[i] = 0.0f64
+        alive[i] = true
+        i += 1usize
+    }
+    var len = 0.0f64
+    var m = 0usize
+    while m + 1usize < n {
+        var bi = n
+        var bj = n
+        var best = 0.0f64
+        i = 0usize
+        while i < n {
+            var j = i + 1usize
+            while j < n {
+                if alive[i] && alive[j] && (bi == n || dm[i * n + j] < best) {
+                    bi = i
+                    bj = j
+                    best = dm[i * n + j]
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        let h = best / 2.0f64
+        out[m] = h
+        len += (h - ht[bi]) + (h - ht[bj])
+        var k = 0usize
+        while k < n {
+            if alive[k] && k != bi && k != bj {
+                var nd = (dm[bi * n + k] + dm[bj * n + k]) / 2.0f64
+                if !weighted { nd = (dm[bi * n + k] * sz[bi] + dm[bj * n + k] * sz[bj]) / (sz[bi] + sz[bj]) }
+                dm[bi * n + k] = nd
+                dm[k * n + bi] = nd
+            }
+            k += 1usize
+        }
+        sz[bi] = sz[bi] + sz[bj]
+        ht[bi] = h
+        alive[bj] = false
+        m += 1usize
+    }
+    out[n - 1usize] = len
+    ret ok
+}

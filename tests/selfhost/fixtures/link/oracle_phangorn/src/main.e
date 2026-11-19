@@ -9,6 +9,13 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if c.name.len == 3usize {
+        let nn = usize(z[1usize])
+        let (o, oe) = mem.alloc[f64](a, nn)
+        if oe != ok { ret 0.0f64 / 0.0f64 }
+        if pg.upgma(a, z[3usize..3usize + nn * nn], nn, z[0usize] > 0.5f64, o) != ok { ret 0.0f64 / 0.0f64 }
+        ret o[usize(z[2usize])]
+    }
     let nt = usize(z[0usize])
     let ns = usize(z[1usize])
     let ne = usize(z[2usize])
