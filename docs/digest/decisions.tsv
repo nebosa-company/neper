@@ -4578,4 +4578,5 @@ D7677	842	fit reuse in the other slow oracle fixtures
 D7678	495	rugarch: more series now the fixture is cheap
 D7679	918	mirt, unmarked and VGAM beta-binomial: the cut data sets restored
 D7680	1310	psych: minres, uls and ols factor analysis
-D7681	521	psych: loadings of the minres, uls and ols fits
+D7681	522	psych: loadings of the minres, uls and ols fits
+D7682	942	psych: rotations of the minres fit

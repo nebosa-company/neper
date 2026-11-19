@@ -56,4 +56,16 @@ for (rep in 1:10) {
     Ld <- unclass(f$loadings); for (kk in 1:q) for (ii in 1:p) cases[[length(cases) + 1]] <- case("faresidual", c(p, q, fm, as.vector(t(R)), p + 1 + (ii - 1) + (kk - 1) * p), as.numeric(Ld[ii, kk]), rel = 1e-2, abs = 3e-3)
   }
 }
+# rotated minres fits (the default method of psych::fa): "farotmin" args (p, q = 2, rot 0 varimax 1 Promax 2 oblimin, r[p * p], k) k p + i + k p the rotated loading, and for oblimin p + p q + q q + k q + l the factor correlation
+for (rep in 1:8) {
+  p <- sample(6:8, 1); q <- 2; N <- sample(250:400, 1)
+  L <- matrix(runif(p * q, 0.3, 0.8), p, q); L[1:3, 2] <- 0.05; L[4:6, 1] <- 0.05; Fm <- matrix(rnorm(N * q), N, q); Fm[, 2] <- 0.3 * Fm[, 1] + 0.95 * Fm[, 2]; X <- Fm %*% t(L) + matrix(rnorm(N * p, 0, 0.7), N, p); R <- cor(X)
+  for (rot in 0:2) {
+    f <- tryCatch(suppressWarnings(fa(R, nfactors = q, n.obs = N, fm = "minres", rotate = c("varimax", "Promax", "oblimin")[rot + 1])), error = function(e) NULL)
+    if (is.null(f) || any(f$uniquenesses < 0.02)) next
+    Ld <- unclass(f$loadings)
+    for (kk in 1:q) for (ii in 1:p) cases[[length(cases) + 1]] <- case("farotmin", c(p, q, rot, as.vector(t(R)), p + (ii - 1) + (kk - 1) * p), as.numeric(Ld[ii, kk]), rel = 1e-2, abs = 4e-3)
+    if (rot == 2) { Ph <- f$Phi; for (kk in 1:q) for (ll in 1:q) cases[[length(cases) + 1]] <- case("farotmin", c(p, q, rot, as.vector(t(R)), p + p * q + q * q + (kk - 1) * q + (ll - 1)), as.numeric(Ph[kk, ll]), rel = 1e-2, abs = 4e-3) }
+  }
+}
 emit("psychfa", "psych", list(cases))

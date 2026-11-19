@@ -1204,14 +1204,20 @@ fn fa_ml(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool 
     ret true
 }
 
+// the unrotated fit of method fm (99 the maximum likelihood of `fa_ml`, 0 .. 4 the residual methods of `fa_resid`) in the common layout: p uniquenesses, one more value, then the p q loadings (item i of factor k at p + 1 + i + k p)
+fn fa_unrotated(a: *mem.Arena, r: []const f64, p: usize, q: usize, fm: usize, out: []f64) -> bool {
+    if fm == 99usize { ret fa_ml(a, r, p, q, out) }
+    ret fa_resid(a, r, p, q, fm, out)
+}
+
 // psych::fa(r, nfactors = q, fm = "ml", rotate = "varimax") for q >= 2: the loadings of `fa_ml` rotated by stats::varimax (normalize, eps 1e-5), columns ordered and signed by `rot_sort`; out = the p uniquenesses, then the p q rotated loadings (item i,
 // factor k at p + i + k p), then the q by q rotation matrix
-fn fa_ml_varimax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool {
+fn fa_varimax_fm(a: *mem.Arena, r: []const f64, p: usize, q: usize, fm: usize, out: []f64) -> bool {
     let (ml, e1) = mem.alloc[f64](a, p + 1usize + p * q)
     let (xr, e2) = mem.alloc[f64](a, p * q)
     let (srt, e3) = mem.alloc[f64](a, p * q + q * q)
     if e1 != ok || e2 != ok || e3 != ok { ret false }
-    if !fa_ml(a, r, p, q, ml) { ret false }
+    if !fa_unrotated(a, r, p, q, fm, ml) { ret false }
     var i = 0usize
     while i < p {
         var k = 0usize
@@ -1233,14 +1239,16 @@ fn fa_ml_varimax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) 
     ret true
 }
 
+fn fa_ml_varimax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool { ret fa_varimax_fm(a, r, p, q, 99usize, out) }
+
 // psych::fa(r, nfactors = q, fm = "ml", rotate = "promax") for q >= 2 (power 4): the loadings of `fa_ml` through psych::Promax (GPArotation::Varimax then the promax step), columns ordered and signed by `rot_sort`;
 // out = the p uniquenesses, then the p q loadings (item i, factor k at p + i + k p), then the q by q rotation matrix
-fn fa_ml_promax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool {
+fn fa_promax_fm(a: *mem.Arena, r: []const f64, p: usize, q: usize, fm: usize, out: []f64) -> bool {
     let (ml, e1) = mem.alloc[f64](a, p + 1usize + p * q)
     let (xr, e2) = mem.alloc[f64](a, p * q)
     let (srt, e3) = mem.alloc[f64](a, p * q + q * q)
     if e1 != ok || e2 != ok || e3 != ok { ret false }
-    if !fa_ml(a, r, p, q, ml) { ret false }
+    if !fa_unrotated(a, r, p, q, fm, ml) { ret false }
     var i = 0usize
     while i < p {
         var k = 0usize
@@ -1262,16 +1270,18 @@ fn fa_ml_promax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -
     ret true
 }
 
+fn fa_ml_promax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool { ret fa_promax_fm(a, r, p, q, 99usize, out) }
+
 // psych::fa(r, nfactors = q, fm = "ml", rotate = "oblimin") for q >= 2: GPArotation::oblimin (gamma 0, no normalisation, eps 1e-5, 1000 iterations) of `fa_ml`'s loadings, columns ordered and signed by `rot_sort` (whose
 // rotation-matrix block is the oblique transformation's inverse transpose here and is not compared); out as `fa_ml_varimax`
-fn fa_ml_oblimin(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool {
+fn fa_oblimin_fm(a: *mem.Arena, r: []const f64, p: usize, q: usize, fm: usize, out: []f64) -> bool {
     let (ml, e1) = mem.alloc[f64](a, p + 1usize + p * q)
     let (xr, e2) = mem.alloc[f64](a, p * q)
     let (srt, e3) = mem.alloc[f64](a, p * q + q * q)
     let (srcs, e6) = mem.alloc[usize](a, q)
     let (sgs, e7) = mem.alloc[f64](a, q)
     if e1 != ok || e2 != ok || e3 != ok || e6 != ok || e7 != ok { ret false }
-    if !fa_ml(a, r, p, q, ml) { ret false }
+    if !fa_unrotated(a, r, p, q, fm, ml) { ret false }
     var i = 0usize
     while i < p {
         var k = 0usize
@@ -1339,6 +1349,8 @@ fn fa_ml_oblimin(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) 
     }
     ret true
 }
+
+fn fa_ml_oblimin(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool { ret fa_oblimin_fm(a, r, p, q, 99usize, out) }
 
 type FaRCtx = struct { a: *mem.Arena, r: []const f64, si: []const f64, p: usize, q: usize, fm: usize, s: []f64, w: []f64, z: []f64, mdl: []f64 }
 
