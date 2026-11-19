@@ -50542,3 +50542,9 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 **Decision.** `emmeans.joint_f` forms the F statistic (Lb)' (L V L')^-1 (Lb) / r of the r linear functions of the coefficients that make up a term, on (r, residual df) degrees of freedom. For lm(y ~ A + B + x) the rows are the differences of the adjusted means of A from its first level, the dummies of B, and the slope of x.
 
 **Result.** `oracle_emmeans` (788 cases, 48 new on 8 models; the generator draws shifted the other cases' data, which still equal emmeans) equals `joint_tests` on Windows. emmeans prints the F ratio to 3 decimals and the p value to 4, so the oracle compares at 6e-4 absolute. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, scheffe for other contrast families, joint_tests with interactions, eff_size, regrid.
+
+## D7340 — emmeans: eff_size
+
+**Decision.** `emmeans.eff_size` standardises a contrast by sigma: d = estimate / sigma, standard error sqrt(se^2 / sigma^2 + d^2 / (2 edf)), and the t interval on edf degrees of freedom, as `eff_size(e, sigma = sigma(m), edf = df.residual(m))` does.
+
+**Result.** `oracle_emmeans` (932 cases, 144 new: d, standard error and both limits for every pairwise contrast of 8 models) equals emmeans on Windows to 1e-6. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, scheffe for other contrast families, joint_tests with interactions, regrid.

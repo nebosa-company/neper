@@ -254,6 +254,26 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "pair_t") { ret t }
     if str.eq(c.name, "p_tukey") { ret em.p_tukey(t, f64(na), m.df) }
     if str.eq(c.name, "p_scheffe") { ret em.p_scheffe(t, f64(na - 1usize), m.df) }
+    if str.starts_with(c.name, "es_") {
+        var rss = 0.0f64
+        var oi = 0usize
+        while oi < n {
+            var fit = 0.0f64
+            var oj = 0usize
+            while oj < p {
+                fit += d[oj * n + oi] * m.beta[oj]
+                oj += 1usize
+            }
+            rss += (y[oi] - fit) * (y[oi] - fit)
+            oi += 1usize
+        }
+        var eo: [4]f64 = zero
+        em.eff_size(est, se, math.sqrt[f64](rss / m.df), m.df, 0.95f64, eo[0usize..4usize])
+        if str.eq(c.name, "es_est") { ret eo[0usize] }
+        if str.eq(c.name, "es_se") { ret eo[1usize] }
+        if str.eq(c.name, "es_lo") { ret eo[2usize] }
+        ret eo[3usize]
+    }
     let pairs = na * (na - 1usize) / 2usize
     if str.eq(c.name, "p_bonf") { ret em.p_bonferroni(em.p_t(t, m.df), f64(pairs)) }
     // holm over every pair of A in emmeans' order

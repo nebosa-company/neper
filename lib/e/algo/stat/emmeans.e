@@ -221,3 +221,15 @@ fn joint_f(a: *mem.Arena, m: *const Lm, l: []const f64, r: usize, out: []f64) ->
     out[1usize] = nb.pf(out[0usize], f64(r), m.df, false, false)
     ret true
 }
+
+// emmeans::eff_size(e, sigma, edf) of a contrast with estimate est and standard error se: the standardised difference d = est / sigma, its delta-method standard error sqrt(se^2 / sigma^2 + d^2 / (2 edf)) and
+// the t interval on edf degrees of freedom at `level`. out[0] d, out[1] se, out[2] lower, out[3] upper
+fn eff_size(est: f64, se: f64, sigma: f64, edf: f64, level: f64, out: []f64) {
+    let d = est / sigma
+    let sed = math.sqrt[f64](se * se / (sigma * sigma) + d * d / (2.0f64 * edf))
+    let tq = nb.qt(1.0f64 - (1.0f64 - level) / 2.0f64, edf, true, false)
+    out[0usize] = d
+    out[1usize] = sed
+    out[2usize] = d - tq * sed
+    out[3usize] = d + tq * sed
+}

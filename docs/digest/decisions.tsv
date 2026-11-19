@@ -4240,4 +4240,5 @@ D7336	758	mlogit: nested logit standard errors
 D7421	454	pscl geometric counts
 D7337	1040	mcmc: morph and morph.metrop
 D7338	560	emmeans: scheffe adjustment
-D7339	828	emmeans: joint_tests
+D7339	829	emmeans: joint_tests
+D7340	624	emmeans: eff_size
