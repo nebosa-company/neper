@@ -4265,4 +4265,4 @@ D7356	756	performance: performance_score
 D7357	647	performance: performance_score for Poisson regression
 D7358	820	survival: Schoenfeld residuals
 D7359	775	emmeans: response-scale means for a log response
-D7360	664	emmeans: sqrt and log10 response transformations
+D7360	704	emmeans: sqrt and log10 response transformations
