@@ -10,6 +10,31 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "sp") {
+        let na = usize(x[0usize])
+        let nmm = usize(x[1usize])
+        let w = usize(x[5usize])
+        let idx = usize(x[6usize])
+        let (sp, spe) = ag.stability_par(a, x[7usize..7usize + na * nmm], na, nmm, x[2usize], x[3usize], x[4usize])
+        if spe != ok { os.exit(8) }
+        if w == 0usize { ret sp.df[idx] }
+        if w == 1usize { ret sp.ss[idx] }
+        if w == 2usize { ret sp.ms[idx] }
+        if w == 3usize { ret sp.fv[idx] }
+        if w == 4usize { ret sp.pv[idx] }
+        if w == 10usize { ret sp.mean[idx] }
+        if w == 11usize { ret sp.sigma2[idx] }
+        if w == 12usize { ret sp.sig1[idx] }
+        if w == 13usize { ret sp.s2[idx] }
+        if w == 14usize { ret sp.sig2[idx] }
+        if w == 15usize { ret sp.eco[idx] }
+        if w == 16usize { ret sp.rank[idx] }
+        if w == 17usize { ret sp.adj_rank[idx] }
+        if w == 18usize { ret sp.adjusted[idx] }
+        if w == 19usize { ret sp.rating[idx] }
+        if w == 20usize { ret sp.ysi[idx] }
+        ret sp.sel[idx]
+    }
     if str.eq(c.name, "sn") {
         let k = usize(x[0usize])
         let n = usize(x[1usize])

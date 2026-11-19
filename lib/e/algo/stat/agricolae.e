@@ -1103,3 +1103,303 @@ fn stability_nonpar(a: *mem.Arena, y: []const f64, k: usize, n: usize, mean: []f
     out.sum_z2 = sz2
     ret (out, ok)
 }
+
+// ---- stability.par (no covariate): Shukla's stability variance, the Kang yield-stability statistic and the analysis of variance of an A genotypes by M environments
+// table of means (row-major) with N replicates and the pooled error mean square mse. Significance codes are 2 for "**", 1 for "*", 0 for "ns".
+type StabPar = struct {
+    df: [7]f64, ss: [6]f64, ms: [6]f64, fv: [5]f64, pv: [5]f64,
+    mean: []f64, sigma2: []f64, sig1: []f64, s2: []f64, sig2: []f64, eco: []f64,
+    rank: []f64, adj_rank: []f64, adjusted: []f64, rating: []f64, ysi: []f64, sel: []f64
+}
+
+fn stability_par(a: *mem.Arena, y: []const f64, na: usize, nm_: usize, nrep: f64, mse: f64, alpha: f64) -> (StabPar, err) {
+    var o: StabPar = zero
+    let (mv, e0) = mem.alloc[f64](a, na)
+    let (shm, e1) = mem.alloc[f64](a, nm_)
+    let (u, e2) = mem.alloc[f64](a, na * nm_)
+    let (u1, e3) = mem.alloc[f64](a, na)
+    let (g, e4) = mem.alloc[f64](a, na)
+    let (si, e5) = mem.alloc[f64](a, na)
+    let (bb, e6) = mem.alloc[f64](a, na)
+    let (sa, e7) = mem.alloc[f64](a, na)
+    let (sv, e8) = mem.alloc[f64](a, na)
+    let (w, e9) = mem.alloc[f64](a, na)
+    let (mv1, e10) = mem.alloc[f64](a, na)
+    let (ii, e11) = mem.alloc[f64](a, nm_)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret (o, mem.Full) }
+    let fa = f64(na)
+    let fm = f64(nm_)
+    var ss = 0.0f64
+    var tot = 0.0f64
+    var i = 0usize
+    while i < na {
+        var rs = 0.0f64
+        var j = 0usize
+        while j < nm_ {
+            ss += y[i * nm_ + j] * y[i * nm_ + j]
+            tot += y[i * nm_ + j]
+            rs += y[i * nm_ + j]
+            j += 1usize
+        }
+        sv[i] = rs
+        mv[i] = rs / fm
+        i += 1usize
+    }
+    var sumsq_r = 0.0f64
+    i = 0usize
+    while i < na {
+        sumsq_r += sv[i] * sv[i]
+        i += 1usize
+    }
+    let sv2 = sumsq_r / fm
+    let fk = tot * tot / (fa * fm)
+    let skv = (sv2 - fk) * nrep
+    let mkv = skv / (fa - 1.0f64)
+    var sumsq_c = 0.0f64
+    var j = 0usize
+    while j < nm_ {
+        var cs = 0.0f64
+        i = 0usize
+        while i < na {
+            cs += y[i * nm_ + j]
+            i += 1usize
+        }
+        shm[j] = cs
+        sumsq_c += cs * cs
+        j += 1usize
+    }
+    let sm = sumsq_c / fa
+    let skm = (sm - fk) * nrep
+    let mkm = skm / (fm - 1.0f64)
+    j = 0usize
+    while j < nm_ {
+        ii[j] = shm[j] / fa - tot / (fa * fm)
+        j += 1usize
+    }
+    let skt = (ss - fk) * nrep
+    let skvm = skt - skv - skm
+    let mkvm = skvm / ((fa - 1.0f64) * (fm - 1.0f64))
+    // U[i, j] = y[i, j] - column mean
+    i = 0usize
+    while i < na {
+        var su = 0.0f64
+        j = 0usize
+        while j < nm_ {
+            u[i * nm_ + j] = y[i * nm_ + j] - shm[j] / fa
+            su += u[i * nm_ + j]
+            j += 1usize
+        }
+        u1[i] = su / fm
+        i += 1usize
+    }
+    let b = 1.0f64 / ((fm - 1.0f64) * (fa - 1.0f64) * (fa - 2.0f64))
+    var gg1 = 0.0f64
+    i = 0usize
+    while i < na {
+        var gs = 0.0f64
+        j = 0usize
+        while j < nm_ {
+            gs += (u[i * nm_ + j] - u1[i]) * (u[i * nm_ + j] - u1[i])
+            j += 1usize
+        }
+        g[i] = gs
+        gg1 += gs
+        i += 1usize
+    }
+    i = 0usize
+    while i < na {
+        si[i] = b * (fa * (fa - 1.0f64) * g[i] - gg1) * nrep
+        i += 1usize
+    }
+    var inn = 0.0f64
+    j = 0usize
+    while j < nm_ {
+        inn += ii[j] * ii[j]
+        j += 1usize
+    }
+    var lsum = 0.0f64
+    i = 0usize
+    while i < na {
+        var num = 0.0f64
+        j = 0usize
+        while j < nm_ {
+            num += (u[i * nm_ + j] - u1[i]) * ii[j]
+            j += 1usize
+        }
+        bb[i] = num / inn
+        var sq = 0.0f64
+        j = 0usize
+        while j < nm_ {
+            let r = u[i * nm_ + j] - u1[i] - bb[i] * ii[j]
+            sq += r * r
+            j += 1usize
+        }
+        sa[i] = sq
+        lsum += sq
+        i += 1usize
+    }
+    var skmb = 0.0f64
+    let ki = ((fa - 1.0f64) * (fm - 2.0f64)) / fa
+    i = 0usize
+    while i < na {
+        g[i] = (fa / ((fa - 2.0f64) * (fm - 2.0f64))) * (sa[i] - lsum / (fa * (fa - 1.0f64))) * nrep
+        skmb += g[i] * ki
+        i += 1usize
+    }
+    // g now holds the s-square values S
+    let ms = skmb / ((fa - 1.0f64) * (fm - 2.0f64))
+    let skh = skvm - skmb
+    let mkh = skh / (fa - 1.0f64)
+    let shklt = fm * (fa - 1.0f64) * (nrep - 1.0f64)
+    let t05 = nb.qt(0.95f64, shklt, true, false)
+    let dmv05 = t05 * math.sqrt[f64](2.0f64 * mse / (nrep * fm))
+    var smes = 0.0f64
+    i = 0usize
+    while i < na {
+        smes += mv[i]
+        i += 1usize
+    }
+    let mes = smes / fa
+    i = 0usize
+    while i < na {
+        var v1 = 0.0f64
+        if mv[i] > mes { v1 = 1.0f64 }
+        if mv[i] >= mes + dmv05 { v1 = 2.0f64 }
+        if mv[i] >= mes + 2.0f64 * dmv05 { v1 = 3.0f64 }
+        if mv[i] < mes { v1 = 0.0f64 - 1.0f64 }
+        if mv[i] <= mes - dmv05 { v1 = 0.0f64 - 2.0f64 }
+        if mv[i] <= mes - 2.0f64 * dmv05 { v1 = 0.0f64 - 3.0f64 }
+        mv1[i] = v1
+        i += 1usize
+    }
+    let fv = mkv / mkvm
+    let fmv = mkm / mse
+    let fvm = mkvm / mse
+    let fh = mkh / ms
+    let fms = ms / mse
+    let sf2a = (fa - 1.0f64) * (fm - 1.0f64)
+    let pa = round_d(1.0f64 - nb.pf(fv, fa - 1.0f64, sf2a, true, false), 3i32)
+    let pb = round_d(1.0f64 - nb.pf(fmv, fm - 1.0f64, fm * (fa - 1.0f64) * (nrep - 1.0f64), true, false), 3i32)
+    let pc = round_d(1.0f64 - nb.pf(fvm, sf2a, fm * (fa - 1.0f64) * (nrep - 1.0f64), true, false), 3i32)
+    let pd = round_d(1.0f64 - nb.pf(fh, fa - 1.0f64, (fa - 1.0f64) * (fm - 2.0f64), true, false), 3i32)
+    let pe = round_d(1.0f64 - nb.pf(fms, (fa - 1.0f64) * (fm - 2.0f64), fm * (fa - 1.0f64) * (nrep - 1.0f64), true, false), 4i32)
+    o.df[0usize] = fa * fm - 1.0f64
+    o.df[1usize] = fa - 1.0f64
+    o.df[2usize] = fm - 1.0f64
+    o.df[3usize] = (fm - 1.0f64) * (fa - 1.0f64)
+    o.df[4usize] = fa - 1.0f64
+    o.df[5usize] = (fa - 1.0f64) * (fm - 2.0f64)
+    o.df[6usize] = fm * (fa - 1.0f64) * (nrep - 1.0f64)
+    o.ss[0usize] = round_d(skt, 4i32)
+    o.ss[1usize] = round_d(skv, 4i32)
+    o.ss[2usize] = round_d(skm, 4i32)
+    o.ss[3usize] = round_d(skvm, 4i32)
+    o.ss[4usize] = round_d(skh, 4i32)
+    o.ss[5usize] = round_d(skmb, 4i32)
+    o.ms[0usize] = round_d(mkv, 4i32)
+    o.ms[1usize] = round_d(mkm, 4i32)
+    o.ms[2usize] = round_d(mkvm, 4i32)
+    o.ms[3usize] = round_d(mkh, 4i32)
+    o.ms[4usize] = round_d(ms, 4i32)
+    o.ms[5usize] = round_d(mse, 4i32)
+    o.fv[0usize] = round_d(fv, 2i32)
+    o.fv[1usize] = round_d(fmv, 2i32)
+    o.fv[2usize] = round_d(fvm, 2i32)
+    o.fv[3usize] = round_d(fh, 2i32)
+    o.fv[4usize] = round_d(fms, 2i32)
+    o.pv[0usize] = pa
+    o.pv[1usize] = pb
+    o.pv[2usize] = pc
+    o.pv[3usize] = pd
+    o.pv[4usize] = pe
+    // significance of the sigma-square and s-square (unrounded values), the ecovalence
+    let sd2 = fm * (fa - 1.0f64) * (nrep - 1.0f64)
+    let f05a = nb.qf(0.95f64, fm - 1.0f64, sd2, true, false)
+    let f01a = nb.qf(0.99f64, fm - 1.0f64, sd2, true, false)
+    let f05b = nb.qf(0.95f64, fm - 2.0f64, sd2, true, false)
+    let f01b = nb.qf(0.99f64, fm - 2.0f64, sd2, true, false)
+    let (sg1, e12) = mem.alloc[f64](a, na)
+    let (sg2, e13) = mem.alloc[f64](a, na)
+    if e12 != ok || e13 != ok { ret (o, mem.Full) }
+    i = 0usize
+    while i < na {
+        let fs = si[i] / mse
+        sg1[i] = 0.0f64
+        if fs >= f05a { sg1[i] = 1.0f64 }
+        if fs >= f01a { sg1[i] = 2.0f64 }
+        let fss = g[i] / mse
+        sg2[i] = 0.0f64
+        if fss >= f05b { sg2[i] = 1.0f64 }
+        if fss >= f01b { sg2[i] = 2.0f64 }
+        i += 1usize
+    }
+    // the ecovalence
+    i = 0usize
+    while i < na {
+        var wsum = 0.0f64
+        j = 0usize
+        while j < nm_ {
+            let r = y[i * nm_ + j] - mv[i] - shm[j] / fa + tot / (fa * fm)
+            wsum += r * r
+            j += 1usize
+        }
+        w[i] = round_d(wsum * nrep, 6i32)
+        i += 1usize
+    }
+    // the rounded statistics
+    i = 0usize
+    while i < na {
+        mv[i] = round_d(mv[i], 6i32)
+        si[i] = round_d(si[i], 6i32)
+        g[i] = round_d(g[i], 6i32)
+        i += 1usize
+    }
+    let fm0 = nb.qf(1.0f64 - alpha, fm - 1.0f64, sd2, true, false)
+    let (rk, e14) = mem.alloc[f64](a, na)
+    let (f1, e15) = mem.alloc[f64](a, na)
+    let (gy, e16) = mem.alloc[f64](a, na)
+    let (gys, e17) = mem.alloc[f64](a, na)
+    let (sel, e18) = mem.alloc[f64](a, na)
+    if e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok { ret (o, mem.Full) }
+    var sgys = 0.0f64
+    i = 0usize
+    while i < na {
+        let ff = si[i] / mse
+        var fv1 = 0.0f64
+        if ff >= fm0 { fv1 = 0.0f64 - 2.0f64 }
+        if ff >= f05a { fv1 = 0.0f64 - 4.0f64 }
+        if ff >= f01a { fv1 = 0.0f64 - 8.0f64 }
+        f1[i] = fv1
+        var r0 = 1.0f64
+        j = 0usize
+        while j < na {
+            if mv[j] < mv[i] { r0 += 1.0f64 }
+            j += 1usize
+        }
+        rk[i] = r0
+        gy[i] = r0 + mv1[i]
+        gys[i] = gy[i] + fv1
+        sgys += gys[i]
+        i += 1usize
+    }
+    let mgys = sgys / fa
+    i = 0usize
+    while i < na {
+        sel[i] = 0.0f64
+        if gys[i] > mgys { sel[i] = 1.0f64 }
+        i += 1usize
+    }
+    o.mean = mv
+    o.sigma2 = si
+    o.sig1 = sg1
+    o.s2 = g
+    o.sig2 = sg2
+    o.eco = w
+    o.rank = rk
+    o.adj_rank = mv1
+    o.adjusted = gy
+    o.rating = f1
+    o.ysi = gys
+    o.sel = sel
+    ret (o, ok)
+}
