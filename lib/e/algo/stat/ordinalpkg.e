@@ -691,3 +691,195 @@ fn clm_anova(ll0: f64, ll1: f64, df: f64, out: []f64) {
     out[0usize] = st
     out[1usize] = nmo.pchisq(st, df, false, false)
 }
+
+// clm(scale = ~ z): the cumulative link model with a log-linear scale, P(y <= j) = F((theta_j - x beta) / exp(z zeta)); par = (theta[K - 1], beta[p], zeta[ps]); returns the log-likelihood and, when want, the analytic gradient in gr
+fn loglik_scale(x: []const f64, zs: []const f64, cls: []const f64, wts: []const f64, n: usize, p: usize, ps: usize, nk: usize, link: usize, par: []const f64, gr: []f64, want: bool) -> f64 {
+    let nt = nk - 1usize
+    let q = nt + p + ps
+    var i = 0usize
+    if want {
+        while i < q {
+            gr[i] = 0.0f64
+            i += 1usize
+        }
+    }
+    var ll = 0.0f64
+    var t = 0usize
+    while t < n {
+        var eta = 0.0f64
+        var c = 0usize
+        while c < p {
+            eta += par[nt + c] * x[t * p + c]
+            c += 1usize
+        }
+        var s = 0.0f64
+        c = 0usize
+        while c < ps {
+            s += par[nt + p + c] * zs[t * ps + c]
+            c += 1usize
+        }
+        let sg = math.exp[f64](s)
+        let y = usize(cls[t])
+        var fhi = 1.0f64
+        var dhi = 0.0f64
+        var uhi = 0.0f64
+        var flo = 0.0f64
+        var dlo = 0.0f64
+        var ulo = 0.0f64
+        if y < nt {
+            uhi = (par[y] - eta) / sg
+            let (u, v, w) = link3(link, uhi)
+            fhi = u
+            dhi = v
+            let _ = w
+        }
+        if y > 0usize {
+            ulo = (par[y - 1usize] - eta) / sg
+            let (u, v, w) = link3(link, ulo)
+            flo = u
+            dlo = v
+            let _ = w
+        }
+        let pr = fhi - flo
+        if !(pr > 0.0f64) { ret 0.0f64 / 0.0f64 }
+        ll += wts[t] * math.log[f64](pr)
+        if want {
+            let wt = wts[t] / pr
+            if y < nt { gr[y] += wt * dhi / sg }
+            if y > 0usize { gr[y - 1usize] -= wt * dlo / sg }
+            c = 0usize
+            while c < p {
+                gr[nt + c] -= wt * (dhi - dlo) / sg * x[t * p + c]
+                c += 1usize
+            }
+            var term = 0.0f64
+            if y < nt { term += dhi * uhi }
+            if y > 0usize { term -= dlo * ulo }
+            c = 0usize
+            while c < ps {
+                gr[nt + p + c] -= wt * term * zs[t * ps + c]
+                c += 1usize
+            }
+        }
+        t += 1usize
+    }
+    ret ll
+}
+
+// Newton fit of the location-scale clm with a central-difference Hessian of the analytic gradient and step halving; par receives (theta, beta, zeta); the answer is the log-likelihood
+fn clm_scale(a: *mem.Arena, x: []const f64, zs: []const f64, cls: []const f64, wts: []const f64, n: usize, p: usize, ps: usize, nk: usize, link: usize, par: []f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let nt = nk - 1usize
+    let q = nt + p + ps
+    let (gr, e1) = mem.alloc[f64](a, q)
+    let (g1, e2) = mem.alloc[f64](a, q)
+    let (g2, e3) = mem.alloc[f64](a, q)
+    let (h, e4) = mem.alloc[f64](a, q * q)
+    let (trial, e5) = mem.alloc[f64](a, q)
+    let (w, e6) = mem.alloc[f64](a, q)
+    let (cum, e7) = mem.alloc[f64](a, nk)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret nan }
+    var k = 0usize
+    while k < nk {
+        cum[k] = 0.0f64
+        k += 1usize
+    }
+    var tt = 0usize
+    var wsum = 0.0f64
+    while tt < n {
+        cum[usize(cls[tt])] += wts[tt]
+        wsum += wts[tt]
+        tt += 1usize
+    }
+    var run = 0.0f64
+    k = 0usize
+    while k < nt {
+        run += cum[k]
+        let pq = run / wsum
+        var v = 0.0f64
+        if link == 0usize { v = math.log[f64](pq / (1.0f64 - pq)) }
+        if link == 1usize { v = dist.qnorm(pq, 0.0f64, 1.0f64, true, false) }
+        if link == 2usize { v = math.log[f64](0.0f64 - math.log[f64](1.0f64 - pq)) }
+        if link == 3usize { v = 0.0f64 - math.log[f64](0.0f64 - math.log[f64](pq)) }
+        par[k] = v
+        k += 1usize
+    }
+    k = nt
+    while k < q {
+        par[k] = 0.0f64
+        k += 1usize
+    }
+    var ll = loglik_scale(x, zs, cls, wts, n, p, ps, nk, link, par, gr, true)
+    if ll != ll { ret nan }
+    var it = 0usize
+    while it < 200usize {
+        // Hessian by central differences of the gradient
+        var c = 0usize
+        while c < q {
+            let hstep = 1.0e-5f64 * (1.0f64 + math.abs[f64](par[c]))
+            var d = 0usize
+            while d < q {
+                w[d] = par[d]
+                d += 1usize
+            }
+            w[c] = par[c] + hstep
+            let _a = loglik_scale(x, zs, cls, wts, n, p, ps, nk, link, w, g1, true)
+            w[c] = par[c] - hstep
+            let _b = loglik_scale(x, zs, cls, wts, n, p, ps, nk, link, w, g2, true)
+            d = 0usize
+            while d < q {
+                h[c * q + d] = (g1[d] - g2[d]) / (2.0f64 * hstep)
+                d += 1usize
+            }
+            c += 1usize
+        }
+        // symmetrise
+        c = 0usize
+        while c < q {
+            var d = c + 1usize
+            while d < q {
+                let m2 = 0.5f64 * (h[c * q + d] + h[d * q + c])
+                h[c * q + d] = m2
+                h[d * q + c] = m2
+                d += 1usize
+            }
+            c += 1usize
+        }
+        let (inv, ie) = gp.invert(a, h, q)
+        if ie != ok { ret nan }
+        var scale = 1.0f64
+        var moved = false
+        var tries = 0usize
+        while tries < 40usize {
+            var i = 0usize
+            while i < q {
+                var dd = 0.0f64
+                var l = 0usize
+                while l < q {
+                    dd += inv[i * q + l] * gr[l]
+                    l += 1usize
+                }
+                trial[i] = par[i] - scale * dd
+                i += 1usize
+            }
+            let ll2 = loglik_scale(x, zs, cls, wts, n, p, ps, nk, link, trial, g1, false)
+            if ll2 == ll2 && ll2 >= ll - 1.0e-14f64 {
+                i = 0usize
+                while i < q {
+                    par[i] = trial[i]
+                    i += 1usize
+                }
+                let step = math.abs[f64](ll2 - ll)
+                ll = loglik_scale(x, zs, cls, wts, n, p, ps, nk, link, par, gr, true)
+                moved = true
+                if step < 1.0e-13f64 { ret ll }
+                break
+            }
+            scale = scale / 2.0f64
+            tries += 1usize
+        }
+        if !moved { break }
+        it += 1usize
+    }
+    ret ll
+}

@@ -31,6 +31,37 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             iw += 1usize
         }
     }
+    if c.name.len >= 4usize && c.name[0usize] == 115u8 && c.name[1usize] == 99u8 {
+        let ps = usize(z[4usize])
+        let (parz, ez) = mem.alloc[f64](a, nk - 1usize + p + ps)
+        if ez != ok { ret nan }
+        let yo = 5usize
+        let xo = yo + n
+        let zo = xo + n * p
+        let lls = od.clm_scale(a, z[xo..zo], z[zo..zo + n * ps], z[yo..yo + n], wts, n, p, ps, nk, link, parz)
+        if str.eq(c.name, "scll") { ret lls }
+        var ss = 0.0f64
+        var is = 0usize
+        if str.eq(c.name, "scth") {
+            while is < nk - 1usize {
+                ss += parz[is] * f64(is + 1usize)
+                is += 1usize
+            }
+            ret ss
+        }
+        if str.eq(c.name, "scbeta") {
+            while is < p {
+                ss += parz[nk - 1usize + is] * f64(is + 1usize)
+                is += 1usize
+            }
+            ret ss
+        }
+        while is < ps {
+            ss += parz[nk - 1usize + p + is] * f64(is + 1usize)
+            is += 1usize
+        }
+        ret ss
+    }
     if c.name.len >= 3usize && c.name[0usize] == 115u8 && c.name[1usize] == 121u8 {
         let (tm, etm) = mem.alloc[f64](a, (nk - 1usize) * nk)
         if etm != ok { ret nan }

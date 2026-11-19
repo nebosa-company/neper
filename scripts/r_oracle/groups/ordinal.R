@@ -105,4 +105,18 @@ for (rep in 1:18) {
   an <- anova(f0, f1); a <- c(n, p, K, lk, y, as.vector(t(x)))
   add("anst", a, an[["LR.stat"]][2]); add("anp", a, an[["Pr(>Chisq)"]][2])
 }
+# scale effects: clm(y ~ x, scale = ~ z): "scll", "scth" (thresholds weighted), "scbeta", "sczeta"; args (n, p, K, link, ps, y, x[n p], z[n ps])
+set.seed(20262486)
+for (rep in 1:18) {
+  n <- sample(250:450, 1); p <- sample(1:2, 1); ps <- sample(1:2, 1); K <- sample(3:5, 1); lk <- (rep - 1) %% 3
+  x <- matrix(rnorm(n * p), n); z <- matrix(rnorm(n * ps), n); b <- rnorm(p) * 0.7; zeta <- rnorm(ps) * 0.35; th <- sort(rnorm(K - 1)) * 1.2
+  eta <- as.vector(x %*% b); sg <- exp(as.vector(z %*% zeta)); u <- if (lk == 0) rlogis(n) else if (lk == 1) rnorm(n) else log(-log(runif(n)))
+  y <- findInterval(eta + sg * u, th)
+  if (length(unique(y)) < K) next
+  d <- as.data.frame(x); names(d) <- paste0("v", seq_len(p)); zd <- as.data.frame(z); names(zd) <- paste0("s", seq_len(ps)); d <- cbind(d, zd); d$y <- factor(y, ordered = TRUE)
+  f <- tryCatch(clm(as.formula(paste("y ~", paste0("v", seq_len(p), collapse = " + "))), scale = as.formula(paste("~", paste0("s", seq_len(ps), collapse = " + "))), data = d, link = links[lk + 1], control = clm.control(gradTol = 1e-10, maxIter = 500)), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, p, K, lk, ps, y, as.vector(t(x)), as.vector(t(z)))
+  add("scll", a, as.numeric(logLik(f))); add("scth", a, sum(f$alpha * seq_along(f$alpha))); add("scbeta", a, sum(f$beta * seq_along(f$beta))); add("sczeta", a, sum(f$zeta * seq_along(f$zeta)))
+}
 emit("ordinal", "ordinal", list(cases))
