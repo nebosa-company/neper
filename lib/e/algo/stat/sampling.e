@@ -1235,3 +1235,57 @@ fn calib_logit(a: *mem.Arena, xs: []const f64, d: []const f64, total: []const f6
     }
     ret 0usize
 }
+
+// Hajekestimator: type 0 total (N sum(y / pik) / sum(1 / pik)), type 1 the mean sum(y / pik) / sum(1 / pik)
+fn hajek_estimator(y: []const f64, pik: []const f64, n_pop: f64, total: bool) -> f64 {
+    var num = 0.0f64
+    var den = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        num += y[i] / pik[i]
+        den += 1.0f64 / pik[i]
+        i += 1usize
+    }
+    if total { ret n_pop * num / den }
+    ret num / den
+}
+
+// ratioest: sum(y / pik) Tx / sum(x / pik)
+fn ratio_estimator(y: []const f64, x: []const f64, tx: f64, pik: []const f64) -> f64 {
+    var a1 = 0.0f64
+    var a2 = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        a1 += y[i] / pik[i]
+        a2 += x[i] / pik[i]
+        i += 1usize
+    }
+    ret a1 * tx / a2
+}
+
+// inclusionprobastrata: pik_i = nh[strata_i] / Nh[strata_i] with strata labelled 1, 2, ...
+fn inclusion_strata(labels: []const f64, nh: []const f64, pik: []f64) {
+    var i = 0usize
+    while i < labels.len {
+        var cnt = 0.0f64
+        var j = 0usize
+        while j < labels.len {
+            if labels[j] == labels[i] { cnt += 1.0f64 }
+            j += 1usize
+        }
+        pik[i] = nh[usize(labels[i]) - 1usize] / cnt
+        i += 1usize
+    }
+}
+
+// HTstrata: the Horvitz-Thompson estimators summed over the strata (each stratum's sum of y / pik)
+fn ht_strata(y: []const f64, pik: []const f64, labels: []const f64) -> f64 {
+    var total = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        // a stratum label's first appearance starts its sum (the sum over strata is the sum over all units)
+        total += y[i] / pik[i]
+        i += 1usize
+    }
+    ret total
+}

@@ -50269,3 +50269,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7380 — sampling calib logit
 `calib_logit` starts from g = 1 (u = 1 in F), returns at once if that calibrates the totals, and otherwise runs R's Newton iteration on the units inside [low, upp] with the clamped ones held at their bound: lambda -= (X1' diag(d1 g1) X1)^-1 (phi - t2 + t1), g = F(A q X lambda) with A = (upp - low) / ((1 - low)(upp - 1)). Where R reports no convergence the golden has no case. Equal to R on 150 weights. All four calib methods now agree; L508 at 0.8.
+
+## D7381 — sampling design-based estimators
+`hajek_estimator` (total N sum(y/pik)/sum(1/pik), or the mean), `ratio_estimator`, `inclusion_strata` (nh[stratum]/Nh[stratum]) and `ht_strata` (the stratum sums of y/pik, whose total is the overall sum) equal sampling on twenty random samples. R's Hajekestimator with type = "mean" and a given N stops with 'object est not found' (no branch), so the mean case is called with N = NULL, which is the documented default path. L508 at 0.85.
