@@ -4438,4 +4438,5 @@ D7579	641	arm bayesglm with the cloglog link
 D7580	722	nnet multinom with weight decay
 D7581	432	nnet multinom with case weights
 D7582	773	nnet hidden-layer network: first attempt does not reproduce R's path
-D7583	547	strucchange efp OLS-CUSUM with sctest
+D7583	548	strucchange efp OLS-CUSUM with sctest
+D7584	688	strucchange efp Rec-CUSUM with sctest

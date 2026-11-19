@@ -4,6 +4,7 @@
 
 use e.algo.stat.gparot as gp
 use e.math
+use e.math.dist as dist
 use e.mem
 
 // the residual sum of squares of y on x over the rows lo .. hi - 1 (hi exclusive); NaN when singular
@@ -212,6 +213,101 @@ fn ols_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) 
             k += 1usize
         }
         pv = 1.0f64 - (1.0f64 + 2.0f64 * s)
+    }
+    ret (peak, pv)
+}
+
+// strucchange efp(type = "Rec-CUSUM") with sctest: the recursive residuals w_r = (y_r - x_r b_(r-1)) / sqrt(1 + x_r (X'X)_(r-1)^-1 x_r), r = p + 1 .. n, scaled by their
+// standard deviation (n - p - 1 degrees of freedom) and sqrt(n - p); the statistic is the largest |W_j| / (1 + 2 j / (n - p)) and the p value is the Brownian-motion
+// boundary formula; (statistic, p)
+fn rec_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let m = n - p
+    let (w, e0) = mem.alloc[f64](a, m)
+    if e0 != ok { ret (nan, nan) }
+    var r = p
+    while r < n {
+        let start = mem.mark(a)
+        let (g, e1) = mem.alloc[f64](a, p * p)
+        let (rv, e2) = mem.alloc[f64](a, p)
+        if e1 != ok || e2 != ok { ret (nan, nan) }
+        var i = 0usize
+        while i < p * p {
+            g[i] = 0.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < p {
+            rv[i] = 0.0f64
+            i += 1usize
+        }
+        var t = 0usize
+        while t < r {
+            var c = 0usize
+            while c < p {
+                rv[c] += x[t * p + c] * y[t]
+                var d = 0usize
+                while d < p {
+                    g[c * p + d] += x[t * p + c] * x[t * p + d]
+                    d += 1usize
+                }
+                c += 1usize
+            }
+            t += 1usize
+        }
+        let (inv, ie) = gp.invert(a, g, p)
+        if ie != ok { ret (nan, nan) }
+        var pred = 0.0f64
+        var quad = 0.0f64
+        var c = 0usize
+        while c < p {
+            var bc = 0.0f64
+            var qc = 0.0f64
+            var d = 0usize
+            while d < p {
+                bc += inv[c * p + d] * rv[d]
+                qc += inv[c * p + d] * x[r * p + d]
+                d += 1usize
+            }
+            pred += bc * x[r * p + c]
+            quad += qc * x[r * p + c]
+            c += 1usize
+        }
+        w[r - p] = (y[r] - pred) / math.sqrt[f64](1.0f64 + quad)
+        mem.reset(a, start)
+        r += 1usize
+    }
+    var mean = 0.0f64
+    var i2 = 0usize
+    while i2 < m {
+        mean += w[i2]
+        i2 += 1usize
+    }
+    mean = mean / f64(m)
+    var ss = 0.0f64
+    i2 = 0usize
+    while i2 < m {
+        ss += (w[i2] - mean) * (w[i2] - mean)
+        i2 += 1usize
+    }
+    let sg = math.sqrt[f64](ss / f64(m - 1usize))
+    var cum = 0.0f64
+    var peak = 0.0f64
+    i2 = 0usize
+    while i2 < m {
+        cum += w[i2]
+        let v = math.abs[f64](cum / (sg * math.sqrt[f64](f64(m)))) / (1.0f64 + 2.0f64 * f64(i2 + 1usize) / f64(m))
+        if v > peak { peak = v }
+        i2 += 1usize
+    }
+    var pv = 0.0f64
+    if peak < 0.3f64 {
+        pv = 1.0f64 - 0.1465f64 * peak
+    } else {
+        let pn1 = dist.pnorm(3.0f64 * peak, 0.0f64, 1.0f64, true, false)
+        let pn2 = dist.pnorm(peak, 0.0f64, 1.0f64, true, false)
+        let pn3 = dist.pnorm(5.0f64 * peak, 0.0f64, 1.0f64, true, false)
+        pv = 2.0f64 * (1.0f64 - pn1 + math.exp[f64](-4.0f64 * peak * peak) * (pn2 + pn3 - 1.0f64) - math.exp[f64](-16.0f64 * peak * peak) * (1.0f64 - pn2))
     }
     ret (peak, pv)
 }

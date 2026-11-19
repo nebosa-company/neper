@@ -18,6 +18,8 @@ for (rep in 1:20) {
   bm <- breakpoints(b, breaks = m)
   e <- efp(y ~ x - 1, type = "OLS-CUSUM"); s <- sctest(e)
   add("cus", a, unname(s$statistic)); add("cusp", a, unname(s$p.value))
+  er <- efp(y ~ x - 1, type = "Rec-CUSUM"); sr <- sctest(er)
+  add("rec", a, unname(sr$statistic)); add("recp", a, unname(sr$p.value))
   add("rss", a, summary(b)$RSS["RSS", m + 1]); add("bp", a, sum(bm$breakpoints * seq_along(bm$breakpoints)))
 }
 emit("strucchange", "strucchange", list(cases))

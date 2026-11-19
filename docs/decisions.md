@@ -51244,3 +51244,6 @@ A one-hidden-layer, linear-output nnet() was ported (unit-by-unit weights, bias 
 
 ## D7583 — strucchange efp OLS-CUSUM with sctest
 `ols_cusum` computes the OLS-CUSUM statistic (supremum of the cumulative residuals over sigma sqrt(n), sigma on n - p degrees of freedom) and its Brownian-bridge p value 1 - (1 + 2 sum_{i=1..100} (-1)^i exp(-2 i^2 s^2)), 1 below 0.1, as the probe of strucchange:::pvalue.efp showed. Equal to sctest(efp(type = "OLS-CUSUM")) on 20 regressions (40 values added to oracle_strucchange, 120 in all). The recursive CUSUM, the MOSUM processes, the other functionals, gefp, mefp and segmented stay open.
+
+## D7584 — strucchange efp Rec-CUSUM with sctest
+`rec_cusum` computes the recursive residuals, scales their cumulative sum by their standard deviation (centred, n - p - 1 degrees of freedom) and sqrt(n - p), takes the statistic as the largest |W_j| / (1 + 2 j / (n - p)) and the p value from the Brownian-motion boundary formula (1 - 0.1465 s below 0.3, the normal-cdf series above). The scale was found by probing: sigma is the standard deviation of the residuals, not their root mean square. Equal to sctest(efp(type = "Rec-CUSUM")) on 20 regressions (40 values added to oracle_strucchange, 160 in all). The MOSUM processes, the other functionals, gefp, mefp and segmented stay open.

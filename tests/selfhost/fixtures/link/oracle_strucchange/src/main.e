@@ -22,6 +22,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "cus") { ret cs }
         ret cp
     }
+    if str.eq(c.name, "rec") || str.eq(c.name, "recp") {
+        let (rs, rp) = sc.rec_cusum(a, y, x, n, p)
+        if str.eq(c.name, "rec") { ret rs }
+        ret rp
+    }
     let from = usize(math.floor[f64](0.15f64 * f64(n)))
     let to = n - from
     if str.eq(c.name, "fsum") || str.eq(c.name, "supf") {

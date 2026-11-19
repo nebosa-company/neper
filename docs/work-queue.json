@@ -386,7 +386,7 @@
       "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6613). e.algo.stat.strucpkg Fstats (single-break F statistics, from = 0.15) and breakpoints (Bai-Perron dynamic programming, h = 0.15, RSS and break positions for m breaks) equal strucchange on Windows (oracle_strucchange, 80 values; Linux pending). efp OLS-CUSUM with sctest equals strucchange (D7583). Open: segmented and its Davies and pscore tests, the other efp types, gefp, mefp, BIC choice, partial-change models. Was: Open (CRAN ranks 338, 344). Mid. Acceptance, equal to R: segmented with estimated breakpoints and its Davies and pscore tests; strucchange efp (CUSUM, MOSUM, recursive, OLS-based), Fstats, sctest, breakpoints (Bai-Perron dynamic programming, with BIC and RSS), gefp, mefp."
+      "evidence": "Partial (D6613). e.algo.stat.strucpkg Fstats (single-break F statistics, from = 0.15) and breakpoints (Bai-Perron dynamic programming, h = 0.15, RSS and break positions for m breaks) equal strucchange on Windows (oracle_strucchange, 80 values; Linux pending). efp OLS-CUSUM (D7583) and Rec-CUSUM (D7584) with sctest equal strucchange. Open: segmented and its Davies and pscore tests, the other efp types, gefp, mefp, BIC choice, partial-change models. Was: Open (CRAN ranks 338, 344). Mid. Acceptance, equal to R: segmented with estimated breakpoints and its Davies and pscore tests; strucchange efp (CUSUM, MOSUM, recursive, OLS-based), Fstats, sctest, breakpoints (Bai-Perron dynamic programming, with BIC and RSS), gefp, mefp."
     },
     {
       "id": "L362",
