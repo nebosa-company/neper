@@ -9,6 +9,7 @@ use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.opt as opt
+use e.algo.stat.psclpkg as pscl
 use e.mem
 
 // the link's inverse and its density: lk 0 logit, 1 probit, 2 cloglog
@@ -934,103 +935,19 @@ fn cr_fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, jn:
     ret true
 }
 
-type ZipCtx = struct { a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, q: []f64 }
-
-// minus the zero-inflated Poisson log-likelihood at (beta: lambda = exp(x' beta), then gamma: pstr0 = logistic(gamma))
-fn zip_f(c: *ZipCtx, par: []const f64) -> f64 {
-    let p = c.p
-    let phi = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - par[p]))
-    var ll = 0.0f64
-    var i = 0usize
-    while i < c.n {
-        var eta = 0.0f64
-        var t = 0usize
-        while t < p {
-            eta += c.x[i * p + t] * par[t]
-            t += 1usize
-        }
-        let lam = math.exp[f64](eta)
-        if c.y[i] == 0.0f64 {
-            ll += math.log[f64](phi + (1.0f64 - phi) * math.exp[f64](0.0f64 - lam))
-        } else {
-            ll += math.log[f64](1.0f64 - phi) + c.y[i] * eta - lam - nm.lgammafn(c.y[i] + 1.0f64)
-        }
-        i += 1usize
-    }
-    ret 0.0f64 - ll
-}
-
-fn zip_g(c: *ZipCtx, par: []const f64, g: []f64) {
-    let p = c.p
-    let phi = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - par[p]))
-    var t = 0usize
-    while t <= p {
-        g[t] = 0.0f64
-        t += 1usize
-    }
-    var i = 0usize
-    while i < c.n {
-        var eta = 0.0f64
-        t = 0usize
-        while t < p {
-            eta += c.x[i * p + t] * par[t]
-            t += 1usize
-        }
-        let lam = math.exp[f64](eta)
-        var de = 0.0f64
-        var dg = 0.0f64
-        if c.y[i] == 0.0f64 {
-            let em = math.exp[f64](0.0f64 - lam)
-            let l0 = phi + (1.0f64 - phi) * em
-            de = 0.0f64 - (1.0f64 - phi) * lam * em / l0
-            dg = phi * (1.0f64 - phi) * (1.0f64 - em) / l0
-        } else {
-            de = c.y[i] - lam
-            dg = 0.0f64 - phi
-        }
-        t = 0usize
-        while t < p {
-            g[t] += 0.0f64 - de * c.x[i * p + t]
-            t += 1usize
-        }
-        g[p] += 0.0f64 - dg
-        i += 1usize
-    }
-}
-
-// vglm(y ~ x, zipoissonff(zero = -2)): the Poisson mean exp(x' beta) with x including the intercept column, and a constant structural-zero probability; out: beta (p), the logit of pstr0, the log-likelihood (p + 2 values);
-// by BFGS on the analytic gradient from the plain Poisson start
+// vglm(y ~ x, zipoissonff(zero = -2)): the zero-inflated Poisson regression with a constant structural-zero probability is pscl's zeroinfl with the intercept as the only zero-part covariate (one model, one implementation); out: beta (p, x
+// with its intercept column), the logit of the structural-zero probability, the log-likelihood (p + 2 values)
 fn zipoisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, out: []f64) -> bool {
-    let m = p + 1usize
-    let (par, e1) = mem.alloc[f64](a, m)
-    let (qq, e2) = mem.alloc[f64](a, m)
-    let (scr, e3) = mem.alloc[f64](a, m * m + 6usize * m + 16usize)
-    if e1 != ok || e2 != ok || e3 != ok { ret false }
-    var t = 0usize
-    while t < m {
-        par[t] = 0.0f64
-        t += 1usize
-    }
-    var sy = 0.0f64
+    let (z1, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret false }
     var i = 0usize
     while i < n {
-        sy += y[i]
+        z1[i] = 1.0f64
         i += 1usize
     }
-    par[0usize] = math.log[f64](sy / f64(n) + 0.1f64)
-    var c = ZipCtx { a: a, x: x, y: y, n: n, p: p, q: qq }
-    var round = 0usize
-    while round < 2usize {
-        let (r, e4) = opt.bfgs[ZipCtx](&c, zip_f, zip_g, par, 1.0e-11f64, 300u32, scr)
-        if e4 != ok { ret false }
-        round += 1usize
-    }
-    t = 0usize
-    while t < m {
-        out[t] = par[t]
-        t += 1usize
-    }
-    out[m] = 0.0f64 - zip_f(&c, par)
+    let ll = pscl.zeroinfl(a, x, z1, y, n, p, 1usize, out[0usize..p + 1usize])
+    if ll != ll { ret false }
+    out[p + 1usize] = ll
     ret true
 }
 
