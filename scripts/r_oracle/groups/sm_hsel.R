@@ -69,4 +69,11 @@ for (rep in 1:20) {
   r <- tryCatch(sm.ancova(x, y, gr, h = h, model = "equal", display = "none", verbose = 0)$p, error = function(e) NULL)
   if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hanc", c(n, h, x, y, gr), r, rel = 1e-7, abs = 1e-10)
 }
+# hanp: the same layout with model = "parallel"
+for (rep in 1:20) {
+  n <- sample(20:50, 1); x <- runif(n, 0, 10); gr <- sample(1:3, n, TRUE); if (length(unique(gr)) < 3) next
+  y <- sin(x) + 0.3 * (gr - 1) + rnorm(n, 0, 0.3) + (rep %% 2) * 0.2 * x * (gr == 2); h <- runif(1, 0.6, 1.5)
+  r <- tryCatch(sm.ancova(x, y, gr, h = h, model = "parallel", display = "none", verbose = 0)$p, error = function(e) NULL)
+  if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hanp", c(n, h, x, y, gr), r, rel = 1e-6, abs = 1e-9)
+}
 emit("sm_hsel", "sm", list(cases))

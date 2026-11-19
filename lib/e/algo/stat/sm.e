@@ -672,7 +672,7 @@ fn smooth_block(smx: []f64, nt: usize, o: usize, xs: []const f64, h: f64) {
 }
 
 // sm.ancova(x, y, group, h, model = "equal") for one covariate, unbinned, unit weights: the p-value of the test of equal regression curves; rows are ordered by group then x as R does
-fn ancova_equal(a: *mem.Arena, x: []const f64, y: []const f64, group: []const f64, h: f64) -> (f64, err) {
+fn ancova_equal(a: *mem.Arena, x: []const f64, y: []const f64, group: []const f64, h: f64, parallel: bool) -> (f64, err) {
     let n = x.len
     let (ord, e0) = mem.alloc[usize](a, n)
     if e0 != ok { ret (0.0f64, e0) }
@@ -795,6 +795,216 @@ fn ancova_equal(a: *mem.Arena, x: []const f64, y: []const f64, group: []const f6
         i += 1usize
     }
     obs = obs / sig2
+    if parallel {
+        // the parallel model: M = (D'Q0'Q0 D)^-1 D'Q0'Q0 with Q0 = I - S(h.alpha); alpha = M y, ghat = Ss (I - D M) y, ghati = Sd y
+        var lo = xs[0usize]
+        var hi = xs[0usize]
+        i = 0usize
+        while i < n {
+            if xs[i] < lo { lo = xs[i] }
+            if xs[i] > hi { hi = xs[i] }
+            i += 1usize
+        }
+        let halpha = 2.0f64 * (hi - lo) / f64(n)
+        let (gi, eg) = mem.alloc[usize](a, n)
+        if eg != ok { ret (0.0f64, eg) }
+        var ng = 0usize
+        i = 0usize
+        while i < n {
+            if i > 0usize && gs[i] != gs[i - 1usize] { ng += 1usize }
+            gi[i] = ng
+            i += 1usize
+        }
+        let kk = ng
+        // R builds D with istart fixed at n[1] + 1 for every column (it is never advanced), so column l marks rows n1 + 1 .. n1 + n[l + 1]
+        let (dmat, edd) = mem.alloc[f64](a, n * kk)
+        let (gsz, egz) = mem.alloc[usize](a, kk + 1usize)
+        if edd != ok || egz != ok { ret (0.0f64, mem.Full) }
+        var zq = 0usize
+        while zq <= kk {
+            gsz[zq] = 0usize
+            zq += 1usize
+        }
+        i = 0usize
+        while i < n {
+            gsz[gi[i]] += 1usize
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var l0 = 0usize
+            while l0 < kk {
+                dmat[i * kk + l0] = 0.0f64
+                if i >= gsz[0usize] && i < gsz[0usize] + gsz[l0 + 1usize] { dmat[i * kk + l0] = 1.0f64 }
+                l0 += 1usize
+            }
+            i += 1usize
+        }
+        let (q0, eq0) = mem.alloc[f64](a, nn)
+        let (am, eam) = mem.alloc[f64](a, n * kk)
+        let (gm, egm) = mem.alloc[f64](a, kk * (kk + n))
+        let (dm, edm) = mem.alloc[f64](a, nn)
+        if eq0 != ok || eam != ok || egm != ok || edm != ok { ret (0.0f64, mem.Full) }
+        i = 0usize
+        while i < nn {
+            q0[i] = 0.0f64
+            i += 1usize
+        }
+        smooth_block(q0, n, 0usize, xs, halpha)
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < n {
+                var v = 0.0f64
+                if i == j { v = 1.0f64 }
+                q0[i * n + j] = v - q0[i * n + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        // A = Q0 D (n by kk): column l sums the Q0 columns of group l + 1
+        i = 0usize
+        while i < n {
+            var l = 0usize
+            while l < kk {
+                var v = 0.0f64
+                var r = 0usize
+                while r < n {
+                    v += q0[i * n + r] * dmat[r * kk + l]
+                    r += 1usize
+                }
+                am[i * kk + l] = v
+                l += 1usize
+            }
+            i += 1usize
+        }
+        // [A'A | A'Q0] then Gauss-Jordan to M (kk by n)
+        let wd = kk + n
+        var l = 0usize
+        while l < kk {
+            var c2 = 0usize
+            while c2 < kk {
+                var v = 0.0f64
+                var r = 0usize
+                while r < n {
+                    v += am[r * kk + l] * am[r * kk + c2]
+                    r += 1usize
+                }
+                gm[l * wd + c2] = v
+                c2 += 1usize
+            }
+            c2 = 0usize
+            while c2 < n {
+                var v = 0.0f64
+                var r = 0usize
+                while r < n {
+                    v += am[r * kk + l] * q0[r * n + c2]
+                    r += 1usize
+                }
+                gm[l * wd + kk + c2] = v
+                c2 += 1usize
+            }
+            l += 1usize
+        }
+        var col = 0usize
+        while col < kk {
+            var piv = col
+            var rr = col + 1usize
+            while rr < kk {
+                if math.abs[f64](gm[rr * wd + col]) > math.abs[f64](gm[piv * wd + col]) { piv = rr }
+                rr += 1usize
+            }
+            var cc2 = 0usize
+            while cc2 < wd {
+                let tt = gm[col * wd + cc2]
+                gm[col * wd + cc2] = gm[piv * wd + cc2]
+                gm[piv * wd + cc2] = tt
+                cc2 += 1usize
+            }
+            let pv = gm[col * wd + col]
+            cc2 = 0usize
+            while cc2 < wd {
+                gm[col * wd + cc2] = gm[col * wd + cc2] / pv
+                cc2 += 1usize
+            }
+            rr = 0usize
+            while rr < kk {
+                if rr != col {
+                    let fct = gm[rr * wd + col]
+                    cc2 = 0usize
+                    while cc2 < wd {
+                        gm[rr * wd + cc2] -= fct * gm[col * wd + cc2]
+                        cc2 += 1usize
+                    }
+                }
+                rr += 1usize
+            }
+            col += 1usize
+        }
+        // DM (n by n): row i is row gi[i] - 1 of M for groups after the first, zero otherwise
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < n {
+                var v = 0.0f64
+                var l1 = 0usize
+                while l1 < kk {
+                    v += dmat[i * kk + l1] * gm[l1 * wd + kk + j]
+                    l1 += 1usize
+                }
+                dm[i * n + j] = v
+                j += 1usize
+            }
+            i += 1usize
+        }
+        // Qm = DM + Ss (I - DM) - Sd, into t1
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < n {
+                var v = dm[i * n + j] - sd[i * n + j]
+                var k = 0usize
+                while k < n {
+                    var e = 0.0f64
+                    if k == j { e = 1.0f64 }
+                    v += ss[i * n + k] * (e - dm[k * n + j])
+                    k += 1usize
+                }
+                t1[i * n + j] = v
+                j += 1usize
+            }
+            i += 1usize
+        }
+        // obs = sum((D alpha + ghat - ghati)^2) / sigma^2 = |Qm y|^2 / sigma^2 for the same linear map
+        var ob2 = 0.0f64
+        i = 0usize
+        while i < n {
+            var v = 0.0f64
+            var j = 0usize
+            while j < n {
+                v += t1[i * n + j] * ys[j]
+                j += 1usize
+            }
+            ob2 += v * v
+            i += 1usize
+        }
+        obs = ob2 / sig2
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < n {
+                var v = 0.0f64
+                var k = 0usize
+                while k < n {
+                    v += t1[k * n + i] * t1[k * n + j]
+                    k += 1usize
+                }
+                q[i * n + j] = v
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
     // p.quad.moment(Q - B obs, I, obs, 0)
     i = 0usize
     while i < nn {

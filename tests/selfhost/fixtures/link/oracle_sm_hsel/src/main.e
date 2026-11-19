@@ -46,8 +46,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
-        if str.eq(c.name, "hanc") {
-            let (pv, ep) = sm.ancova_equal(a, c.args[2usize..2usize + n], c.args[2usize + n..2usize + 2usize * n], c.args[2usize + 2usize * n..2usize + 3usize * n], c.args[1usize])
+        if str.eq(c.name, "hanc") || str.eq(c.name, "hanp") {
+            let (pv, ep) = sm.ancova_equal(a, c.args[2usize..2usize + n], c.args[2usize + n..2usize + 2usize * n], c.args[2usize + 2usize * n..2usize + 3usize * n], c.args[1usize], str.eq(c.name, "hanp"))
             if ep != ok { os.exit(4) }
             if !oracle.agrees(pv, c) {
                 failures += 1usize

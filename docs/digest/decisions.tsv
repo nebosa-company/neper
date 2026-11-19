@@ -4308,4 +4308,5 @@ D7454	458	sampling strata with several variables
 D7455	299	sampling cluster takes one variable
 D7456	824	lpSolve sensitivity output
 D7457	395	lpSolve sensitivity with mixed row directions
-D7458	644	sm.ancova test of equality
+D7458	645	sm.ancova test of equality
+D7459	755	sm.ancova parallel model, with R's indicator-matrix quirk
