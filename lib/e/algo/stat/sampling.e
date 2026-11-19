@@ -7,18 +7,23 @@
 use e.algo.rand.r as rr
 use e.algo.stat.gparot as gp
 use e.math
+use e.math.nmath as nm
 use e.mem
 
 error Malformed
 
-// inclusionprobabilities(a, n) into pik: n a / sum(a), with values at or above 1 set to 1 and the rest rescaled until none exceeds it
+// inclusionprobabilities(a, n) into pik: n a / sum(a), with values at or above 1 set to 1 and the rest rescaled until none exceeds it; the sums are long doubles as R's sum() is
 fn inclusion(a: []const f64, n: f64, pik: []f64) {
-    var s = 0.0f64
+    var sh = 0.0f64
+    var sl = 0.0f64
     var i = 0usize
     while i < a.len {
-        s += a[i]
+        let (h2, l2) = ld_add(sh, sl, a[i])
+        sh = h2
+        sl = l2
         i += 1usize
     }
+    let s = sh + sl
     i = 0usize
     while i < a.len {
         pik[i] = n * a[i] / s
@@ -33,15 +38,21 @@ fn inclusion(a: []const f64, n: f64, pik: []f64) {
     if l == 0usize { ret }
     var l1 = 0usize
     while l != l1 {
-        var sum = 0.0f64
+        var smh = 0.0f64
+        var sml = 0.0f64
         i = 0usize
         while i < a.len {
-            if pik[i] < 1.0f64 { sum += pik[i] }
+            if pik[i] < 1.0f64 {
+                let (h2, l2) = ld_add(smh, sml, pik[i])
+                smh = h2
+                sml = l2
+            }
             i += 1usize
         }
+        let sum = smh + sml
         i = 0usize
         while i < a.len {
-            if pik[i] < 1.0f64 { pik[i] = (n - f64(l)) * pik[i] / sum } else { pik[i] = 1.0f64 }
+            if pik[i] < 1.0f64 { pik[i] = (n - f64(l)) * (pik[i] / sum) } else { pik[i] = 1.0f64 }
             i += 1usize
         }
         l1 = l
@@ -1596,4 +1607,102 @@ fn srswr(g: *rr.Rng, n: usize, total: usize, s: []f64) {
         k += 1usize
     }
     s[total - 1usize] = left
+}
+
+
+// x87 extended precision (64-bit mantissa) as a (hi, lo) pair of doubles: s = hi + lo with lo carrying at most the 11 bits below hi. R's sum() and rmultinom's p_tot are long doubles,
+// and their rounding at 2^-64 decides some of the last bits of the conditional probabilities.
+fn two_sum(x: f64, y: f64) -> (f64, f64) {
+    let s = x + y
+    let bb = s - x
+    let er = (x - (s - bb)) + (y - bb)
+    ret (s, er)
+}
+
+// round the exact pair (h, l) to a 64-bit mantissa, ties to even
+fn ld_round(h: f64, l: f64) -> (f64, f64) {
+    let (s, e) = two_sum(h, l)
+    if s == 0.0f64 { ret (s, 0.0f64) }
+    let bits = mem.bitcast[u64](s)
+    let ex = i64((bits >> 52u64) & 2047u64) - 1023i64
+    let qn = nm.pow2(ex - 63i64)
+    let r = e / qn
+    var fl = math.floor[f64](r)
+    let d = r - fl
+    if d > 0.5f64 { fl += 1.0f64 }
+    if d == 0.5f64 {
+        let half = fl / 2.0f64
+        if half != math.floor[f64](half) { fl += 1.0f64 }
+    }
+    let (rh, rl) = two_sum(s, fl * qn)
+    ret (rh, rl)
+}
+
+// (h, l) + p in extended precision
+fn ld_add(h: f64, l: f64, p: f64) -> (f64, f64) {
+    let (s, e) = two_sum(h, p)
+    let (rh, rl) = ld_round(s, l + e)
+    ret (rh, rl)
+}
+
+// UPmultinomial(pik): rmultinom(1, sum(pik), pik / sum(pik)) as R computes it. sum() runs in long double and the size is truncated to an integer; the C code normalises the
+// probabilities again with a double running sum, adds them into a long double p_tot and subtracts them one by one, drawing sequential binomials with prob_k / p_tot (R's inversion
+// sampler, so n times the smaller of p and 1 - p must stay under 30). s receives the counts.
+fn up_multinomial(g: *rr.Rng, a: *mem.Arena, pik: []const f64, s: []f64) -> err {
+    let n = pik.len
+    let (prob, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret mem.Full }
+    var hi = 0.0f64
+    var lo = 0.0f64
+    var i = 0usize
+    while i < n {
+        let (h2, l2) = ld_add(hi, lo, pik[i])
+        hi = h2
+        lo = l2
+        i += 1usize
+    }
+    let tot = hi + lo
+    let size = math.floor[f64](tot)
+    var sum2 = 0.0f64
+    i = 0usize
+    while i < n {
+        prob[i] = pik[i] / tot
+        sum2 += prob[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        prob[i] = prob[i] / sum2
+        i += 1usize
+    }
+    var ph = 0.0f64
+    var pl = 0.0f64
+    i = 0usize
+    while i < n {
+        let (h2, l2) = ld_add(ph, pl, prob[i])
+        ph = h2
+        pl = l2
+        s[i] = 0.0f64
+        i += 1usize
+    }
+    var left = size
+    var k = 0usize
+    while k + 1usize < n {
+        if prob[k] > 0.0f64 {
+            // prob / p_tot in extended precision rounded to a double
+            let q1 = prob[k] / ph
+            let pp = q1 - q1 * (pl / ph)
+            var v = left
+            if pp < 1.0f64 { v = rr.rbinom_inv(g, left, pp) }
+            s[k] = v
+            left -= v
+        }
+        if left <= 0.0f64 { ret ok }
+        let (h3, l3) = ld_add(ph, pl, 0.0f64 - prob[k])
+        ph = h3
+        pl = l3
+        k += 1usize
+    }
+    s[n - 1usize] = left
+    ret ok
 }

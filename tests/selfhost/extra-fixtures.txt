@@ -531,3 +531,4 @@ oracle_sampling_est
 oracle_sampling_var
 oracle_sampling_post
 oracle_sampling_srswr
+oracle_sampling_mult
