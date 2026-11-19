@@ -328,3 +328,64 @@ fn is_identifier(s: str) -> bool {
     }
     ret true
 }
+
+fn push_hex(b: *mem.Arena, out: []u8, n: usize, v: u32, width: usize) -> usize {
+    var k = n
+    var d = width
+    while d > 0usize {
+        let digit = (v >> u32((d - 1usize) * 4usize)) & 15u32
+        if digit < 10u32 { out[k] = u8(48u32 + digit) } else { out[k] = u8(55u32 + digit) }
+        k += 1usize
+        d -= 1usize
+    }
+    ret k
+}
+
+// ICU's Any-Hex: every scalar as hex text. style 0 is \uXXXX (the Unicode and Java styles: four digits, a surrogate pair for a scalar above U+FFFF), 1 is Perl's \x{X}, 2 is XML's &#xX;
+// with the digits upper case and no leading zeros in the last two.
+fn any_hex(a: *mem.Arena, text: str, style: usize) -> (str, err) {
+    let (out, e) = mem.alloc[u8](a, text.len * 12usize + 4usize)
+    if e != ok { ret ("", e) }
+    var n = 0usize
+    var at = 0usize
+    while at < text.len {
+        let (cp, w) = read_utf8(text, at)
+        at += w
+        if style == 0usize {
+            if cp >= 65536u32 {
+                let v = cp - 65536u32
+                let hi = 55296u32 + (v >> 10u32)
+                let lo = 56320u32 + (v & 1023u32)
+                out[n] = 92u8
+                out[n + 1usize] = 117u8
+                n = push_hex(a, out, n + 2usize, hi, 4usize)
+                out[n] = 92u8
+                out[n + 1usize] = 117u8
+                n = push_hex(a, out, n + 2usize, lo, 4usize)
+            } else {
+                out[n] = 92u8
+                out[n + 1usize] = 117u8
+                n = push_hex(a, out, n + 2usize, cp, 4usize)
+            }
+        } else {
+            var digits = 1usize
+            while digits < 6usize && (cp >> u32(digits * 4usize)) != 0u32 { digits += 1usize }
+            if style == 1usize {
+                out[n] = 92u8
+                out[n + 1usize] = 120u8
+                out[n + 2usize] = 123u8
+                n = push_hex(a, out, n + 3usize, cp, digits)
+                out[n] = 125u8
+                n += 1usize
+            } else {
+                out[n] = 38u8
+                out[n + 1usize] = 35u8
+                out[n + 2usize] = 120u8
+                n = push_hex(a, out, n + 3usize, cp, digits)
+                out[n] = 59u8
+                n += 1usize
+            }
+        }
+    }
+    ret (out[0usize..n], ok)
+}

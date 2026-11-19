@@ -52,4 +52,13 @@ for (ci in seq_along(charsets)) for (rep in 1:60) {
   if (is.null(r) || length(r) != 1) next
   cases[[length(cases) + 1]] <- case("enc", c(ci - 1, cp), as.integer(r), rel = 0, abs = 0)
 }
+# Any-Hex: "hex" args (n, cp[n], style 0 Any-Hex 1 Any-Hex/Perl 2 Any-Hex/XML, what 0 length 1 weighted byte sum) of stri_trans_general
+for (rep in 1:60) {
+  n <- sample(1:6, 1); cp <- sample(c(0x41, 0x7A, 0x20, 0xE9, 0x20AC, 0x3A9, 0x1F600, 0x10000, 0x10FFFF, 0xFFFF, 0xAC01, 0x1D11E, 0xFE0F), n, TRUE)
+  for (st in 0:2) {
+    r <- stri_trans_general(intToUtf8(cp), c("Any-Hex", "Any-Hex/Perl", "Any-Hex/XML")[st + 1]); u <- utf8ToInt(r)
+    cases[[length(cases) + 1]] <- case("hex", c(n, cp, st, 0), length(u), rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("hex", c(n, cp, st, 1), sum(u * seq_along(u)), rel = 0, abs = 0)
+  }
+}
 emit("stringi", "stringi", list(cases))

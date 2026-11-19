@@ -106,6 +106,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret f64(gc)
     }
+    if str.eq(c.name, "hex") {
+        let (hx, he) = uc.any_hex(a, s, usize(x[1usize + n]))
+        if he != ok { os.exit(13) }
+        if usize(x[2usize + n]) == 0usize { ret f64(hx.len) }
+        var hs = 0.0f64
+        var q3 = 0usize
+        while q3 < hx.len {
+            hs += f64(hx[q3]) * f64(q3 + 1usize)
+            q3 += 1usize
+        }
+        ret hs
+    }
     let f = usize(x[1usize + n])
     var form = nz.Form.Nfc
     if f == 1usize { form = nz.Form.Nfd }
