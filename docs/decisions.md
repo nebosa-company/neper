@@ -50827,3 +50827,6 @@ rhg_strata is rhg inside each stratum, so its response probability is `rhg_prob`
 
 ## D7454 — sampling strata with several variables
 strata(data, c("a", "b"), size, "srswor") draws within the (a, b) combinations in order of first appearance, so the existing one-label `strata` already answers it when the label is the combination (10 * a + b for small integer codes); equal to sampling on 20 two-variable samples added to oracle_sampling_strata, and no new code was needed. Open for L508: the cube method, cluster with several variables.
+
+## D7455 — sampling cluster takes one variable
+R's cluster(data, c("a", "b"), ...) stops with "there are too many specified variables as clusters", so cluster with several variables is not an R behaviour to match; the one-variable cluster is the whole of it. Open for L508: the cube method only.

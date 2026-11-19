@@ -4304,4 +4304,5 @@ D7450	577	isotone gpava with a list response
 D7451	680	isotone gpava list response with secondary and tertiary ties; L520 closed
 D7452	633	sampling Hajekstrata and rhg
 D7453	349	sampling rhg_strata
-D7454	457	sampling strata with several variables
+D7454	458	sampling strata with several variables
+D7455	298	sampling cluster takes one variable
