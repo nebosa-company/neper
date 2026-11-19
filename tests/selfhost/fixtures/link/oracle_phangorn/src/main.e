@@ -26,7 +26,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let ne = usize(z[2usize])
     if c.name.len == 10usize {
         let o = 3usize + 3usize * ne
-        ret pg.gtr_loglik_gamma(a, z[3usize..3usize + ne], z[3usize + ne..3usize + 2usize * ne], z[3usize + 2usize * ne..o], ne, nt, z[o + 12usize..o + 12usize + nt * ns], ns, z[o..o + 4usize], z[o + 4usize..o + 10usize], z[o + 10usize], usize(z[o + 11usize]))
+        ret pg.gtr_loglik_gamma(a, z[3usize..3usize + ne], z[3usize + ne..3usize + 2usize * ne], z[3usize + 2usize * ne..o], ne, nt, z[o + 13usize..o + 13usize + nt * ns], ns, z[o..o + 4usize], z[o + 4usize..o + 10usize], z[o + 10usize], usize(z[o + 11usize]), z[o + 12usize])
     }
     if c.name.len == 9usize {
         let o = 3usize + 3usize * ne

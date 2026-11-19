@@ -406,11 +406,11 @@ fn gtr_site_lik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f
 }
 
 fn gtr_loglik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bf: []const f64, rates: []const f64) -> f64 {
-    ret gtr_loglik_gamma(a, par, chd, bl, ne, nt, data, ns, bf, rates, 1.0f64, 1usize)
+    ret gtr_loglik_gamma(a, par, chd, bl, ne, nt, data, ns, bf, rates, 1.0f64, 1usize, 0.0f64)
 }
 
-// as gtr_loglik with the rate over sites discretised gamma(shape) in k categories, each the mean of its bin of the distribution (phangorn's discrete.gamma) and equally likely; k = 1 is a single rate of one
-fn gtr_loglik_gamma(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bf: []const f64, rates: []const f64, shape: f64, k: usize) -> f64 {
+// as gtr_loglik with a share inv of invariant sites (rates over the rest rescaled by 1 / (1 - inv)) and the rate over sites discretised gamma(shape) in k categories, each the mean of its bin of the distribution (phangorn's discrete.gamma) and equally likely; k = 1 is a single rate of one
+fn gtr_loglik_gamma(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bf: []const f64, rates: []const f64, shape: f64, k: usize, inv: f64) -> f64 {
     let (sl, e1) = mem.alloc[f64](a, ns)
     let (acc, e2) = mem.alloc[f64](a, ns)
     if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
@@ -432,10 +432,11 @@ fn gtr_loglik_gamma(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []con
             mult = (cur - prev) * f64(k)
             prev = cur
         }
+        mult = mult / (1.0f64 - inv)
         if !gtr_site_lik(a, par, chd, bl, ne, nt, data, ns, bf, rates, mult, sl) { ret 0.0f64 / 0.0f64 }
         s = 0usize
         while s < ns {
-            acc[s] += sl[s] / f64(k)
+            acc[s] += (1.0f64 - inv) * sl[s] / f64(k)
             s += 1usize
         }
         c += 1usize
@@ -443,6 +444,20 @@ fn gtr_loglik_gamma(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []con
     var ll = 0.0f64
     s = 0usize
     while s < ns {
+        var share = 0u32
+        share = 15u32
+        var i = 0usize
+        while i < nt {
+            share = share & u32(data[i * ns + s])
+            i += 1usize
+        }
+        var cst = 0.0f64
+        var st = 0usize
+        while st < 4usize {
+            if (share & (1u32 << u32(st))) != 0u32 { cst += bf[st] }
+            st += 1usize
+        }
+        acc[s] += inv * cst
         ll += math.log[f64](acc[s])
         s += 1usize
     }
