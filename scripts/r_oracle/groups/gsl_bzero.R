@@ -17,4 +17,9 @@ for (rep in 1:30) {
   cases[[length(cases) + 1]] <- case("ad", c(2, x), airy_Ai_deriv(x), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("ad", c(3, x), airy_Bi_deriv(x), rel = 1e-9, abs = 1e-12)
 }
+# "h3" (l, lambda, eta): legendre_H3d
+for (rep in 1:50) {
+  l <- sample(0:6, 1); lam <- runif(1, 0.3, 4); eta <- runif(1, 0.4, 3)
+  cases[[length(cases) + 1]] <- case("h3", c(l, lam, eta), legendre_H3d(l, lam, eta), rel = 1e-9, abs = 1e-12)
+}
 emit("gsl_bzero", "gsl", list(cases))

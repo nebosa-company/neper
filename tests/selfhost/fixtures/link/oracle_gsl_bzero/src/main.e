@@ -9,6 +9,7 @@ use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "h3") { ret gs.legendre_h3d(usize(c.args[0usize]), c.args[1usize], c.args[2usize]) }
     if str.eq(c.name, "az") { ret gs.airy_zero(usize(c.args[0usize]), usize(c.args[1usize])) }
     if str.eq(c.name, "ad") {
         if usize(c.args[0usize]) == 2usize { ret gs.airy_ai_deriv(c.args[1usize]) }

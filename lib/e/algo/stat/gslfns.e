@@ -1300,3 +1300,25 @@ fn airy_zero(kind: usize, s: usize) -> f64 {
     }
     ret 0.0f64 / 0.0f64
 }
+
+// legendre_H3d(l, lambda, eta): the radial eigenfunctions of the Laplacian on hyperbolic 3-space, H_0 = sin(lambda eta) / (lambda sinh eta), H_1 = (sin(lambda eta) / sinh eta) (coth eta - lambda cot(lambda eta)) / (lambda sqrt(lambda^2 + 1)),
+// and upward sqrt(lambda^2 + (L + 1)^2) H_{L+1} = (2 L + 1) coth(eta) H_L - sqrt(lambda^2 + L^2) H_{L-1}
+fn legendre_h3d(l: usize, lam: f64, et: f64) -> f64 {
+    let ex = math.exp[f64](et)
+    let sh = 0.5f64 * (ex - 1.0f64 / ex)
+    let ct = (ex + 1.0f64 / ex) / (ex - 1.0f64 / ex)
+    let h0 = math.sin[f64](lam * et) / (lam * sh)
+    if l == 0usize { ret h0 }
+    let h1 = math.sin[f64](lam * et) / sh * (ct - lam * math.cos[f64](lam * et) / math.sin[f64](lam * et)) / (lam * math.sqrt[f64](lam * lam + 1.0f64))
+    var hm = h0
+    var hc = h1
+    var k = 1usize
+    while k < l {
+        let kf = f64(k)
+        let hn = ((2.0f64 * kf + 1.0f64) * ct * hc - math.sqrt[f64](lam * lam + kf * kf) * hm) / math.sqrt[f64](lam * lam + (kf + 1.0f64) * (kf + 1.0f64))
+        hm = hc
+        hc = hn
+        k += 1usize
+    }
+    ret hc
+}

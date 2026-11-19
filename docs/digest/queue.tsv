@@ -77,7 +77,7 @@ L368	library	0.2	684	fixest: high-dimensional fixed-effects estimation	Partial (
 L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (D6620).
 L372	library	0.15	729	spdep: spatial autocorrelation and spatial regression	Partial (D6624).
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
-L417	library	0.86	1380	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
+L417	library	0.86	1407	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
 L435	library	0.15	840	sna: social network analysis	Partial (D6636).
 L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
 L439	library	0.05	714	MCMCpack: Bayesian MCMC for common models	Partial (D6648).
