@@ -50710,3 +50710,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `coxext.tmerge_rows` builds the counting-process rows that `tmerge` makes from follow-up (0, futime]: cuts at the distinct observation times strictly inside (0, futime). `tdc(time, value)` gives each row the value of the latest observation (by time, ties by data order) at or before its start, NaN before the first; `cumevent(time)` gives a row the number of observations at or before its stop, but only when one falls exactly on the stop (otherwise 0), so the last interval counts only observations at futime; observations after futime are ignored.
 
 **Result.** `oracle_coxph` (1218 cases, 96 new: row counts and position-weighted sums of tstart, tstop and the covariate over 24 data sets with ties, time-0 and out-of-follow-up observations) equals `tmerge` on Windows. Linux pending. L311 stays partial: tmerge with event() and the other tmerge verbs (cumtdc, the options), Schoenfeld residuals for Efron ties and scaled residuals, robust variance for Efron and exact fits and by shared ids, frailty, interval and left censoring.
+
+## D7366 — survival: tmerge event()
+
+**Decision.** `coxext.tmerge_rows` kind 2 is `event(time, value)`: a row takes the value of the last observation (data order) whose time is exactly its stop, otherwise 0; observations at or before 0 are ignored, those at futime fall in the last row, those after it are dropped; the cut points are the distinct observation times strictly inside follow-up as for `tdc`.
+
+**Result.** `oracle_coxph` (1266 cases, 48 new on 12 data sets) equals `tmerge` on Windows. Linux pending. L311 stays partial: the other tmerge verbs (cumtdc, options such as tstart and tstop merges on data with start times), Schoenfeld residuals for Efron ties and scaled residuals, robust variance for Efron and exact fits and by shared ids, frailty, interval and left censoring.

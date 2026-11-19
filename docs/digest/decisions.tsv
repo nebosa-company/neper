@@ -4270,4 +4270,5 @@ D7361	952	emmeans: logistic regression
 D7362	705	emmeans: Poisson regression
 D7363	758	emmeans: odds ratios
 D7364	796	emmeans: Tukey-adjusted odds ratios and rate ratios
-D7365	1096	survival: tmerge (tdc and cumevent)
+D7365	1097	survival: tmerge (tdc and cumevent)
+D7366	790	survival: tmerge event()

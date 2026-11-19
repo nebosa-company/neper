@@ -1055,7 +1055,7 @@ fn tmerge_rows(a: *mem.Arena, futime: []const f64, sid: []const usize, tm: []con
             var sp = ft
             if r < nc { sp = cuts[r] }
             var v = 0.0f64 / 0.0f64
-            if kind == 1usize { v = 0.0f64 }
+            if kind >= 1usize { v = 0.0f64 }
             var bt = 0.0f64
             var have = false
             var hit = false
@@ -1069,9 +1069,11 @@ fn tmerge_rows(a: *mem.Arena, futime: []const f64, sid: []const usize, tm: []con
                             have = true
                             v = val[k]
                         }
-                    } else {
+                    } else if kind == 1usize {
                         if tm[k] <= sp { cntle += 1.0f64 }
                         if tm[k] == sp { hit = true }
+                    } else {
+                        if tm[k] == sp && sp > 0.0f64 { v = val[k] }
                     }
                 }
                 k += 1usize
