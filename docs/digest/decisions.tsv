@@ -4518,4 +4518,5 @@ D7695	850	hcubature in one dimension
 D7696	1229	robustbase adjOutlyingness
 D7697	1479	segmented davies.test for a binomial or poisson glm
 D7698	937	segmented pscore.test for a binomial or poisson glm
-D7699	999	Rtsne random start
+D7699	1000	Rtsne random start
+D7700	1381	actuar cm hierarchical credibility

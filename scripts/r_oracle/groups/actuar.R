@@ -279,4 +279,19 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("gg", c(r, cj, nj, 1, kk), emm(gd, kk), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("gg", c(r, cj, nj, 2, abs(xx)), elev(gd)(abs(xx)), rel = 1e-10, abs = 1e-12)
 }
+# cm() hierarchical (sector, unit, period): "hier" args (nl = 2, nr, nt, meth 0 Buhlmann-Gisler 1 Ohlsson, parlen0, parlen1, par0[], par1[] (0-based), nn0, nn1, ratios[nr*nt] row-major, weights[nr*nt] (NaN missing), idx)
+# the idx-th number of c(unbiased, unlist(cred), unlist(means))
+for (rep in 1:14) {
+  ns <- sample(2:4, 1); upn <- sample(2:4, ns, replace = TRUE); nt <- sample(4:7, 1); nr <- sum(upn)
+  df <- data.frame(sector = rep(seq_len(ns), upn), unit = seq_len(nr))
+  R <- matrix(round(rnorm(nr * nt, rep(rnorm(nr, 10, 2), nt), 3), 3), nr, nt); W <- matrix(round(runif(nr * nt, 0.5, 5), 3), nr, nt)
+  if (rep %% 2 == 0) { na <- sample(nr * nt, 3); for (k in na) { rr0 <- (k - 1) %% nr + 1; cc <- (k - 1) %/% nr + 1; if (sum(!is.na(W[rr0, ])) > 1) { W[rr0, cc] <- NA; R[rr0, cc] <- NA } } }
+  meth <- rep %% 3 == 0
+  colnames(R) <- paste0("r", seq_len(nt)); colnames(W) <- paste0("w", seq_len(nt)); d <- cbind(df, R, W)
+  fit <- tryCatch(cm(~sector + sector:unit, data = d, ratios = paste0("r", seq_len(nt)), weights = paste0("w", seq_len(nt)), method = if (meth) "Ohlsson" else "Buhlmann-Gisler"), error = function(e) NULL)
+  if (is.null(fit)) next
+  ord <- fit$ordering; nn <- sapply(fit$means[1:2], length)
+  want <- c(fit$unbiased, unlist(fit$cred), unlist(fit$means))
+  for (i in seq_along(want)) cases[[length(cases) + 1]] <- case("hier", c(2, nr, nt, as.numeric(meth), length(ord[[1]]), length(ord[[2]]), ord[[1]] - 1, ord[[2]] - 1, nn, as.vector(t(R)), as.vector(t(W)), i - 1), want[i], rel = 1e-8, abs = 1e-10)
+}
 emit("actuar", "actuar", list(cases))

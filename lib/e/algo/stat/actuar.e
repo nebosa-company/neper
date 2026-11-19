@@ -1214,3 +1214,266 @@ fn small_inverse(a: *mem.Arena, m: []const f64, p: usize, out: []f64) -> bool {
     mem.reset(a, start)
     ret true
 }
+
+// sums of vals over the groups grp (0-based) into out (ng entries)
+fn hier_tsum(vals: []const f64, grp: []const usize, ng: usize, out: []f64) {
+    var g = 0usize
+    while g < ng {
+        out[g] = 0.0f64
+        g += 1usize
+    }
+    var i = 0usize
+    while i < vals.len {
+        out[grp[i]] += vals[i]
+        i += 1usize
+    }
+}
+
+fn offp_of(clen: []const usize, lv: usize) -> usize {
+    var s = 0usize
+    var i = 0usize
+    while i < lv {
+        s += clen[i]
+        i += 1usize
+    }
+    ret s
+}
+
+// actuar cm() hierarchical model, methods Buhlmann-Gisler (meth 0) and Ohlsson (meth 1): nr rows (the contracts) of nt periods, ratios and weights row-major with NaN for a missing weight
+// in the same cells as the missing ratios; par maps level i + 1 nodes to level i nodes (the last map takes the rows to the level nl nodes), parlen[i] the length of map i, 0-based; nn[i] the
+// number of nodes of level i. out gets b (nl entries then the within variance), then the credibility factors of each level (one per child), then the weighted means of the levels and the rows.
+fn cm_hierarchical(a: *mem.Arena, nl: usize, nr: usize, nt: usize, meth: usize, ratios: []const f64, weights: []const f64, par: []const usize, parlen: []const usize, nn: []const usize, out: []f64) -> err {
+    let (ws, e0) = mem.alloc[f64](a, nr)
+    let (rw, e1) = mem.alloc[f64](a, nr)
+    if e0 != ok || e1 != ok { ret e0 }
+    var cells = 0usize
+    var r = 0usize
+    while r < nr {
+        var sw = 0.0f64
+        var sx = 0.0f64
+        var t = 0usize
+        while t < nt {
+            let w = weights[r * nt + t]
+            if w == w {
+                sw += w
+                sx += w * ratios[r * nt + t]
+                cells += 1usize
+            }
+            t += 1usize
+        }
+        ws[r] = sw
+        rw[r] = 0.0f64
+        if sw > 0.0f64 { rw[r] = sx / sw }
+        r += 1usize
+    }
+    var total = 0usize
+    var lv = 0usize
+    while lv < nl {
+        total += nn[lv]
+        lv += 1usize
+    }
+    let (eff, e2) = mem.alloc[f64](a, total + 1usize)
+    let (offs, e3) = mem.alloc[usize](a, nl + 1usize)
+    let (pofs, e3b) = mem.alloc[usize](a, nl + 1usize)
+    if e2 != ok || e3 != ok || e3b != ok { ret e2 }
+    var o = 0usize
+    var offp = 0usize
+    lv = 0usize
+    while lv < nl {
+        offs[lv] = o
+        o += nn[lv]
+        pofs[lv] = offp
+        offp += parlen[lv]
+        lv += 1usize
+    }
+    let (wcur, e4) = mem.alloc[f64](a, nr + 1usize)
+    let (wnext, e5) = mem.alloc[f64](a, nr + 1usize)
+    if e4 != ok || e5 != ok { ret e4 }
+    r = 0usize
+    while r < nr {
+        wcur[r] = ws[r]
+        r += 1usize
+    }
+    var curlen = nr
+    lv = nl
+    while lv > 0usize {
+        lv -= 1usize
+        var g = 0usize
+        while g < nn[lv] {
+            eff[offs[lv] + g] = 0.0f64
+            g += 1usize
+        }
+        var c = 0usize
+        while c < curlen {
+            if wcur[c] > 0.0f64 { eff[offs[lv] + par[pofs[lv] + c]] += 1.0f64 }
+            c += 1usize
+        }
+        hier_tsum(wcur[0usize..curlen], par[pofs[lv]..pofs[lv] + curlen], nn[lv], wnext[0usize..nn[lv]])
+        curlen = nn[lv]
+        c = 0usize
+        while c < curlen {
+            wcur[c] = wnext[c]
+            c += 1usize
+        }
+    }
+    var sumeff_last = 0.0f64
+    var g0 = 0usize
+    while g0 < nn[nl - 1usize] {
+        sumeff_last += eff[offs[nl - 1usize] + g0]
+        g0 += 1usize
+    }
+    var s2n = 0.0f64
+    r = 0usize
+    while r < nr {
+        var t = 0usize
+        while t < nt {
+            let w = weights[r * nt + t]
+            if w == w {
+                let dlt = ratios[r * nt + t] - rw[r]
+                s2n += w * dlt * dlt
+            }
+            t += 1usize
+        }
+        r += 1usize
+    }
+    let s2 = s2n / (f64(cells) - sumeff_last)
+    var b: [17]f64 = zero
+    b[nl] = s2
+    let (tw, e6) = mem.alloc[f64](a, total + nr)
+    let (wm, e7) = mem.alloc[f64](a, total + nr)
+    let (cr, e8) = mem.alloc[f64](a, total + nr)
+    let (tmp1, e9) = mem.alloc[f64](a, total + nr)
+    let (tmp2, e10) = mem.alloc[f64](a, total + nr)
+    let (bi, e11) = mem.alloc[f64](a, total + nr)
+    let (ci, e12) = mem.alloc[f64](a, total + nr)
+    if e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok { ret e6 }
+    r = 0usize
+    while r < nr {
+        tw[total + r] = ws[r]
+        wm[total + r] = rw[r]
+        r += 1usize
+    }
+    lv = nl
+    while lv > 0usize {
+        lv -= 1usize
+        let ng = nn[lv]
+        let cl = parlen[lv]
+        let tl = offs[lv]
+        var cb = total
+        if lv + 1usize < nl { cb = offs[lv + 1usize] }
+        let pg = par[pofs[lv]..pofs[lv] + cl]
+        var c = 0usize
+        hier_tsum(tw[cb..cb + cl], pg, ng, tw[tl..tl + ng])
+        c = 0usize
+        while c < cl {
+            tmp1[c] = tw[cb + c] * wm[cb + c]
+            c += 1usize
+        }
+        hier_tsum(tmp1[0usize..cl], pg, ng, tmp2[0usize..ng])
+        var g = 0usize
+        while g < ng {
+            wm[tl + g] = 0.0f64
+            if tw[tl + g] > 0.0f64 { wm[tl + g] = tmp2[g] / tw[tl + g] }
+            g += 1usize
+        }
+        var between = 0.0f64
+        var bj = 0usize
+        while bj <= nl {
+            if b[bj] != 0.0f64 {
+                between = b[bj]
+                break
+            }
+            bj += 1usize
+        }
+        c = 0usize
+        while c < cl {
+            let dm = wm[cb + c] - wm[tl + pg[c]]
+            tmp1[c] = tw[cb + c] * dm * dm
+            c += 1usize
+        }
+        hier_tsum(tmp1[0usize..cl], pg, ng, bi[0usize..ng])
+        c = 0usize
+        while c < cl {
+            tmp1[c] = tw[cb + c] * tw[cb + c]
+            c += 1usize
+        }
+        hier_tsum(tmp1[0usize..cl], pg, ng, ci[0usize..ng])
+        g = 0usize
+        var sb = 0.0f64
+        var sc = 0.0f64
+        var mean_b = 0.0f64
+        while g < ng {
+            let bgv = bi[g] - (eff[tl + g] - 1.0f64) * between
+            let cgv = tw[tl + g] - ci[g] / tw[tl + g]
+            sb += bgv
+            sc += cgv
+            var q = 0.0f64
+            if cgv != 0.0f64 { q = bgv / cgv }
+            if q < 0.0f64 { q = 0.0f64 }
+            mean_b += q
+            g += 1usize
+        }
+        if meth == 0usize { b[lv] = mean_b / f64(ng) } else { b[lv] = sb / sc }
+        let co = offp_of(parlen, lv)
+        if b[lv] != 0.0f64 {
+            c = 0usize
+            while c < cl {
+                cr[co + c] = 1.0f64 / (1.0f64 + between / (b[lv] * tw[cb + c]))
+                tmp1[c] = cr[co + c]
+                c += 1usize
+            }
+            hier_tsum(tmp1[0usize..cl], pg, ng, tw[tl..tl + ng])
+            c = 0usize
+            while c < cl {
+                tmp1[c] = cr[co + c] * wm[cb + c]
+                c += 1usize
+            }
+            hier_tsum(tmp1[0usize..cl], pg, ng, tmp2[0usize..ng])
+            g = 0usize
+            while g < ng {
+                wm[tl + g] = 0.0f64
+                if tw[tl + g] > 0.0f64 { wm[tl + g] = tmp2[g] / tw[tl + g] }
+                g += 1usize
+            }
+        } else {
+            c = 0usize
+            while c < cl {
+                cr[co + c] = 0.0f64
+                c += 1usize
+            }
+        }
+    }
+    var k = 0usize
+    while k <= nl {
+        out[k] = b[k]
+        k += 1usize
+    }
+    var oo = nl + 1usize
+    lv = 0usize
+    while lv < nl {
+        var c = 0usize
+        while c < parlen[lv] {
+            out[oo] = cr[offp_of(parlen, lv) + c]
+            oo += 1usize
+            c += 1usize
+        }
+        lv += 1usize
+    }
+    lv = 0usize
+    while lv < nl {
+        var g = 0usize
+        while g < nn[lv] {
+            out[oo] = wm[offs[lv] + g]
+            oo += 1usize
+            g += 1usize
+        }
+        lv += 1usize
+    }
+    r = 0usize
+    while r < nr {
+        out[oo] = wm[total + r]
+        oo += 1usize
+        r += 1usize
+    }
+    ret ok
+}
