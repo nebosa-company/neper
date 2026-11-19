@@ -584,3 +584,4 @@ oracle_stringi
 oracle_energy_kgroups
 oracle_sampling_cube
 oracle_mediation
+oracle_vgam_cum

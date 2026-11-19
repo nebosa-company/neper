@@ -1274,10 +1274,10 @@
       "group": "CRAN parity",
       "order": 825,
       "title": "VGAM: vector generalized linear and additive models",
-      "score": 0,
+      "score": 0.05,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 382). Very large (about 150k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to VGAM: vglm and vgam for the multinomial, cumulative, acat, sratio, zero-inflated, beta-binomial, Tobit and extreme-value families with their link functions."
+      "evidence": "Started (D7625: cumulative logit with parallel slopes, coefficients, log-likelihood and standard errors equal to vglm on Windows; oracle_vgam_cum; Linux pending). Open: the other families and links, non-parallel odds, factors, weights, vgam smoothers. Very large (about 150k lines upstream). Acceptance, equal to VGAM: vglm and vgam for the multinomial, cumulative, acat, sratio, zero-inflated, beta-binomial, Tobit and extreme-value families with their link functions."
     },
     {
       "id": "L383",
