@@ -11,6 +11,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let kind = usize(z[0usize])
     let k = usize(z[1usize])
+    if c.name.len == 9usize {
+        let n = usize(z[2usize])
+        let (o, e1) = mem.alloc[f64](a, 6usize * k * k)
+        if e1 != ok { ret 0.0f64 / 0.0f64 }
+        let mm = em.contrast_oneway(a, z[3usize..3usize + n], z[3usize + n..3usize + 2usize * n], n, k, kind, o)
+        if mm == 0usize { ret 0.0f64 / 0.0f64 }
+        ret o[6usize * usize(z[3usize + 2usize * n]) + usize(z[4usize + 2usize * n])]
+    }
     var out: [160]f64 = zero
     let mm = em.contrast_coefs(kind, k, out[0usize..160usize])
     if mm == 0usize { ret 0.0f64 / 0.0f64 }
