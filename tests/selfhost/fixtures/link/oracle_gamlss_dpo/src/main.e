@@ -29,7 +29,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 15usize { ret gd.psichel(z[3usize], z[1usize], z[2usize], z[4usize]) }
     if which == 16usize { ret gd.pzasichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize]) }
     if which == 17usize { ret gd.qsichel(z[3usize], z[1usize], z[2usize], z[4usize]) }
-    ret gd.qzasichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize])
+    if which == 18usize { ret gd.qzasichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize]) }
+    if which == 19usize { ret gd.pzisichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize]) }
+    ret gd.qzisichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize])
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

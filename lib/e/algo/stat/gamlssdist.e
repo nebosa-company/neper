@@ -2371,3 +2371,17 @@ fn qzasichel(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if !(pn2 > 0.0f64) { pn2 = 0.0f64 }
     ret qsichel(pn2, mu, sigma, nu)
 }
+
+// ZISICHEL distribution: tau + (1 - tau) F(q) with the Sichel F; quantile: the Sichel quantile of max(0, (p - tau) / (1 - tau))
+fn pzisichel(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    ret tau + (1.0f64 - tau) * psichel(q, mu, sigma, nu)
+}
+
+fn qzisichel(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var pn = (p - tau) / (1.0f64 - tau)
+    if !(pn > 0.0f64) { pn = 0.0f64 }
+    ret qsichel(pn, mu, sigma, nu)
+}
