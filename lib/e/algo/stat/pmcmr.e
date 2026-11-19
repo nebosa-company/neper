@@ -906,9 +906,9 @@ fn steel_stat(a: *mem.Arena, x: []const f64, grp: []const usize, n: usize, nk: u
     ret (rs, crit, ok)
 }
 
-// P(T_i < q for all i) for the many-to-one multivariate t with df degrees of freedom and one-factor correlations lam_i lam_j: the integral over the scale s = chi / sqrt(df) (density
+// P(T_i < q for all i) (or P(|T_i| < q) when two_sided) for the many-to-one multivariate t with df degrees of freedom and one-factor correlations lam_i lam_j: the integral over the scale s = chi / sqrt(df) (density
 // df^(df/2) s^(df - 1) exp(-df s^2 / 2) / (2^(df/2 - 1) Gamma(df/2))) and over the common normal factor of the product of Phi((q s + lam_i z) / sqrt(1 - lam_i^2)), by nested Simpson's rule
-fn mvt_one_factor_upper(q: f64, lam: []const f64, df: f64) -> f64 {
+fn mvt_one_factor_upper(q: f64, lam: []const f64, df: f64, two_sided: bool) -> f64 {
     let ns = 400usize
     let nz = 300usize
     let smax = 1.0f64 + 8.0f64 / math.sqrt[f64](df) + 2.0f64
@@ -932,7 +932,9 @@ fn mvt_one_factor_upper(q: f64, lam: []const f64, df: f64) -> f64 {
                 var m = 0usize
                 while m < lam.len {
                     let rs = math.sqrt[f64](1.0f64 - lam[m] * lam[m])
-                    prod *= dist.pnorm((q * s + lam[m] * z) / rs, 0.0f64, 1.0f64, true, false)
+                    var term = dist.pnorm((q * s + lam[m] * z) / rs, 0.0f64, 1.0f64, true, false)
+                    if two_sided { term -= dist.pnorm((0.0f64 - q * s + lam[m] * z) / rs, 0.0f64, 1.0f64, true, false) }
+                    prod *= term
                     m += 1usize
                 }
                 let f = math.exp[f64](0.0f64 - z * z / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64) * prod
@@ -986,7 +988,20 @@ fn dunnett_many(x: []const f64, grp: []const usize, k: usize, j: usize) -> (f64,
     }
     var at = tv
     if at < 0.0f64 { at = 0.0f64 - at }
-    var p = 2.0f64 * (1.0f64 - mvt_one_factor_upper(at, lam[0usize..k - 1usize], df))
+    var p = 2.0f64 * (1.0f64 - mvt_one_factor_upper(at, lam[0usize..k - 1usize], df, false))
     if p > 1.0f64 { p = 1.0f64 }
     ret (tv, p)
+}
+
+// the single-step p of a many-to-one t statistic: 1 - P(|T_i| < |t| for all i) for group sizes (lam_i = sqrt(n_i / (n_i + n_0))) and df degrees of freedom
+fn t_single_step_p(t: f64, rn: []const f64, k: usize, df: f64) -> f64 {
+    var lam: [16]f64 = zero
+    var m = 1usize
+    while m < k {
+        lam[m - 1usize] = math.sqrt[f64](rn[m] / (rn[m] + rn[0usize]))
+        m += 1usize
+    }
+    var at = t
+    if at < 0.0f64 { at = 0.0f64 - at }
+    ret 1.0f64 - mvt_one_factor_upper(at, lam[0usize..k - 1usize], df, true)
 }

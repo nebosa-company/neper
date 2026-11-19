@@ -37,6 +37,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         t += 1usize
     }
+    if kind == 9usize {
+        let (tv9, p9, pt9) = pm.conover(q, rbar, rn, jj, 0usize)
+        let _ = p9
+        let _ = pt9
+        ret pm.t_single_step_p(tv9, rn, k, q.n - f64(k))
+    }
     if kind == 7usize || kind == 8usize {
         let (lam2, e9) = mem.alloc[f64](a, k)
         if e9 != ok { os.exit(7) }

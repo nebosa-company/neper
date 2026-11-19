@@ -30,4 +30,11 @@ for (rep in 1:12) {
   nd <- suppressWarnings(kwManyOneNdwTest(x, g, p.adjust.method = "single-step"))
   for (j in 1:(k - 1)) { add(c(n, k, 7, j, x, as.numeric(g)), nd$statistic[j, 1]); add(c(n, k, 8, j, x, as.numeric(g)), nd$p.value[j, 1], abs = 3e-3) }
 }
+# kwManyOneConoverTest single-step (kind 9: p of comparison j, R's pmvt Monte Carlo, error about 1e-3).
+for (rep in 1:10) {
+  k <- sample(3:5, 1); sz <- sample(5:9, k, replace = TRUE); n <- sum(sz); g <- factor(rep(1:k, sz))
+  x <- round(rnorm(n) + as.numeric(g) * runif(1, 0, 0.6), 4)
+  cs <- suppressWarnings(kwManyOneConoverTest(x, g, p.adjust.method = "single-step"))
+  for (j in 1:(k - 1)) add(c(n, k, 9, j, x, as.numeric(g)), cs$p.value[j, 1], abs = 4e-3)
+}
 emit("pmcmr_many", "PMCMRplus", list(cases))

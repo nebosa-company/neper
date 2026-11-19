@@ -50353,3 +50353,6 @@ The many-to-one single-step tests take their p value from R's pmvnorm on a corre
 
 ## D7406 — a one-factor multivariate-t integral and PMCMRplus dunnettTest
 `mvt_one_factor_upper` gives P(T_i < q for all i) for the Dunnett structure (many-to-one correlations lam_i lam_j, df degrees of freedom) as a nested integral over the chi scale s and the common normal factor, by Simpson's rule (400 by 300 points), and `dunnett_many` forms dunnettTest's t and two-sided p = min(1, 2 (1 - that)) with the pooled variance on n - k degrees of freedom. R computes it by Monte Carlo (pmvt, error about 1e-3); statistics equal R and p values agree within 4e-3 on twelve data sets. The same integral is what pDunnett and the t-based single-step tests need. L487 at 0.92.
+
+## D7407 — PMCMRplus kwManyOneConoverTest single-step
+`mvt_one_factor_upper` gained a two-sided mode (the product of Phi(upper) - Phi(lower) terms), and `t_single_step_p` gives 1 - P(|T_i| < |t| for all i) for the many-to-one correlations of the group sizes at n - k degrees of freedom, which is how kwManyOneConoverTest(p.adjust.method = "single-step") takes its p from pmvt. The Conover t equals R already (D7360) and the single-step p agrees within 4e-3 of R's Monte Carlo on ten data sets. The same helper serves vanWaerdenManyOneTest. L487 at 0.93.
