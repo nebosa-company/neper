@@ -447,7 +447,7 @@ fn twosls(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usiz
 
 // systemfit method "3SLS" with one instrument set z (n by q) for every equation: equation-wise 2SLS residuals give the residual covariance (the geometric-mean divisor sqrt((n - k_i)(n - k_j))), then the GLS
 // estimator on the projected regressors, beta = [X_hat'(S^-1 x I)X_hat]^-1 X_hat'(S^-1 x I) y; xs and y are laid out as for `sur` (equation after equation); coef and se hold sum(ks) values
-fn threesls(a: *mem.Arena, xs: []const f64, ks: []const usize, z: []const f64, q: usize, y: []const f64, n: usize, m: usize, coef: []f64, se: []f64) -> err {
+fn threesls_z(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64, qs: []const usize, y: []const f64, n: usize, m: usize, coef: []f64, se: []f64) -> err {
     var kt = 0usize
     var e = 0usize
     while e < m {
@@ -470,9 +470,12 @@ fn threesls(a: *mem.Arena, xs: []const f64, ks: []const usize, z: []const f64, q
         e += 1usize
     }
     var xoff = 0usize
+    var zoff = 0usize
     e = 0usize
     while e < m {
         let k = ks[e]
+        let q = qs[e]
+        let z = zs[zoff..zoff + n * q]
         let xe = xs[xoff..xoff + n * k]
         let (cf, ec) = mem.alloc[f64](a, k)
         let (sf, es) = mem.alloc[f64](a, k)
@@ -537,6 +540,7 @@ fn threesls(a: *mem.Arena, xs: []const f64, ks: []const usize, z: []const f64, q
             i += 1usize
         }
         xoff += n * k
+        zoff += n * q
         e += 1usize
     }
     var p1 = 0usize
@@ -619,6 +623,24 @@ fn threesls(a: *mem.Arena, xs: []const f64, ks: []const usize, z: []const f64, q
         q2 += 1usize
     }
     ret ok
+}
+
+// systemfit 3SLS with one instrument set (n by q) shared by every equation
+fn threesls(a: *mem.Arena, xs: []const f64, ks: []const usize, z: []const f64, q: usize, y: []const f64, n: usize, m: usize, coef: []f64, se: []f64) -> err {
+    let (zs, e0) = mem.alloc[f64](a, m * n * q)
+    let (qs, e1) = mem.alloc[usize](a, m)
+    if e0 != ok || e1 != ok { ret mem.Full }
+    var e = 0usize
+    while e < m {
+        qs[e] = q
+        var i = 0usize
+        while i < n * q {
+            zs[e * n * q + i] = z[i]
+            i += 1usize
+        }
+        e += 1usize
+    }
+    ret threesls_z(a, xs, ks, zs, qs, y, n, m, coef, se)
 }
 
 // systemfit SUR iterated to convergence (control maxiter, tol): GLS passes are repeated while sqrt(sum((b - b_old)^2) / sum(b_old^2)) exceeds tol, the first pass being compared with the OLS coefficients; answers the number of passes made, and coef, se, sig are those of the last pass

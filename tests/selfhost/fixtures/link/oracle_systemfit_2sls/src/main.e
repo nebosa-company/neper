@@ -11,6 +11,33 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "s3z") {
+        let nz = usize(z[0usize])
+        let mz = usize(z[1usize])
+        let (kz, ekz) = mem.alloc[usize](a, mz)
+        let (qz, eqz) = mem.alloc[usize](a, mz)
+        if ekz != ok || eqz != ok { ret nan }
+        var ktz = 0usize
+        var qtz = 0usize
+        var e = 0usize
+        while e < mz {
+            kz[e] = usize(z[2usize + e])
+            qz[e] = usize(z[2usize + mz + e])
+            ktz += kz[e]
+            qtz += qz[e]
+            e += 1usize
+        }
+        let xo = 2usize + 2usize * mz
+        let zo = xo + nz * ktz
+        let yo = zo + nz * qtz
+        let (cfz, e1) = mem.alloc[f64](a, ktz)
+        let (sez, e2) = mem.alloc[f64](a, ktz)
+        if e1 != ok || e2 != ok { ret nan }
+        if sf.threesls_z(a, z[xo..zo], kz, z[zo..yo], qz, z[yo..yo + nz * mz], nz, mz, cfz, sez) != ok { ret nan }
+        let wz = usize(z[yo + nz * mz])
+        if wz < ktz { ret cfz[wz] }
+        ret sez[wz - ktz]
+    }
     if str.eq(c.name, "s3") {
         let n3 = usize(z[0usize])
         let m3 = usize(z[1usize])

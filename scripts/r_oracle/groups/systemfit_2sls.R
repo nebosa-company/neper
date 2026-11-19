@@ -63,4 +63,21 @@ for (rep in 1:20) {
   a <- c(n, k, q, as.vector(t(cbind(1, X))), as.vector(t(cbind(1, Z))), as.vector(y))
   for (j in 1:k) { cases[[length(cases) + 1]] <- case("sls", c(a, j - 1), cf[j], rel = 1e-9, abs = 1e-11); cases[[length(cases) + 1]] <- case("sls", c(a, k + j - 1), sev[j], rel = 1e-9, abs = 1e-11) }
 }
+# 3SLS with a different instrument set per equation: "s3z" (n, m, ks[m], qs[m], X_1 .. X_m row-major, Z_1 .. Z_m row-major (each with its constant), y_1 .. y_m, which): the instruments of equation e are the first qs[e] - 1 of the z columns
+for (rep in 1:20) {
+  n <- sample(50:120, 1); m <- 2; qmax <- 6; Zall <- matrix(rnorm(n * (qmax - 1)), n, qmax - 1); ks <- sample(2:3, m, TRUE)
+  qs <- c(sample(4:5, 1), sample(4:6, 1)); d <- data.frame(Zall); names(d) <- paste0("z", 1:(qmax - 1)); fl <- list(); il <- list(); Xl <- list(); Zl <- list(); common <- rnorm(n)
+  for (e in 1:m) {
+    xe <- matrix(0, n, ks[e] - 1); for (j in seq_len(ks[e] - 1)) xe[, j] <- Zall[, 1:(qs[e] - 1)] %*% rnorm(qs[e] - 1, 0, 0.6) + rnorm(n)
+    d[[paste0("y", e)]] <- as.vector(1 + xe %*% runif(ks[e] - 1, -2, 2) + rnorm(n) + 0.5 * common)
+    for (j in seq_len(ks[e] - 1)) d[[paste0("x", e, "_", j)]] <- xe[, j]
+    fl[[paste0("e", e)]] <- as.formula(paste0("y", e, " ~ ", paste(paste0("x", e, "_", seq_len(ks[e] - 1)), collapse = " + ")))
+    il[[e]] <- as.formula(paste("~", paste(paste0("z", 1:(qs[e] - 1)), collapse = " + "))); Xl[[e]] <- cbind(1, xe); Zl[[e]] <- cbind(1, Zall[, 1:(qs[e] - 1)])
+  }
+  r <- tryCatch(suppressWarnings(systemfit(fl, method = "3SLS", inst = il, data = d)), error = function(e) NULL)
+  if (is.null(r)) next
+  cf <- as.numeric(coef(r)); sev <- sqrt(diag(vcov(r))); kt <- sum(ks)
+  a <- c(n, m, ks, qs, unlist(lapply(Xl, function(M) as.vector(t(M)))), unlist(lapply(Zl, function(M) as.vector(t(M)))), unlist(lapply(1:m, function(e) d[[paste0("y", e)]])))
+  for (j in 1:kt) { cases[[length(cases) + 1]] <- case("s3z", c(a, j - 1), cf[j], rel = 1e-7, abs = 1e-9); cases[[length(cases) + 1]] <- case("s3z", c(a, kt + j - 1), sev[j], rel = 1e-7, abs = 1e-9) }
+}
 emit("systemfit_2sls", "systemfit", list(cases))
