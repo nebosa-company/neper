@@ -64,5 +64,8 @@ for (rep in 1:10) {
   for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("fitv", mk(j - 1), cf[[j]], rel = 3e-3, abs = 1e-4)
   for (j in 1:2) cases[[length(cases) + 1]] <- case("fitv", mk(10 + j - 1), cp[[j]], rel = 3e-3, abs = 1e-4)
   cases[[length(cases) + 1]] <- case("fitv", mk(30), as.numeric(logLik(f)), rel = 1e-6, abs = 1e-6)
+  sm <- summary(f)$coefficients
+  for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("fitv", mk(40 + j - 1), sm$mean[j, 2], rel = 1e-2, abs = 1e-4)
+  for (j in 1:2) cases[[length(cases) + 1]] <- case("fitv", mk(60 + j - 1), sm$precision[j, 2], rel = 1e-2, abs = 1e-4)
 }
 emit("betareg", "betareg", list(cases))

@@ -49996,3 +49996,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.agricolae` gains `design_bib` and `bib_r`: the replication is the first r in 2..maxRep (20) with r (k - 1) / (v - 1) and v r / k both whole; the balanced incomplete block design comes from the existing AlgDesign `optBlock` port (`block_optimize`: D criterion, five repeats, the treatment-contrast model of the factor of v treatments with the intercept removed, rows of each block sorted as optBlock answers them); then the blocks are permuted by `sample(1:b, b)` and each block's treatments by `sample(1:k, k)`, all from one stream (the optimiser's draws come first). Both the Mersenne-Twister and the default Super-Duper streams.
 
 **Result.** `oracle_agricolae_groups` has 2849 values (adding design.bib for 7 by 3, 6 by 3, 5 by 4, 4 by 2 and 7 by 4 designs under both generators) and equals agricolae on Windows. Linux pending. L396 stays partial: design.alpha, design.lattice and AMMI remain.
+
+## D7312 — betareg: variable-dispersion standard errors
+
+**Decision.** `betareg.fit_se_var` inverts the Fisher information of the joint fit with the log precision link: K_bb = X' diag(phi^2 w) X, K_bg = X' diag(c phi / g') Z, K_gg = Z' diag(d phi^2) Z.
+
+**Result.** `oracle_betareg` (669 cases, 49 new) equals `summary(betareg(y ~ x | z))` standard errors on Windows to 1e-2 relative (they inherit the optimiser's tolerance on the coefficients). Linux pending. L451 stays partial: other precision links, bias correction and bias reduction, sweighted2.

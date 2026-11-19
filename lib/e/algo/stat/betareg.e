@@ -395,3 +395,95 @@ fn fit_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usi
     }
     ret (Fit { par: par, phi: math.exp[f64](par[p]), ll: 0.0f64 - best }, ok)
 }
+
+// the standard errors of `fit_var` from the Fisher information: K_bb = X' diag(phi^2 w) X, K_bg = X' diag(c phi / g') Z, K_gg = Z' diag(d phi^2) Z with the log precision link (dphi / dgamma = phi z);
+// w, c, d as in `fit_se`. se[0..p] the mean coefficients, se[p..p+q] the precision coefficients; false when singular
+fn fit_se_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize, f: *const Fit, se: []f64) -> bool {
+    let m = p + q
+    let (kk, e1) = mem.alloc[f64](a, m * m)
+    let (col, e2) = mem.alloc[f64](a, m)
+    let (mat, e3) = mem.alloc[f64](a, m * m)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    var i = 0usize
+    while i < m * m {
+        kk[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var j = 0usize
+        while j < p {
+            t += x[i * p + j] * f.par[j]
+            j += 1usize
+        }
+        var u = 0.0f64
+        j = 0usize
+        while j < q {
+            u += z[i * q + j] * f.par[p + j]
+            j += 1usize
+        }
+        let phi = math.exp[f64](u)
+        let mu = linkinv(t, link)
+        var omu = 1.0f64 - mu
+        var gp = gprime(mu, link)
+        if link == 2usize {
+            omu = math.exp[f64](0.0f64 - math.exp[f64](t))
+            gp = 1.0f64 / (omu * math.exp[f64](t))
+        }
+        if link == 3usize {
+            let xx = math.exp[f64](0.0f64 - t)
+            if xx < 0.00001f64 { omu = xx - xx * xx / 2.0f64 + xx * xx * xx / 6.0f64 }
+            gp = 1.0f64 / (mu * xx)
+        }
+        let t1 = gsl.psi_n(1usize, mu * phi)
+        let t2 = gsl.psi_n(1usize, omu * phi)
+        let w = (t1 + t2) / (gp * gp)
+        let cc = phi * (t1 * mu - t2 * omu)
+        let dd = t1 * mu * mu + t2 * omu * omu - gsl.psi_n(1usize, phi)
+        j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                kk[j * m + k] += phi * phi * w * x[i * p + j] * x[i * p + k]
+                k += 1usize
+            }
+            k = 0usize
+            while k < q {
+                let v = x[i * p + j] * cc / gp * phi * z[i * q + k]
+                kk[j * m + p + k] += v
+                kk[(p + k) * m + j] += v
+                k += 1usize
+            }
+            j += 1usize
+        }
+        j = 0usize
+        while j < q {
+            var k = 0usize
+            while k < q {
+                kk[(p + j) * m + p + k] += dd * phi * phi * z[i * q + j] * z[i * q + k]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var c = 0usize
+    while c < m {
+        i = 0usize
+        while i < m * m {
+            mat[i] = kk[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < m {
+            col[i] = 0.0f64
+            i += 1usize
+        }
+        col[c] = 1.0f64
+        if !qrb.solve_dense(mat, col, m) { ret false }
+        se[c] = math.sqrt[f64](col[c])
+        c += 1usize
+    }
+    ret true
+}
