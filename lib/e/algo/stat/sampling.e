@@ -724,3 +724,64 @@ fn strata(a: *mem.Arena, g: *rr.Rng, label: []const f64, w: []const f64, size: [
     }
     ret (cnt, ok)
 }
+
+// cluster(data, "g", size, method) with the cluster variable's levels in ascending order (labels below 10 so that the character and numeric orders agree): the clusters are drawn with
+// srswor(size, K), or inclusionprobabilities(pik, size) and UPsystematic / UPpoisson over the K clusters; the selected clusters' units are written ascending by cluster and then by unit
+// number (1-based) to ids. method 0 srswor, 1 systematic, 2 poisson; pik is per cluster, in level order. The answer is the number of units selected.
+fn cluster(a: *mem.Arena, g: *rr.Rng, label: []const f64, pik: []const f64, size: f64, method: usize, ids: []f64) -> (usize, err) {
+    let n = label.len
+    let k = pik.len
+    let (lv, e0) = mem.alloc[f64](a, k)
+    let (pk, e1) = mem.alloc[f64](a, k)
+    let (s, e2) = mem.alloc[f64](a, k)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0usize, mem.Full) }
+    // the distinct labels ascending
+    var m = 0usize
+    var i = 0usize
+    while i < n {
+        var known = false
+        var q = 0usize
+        while q < m {
+            if lv[q] == label[i] { known = true }
+            q += 1usize
+        }
+        if !known {
+            var j = m
+            while j > 0usize && lv[j - 1usize] > label[i] {
+                lv[j] = lv[j - 1usize]
+                j -= 1usize
+            }
+            lv[j] = label[i]
+            m += 1usize
+        }
+        i += 1usize
+    }
+    if method == 0usize {
+        let er = srswor(a, g, usize(size), m, s[0usize..m])
+        if er != ok { ret (0usize, er) }
+    } else {
+        inclusion(pik, size, pk)
+        if method == 1usize {
+            let er = up_systematic(a, g, pk, s)
+            if er != ok { ret (0usize, er) }
+        } else {
+            up_poisson(g, pk, s)
+        }
+    }
+    var cnt = 0usize
+    var c = 0usize
+    while c < m {
+        if s[c] == 1.0f64 {
+            i = 0usize
+            while i < n {
+                if label[i] == lv[c] {
+                    ids[cnt] = f64(i + 1usize)
+                    cnt += 1usize
+                }
+                i += 1usize
+            }
+        }
+        c += 1usize
+    }
+    ret (cnt, ok)
+}

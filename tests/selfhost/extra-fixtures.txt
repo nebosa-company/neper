@@ -525,3 +525,4 @@ oracle_pmcmr_demsar
 oracle_sm_sj
 oracle_sampling_pi2
 oracle_sampling_strata
+oracle_sampling_cluster

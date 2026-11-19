@@ -50257,3 +50257,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7376 — sampling strata (one variable)
 `strata` visits the strata in order of first appearance (as `unique(data[, m])` does), draws each from the shared generator (srswor(size_i, N_i), or inclusionprobabilities(w[y], size_i) with UPsystematic or UPpoisson) and writes the selected unit numbers ascending within each stratum, which is the order of R's result rows. Equal to R under set.seed on ten samples for each of the three methods (count and position-weighted ID sum). L508 at 0.6.
+
+## D7377 — sampling cluster
+`cluster` draws over the K clusters (distinct labels ascending, labels below 10) with srswor(size, K) or inclusionprobabilities(pik, size) and UPsystematic or UPpoisson, then lists the units of the selected clusters, cluster by cluster. R builds the result with merge, which orders the rows inside a cluster in a way that depends on the draw (cluster 1 came out 2, 5, 10, 9 once and 5, 2, 9, 10 another time), so the oracle compares the count, the sum of the unit numbers and the sum of unit times cluster, not positions (the first run, comparing position-weighted sums, disagreed for that reason alone). Equal to R under set.seed on ten draws per method. L508 at 0.65.

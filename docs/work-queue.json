@@ -702,10 +702,10 @@
       "group": "CRAN parity",
       "order": 746,
       "title": "sampling: survey sampling designs",
-      "score": 0.6,
+      "score": 0.65,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6191). inclusionprobabilities, UPsystematic, UPpoisson, srswor, UPrandomsystematic, UPtille draws and the Horvitz-Thompson estimator equal sampling on Windows (oracle_sampling; Linux pending). D7126: UPbrewer equal to sampling under set.seed (oracle_sampling_brewer, 20 samples). D7127: UPmidzuno equal to sampling (oracle_sampling_midzuno, 20 samples). UPtillepi2, UPsystematicpi2, UPmidzunopi2, UPsampfordpi2 and varHT, and strata with one stratification variable under set.seed (srswor, systematic, poisson; 30 samples, oracle_sampling_strata)  (methods 1 and 2) equal sampling (oracle_sampling_pi2). Open: UPmaxentropy and its pi2, strata with srswr or several variables, clusters, calibration, other joint inclusion probabilities, other variance estimators. Was: Open (CRAN rank 980). Mid. Needs the R RNG streams. Acceptance, equal to sampling value for value under set.seed: srswor, srswr, UPsystematic, UPtille, UPmidzuno, UPbrewer, UPmaxentropy, balancedsampling and fastflightcube, strata, cluster, calib, inclusionprobabilities, rake."
+      "evidence": "Partial (D6191). inclusionprobabilities, UPsystematic, UPpoisson, srswor, UPrandomsystematic, UPtille draws and the Horvitz-Thompson estimator equal sampling on Windows (oracle_sampling; Linux pending). D7126: UPbrewer equal to sampling under set.seed (oracle_sampling_brewer, 20 samples). D7127: UPmidzuno equal to sampling (oracle_sampling_midzuno, 20 samples). UPtillepi2, UPsystematicpi2, UPmidzunopi2, UPsampfordpi2 and varHT, and strata with one stratification variable under set.seed (srswor, systematic, poisson; 30 samples, oracle_sampling_strata)  (methods 1 and 2) equal sampling (oracle_sampling_pi2). cluster by one variable under set.seed (the selected units; 30 draws, oracle_sampling_cluster; R's merge orders rows within a cluster arbitrarily, so the order is not compared). Open: UPmaxentropy and its pi2, strata and cluster with srswr or several variables, calibration, other joint inclusion probabilities, other variance estimators. Was: Open (CRAN rank 980). Mid. Needs the R RNG streams. Acceptance, equal to sampling value for value under set.seed: srswor, srswr, UPsystematic, UPtille, UPmidzuno, UPbrewer, UPmaxentropy, balancedsampling and fastflightcube, strata, cluster, calib, inclusionprobabilities, rake."
     },
     {
       "id": "L509",
