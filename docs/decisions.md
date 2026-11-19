@@ -50803,3 +50803,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7446 — sm h.select cv on binned data
 `cv_density_w` is cv.crit.dens over bin midpoints and counts, with n the number of bins as in sm; `hselect_cv_binned` minimises it over log(start / 8) to log(start * 4), start = sd / 2 of the raw sample, and equals h.select(x, method = "cv", nbins = k) at rel 1e-6 on 15 cases in oracle_sm_hsel. Open for L505: binned regression criteria, reference bands, 2-d, sm.ancova, sm.survival, sm.options.
+
+## D7447 — sm h.select df and aicc on binned regression data
+`hselect_bin_reg` carries the count weights and the within-bin deviations through the df (tr S, S = sum of the count-weighted local-linear rows) and aicc (tr S = sum freq * s_ii, nobs = sum freq) criteria; equal to h.select(x, y, method, nbins = k) at rel 1e-6 on 10 samples each in oracle_sm_hsel. The cv kind is written the same way but not in the oracle: its score is flat to six digits over the whole bracket (0.1120704 at h 0.1, 0.1120612 at 0.2 on a probe), so the minimiser moves with rounding order and 4 of 10 samples disagreed with R. Open for L505: that cv equality, reference bands, 2-d, sm.ancova, sm.survival, sm.options.

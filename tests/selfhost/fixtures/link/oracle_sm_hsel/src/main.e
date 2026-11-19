@@ -46,6 +46,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "hbrcv") || str.eq(c.name, "hbrdf") || str.eq(c.name, "hbraicc") {
+            let nbn = usize(c.args[1usize])
+            let (bx, f0) = mem.alloc[f64](a, nbn)
+            let (bf, f1) = mem.alloc[f64](a, nbn)
+            let (bm, f2) = mem.alloc[f64](a, nbn)
+            let (bd, f3) = mem.alloc[f64](a, nbn)
+            if f0 != ok || f1 != ok || f2 != ok || f3 != ok { os.exit(4) }
+            let xs = c.args[2usize..2usize + n]
+            let (m, eb) = sm.binning1d(a, xs, c.args[2usize + n..2usize + 2usize * n], nbn, bx, bf, bm, bd)
+            if eb != ok { os.exit(4) }
+            var kd = 0usize
+            if str.eq(c.name, "hbrdf") { kd = 1usize }
+            if str.eq(c.name, "hbraicc") { kd = 2usize }
+            let est = sm.hselect_bin_reg(bx[0usize..m], bm[0usize..m], bf[0usize..m], bd[0usize..m], kd, 5.0f64, sm.sd_of(xs) / 2.0f64)
+            if !oracle.agrees(est, c) {
+                failures += 1usize
+                let _ = io.print(oracle.describe(a, c, est))
+                let _ = io.print(" mismatch\n")
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "hbsel") {
             let nbn = usize(c.args[1usize])
             let (bx, f0) = mem.alloc[f64](a, nbn)
@@ -57,7 +80,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (m, eb) = sm.binning1d(a, xs, xs, nbn, bx, bf, bm, bd)
             if eb != ok { os.exit(4) }
             let est = sm.hselect_cv_binned(bx[0usize..m], bf[0usize..m], sm.sd_of(xs) / 2.0f64)
-            if !oracle.agrees(est, c) { failures += 1usize }
+            if !oracle.agrees(est, c) {
+                failures += 1usize
+                let _ = io.print(oracle.describe(a, c, est))
+                let _ = io.print(" mismatch\n")
+            }
             mem.reset(a, start)
             at += 1usize
             continue
@@ -73,7 +100,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (m, eb) = sm.binning1d(a, xs, xs, nbn, bx, bf, bm, bd)
             if eb != ok { os.exit(4) }
             let est = sm.density_w(bx[0usize..m], bf[0usize..m], c.args[2usize], c.args[3usize])
-            if !oracle.agrees(est, c) { failures += 1usize }
+            if !oracle.agrees(est, c) {
+                failures += 1usize
+                let _ = io.print(oracle.describe(a, c, est))
+                let _ = io.print(" mismatch\n")
+            }
             mem.reset(a, start)
             at += 1usize
             continue
@@ -88,7 +119,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (m, eb) = sm.binning1d(a, c.args[4usize..4usize + n], c.args[4usize + n..4usize + 2usize * n], nbn, bx, bf, bm, bd)
             if eb != ok { os.exit(4) }
             let est = sm.regression_w(bx[0usize..m], bm[0usize..m], bf[0usize..m], c.args[2usize], c.args[3usize])
-            if !oracle.agrees(est, c) { failures += 1usize }
+            if !oracle.agrees(est, c) {
+                failures += 1usize
+                let _ = io.print(oracle.describe(a, c, est))
+                let _ = io.print(" mismatch\n")
+            }
             mem.reset(a, start)
             at += 1usize
             continue

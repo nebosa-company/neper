@@ -550,3 +550,66 @@ fn hselect_cv_binned(x: []const f64, f: []const f64, start: f64) -> f64 {
     var c = CvWCtx { x: x, f: f }
     ret math.exp[f64](fd.brent_min[CvWCtx](&c, cv_w_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
 }
+
+type BinRegCtx = struct { x: []const f64, y: []const f64, f: []const f64, dv: []const f64, kind: usize, df: f64 }
+
+// the criteria of sm's h.select for regression on binned data: kind 0 cv (cross-validated smoother), 1 df, 2 aicc; weights are the bin counts
+fn bin_reg_log(c: *BinRegCtx, lh: f64) -> f64 {
+    let m = c.x.len
+    let h = math.exp[f64](lh)
+    var tr = 0.0f64
+    var tot = 0.0f64
+    var nobs = 0.0f64
+    var rss = 0.0f64
+    var i = 0usize
+    while i < m {
+        var s0 = 0.0f64
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        var j = 0usize
+        while j < m {
+            if c.kind != 0usize || j != i {
+                let wd = c.x[i] - c.x[j]
+                let w = c.f[j] * math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+                s0 += w
+                s1 += w * wd
+                s2 += w * wd * wd
+            }
+            j += 1usize
+        }
+        var fit = 0.0f64
+        var sii = 0.0f64
+        j = 0usize
+        while j < m {
+            if c.kind != 0usize || j != i {
+                let wd = c.x[i] - c.x[j]
+                let w = c.f[j] * math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+                let sij = w * (s2 - wd * s1) / (s2 * s0 - s1 * s1)
+                fit += sij * c.y[j]
+                if j == i { sii = sij }
+            }
+            j += 1usize
+        }
+        let r = c.y[i] - fit
+        rss += c.f[i] * r * r + c.dv[i]
+        tr += c.f[i] * sii
+        nobs += c.f[i]
+        tot += sii
+        i += 1usize
+    }
+    if c.kind == 0usize {
+        let v = rss / nobs
+        if v != v { ret 1.0e10f64 }
+        ret v
+    }
+    if c.kind == 1usize { ret (tot - c.df) * (tot - c.df) }
+    let sg = rss / nobs
+    let v = math.log[f64](sg) + 1.0f64 + 2.0f64 * (tr + 1.0f64) / (nobs - tr - 2.0f64)
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+fn hselect_bin_reg(x: []const f64, y: []const f64, f: []const f64, dv: []const f64, kind: usize, df: f64, start: f64) -> f64 {
+    var c = BinRegCtx { x: x, y: y, f: f, dv: dv, kind: kind, df: df }
+    ret math.exp[f64](fd.brent_min[BinRegCtx](&c, bin_reg_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+}

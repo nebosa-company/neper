@@ -54,4 +54,12 @@ for (rep in 1:15) {
   r <- tryCatch(h.select(x, method = "cv", nbins = nb), error = function(e) NULL)
   if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hbsel", c(n, nb, x), r, rel = 1e-6, abs = 1e-12)
 }
+# hbrcv / hbrdf / hbraicc (n, nbins, x[n], y[n]): h.select(x, y, method, nbins = nbins), df = 5
+for (rep in 1:10) {
+  n <- sample(100:300, 1); nb <- sample(10:25, 1); x <- rnorm(n); y <- sin(x) + rnorm(n, 0, 0.3)
+  for (m in c("df", "aicc")) {
+    r <- tryCatch(h.select(x, y, method = m, nbins = nb, df = 5), error = function(e) NULL)
+    if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case(paste0("hbr", m), c(n, nb, x, y), r, rel = 1e-6, abs = 1e-12)
+  }
+}
 emit("sm_hsel", "sm", list(cases))
