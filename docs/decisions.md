@@ -50395,3 +50395,9 @@ The test is the van der Waerden many-to-one test with the expected normal order 
 **Decision.** `psych.principal_varimax` rotates the sign-fixed `principal` loadings with `gparot.varimax_stats` (stats::varimax, normalised, eps 1e-5), orders the columns by decreasing sum of squares and signs each to a positive sum, as `principal(rotate = "varimax")` does.
 
 **Result.** `oracle_psych` (1973 cases, 223 new loadings) equals psych on Windows to 1e-6. The rotation matrix it also returns is not compared. Linux pending. L312 stays partial: oblique rotations, smoothing, omega, fa, fa.parallel, VSS, scoreItems, describeBy.
+
+## D7320 — psych: fa by principal axis
+
+**Decision.** `psych.fa_pa` starts the communalities at the squared multiple correlations and repeats the eigen decomposition of the reduced matrix until the sum of communalities moves by at most 0.001 (50 rounds at most), as `fa(fm = "pa", rotate = "none")` does; loadings are signed to a positive column sum.
+
+**Result.** `oracle_psych` (2194 cases, 221 new) equals psych on Windows to 1e-7: loadings and communalities. Linux pending. L312 stays partial: minres, ml, wls and gls factor extraction (they rest on `optim` with L-BFGS-B), oblique rotations, smoothing, omega, fa.parallel, VSS, scoreItems, describeBy.

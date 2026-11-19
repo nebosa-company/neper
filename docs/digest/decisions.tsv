@@ -4211,4 +4211,5 @@ D7411	745	PMCMRplus frdAllPairsExactTest
 D7317	916	psych: tetrachoric and polychoric of a column pair
 D7318	574	psych: principal components
 D7412	713	PMCMRplus normalScoresManyOneTest
-D7319	582	psych: principal with varimax
+D7319	583	psych: principal with varimax
+D7320	658	psych: fa by principal axis

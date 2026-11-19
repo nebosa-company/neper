@@ -95,4 +95,13 @@ for (rep in 1:14) {
   L <- unclass(pc$loadings)
   for (q in 0:(p * nf - 1)) cases[[length(cases) + 1]] <- case("pcav", c(p, nf, R, q), L[(q %% p) + 1, (q %/% p) + 1], rel = 1e-6, abs = 1e-7)
 }
+# principal-axis factor analysis, unrotated: "fapa" (p, nf, R, q) q < p*nf loading q, p*nf + i communality i
+for (rep in 1:14) {
+  n <- sample(60:160, 1); p <- sample(5:8, 1); f <- rnorm(n); g <- rnorm(n); X <- sapply(1:p, function(j) f * runif(1, 0.2, 1) + g * runif(1, 0, 0.8) + rnorm(n)); R <- cor(X)
+  nf <- sample(1:2, 1)
+  fa1 <- suppressMessages(suppressWarnings(fa(R, nfactors = nf, fm = "pa", rotate = "none", n.obs = n, warnings = FALSE)))
+  L <- unclass(fa1$loadings)
+  for (q in 0:(p * nf - 1)) cases[[length(cases) + 1]] <- case("fapa", c(p, nf, R, q), L[(q %% p) + 1, (q %/% p) + 1], rel = 1e-7, abs = 1e-8)
+  for (i in 1:p) cases[[length(cases) + 1]] <- case("fapa", c(p, nf, R, p * nf + i - 1), fa1$communality[i], rel = 1e-7, abs = 1e-8)
+}
 emit("psych", "psych", list(cases))

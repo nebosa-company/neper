@@ -11,6 +11,8 @@ use e.math.nmath_beta as nbt
 use e.math.dist as dst
 use e.algo.stat.desctools as dt
 use e.mem
+
+error Malformed
 use e.algo.stat.gparot as gp
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.stat.fdrtool as fd
@@ -725,6 +727,83 @@ fn principal_varimax(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []
         while rr < nf {
             out[p * nf + rr + k * nf] = rm[rr * nf + src]
             rr += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// psych::fa(r, nfactors = nf, fm = "pa", rotate = "none") of a correlation matrix r (p by p, symmetric): principal-axis factoring from the squared multiple correlations until the sum of communalities changes
+// by at most min.err = 0.001 (at most 50 rounds). out[0 .. p nf] the loadings (item i, factor k at i + k p, each column signed to a positive sum), then the p communalities
+fn fa_pa(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []f64) -> err {
+    let (inv, e1) = mem.alloc[f64](a, p * p)
+    let (rm, e2) = mem.alloc[f64](a, p * p)
+    let (w, e3) = mem.alloc[f64](a, p)
+    let (z, e4) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if !invert(a, r, p, inv) { ret Malformed }
+    var i = 0usize
+    while i < p * p {
+        rm[i] = r[i]
+        i += 1usize
+    }
+    var comm = 0.0f64
+    i = 0usize
+    while i < p {
+        rm[i * p + i] = 1.0f64 - 1.0f64 / inv[i * p + i]
+        comm += rm[i * p + i]
+        i += 1usize
+    }
+    var err0 = comm
+    var iter = 1usize
+    while err0 > 0.001f64 {
+        let e5 = sy.dsyevr_all(a, rm, p, w, z)
+        if e5 != ok { ret e5 }
+        var comm1 = 0.0f64
+        var j = 0usize
+        while j < p {
+            var h = 0.0f64
+            var k = 0usize
+            while k < nf {
+                let col = p - 1usize - k
+                let ld = z[col * p + j] * math.sqrt[f64](w[col])
+                h += ld * ld
+                k += 1usize
+            }
+            out[p * nf + j] = h
+            comm1 += h
+            j += 1usize
+        }
+        j = 0usize
+        while j < p {
+            rm[j * p + j] = out[p * nf + j]
+            j += 1usize
+        }
+        err0 = math.abs[f64](comm - comm1)
+        comm = comm1
+        iter += 1usize
+        if iter > 50usize { err0 = 0.0f64 }
+    }
+    // the loadings of the last decomposition
+    var k = 0usize
+    while k < nf {
+        let col = p - 1usize - k
+        var sum = 0.0f64
+        var j = 0usize
+        while j < p {
+            out[j + k * p] = z[col * p + j] * math.sqrt[f64](w[col])
+            sum += out[j + k * p]
+            j += 1usize
+        }
+        if sum < 0.0f64 {
+            j = 0usize
+            while j < p {
+                out[j + k * p] = 0.0f64 - out[j + k * p]
+                j += 1usize
+            }
         }
         k += 1usize
     }
