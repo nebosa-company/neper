@@ -44,4 +44,14 @@ for (rep in 1:40) {
     add("npaths", zz, length(pp$paths)); add("nopen", zz, sum(unlist(pp$open)))
   }
 }
+# "neq": the number of DAGs in the Markov equivalence class (length(equivalentDAGs(g))), DAGs with at most 14 edges
+for (rep in 1:40) {
+  n <- sample(4:8, 1); nodes <- paste0("v", seq_len(n))
+  A <- matrix(0, n, n); for (i in 1:(n - 1)) for (j in (i + 1):n) if (runif(1) < 0.35) A[i, j] <- 1
+  edges <- which(A == 1, arr.ind = TRUE)
+  if (nrow(edges) == 0 || nrow(edges) > 14) next
+  txt <- paste("dag {", paste(nodes, collapse = " "), paste(sprintf("%s -> %s", nodes[edges[, 1]], nodes[edges[, 2]]), collapse = " "), "}")
+  g <- dagitty(txt)
+  add("neq", c(n, 0, 1, 0, as.vector(t(A))), length(equivalentDAGs(g)))
+}
 emit("dagitty", "dagitty", list(cases))

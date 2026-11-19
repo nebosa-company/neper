@@ -4124,4 +4124,5 @@ D7328	1115	agricolae: stability.par
 D7329	1273	agricolae: AMMI from raw data, the grouped Kruskal and Friedman tests; L396 closed
 D7330	1064	fpc: dbscan
 D7331	1787	fpc: ncoord, and R's solve() in the LU order
-D7332	1060	dagitty: every adjustment set, the canonical set and path enumeration
+D7332	1061	dagitty: every adjustment set, the canonical set and path enumeration
+D7333	687	dagitty: equivalentDAGs

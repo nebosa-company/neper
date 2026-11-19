@@ -261,3 +261,95 @@ fn count_paths(adj: []const bool, n: usize, x: usize, y: usize, z: u32) -> (usiz
     }
     ret (total, open)
 }
+
+// the v-structures of an n by n DAG (n at most 8) as a set of (u, v, z) with u < v non-adjacent parents of z, packed u * 64 + v * 8 + z into vs (512 entries)
+fn v_structures(adj: []const bool, n: usize, vs: []bool) {
+    var i = 0usize
+    while i < 512usize {
+        vs[i] = false
+        i += 1usize
+    }
+    var z = 0usize
+    while z < n {
+        var u = 0usize
+        while u < n {
+            var v = u + 1usize
+            while v < n {
+                if has(adj, n, u, z) && has(adj, n, v, z) && !has(adj, n, u, v) && !has(adj, n, v, u) { vs[u * 64usize + v * 8usize + z] = true }
+                v += 1usize
+            }
+            u += 1usize
+        }
+        z += 1usize
+    }
+}
+
+fn is_acyclic(adj: []const bool, n: usize) -> bool {
+    var done = 0u32
+    var progress = true
+    while progress {
+        progress = false
+        var v = 0usize
+        while v < n {
+            if (done & bit(v)) == 0u32 && (parents_mask(adj, n, v) & ~done) == 0u32 {
+                done = done | bit(v)
+                progress = true
+            }
+            v += 1usize
+        }
+    }
+    ret done == (1u32 << u32(n)) - 1u32
+}
+
+// the number of DAGs in the Markov equivalence class of the DAG (same skeleton and same v-structures), the DAG itself included (equivalentDAGs); n at most 8, at most 20 edges
+fn equivalent_dag_count(a: *mem.Arena, adj: []const bool, n: usize) -> usize {
+    var eu: [28]usize = zero
+    var ev: [28]usize = zero
+    var m = 0usize
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            if has(adj, n, i, j) && m < 28usize {
+                eu[m] = i
+                ev[m] = j
+                m += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if m > 20usize { ret 0usize }
+    let (g, e0) = mem.alloc[bool](a, n * n)
+    let (vs0, e1) = mem.alloc[bool](a, 512usize)
+    let (vs1, e2) = mem.alloc[bool](a, 512usize)
+    if e0 != ok || e1 != ok || e2 != ok { ret 0usize }
+    v_structures(adj, n, vs0)
+    var count = 0usize
+    var mask = 0u32
+    let total = 1u32 << u32(m)
+    while mask < total {
+        var t = 0usize
+        while t < n * n {
+            g[t] = false
+            t += 1usize
+        }
+        var e = 0usize
+        while e < m {
+            if ((mask >> u32(e)) & 1u32) == 1u32 { g[ev[e] * n + eu[e]] = true } else { g[eu[e] * n + ev[e]] = true }
+            e += 1usize
+        }
+        if is_acyclic(g, n) {
+            v_structures(g, n, vs1)
+            var same = true
+            t = 0usize
+            while t < 512usize {
+                if vs0[t] != vs1[t] { same = false }
+                t += 1usize
+            }
+            if same { count += 1usize }
+        }
+        mask += 1u32
+    }
+    ret count
+}
