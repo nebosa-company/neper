@@ -4140,4 +4140,5 @@ D7343	1125	mgcv: penalised least squares for a Gaussian gam (fixed smoothing par
 D7344	1055	mgcv: GCV smoothing-parameter selection
 D7345	1113	mgcv: REML smoothing-parameter selection
 D7346	1250	mgcv: an additive model of several smooths (fixed smoothing parameters)
-D7347	953	mgcv: predict.gam with standard errors
+D7347	954	mgcv: predict.gam with standard errors
+D7348	1155	mgcv: summary.gam parametric table and fit statistics

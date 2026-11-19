@@ -5,6 +5,7 @@
 
 use e.algo.linalg.lapack_syevr as sy
 use e.math
+use e.math.nmath_beta as nbt
 use e.mem
 
 error Malformed
@@ -973,4 +974,71 @@ fn gam_predict(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen: []const 
         i += 1usize
     }
     ret ok
+}
+
+// ---- summary.gam, the parametric part and the fit statistics, for a Gaussian one-smooth model with a fixed smoothing parameter (the smooth-term F test is not ported): the
+// intercept's estimate, Bayesian standard error sqrt(sig2 [(X'X + P)^-1]_00), t value and p value from the t distribution with the residual degrees of freedom n - edf,
+// the scale sig2 = rss / (n - edf), the adjusted r squared 1 - var(y - mu) (n - 1) / (var(y) (n - edf)) and the deviance explained 1 - rss / sum((y - mean(y))^2).
+type GamSummary = struct { est: f64, se: f64, tval: f64, pval: f64, sig2: f64, rsq: f64, devexpl: f64, edf: f64, resdf: f64 }
+
+fn gam_summary(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen: []const f64, y: []const f64) -> (GamSummary, err) {
+    var o: GamSummary = zero
+    let (coef, e0) = mem.alloc[f64](a, p)
+    let (fit, e1) = mem.alloc[f64](a, n)
+    let (am, e2) = mem.alloc[f64](a, p * p)
+    let (ident, e3) = mem.alloc[f64](a, p * p)
+    let (ainv, e4) = mem.alloc[f64](a, p * p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (o, mem.Full) }
+    let (edf, rss, ef) = pls_fit(a, dm, n, p, pen, y, coef, fit)
+    if ef != ok { ret (o, ef) }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var v = 0.0f64
+            var i = 0usize
+            while i < n {
+                v += dm[i * p + r] * dm[i * p + c]
+                i += 1usize
+            }
+            am[r * p + c] = v + pen[r * p + c]
+            ident[r * p + c] = 0.0f64
+            if r == c { ident[r * p + c] = 1.0f64 }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let es = solve_dense(a, am, p, ident, p, ainv)
+    if es != ok { ret (o, es) }
+    let nf = f64(n)
+    let resdf = nf - edf
+    let sig2 = rss / resdf
+    o.est = coef[0usize]
+    o.se = math.sqrt[f64](sig2 * ainv[0usize])
+    o.tval = o.est / o.se
+    o.pval = 2.0f64 * nbt.pt(0.0f64 - math.abs[f64](o.tval), resdf, true, false)
+    o.sig2 = sig2
+    o.edf = edf
+    o.resdf = resdf
+    var my = 0.0f64
+    var mf = 0.0f64
+    var i = 0usize
+    while i < n {
+        my += y[i] / nf
+        mf += (y[i] - fit[i]) / nf
+        i += 1usize
+    }
+    var vy = 0.0f64
+    var vr = 0.0f64
+    var tss = 0.0f64
+    i = 0usize
+    while i < n {
+        vy += (y[i] - my) * (y[i] - my) / (nf - 1.0f64)
+        vr += (y[i] - fit[i] - mf) * (y[i] - fit[i] - mf) / (nf - 1.0f64)
+        tss += (y[i] - my) * (y[i] - my)
+        i += 1usize
+    }
+    o.rsq = 1.0f64 - vr * (nf - 1.0f64) / (vy * resdf)
+    o.devexpl = 1.0f64 - rss / tss
+    ret (o, ok)
 }
