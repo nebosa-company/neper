@@ -543,3 +543,4 @@ oracle_pmcmr_welch
 oracle_pmcmr_st
 oracle_pmcmr_nemy
 oracle_pmcmr_steel
+oracle_pmcmr_dunnett

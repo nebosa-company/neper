@@ -905,3 +905,88 @@ fn steel_stat(a: *mem.Arena, x: []const f64, grp: []const usize, n: usize, nk: u
     }
     ret (rs, crit, ok)
 }
+
+// P(T_i < q for all i) for the many-to-one multivariate t with df degrees of freedom and one-factor correlations lam_i lam_j: the integral over the scale s = chi / sqrt(df) (density
+// df^(df/2) s^(df - 1) exp(-df s^2 / 2) / (2^(df/2 - 1) Gamma(df/2))) and over the common normal factor of the product of Phi((q s + lam_i z) / sqrt(1 - lam_i^2)), by nested Simpson's rule
+fn mvt_one_factor_upper(q: f64, lam: []const f64, df: f64) -> f64 {
+    let ns = 400usize
+    let nz = 300usize
+    let smax = 1.0f64 + 8.0f64 / math.sqrt[f64](df) + 2.0f64
+    let hs = smax / f64(ns)
+    let zlo = 0.0f64 - 9.0f64
+    let hz = 18.0f64 / f64(nz)
+    let lg = nm.lgammafn(df / 2.0f64)
+    let c0 = (df / 2.0f64) * math.log[f64](df) - (df / 2.0f64 - 1.0f64) * math.log[f64](2.0f64) - lg
+    var total = 0.0f64
+    var i = 0usize
+    while i <= ns {
+        let s = hs * f64(i)
+        var fs = 0.0f64
+        if s > 0.0f64 { fs = math.exp[f64](c0 + (df - 1.0f64) * math.log[f64](s) - df * s * s / 2.0f64) }
+        var inner = 0.0f64
+        if fs > 0.0f64 {
+            var j = 0usize
+            while j <= nz {
+                let z = zlo + hz * f64(j)
+                var prod = 1.0f64
+                var m = 0usize
+                while m < lam.len {
+                    let rs = math.sqrt[f64](1.0f64 - lam[m] * lam[m])
+                    prod *= dist.pnorm((q * s + lam[m] * z) / rs, 0.0f64, 1.0f64, true, false)
+                    m += 1usize
+                }
+                let f = math.exp[f64](0.0f64 - z * z / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64) * prod
+                var wz = 2.0f64
+                if j == 0usize || j == nz { wz = 1.0f64 } else if j % 2usize == 1usize { wz = 4.0f64 }
+                inner += wz * f
+                j += 1usize
+            }
+            inner = inner * hz / 3.0f64
+        }
+        var ws = 2.0f64
+        if i == 0usize || i == ns { ws = 1.0f64 } else if i % 2usize == 1usize { ws = 4.0f64 }
+        total += ws * fs * inner
+        i += 1usize
+    }
+    ret total * hs / 3.0f64
+}
+
+// dunnettTest (two-sided): t_j = (mean_j - mean_1) / sqrt(s2 (1 / n_j + 1 / n_1)) with the pooled s2 on n - k degrees of freedom, p = min(1, 2 (1 - P(T_i < |t_j| for all i))) under the one-factor
+// correlations sqrt(n_i / (n_i + n_1)); grp holds labels 1..k; answers (t, p)
+fn dunnett_many(x: []const f64, grp: []const usize, k: usize, j: usize) -> (f64, f64) {
+    let n = x.len
+    var cnt: [16]f64 = zero
+    var mean: [16]f64 = zero
+    var t = 0usize
+    while t < n {
+        cnt[grp[t] - 1usize] += 1.0f64
+        mean[grp[t] - 1usize] += x[t]
+        t += 1usize
+    }
+    var g = 0usize
+    while g < k {
+        mean[g] = mean[g] / cnt[g]
+        g += 1usize
+    }
+    var ss = 0.0f64
+    t = 0usize
+    while t < n {
+        let d = x[t] - mean[grp[t] - 1usize]
+        ss += d * d
+        t += 1usize
+    }
+    let df = f64(n) - f64(k)
+    let s2 = ss / df
+    let tv = (mean[j] - mean[0usize]) / math.sqrt[f64](s2 * (1.0f64 / cnt[j] + 1.0f64 / cnt[0usize]))
+    var lam: [16]f64 = zero
+    g = 1usize
+    while g < k {
+        lam[g - 1usize] = math.sqrt[f64](cnt[g] / (cnt[g] + cnt[0usize]))
+        g += 1usize
+    }
+    var at = tv
+    if at < 0.0f64 { at = 0.0f64 - at }
+    var p = 2.0f64 * (1.0f64 - mvt_one_factor_upper(at, lam[0usize..k - 1usize], df))
+    if p > 1.0f64 { p = 1.0f64 }
+    ret (tv, p)
+}
