@@ -50386,3 +50386,6 @@ vanWaerdenManyOneTest(p.adjust.method = "single-step") takes its p from the same
 **Decision.** `psych.principal` takes the sign-exact `dsyevr` eigen decomposition of a correlation matrix, forms the loadings eigenvector times sqrt(eigenvalue) (eigenvalues floored at machine epsilon), flips each column so its sum is positive, and returns the eigenvalues and the communalities (`rotate = "none"`).
 
 **Result.** `oracle_psych` (1750 cases, 273 new) equals psych on Windows to 1e-8. Linux pending. L312 stays partial: rotations (varimax and oblique), smoothing, omega, fa, fa.parallel, VSS, scoreItems, describeBy.
+
+## D7412 — PMCMRplus normalScoresManyOneTest
+The test is the van der Waerden many-to-one test with the expected normal order statistics as scores in place of qnorm(rank / (n + 1)); `vdw_pair` takes an `exact_scores` flag and `norm_order` computes E[Z(r:n)] = r C(n, r) integral x Phi^(r - 1) (1 - Phi)^(n - r) phi dx by Simpson's rule. PMCMRplus gets those values from SuppDists::normOrder, a compiled approximation that differs from the integral by up to 6e-5 (checked: n = 12), so the oracle compares statistics and p values at 5e-4 relative on twelve data sets without ties; the package breaks ties at random from the R generator, which is not ported. The van der Waerden fixtures still pass. L487 at 0.99.

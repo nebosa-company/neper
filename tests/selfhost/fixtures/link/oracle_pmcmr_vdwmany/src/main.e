@@ -14,6 +14,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let k = usize(z[1usize])
     let kind = usize(z[2usize])
     let jj = usize(z[3usize])
+    let ns_flag = false
     let x = z[4usize..4usize + n]
     let (grp, e0) = mem.alloc[usize](a, n)
     let (rbar, e1) = mem.alloc[f64](a, k)
@@ -27,7 +28,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     t = 1usize
     while t < k {
-        let (tv, p, pt, e7) = pm.vdw_pair(a, n, k, x, grp, t, 0usize, true)
+        let (tv, p, pt, e7) = pm.vdw_pair(a, n, k, x, grp, t, 0usize, true, ns_flag)
         let _ = pt
         if e7 != ok { os.exit(7) }
         if kind == 0usize && t == jj { ret tv }

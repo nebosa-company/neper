@@ -547,3 +547,4 @@ oracle_pmcmr_dunnett
 oracle_pmcmr_tamhane
 oracle_pmcmr_siegel
 oracle_pmcmr_exact
+oracle_pmcmr_ns

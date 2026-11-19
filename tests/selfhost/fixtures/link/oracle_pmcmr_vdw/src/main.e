@@ -22,7 +22,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         grp[t] = usize(z[5usize + n + t]) - 1usize
         t += 1usize
     }
-    let (tv, p, pt, e) = pm.vdw_pair(a, n, k, x, grp, i, j, false)
+    let (tv, p, pt, e) = pm.vdw_pair(a, n, k, x, grp, i, j, false, false)
     if e != ok { os.exit(5) }
     if kind == 0usize { ret tv }
     if kind == 1usize { ret p }

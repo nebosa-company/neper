@@ -421,13 +421,16 @@ fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: u
     ret (tv, 2.0f64 * nb.pt(0.0f64 - at, df, true, false), ok)
 }
 
-// van der Waerden all-pairs test: normal scores qnorm(rank / (n + 1)) of the pooled sample; the statistic of cell (row i, column j), i > j, is
+// van der Waerden all-pairs test: normal scores qnorm(rank / (n + 1)) of the pooled sample (or, with exact_scores, the expected normal order statistics, the normal scores test); the statistic of cell (row i, column j), i > j, is
 // |mean score_i - mean score_j| / sqrt(s2 (n - 1 - T) / (n - k) (1 / n_i + 1 / n_j)). Answers (t, unadjusted two-sided p, single-step Tukey p).
-fn vdw_pair(a: *mem.Arena, n: usize, k: usize, x: []const f64, grp: []const usize, i: usize, j: usize, signed: bool) -> (f64, f64, f64, err) {
+fn vdw_pair(a: *mem.Arena, n: usize, k: usize, x: []const f64, grp: []const usize, i: usize, j: usize, signed: bool, exact_scores: bool) -> (f64, f64, f64, err) {
     let (r, e0) = mem.alloc[f64](a, n)
     let (aj, e1) = mem.alloc[f64](a, k)
     let (nj, e2) = mem.alloc[f64](a, k)
     if e0 != ok || e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, 0.0f64, mem.Full) }
+    let (eij, e9) = mem.alloc[f64](a, n)
+    if e9 != ok { ret (0.0f64, 0.0f64, 0.0f64, mem.Full) }
+    if exact_scores { norm_order(n, eij) }
     let er = rank_avg(a, x, r)
     if er != ok { ret (0.0f64, 0.0f64, 0.0f64, er) }
     var c = 0usize
@@ -440,7 +443,8 @@ fn vdw_pair(a: *mem.Arena, n: usize, k: usize, x: []const f64, grp: []const usiz
     var ss = 0.0f64
     var t = 0usize
     while t < n {
-        let z = dist.qnorm(r[t] / (nf + 1.0f64), 0.0f64, 1.0f64, true, false)
+        var z = dist.qnorm(r[t] / (nf + 1.0f64), 0.0f64, 1.0f64, true, false)
+        if exact_scores { z = eij[usize(r[t]) - 1usize] }
         aj[grp[t]] += z
         nj[grp[t]] += 1.0f64
         ss += z * z
@@ -1124,4 +1128,34 @@ fn frd_exact_p(n: usize, k: usize, d: usize) -> f64 {
         t += 1usize
     }
     ret p
+}
+
+// the expected values of the normal order statistics of a sample of n, E[Z(r:n)] = r C(n, r) integral x Phi(x)^(r - 1) (1 - Phi(x))^(n - r) phi(x) dx, by Simpson's rule on [-9, 9]
+// (SuppDists' normOrder, which PMCMRplus uses, is an approximation good to about 1e-4; this is the exact value); out receives the n values in increasing order
+fn norm_order(n: usize, out: []f64) {
+    let steps = 6000usize
+    let lo = 0.0f64 - 9.0f64
+    let h = 18.0f64 / f64(steps)
+    var r = 1usize
+    while r <= n {
+        // log of r C(n, r)
+        let lc = nm.lgammafn(f64(n) + 1.0f64) - nm.lgammafn(f64(r)) - nm.lgammafn(f64(n - r) + 1.0f64)
+        var s = 0.0f64
+        var i = 0usize
+        while i <= steps {
+            let x = lo + h * f64(i)
+            let cdf = dist.pnorm(x, 0.0f64, 1.0f64, true, false)
+            let sf = dist.pnorm(x, 0.0f64, 1.0f64, false, false)
+            var lf = lc + dist.dnorm(x, 0.0f64, 1.0f64, true)
+            if r > 1usize { lf += f64(r - 1usize) * math.log[f64](cdf) }
+            if n > r { lf += f64(n - r) * math.log[f64](sf) }
+            let f = x * math.exp[f64](lf)
+            var wgt = 2.0f64
+            if i == 0usize || i == steps { wgt = 1.0f64 } else if i % 2usize == 1usize { wgt = 4.0f64 }
+            s += wgt * f
+            i += 1usize
+        }
+        out[r - 1usize] = s * h / 3.0f64
+        r += 1usize
+    }
 }
