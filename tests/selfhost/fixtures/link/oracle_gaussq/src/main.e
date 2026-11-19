@@ -13,6 +13,7 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "twb") { ret gq.tweedie_series_bigp(z[0usize], z[1usize], z[2usize], z[3usize]) }
     if str.eq(c.name, "twpg") { ret gq.tweedie_pg(z[1usize], z[2usize], z[3usize], z[4usize], usize(z[0usize])) }
     if str.eq(c.name, "twr") {
         // (seed, n, power, mu, phi, index)

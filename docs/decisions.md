@@ -50728,3 +50728,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `mlogitpkg.clogit_vcov` returns the inverse of the information at the fitted coefficients (the full covariance matrix, off-diagonals included) and `wald_test` the statistic b_S' (V_SS)^-1 b_S of a subset of the coefficients with its chi-square p value on the subset's size.
 
 **Result.** `oracle_mlogit` (253 cases, 40 new) equals the same statistic computed from mlogit's `vcov` and `coef` on Windows: statistic to 1e-4, p value to 1e-4 relative (mlogit's coefficients are only about 1e-5 from the optimum, which a quadratic form amplifies). The oracle forms the Wald statistic itself from `vcov(f)` because `waldtest` and `linearHypothesis` are not part of mlogit. Linux pending. L456 stays partial: mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, predictions on new data, an analytic Hessian for nested-logit standard errors.
+
+## D7368 — tweedie: the series density for power above 2
+
+**Decision.** `gaussq.tweedie_series_bigp` is `dtweedie_series` for power > 2 and y > 0: logv is the log of the alternating sum of (-1)^k sin(-a pi k) exp(k r + lgamma(1 + a k) - lgamma(1 + k)) over the terms from the drop-of-37 range, with the package's reliability test (rounding-error estimate under 1e-6 of the sum); the density is exp((y theta - kappa)/phi - log(pi y) + logv), NaN where the package gives up. The package's inversion method for power above 2 is compiled code (`twcomputation`) and is not ported.
+
+**Result.** `oracle_gaussq` (2987 cases, 59 new) equals `tweedie::dtweedie_series` on Windows to 1e-9 on the points where the series is reliable. Linux pending. L518 stays partial (score 0.2): ptweedie, qtweedie and rtweedie for power above 2, the inversion method with its tolerances, power 1 and 2 edge cases.

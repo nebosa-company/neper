@@ -82,4 +82,13 @@ for (rep in 1:30) { pw <- runif(1, 1.1, 1.9); mu <- runif(1, 0.5, 6); ph <- runi
 # dtweedie_saddle: "tws" (y, power, mu, phi), powers on both sides of 2 and the atom at 0
 for (rep in 1:40) { pw <- c(runif(1, 1.1, 1.9), runif(1, 2.2, 3.5))[rep %% 2 + 1]; mu <- runif(1, 0.5, 6); ph <- runif(1, 0.3, 3); y <- if (rep %% 7 == 0 && pw < 2) 0 else rexp(1) * mu + 0.05
   cases[[length(cases) + 1]] <- case("tws", c(y, pw, mu, ph), dtweedie_saddle(y, power = pw, mu = mu, phi = ph), rel = 1e-10, abs = 1e-12) }
+# tweedie dtweedie_series for power > 2: "twb" (y, power, mu, phi); only the points where the package's series is reliable (not NaN)
+suppressWarnings({
+for (rep in 1:60) {
+  pw <- runif(1, 2.1, 4.5); mu <- runif(1, 0.5, 4); ph <- runif(1, 0.3, 2); y <- rexp(1, 1 / mu) + 0.05
+  d <- suppressWarnings(tryCatch(dtweedie_series(y, power = pw, mu = mu, phi = ph), error = function(e) NaN))
+  if (!is.finite(d) || d <= 0) next
+  cases[[length(cases) + 1]] <- case("twb", c(y, pw, mu, ph), d, rel = 1e-9, abs = 1e-14)
+}
+})
 emit("gaussq", "statmod", list(cases))

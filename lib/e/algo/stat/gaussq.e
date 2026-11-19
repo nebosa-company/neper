@@ -680,3 +680,62 @@ fn tweedie_saddle(y: f64, p: f64, mu: f64, phi: f64) -> f64 {
     if p < 2.0f64 { v = math.pow[f64](y + 1.0f64 / 6.0f64, p) }
     ret math.exp[f64](0.0f64 - d / (2.0f64 * phi)) / math.sqrt[f64](2.0f64 * 3.141592653589793f64 * phi * v)
 }
+
+// tweedie::dtweedie_series for power > 2 (Dunn and Smyth's series of the Wright-type function) for one y > 0: logv = log sum_k (-1)^k sin(-a pi k) exp(k r + lgamma(1 + a k) - lgamma(1 + k)) over the terms the
+// package keeps (the range from a drop of 37 in the exponent), a = (2 - p) / (1 - p); the density is exp((y theta - kappa) / phi - log(pi y) + logv). NaN where the package gives up: kmax too large or the
+// alternating sum is not reliable (error estimate not below 1e-6 of the sum)
+fn tweedie_series_bigp(y: f64, p: f64, mu: f64, phi: f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let a = (2.0f64 - p) / (1.0f64 - p)
+    let a1 = 1.0f64 - a
+    let kmaxe = math.pow[f64](y, 2.0f64 - p) / (phi * (p - 2.0f64))
+    if !(kmaxe <= 40.0f64 * (p - 1.0f64) + 10.0f64) { ret nan }
+    let r = 0.0f64 - a1 * math.log[f64](phi) - math.log[f64](p - 2.0f64) - a * math.log[f64](y) + a * math.log[f64](p - 1.0f64)
+    let drop = 37.0f64
+    var k = math.max[f64](1.0f64, kmaxe)
+    let c = r + a1 + a * math.log[f64](a)
+    let vmax = kmaxe * a1
+    var estlogv = vmax
+    while estlogv > vmax - drop {
+        k += 2.0f64
+        estlogv = k * (c - a1 * math.log[f64](k))
+    }
+    let hik = math.ceil[f64](k)
+    k = math.max[f64](1.0f64, kmaxe)
+    estlogv = vmax
+    while estlogv > vmax - drop && k >= 2.0f64 {
+        k = math.max[f64](1.0f64, k - 2.0f64)
+        estlogv = k * (c - a1 * math.log[f64](k))
+    }
+    let lok = math.max[f64](1.0f64, math.floor[f64](k))
+    var m = 0.0f64 - 1.0e300f64
+    var kk = lok
+    while kk <= hik {
+        let av = r * kk + nm.lgammafn(1.0f64 + a * kk) - nm.lgammafn(1.0f64 + kk)
+        if av > m { m = av }
+        kk += 1.0f64
+    }
+    var sum = 0.0f64
+    var absum = 0.0f64
+    var neff = 0.0f64
+    var errsum = 0.0f64
+    kk = lok
+    while kk <= hik {
+        let av = r * kk + nm.lgammafn(1.0f64 + a * kk) - nm.lgammafn(1.0f64 + kk)
+        let ve = math.exp[f64](av - m)
+        var sg = 1.0f64
+        if math.floor[f64](kk / 2.0f64) * 2.0f64 != kk { sg = 0.0f64 - 1.0f64 }
+        let cc = math.sin[f64](0.0f64 - a * 3.141592653589793f64 * kk) * sg
+        sum += ve * cc
+        absum += math.abs[f64](ve * cc)
+        if ve > 2.220446049250313e-16f64 { neff += 1.0f64 }
+        errsum += (math.abs[f64](av - m) + 1.0f64) * math.abs[f64](ve * cc)
+        kk += 1.0f64
+    }
+    let erre = 2.220446049250313e-16f64 * (errsum + neff * absum)
+    if !(sum > 0.0f64 && erre < 1.0e-6f64 * sum) { ret nan }
+    let logv = math.log[f64](sum) + m
+    let theta = math.pow[f64](mu, 1.0f64 - p) / (1.0f64 - p)
+    let kappa = math.pow[f64](mu, 2.0f64 - p) / (2.0f64 - p)
+    ret math.exp[f64]((y * theta - kappa) / phi - math.log[f64](3.141592653589793f64 * y) + logv)
+}

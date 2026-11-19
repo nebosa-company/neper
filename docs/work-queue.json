@@ -4739,10 +4739,10 @@
       "group": "CRAN parity",
       "order": 830,
       "title": "tweedie: powers above 2 and the series beyond statmod",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open. Split from L327, which met its statmod acceptance (D6086, D6801-D6803, D6811, D6820, D6821, D6957) and the tweedie package for 1 < power < 2 (D6958-D6960). Acceptance, equal to tweedie: dtweedie, ptweedie, qtweedie and rtweedie for power above 2 (Fourier inversion, stable distributions), power 1 and 2 edge cases, the series and inversion methods with their tolerances."
+      "evidence": "Partial (D7368): dtweedie_series for power above 2 (the Wright-type series with its reliability check) equal to tweedie on 59 values on Windows (oracle_gaussq; Linux pending). Open. Split from L327, which met its statmod acceptance (D6086, D6801-D6803, D6811, D6820, D6821, D6957) and the tweedie package for 1 < power < 2 (D6958-D6960). Acceptance, equal to tweedie: dtweedie, ptweedie, qtweedie and rtweedie for power above 2 (Fourier inversion, stable distributions), power 1 and 2 edge cases, the series and inversion methods with their tolerances."
     },
     {
       "id": "L519",
