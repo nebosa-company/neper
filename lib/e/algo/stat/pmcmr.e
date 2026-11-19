@@ -365,6 +365,13 @@ fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: u
     }
     let nf = f64(n)
     let kf = f64(k)
+    if kind == 6usize {
+        // frdAllPairsExactTest: the rank-sum difference R_i - R_j and its exact two-sided p, the tail of the n-fold convolution of the per-block difference distribution (Eisinga et al.)
+        let dsum = rs[i] - rs[j]
+        var ad = dsum
+        if ad < 0.0f64 { ad = 0.0f64 - ad }
+        ret (dsum, frd_exact_p(n, k, usize(math.floor[f64](ad + 0.5f64))), ok)
+    }
     if kind == 5usize {
         // frdAllPairsSiegelTest: the mean rank difference over sqrt(k (k + 1) / (6 n)) and its two-sided normal p (unadjusted)
         var dsg = (rs[i] - rs[j]) / nf
@@ -1069,4 +1076,52 @@ fn tamhane_dunnett(x: []const f64, grp: []const usize, k: usize, j: usize) -> (f
     var at = tv
     if at < 0.0f64 { at = 0.0f64 - at }
     ret (tv, 1.0f64 - mvt_one_factor_upper(at, lam[0usize..k - 1usize], cnt[0usize] + cnt[j] - 2.0f64, true))
+}
+
+// the exact two-sided p P(|D| >= d) of the rank-sum difference of two treatments over n blocks of k untied ranks (pexactfrsd): in one block the difference is delta in -(k - 1) .. (k - 1)
+// with probability (k - |delta|) / (k (k - 1)) for delta != 0, and D is the n-fold convolution of that; d = 0 gives 1
+fn frd_exact_p(n: usize, k: usize, d: usize) -> f64 {
+    if d == 0usize { ret 1.0f64 }
+    let half = n * (k - 1usize)
+    let w = 2usize * half + 1usize
+    var cur: [1024]f64 = zero
+    var nxt: [1024]f64 = zero
+    if w > 1024usize { ret 0.0f64 / 0.0f64 }
+    cur[half] = 1.0f64
+    var b = 0usize
+    while b < n {
+        var t = 0usize
+        while t < w {
+            nxt[t] = 0.0f64
+            t += 1usize
+        }
+        t = 0usize
+        while t < w {
+            if cur[t] != 0.0f64 {
+                var dl = 1usize
+                while dl < k {
+                    let pr = f64(k - dl) / f64(k * (k - 1usize))
+                    nxt[t + dl] += cur[t] * pr
+                    nxt[t - dl] += cur[t] * pr
+                    dl += 1usize
+                }
+            }
+            t += 1usize
+        }
+        t = 0usize
+        while t < w {
+            cur[t] = nxt[t]
+            t += 1usize
+        }
+        b += 1usize
+    }
+    var p = 0.0f64
+    var t = 0usize
+    while t < w {
+        var off = t
+        if t < half { off = half - t } else { off = t - half }
+        if off >= d { p += cur[t] }
+        t += 1usize
+    }
+    ret p
 }
