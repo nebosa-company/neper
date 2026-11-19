@@ -51238,3 +51238,6 @@ With an odd n the median is an observation, and the pair (median, median) enters
 
 ## D7581 — nnet multinom with case weights
 `multinom` takes a case-weight vector that multiplies each observation's log-likelihood, gradient and Hessian terms (the decay penalty is unweighted); the oracle layout appends the weights. Equal to multinom(weights = ) on 20 fits with integer weights 1 to 4 and decay 0.01, 0.1 and 1 (40 values added to oracle_nnet, 120 in all). The hidden-layer networks and the BFGS path stay open.
+
+## D7582 — nnet hidden-layer network: first attempt does not reproduce R's path
+A one-hidden-layer, linear-output nnet() was ported (unit-by-unit weights, bias first, logistic hidden units clamped at +-15, sum of squares plus decay times squared weights, backpropagated gradient, the existing vmmin with abstol 1e-4, reltol 1e-8, maxit 100, start weights passed in from R's runif(-0.7, 0.7)). The objective and the topology are right: values agree to about 1e-4 relative and a longer run (maxit 3000, reltol 1e-12) still differs by 1e-4, so the optimiser path of nnet's own vmmin differs from optim's in a detail that is not recoverable without the C source. The port was not committed; the weight-ordering and objective findings are recorded here for the next attempt.
