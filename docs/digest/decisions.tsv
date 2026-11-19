@@ -4541,4 +4541,5 @@ D7715	1258	the pcubature maxEval rule
 D7642	869	VGAM: zero-inflated Poisson regression
 D7716	1383	segmented() for one breakpoint
 D7643	769	VGAM: Tobit regression
-D7644	838	VGAM: beta-binomial regression
+D7644	839	VGAM: beta-binomial regression
+D7645	1045	rugarch: sGARCH(1,1) fit

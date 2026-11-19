@@ -1,0 +1,117 @@
+// rugarch::ugarchfit(ugarchspec(sGARCH(1,1), constant mean, "norm")): the Gaussian quasi-maximum likelihood of r_t = mu + e_t, h_t = omega + alpha e_{t-1}^2 + beta h_{t-1} with the start of the recursion h_1 = omega + (alpha + beta) mean(e^2) (e at the current mu); rugarch's own backcast
+// is an exponentially smoothed mean (lambda 0.7), which moved the log-likelihood by up to 0.01 in 459 and is not reproduced, maximised by BFGS on an unconstrained parameterisation that keeps omega > 0, alpha, beta >= 0 and alpha + beta < 1.
+//
+// Not here: other variance models and orders, ARMA means, other distributions, standard errors, forecasts, simulation, bootstrap.
+
+use e.math
+use e.math.opt as opt
+use e.mem
+
+type GCtx = struct { y: []const f64, n: usize, q: []f64 }
+
+fn lg(t: f64) -> f64 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t)) }
+
+// the log-likelihood at the natural parameters
+fn garch_ll(y: []const f64, n: usize, mu: f64, om: f64, al: f64, be: f64) -> f64 {
+    var m2 = 0.0f64
+    var i = 0usize
+    while i < n {
+        m2 += (y[i] - mu) * (y[i] - mu)
+        i += 1usize
+    }
+    m2 = m2 / f64(n)
+    var h = om + (al + be) * m2
+    var ll = 0.0f64
+    i = 0usize
+    while i < n {
+        let e = y[i] - mu
+        ll += 0.0f64 - 0.5f64 * (math.log[f64](2.0f64 * 3.141592653589793238462643383279f64) + math.log[f64](h) + e * e / h)
+        h = om + al * e * e + be * h
+        i += 1usize
+    }
+    ret ll
+}
+
+// the natural parameters of the unconstrained x = (mu, log omega, logit of alpha + beta, logit of alpha / (alpha + beta))
+fn garch_nat(x: []const f64, o: []f64) {
+    o[0usize] = x[0usize]
+    o[1usize] = math.exp[f64](x[1usize])
+    let s = lg(x[2usize])
+    let w = lg(x[3usize])
+    o[2usize] = s * w
+    o[3usize] = s * (1.0f64 - w)
+}
+
+fn garch_f(c: *GCtx, x: []const f64) -> f64 {
+    var nat: [4]f64 = zero
+    garch_nat(x, nat[0usize..4usize])
+    ret 0.0f64 - garch_ll(c.y, c.n, nat[0usize], nat[1usize], nat[2usize], nat[3usize])
+}
+
+fn garch_g(c: *GCtx, x: []const f64, g: []f64) {
+    var i = 0usize
+    while i < 4usize {
+        c.q[i] = x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < 4usize {
+        let h = 1.0e-6f64
+        c.q[i] = x[i] + h
+        let fp = garch_f(c, c.q[0usize..4usize])
+        c.q[i] = x[i] - h
+        let fm = garch_f(c, c.q[0usize..4usize])
+        c.q[i] = x[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// the fit to the series y: out = mu, omega, alpha1, beta1, the log-likelihood; false when the optimiser fails
+fn garch11(a: *mem.Arena, y: []const f64, n: usize, out: []f64) -> bool {
+    let (qq, e1) = mem.alloc[f64](a, 4usize)
+    let (scr, e2) = mem.alloc[f64](a, 128usize)
+    if e1 != ok || e2 != ok { ret false }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += y[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    var v = 0.0f64
+    i = 0usize
+    while i < n {
+        v += (y[i] - mean) * (y[i] - mean)
+        i += 1usize
+    }
+    v = v / f64(n)
+    var x: [4]f64 = zero
+    x[0usize] = mean
+    x[1usize] = math.log[f64](v * 0.05f64)
+    x[2usize] = math.log[f64](0.9f64 / 0.1f64)
+    x[3usize] = math.log[f64](0.1f64 / 0.8f64 * 1.0f64)
+    var c = GCtx { y: y, n: n, q: qq }
+    var round = 0usize
+    while round < 4usize {
+        let (r, e3) = opt.bfgs[GCtx](&c, garch_f, garch_g, x[0usize..4usize], 1.0e-12f64, 400u32, scr)
+        if e3 != ok { ret false }
+        round += 1usize
+    }
+    var pol = 0usize
+    while pol < 3usize {
+        let (r2, e4) = opt.nelder_mead[GCtx](&c, garch_f, x[0usize..4usize], 0.05f64, 1.0e-16f64, 3000u32, scr)
+        if e4 != ok { ret false }
+        let (r3, e5) = opt.bfgs[GCtx](&c, garch_f, garch_g, x[0usize..4usize], 1.0e-12f64, 400u32, scr)
+        if e5 != ok { ret false }
+        pol += 1usize
+    }
+    var nat: [4]f64 = zero
+    garch_nat(x[0usize..4usize], nat[0usize..4usize])
+    out[0usize] = nat[0usize]
+    out[1usize] = nat[1usize]
+    out[2usize] = nat[2usize]
+    out[3usize] = nat[3usize]
+    out[4usize] = garch_ll(y, n, nat[0usize], nat[1usize], nat[2usize], nat[3usize])
+    ret true
+}
