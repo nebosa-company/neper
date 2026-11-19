@@ -50278,3 +50278,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7383 — sampling regest
 `regest` fits the weighted regression with weights 1/pik, forms the Horvitz-Thompson estimate plus sum(beta_j (Tx_j - HT(x_j))) over the non-constant columns, and the sandwich covariance (X'WX)^-1 V (X'WX)^-1 with V = u' delta u, u = x w e, delta_kl = 1 - pik_k pik_l / pikl_kl and delta_kk = 1 - pik_k; the standard errors are the square roots of its diagonal. Equal to sampling to 1e-9 on fifteen Tille designs (the joint matrix from UPtillepi2, skipping designs with a non-positive cell). L508 at 0.92.
+
+## D7384 — sampling postest (post-strata only)
+`post_estimator` is postest for a data frame with a poststratum column and no Stratum column: over the post-strata in order of first appearance, NG[j] sum(y/pik) / sum(1/pik) within the j-th, summed. Equal to sampling to 1e-10 on twenty samples. The two-way version (a Stratum column with a matrix NG) is not ported. L508 at 0.94.

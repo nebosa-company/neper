@@ -1528,3 +1528,36 @@ fn regest(a: *mem.Arena, y: []const f64, x: []const f64, p: usize, w: []const f6
     }
     ret ok
 }
+
+// postest without a Stratum column: the post-stratified estimator sum over the post-strata (in order of first appearance, NG[j] the known size of the j-th) of
+// NG[j] sum(y / pik) / sum(1 / pik) within the post-stratum
+fn post_estimator(y: []const f64, pik: []const f64, post: []const f64, ng: []const f64) -> f64 {
+    let n = y.len
+    var total = 0.0f64
+    var j = 0usize
+    var i = 0usize
+    while i < n {
+        var first = true
+        var q = 0usize
+        while q < i {
+            if post[q] == post[i] { first = false }
+            q += 1usize
+        }
+        if first {
+            var num = 0.0f64
+            var den = 0.0f64
+            q = 0usize
+            while q < n {
+                if post[q] == post[i] {
+                    num += y[q] / pik[q]
+                    den += 1.0f64 / pik[q]
+                }
+                q += 1usize
+            }
+            total += ng[j] * num / den
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret total
+}
