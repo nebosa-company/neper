@@ -490,3 +490,16 @@ fn regression_w(x: []const f64, y: []const f64, f: []const f64, h: f64, p: f64) 
     }
     ret (s2 * t0 - s1 * t1) / (s0 * s2 - s1 * s1)
 }
+
+// the Gaussian kernel density estimate at p over weighted points (bin midpoints with counts f): binned sm.density
+fn density_w(x: []const f64, f: []const f64, h: f64, p: f64) -> f64 {
+    var s = 0.0f64
+    var tot = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += f[i] * phi((p - x[i]) / h)
+        tot += f[i]
+        i += 1usize
+    }
+    ret s / (tot * h)
+}

@@ -42,4 +42,10 @@ for (rep in 1:15) {
   r <- sm.regression(x, y, h = h, eval.points = p, display = "none", nbins = nb)$estimate
   cases[[length(cases) + 1]] <- case("hbreg", c(n, nb, h, p, x, y), r[1], rel = 1e-9, abs = 1e-12)
 }
+# hbden (n, nbins, h, p, x[n]): sm.density on nbins bins
+for (rep in 1:15) {
+  n <- sample(100:400, 1); nb <- sample(8:25, 1); x <- rnorm(n); h <- runif(1, 0.2, 0.8); p <- runif(1, -1, 1)
+  r <- sm.density(x, h = h, eval.points = p, display = "none", nbins = nb)$estimate
+  cases[[length(cases) + 1]] <- case("hbden", c(n, nb, h, p, x), r[1], rel = 1e-9, abs = 1e-12)
+}
 emit("sm_hsel", "sm", list(cases))

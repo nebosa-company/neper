@@ -50797,3 +50797,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7444 — sm.regression on binned data
 `regression_w` is the local-linear estimate over weighted points; with `binning1d` bin midpoints, means and counts it equals sm.regression(x, y, h, nbins = k) at rel 1e-9 on 15 cases in oracle_sm_hsel. Open for L505: binned density and bandwidth selection, reference bands, 2-d, sm.ancova, sm.survival, sm.options.
+
+## D7445 — sm.density on binned data
+`density_w` is the Gaussian kernel estimate over bin midpoints weighted by counts; with `binning1d` it equals sm.density(x, h, nbins = k) at rel 1e-9 on 15 cases in oracle_sm_hsel. Open for L505: binned bandwidth selection, reference bands, 2-d, sm.ancova, sm.survival, sm.options.
