@@ -18,6 +18,7 @@ use e.algo.stat.gparot as gp
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.stat.fdrtool as fd
 use e.algo.stat.pbivnorm as pbv
+use e.math.opt as opt
 
 // column-major n by p
 fn colmean(x: []const f64, n: usize, j: usize) -> f64 {
@@ -1073,4 +1074,102 @@ fn fa_parallel(a: *mem.Arena, x: []const f64, n: usize, p: usize, niter: usize, 
         it += 1usize
     }
     ret ok
+}
+
+type FaMlCtx = struct { a: *mem.Arena, r: []const f64, p: usize, q: usize, w: []f64, z: []f64, sc: []f64, v: []f64 }
+
+fn fa_psi(u: f64) -> f64 { ret 0.005f64 + 0.995f64 / (1.0f64 + math.exp[f64](0.0f64 - u)) }
+
+// factanal's objective for the uniquenesses psi = fa_psi(u): with e the eigenvalues of Psi^(-1/2) R Psi^(-1/2) from the (q + 1)-th down, minus the sum of (log e - e) less q plus p
+fn fa_ml_f(c: *FaMlCtx, u: []const f64) -> f64 {
+    let p = c.p
+    var i = 0usize
+    while i < p {
+        c.v[i] = 1.0f64 / math.sqrt[f64](fa_psi(u[i]))
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            c.sc[i * p + j] = c.v[i] * c.r[i * p + j] * c.v[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let mk = mem.mark(c.a)
+    let e4 = sy.dsyevr_all(c.a, c.sc, p, c.w, c.z)
+    mem.reset(c.a, mk)
+    if e4 != ok { ret 1.0e300f64 }
+    // w is ascending: the eigenvalues beyond the q largest are w[0 .. p - q)
+    var s = 0.0f64
+    i = 0usize
+    while i < p - c.q {
+        s += math.log[f64](c.w[i]) - c.w[i]
+        i += 1usize
+    }
+    ret 0.0f64 - s - f64(c.q) + f64(p)
+}
+
+type FaMlGrad = struct { c: *FaMlCtx, x: []f64 }
+
+fn fa_ml_fw(t: *FaMlGrad, u: []const f64) -> f64 { ret fa_ml_f(t.c, u) }
+
+fn fa_ml_g(t: *FaMlGrad, u: []const f64, g: []f64) {
+    let m = u.len
+    var i = 0usize
+    while i < m {
+        t.x[i] = u[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        let h = 1.0e-6f64
+        t.x[i] = u[i] + h
+        let fp = fa_ml_f(t.c, t.x[0usize..m])
+        t.x[i] = u[i] - h
+        let fm = fa_ml_f(t.c, t.x[0usize..m])
+        t.x[i] = u[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// psych::fa(r, nfactors = q, fm = "ml", rotate = "none"): the maximum likelihood uniquenesses of the p by p correlation matrix r (factanal's objective, uniquenesses kept within [0.005, 1], start (1 - q / (2 p)) / diag(r^-1)),
+// by BFGS on a logistic map of them; out = the p uniquenesses, then the objective at the optimum
+fn fa_ml(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool {
+    let (w, e1) = mem.alloc[f64](a, p)
+    let (z, e2) = mem.alloc[f64](a, p * p)
+    let (sc, e3) = mem.alloc[f64](a, p * p)
+    let (v, e4) = mem.alloc[f64](a, p)
+    let (u, e5) = mem.alloc[f64](a, p)
+    let (xx, e6) = mem.alloc[f64](a, p)
+    let (scr, e7) = mem.alloc[f64](a, p * p + 6usize * p + 16usize)
+    let (ri, e8) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret false }
+    if !invert(a, r, p, ri) { ret false }
+    var i = 0usize
+    while i < p {
+        var st = (1.0f64 - 0.5f64 * f64(q) / f64(p)) / ri[i * p + i]
+        if st < 0.006f64 { st = 0.006f64 }
+        if st > 0.999f64 { st = 0.999f64 }
+        let t = (st - 0.005f64) / 0.995f64
+        u[i] = math.log[f64](t / (1.0f64 - t))
+        i += 1usize
+    }
+    var c = FaMlCtx { a: a, r: r, p: p, q: q, w: w, z: z, sc: sc, v: v }
+    var t = FaMlGrad { c: &c, x: xx }
+    var round = 0usize
+    while round < 3usize {
+        let (rr, e9) = opt.bfgs[FaMlGrad](&t, fa_ml_fw, fa_ml_g, u, 1.0e-10f64, 200u32, scr)
+        if e9 != ok { ret false }
+        round += 1usize
+    }
+    i = 0usize
+    while i < p {
+        out[i] = fa_psi(u[i])
+        i += 1usize
+    }
+    out[p] = fa_ml_f(&c, u)
+    ret true
 }

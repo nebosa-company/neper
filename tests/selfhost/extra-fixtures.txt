@@ -600,3 +600,4 @@ oracle_rugarch
 oracle_unmarked
 oracle_mirt
 oracle_concordance
+oracle_psychfa

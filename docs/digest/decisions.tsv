@@ -4557,4 +4557,5 @@ D7656	654	queue scores re-set for the CRAN items started this session
 D7657	873	mirt: analytic 2PL gradient, smaller fixture
 D7658	490	mirt: analytic Rasch gradient
 D7659	1011	survival: concordance by pair counts
-D7660	900	survival: survSplit
+D7660	901	survival: survSplit
+D7661	943	psych: maximum likelihood factor analysis
