@@ -1,6 +1,6 @@
 // R pscl: zero-inflated Poisson (zeroinfl, logit zero part) and the Poisson hurdle model (hurdle, zero-truncated count part and logit zero part), fitted by Newton's method with step halving on the exact Hessian (R uses BFGS from glm starting values; the likelihood optimum is what is compared). Matrices are row-major with their own constant columns.
 //
-// Not here: the negative binomial hurdle, geometric counts, the other zero links, offsets and weights, prediction types beyond response, count and zero.
+// Not here: geometric counts, the other zero links, offsets and weights, prediction types beyond response, count and zero.
 
 use e.algo.stat.gparot as gp
 use e.math
@@ -502,4 +502,112 @@ fn zeroinfl_nb(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n:
         round += 1usize
     }
     ret nb_loglik(&c, par)
+}
+
+// the zero-truncated negative binomial count part of hurdle(dist = "negbin"): the log-likelihood over the positive rows, parameters beta (p) and log theta
+fn nbt_loglik(c: *NbCtx, par: []const f64) -> f64 {
+    var ll = 0.0f64
+    let theta = math.exp[f64](par[c.p])
+    var i = 0usize
+    while i < c.n {
+        if c.y[i] > 0.0f64 {
+            var eta = 0.0f64
+            var j = 0usize
+            while j < c.p {
+                eta += c.x[i * c.p + j] * par[j]
+                j += 1usize
+            }
+            let mu = math.exp[f64](eta)
+            let lq = theta * math.log[f64](theta / (theta + mu))
+            ll += nm.lgammafn(theta + c.y[i]) - nm.lgammafn(theta) - nm.lgammafn(c.y[i] + 1.0f64) + lq + c.y[i] * math.log[f64](mu / (theta + mu)) - math.log[f64](1.0f64 - math.exp[f64](lq))
+        }
+        i += 1usize
+    }
+    ret ll
+}
+
+fn nbt_neg(c: *NbCtx, par: []const f64) -> f64 {
+    var j = 0usize
+    while j <= c.p {
+        if math.abs[f64](par[j]) > 12.0f64 { ret 1.0e300f64 }
+        j += 1usize
+    }
+    let v = nbt_loglik(c, par)
+    if v != v { ret 1.0e300f64 }
+    ret 0.0f64 - v
+}
+
+fn nbt_grad(c: *NbCtx, par: []const f64, g: []f64) {
+    let m = par.len
+    var w: [32]f64 = zero
+    var k = 0usize
+    while k < m {
+        w[k] = par[k]
+        k += 1usize
+    }
+    k = 0usize
+    while k < m {
+        var h = 1.0e-6f64
+        if math.abs[f64](par[k]) > 1.0f64 { h = 1.0e-6f64 * math.abs[f64](par[k]) }
+        w[k] = par[k] + h
+        let f1 = nbt_neg(c, w[0usize..m])
+        w[k] = par[k] - h
+        let f2 = nbt_neg(c, w[0usize..m])
+        w[k] = par[k]
+        g[k] = (f1 - f2) / (2.0f64 * h)
+        k += 1usize
+    }
+}
+
+// hurdle(y ~ x | z, dist = "negbin"): par receives beta (p), gamma (q) and log theta; the logit zero part is the existing exact fit, the truncated count part is BFGS from the truncated Poisson fit;
+// returns the sum of the two log-likelihoods (NaN on failure)
+fn hurdle_nb(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let m = p + 1usize
+    if m > 32usize { ret nan }
+    let l0 = hurdle(a, x, z, y, n, p, q, par[0usize..p + q])
+    if l0 != l0 { ret nan }
+    // the zero part's log-likelihood: the logit on y > 0
+    let (gr, e1) = mem.alloc[f64](a, q)
+    let (hh, e2) = mem.alloc[f64](a, q * q)
+    if e1 != ok || e2 != ok { ret nan }
+    let lz = lik(3usize, x, z, y, n, p, q, par[p..p + q], gr, hh, false)
+    // the truncated count part on its own parameters (beta, log theta), keeping gamma aside
+    let (bt, e3) = mem.alloc[f64](a, m)
+    if e3 != ok { ret nan }
+    var j = 0usize
+    while j < p {
+        bt[j] = par[j]
+        j += 1usize
+    }
+    bt[p] = 0.0f64
+    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: 0usize }
+    let (scr, e4) = mem.alloc[f64](a, m * m + 6usize * m)
+    if e4 != ok { ret nan }
+    var round = 0usize
+    while round < 2usize {
+        let (r, e5) = opt.bfgs[NbCtx](&c, nbt_neg, nbt_grad, bt, 1.0e-8f64, 400u32, scr)
+        let _ = r
+        if e5 != ok { ret nan }
+        round += 1usize
+    }
+    // layout of par: beta (p), gamma (q), log theta
+    var gm: [8]f64 = zero
+    j = 0usize
+    while j < q {
+        gm[j] = par[p + j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        par[j] = bt[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < q {
+        par[p + j] = gm[j]
+        j += 1usize
+    }
+    par[p + q] = bt[p]
+    ret nbt_loglik(&c, bt) + lz
 }
