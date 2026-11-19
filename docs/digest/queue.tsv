@@ -4,7 +4,7 @@ L358	library	0.2	536	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Par
 L380	library	0.35	1159	tm and tidytext: text mining	Partial (D6618).
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
 L407	library	0.93	1406	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
-L409	library	0.55	1194	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
+L409	library	0.55	1356	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
 L448	library	0.25	676	mcmc: Metropolis and tempering samplers	D7337: morph and morph.metrop (subexponential and exponential maps, centre) equal to mcmc under set.seed.
 L450	library	0.2	722	mediation: causal mediation analysis	Partial (D7376): e.algo.stat.mediationpkg.mediate_lm (quasi-Bayesian mediate for linear mediator and outcome models without interaction: ACME, ADE, total effect and proportion mediated with percentile
@@ -31,7 +31,7 @@ L338	library	0.2	578	robustbase: robust regression and scale	Partial (D6192, D64
 L339	library	0.16	1649	bayestestR, performance and parameters: model summary indices	D7357: performance_score of a Poisson regression equal to performance.
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 
-L361	library	0.2	953	segmented and strucchange: breakpoints and structural change	Partial (D6613).
+L361	library	0.2	1129	segmented and strucchange: breakpoints and structural change	Partial (D6613).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
 L367	library	0.65	1556	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).

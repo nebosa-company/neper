@@ -4,6 +4,7 @@
 
 use e.algo.rand.rdist as rd
 use e.algo.rand.r as rng
+use e.algo.linalg.decomp as dc
 use e.algo.stat.carlmtest as ols
 use e.algo.stat.mass as ms
 use e.algo.stat.desctools as dt
@@ -628,65 +629,100 @@ fn sim_lm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, 
 
 // IRLS of glm.fit for the binomial (family 1, logit) and poisson (family 2, log) with a dispersion of 1: the stopping rule is R's (|dev - devold| / (|dev| + 0.1) < 1e-8), cov is (X'WX)^-1 with the
 // weights of the last iteration (what summary.glm uses); d is n by k row-major
-fn glm_fit(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, family: usize, beta: []f64, cov: []f64) -> err {
+fn glm_fit(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, family: usize, eta0: []const f64, beta: []f64, cov: []f64) -> err {
     let (eta, e2) = mem.alloc[f64](a, n)
     let (mu, e3) = mem.alloc[f64](a, n)
     let (am, e4) = mem.alloc[f64](a, k * k)
     let (bv, e5) = mem.alloc[f64](a, k)
-    if e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    let (bq, e6) = mem.alloc[f64](a, k)
+    let (ri, e7) = mem.alloc[f64](a, k * k)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
     var i = 0usize
     var devold = 0.0f64
     while i < n {
         if family == 1usize { mu[i] = (y[i] + 0.5f64) / 2.0f64 } else { mu[i] = y[i] + 0.1f64 }
         if family == 1usize { eta[i] = math.log[f64](mu[i] / (1.0f64 - mu[i])) } else { eta[i] = math.log[f64](mu[i]) }
+        if eta0.len == n {
+            eta[i] = eta0[i]
+            if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[i])) } else { mu[i] = math.exp[f64](eta[i]) }
+            if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 }
+            if family == 1usize && mu[i] > 1.0f64 - 2.220446049250313e-16f64 { mu[i] = 1.0f64 - 2.220446049250313e-16f64 }
+        }
         devold += dev_resid(family, y[i], mu[i])
         i += 1usize
     }
     var it = 0usize
     while it < 25usize {
-        var r = 0usize
-        while r < k {
-            var c = 0usize
-            while c < k {
-                am[r * k + c] = 0.0f64
-                c += 1usize
-            }
-            bv[r] = 0.0f64
-            r += 1usize
-        }
+        let (xq, qe1) = mem.alloc[f64](a, n * k)
+        let (zq, qe2) = mem.alloc[f64](a, n)
+        if qe1 != ok || qe2 != ok { ret mem.Full }
         i = 0usize
         while i < n {
-            var w = mu[i]
-            if family == 1usize { w = mu[i] * (1.0f64 - mu[i]) }
-            let z = eta[i] + (y[i] - mu[i]) / w
-            r = 0usize
-            while r < k {
-                var c = 0usize
-                while c < k {
-                    am[r * k + c] += w * d[i * k + r] * d[i * k + c]
-                    c += 1usize
-                }
-                bv[r] += w * d[i * k + r] * z
-                r += 1usize
+            var vr = mu[i]
+            if family == 1usize { vr = mu[i] * (1.0f64 - mu[i]) }
+            var me = vr
+            if family == 2usize { me = math.exp[f64](eta[i]) }
+            if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
+            let sw = me / math.sqrt[f64](vr)
+            let z = eta[i] + (y[i] - mu[i]) / me
+            var c = 0usize
+            while c < k {
+                xq[c * n + i] = sw * d[i * k + c]
+                c += 1usize
             }
+            zq[i] = sw * z
             i += 1usize
         }
-        let (inv, ie) = gp.invert(a, am, k)
-        if ie != ok { ret ie }
-        r = 0usize
-        while r < k * k {
-            cov[r] = inv[r]
-            r += 1usize
+        let (fq, fe) = dc.qr(a, xq, n, k, 1.0e-11f64)
+        if fe != ok { ret fe }
+        if fq.rank < k { ret gp.Singular }
+        dc.qr_qty(&fq, zq)
+        var r = k
+        while r > 0usize {
+            r -= 1usize
+            var v = zq[r]
+            var c = r + 1usize
+            while c < k {
+                v -= fq.qr[c * n + r] * bq[c]
+                c += 1usize
+            }
+            bq[r] = v / fq.qr[r * n + r]
         }
         r = 0usize
         while r < k {
-            var v = 0.0f64
+            beta[fq.pivot[r]] = bq[r]
+            r += 1usize
+        }
+        // (R'R)^-1 = R^-1 R^-T, R upper triangular
+        var col = 0usize
+        while col < k {
+            var rr = k
+            while rr > 0usize {
+                rr -= 1usize
+                var v = 0.0f64
+                if rr == col { v = 1.0f64 }
+                var c = rr + 1usize
+                while c < k {
+                    v -= fq.qr[c * n + rr] * ri[c * k + col]
+                    c += 1usize
+                }
+                ri[rr * k + col] = v / fq.qr[rr * n + rr]
+            }
+            col += 1usize
+        }
+        r = 0usize
+        while r < k {
             var c = 0usize
             while c < k {
-                v += inv[r * k + c] * bv[c]
+                var v = 0.0f64
+                var m2 = 0usize
+                while m2 < k {
+                    v += ri[r * k + m2] * ri[c * k + m2]
+                    m2 += 1usize
+                }
+                cov[fq.pivot[r] * k + fq.pivot[c]] = v
                 c += 1usize
             }
-            beta[r] = v
             r += 1usize
         }
         var dev = 0.0f64
@@ -700,6 +736,8 @@ fn glm_fit(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, fa
             }
             eta[i] = e
             if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) } else { mu[i] = math.exp[f64](e) }
+            if family == 1usize { if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 }
+                if mu[i] > 1.0f64 - 2.220446049250313e-16f64 { mu[i] = 1.0f64 - 2.220446049250313e-16f64 } } else { if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 } }
             dev += dev_resid(family, y[i], mu[i])
             i += 1usize
         }
@@ -714,7 +752,8 @@ fn glm_fit(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, fa
 fn sim_glm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, nsims: usize, bhat: []f64, beta: []f64) -> err {
     let (cv, e1) = mem.alloc[f64](a, k * k)
     if e1 != ok { ret e1 }
-    let fe = glm_fit(a, x, y, n, k, family, bhat, cv)
+    var nostart: []f64 = zero
+    let fe = glm_fit(a, x, y, n, k, family, nostart, bhat, cv)
     if fe != ok { ret fe }
     ret ms.mvrnorm(a, g, nsims, k, bhat, cv, beta)
 }

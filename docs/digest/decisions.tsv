@@ -4515,4 +4515,5 @@ D7692	527	Rtsne distance-matrix input
 D7693	630	Rtsne PCA step
 D7694	1342	hcubature's adaptive Genz-Malik recursion
 D7695	850	hcubature in one dimension
-D7696	1228	robustbase adjOutlyingness
+D7696	1229	robustbase adjOutlyingness
+D7697	1478	segmented davies.test for a binomial or poisson glm

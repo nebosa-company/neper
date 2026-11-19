@@ -2,6 +2,7 @@
 //
 // Not here: efp, sctest, gefp, mefp, partial-change models, BIC choice and the confidence intervals of the breaks.
 
+use e.algo.stat.arm as ar
 use e.algo.stat.gparot as gp
 use e.math
 use e.math.dist as dist
@@ -1062,5 +1063,141 @@ fn pscore_lmw(a: *mem.Arena, y: []const f64, z: []const f64, w: []const f64, xre
     if alt == 2usize { pv = nb.pt(st, df, false, false) }
     out[0usize] = st
     out[1usize] = pv
+    ret ok
+}
+
+fn glm_dev(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, family: usize, beta: []f64) -> f64 {
+    var dev = 0.0f64
+    var i = 0usize
+    while i < n {
+        var e = 0.0f64
+        var c = 0usize
+        while c < k {
+            e += d[i * k + c] * beta[c]
+            c += 1usize
+        }
+        var mu = math.exp[f64](e)
+        if family == 1usize { mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) }
+        if mu < 2.220446049250313e-16f64 { mu = 2.220446049250313e-16f64 }
+        if family == 1usize && mu > 1.0f64 - 2.220446049250313e-16f64 { mu = 1.0f64 - 2.220446049250313e-16f64 }
+        dev += ar.dev_resid(family, y[i], mu)
+        i += 1usize
+    }
+    ret dev
+}
+
+// segmented::davies.test (type "lrt", the default) for a binomial (family 1) or poisson (family 2) glm, dispersion 1: for each of k psi values from the second smallest to the second largest of z
+// the term pmax(z - psi, 0) is put in front of the design and RIS = sqrt(dev0 - dev) sign(coef of the term) kept; p = naive normal tail of the extreme value plus V exp(-M^2 / 2) / sqrt(8 pi), V the
+// total variation of the RIS, doubled for the two-sided case (alt 0 two-sided, 1 less, 2 greater). out = (best psi, p value, points used)
+fn davies_glm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, n: usize, p: usize, k: usize, family: usize, alt: usize, out: []f64) -> err {
+    let (zs, e0) = mem.alloc[f64](a, n)
+    let (ris, e1) = mem.alloc[f64](a, k)
+    let (vals, e2) = mem.alloc[f64](a, k)
+    let (b0, e3) = mem.alloc[f64](a, p)
+    let (c0, e4) = mem.alloc[f64](a, p * p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret e0 }
+    var i = 0usize
+    while i < n {
+        zs[i] = z[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let v = zs[i]
+        var j = i
+        while j > 0usize && zs[j - 1usize] > v {
+            zs[j] = zs[j - 1usize]
+            j -= 1usize
+        }
+        zs[j] = v
+        i += 1usize
+    }
+    let lo = zs[1usize]
+    let hi = zs[n - 2usize]
+    var nostart: []f64 = zero
+    let fe = ar.glm_fit(a, xreg, y, n, p, family, nostart, b0, c0)
+    if fe != ok { ret fe }
+    let (eta0, ee0) = mem.alloc[f64](a, n)
+    if ee0 != ok { ret ee0 }
+    i = 0usize
+    while i < n {
+        var s0 = 0.0f64
+        var c0i = 0usize
+        while c0i < p {
+            s0 += xreg[i * p + c0i] * b0[c0i]
+            c0i += 1usize
+        }
+        eta0[i] = s0
+        i += 1usize
+    }
+    let dev0 = glm_dev(a, xreg, y, n, p, family, b0)
+    let q = p + 1usize
+    let (d1, e5) = mem.alloc[f64](a, n * q)
+    let (b1, e6) = mem.alloc[f64](a, q)
+    let (c1, e7) = mem.alloc[f64](a, q * q)
+    if e5 != ok || e6 != ok || e7 != ok { ret e5 }
+    var cnt = 0usize
+    i = 0usize
+    while i < k {
+        let psi = lo + (hi - lo) * f64(i) / f64(k - 1usize)
+        var t = 0usize
+        while t < n {
+            var v = z[t] - psi
+            if v < 0.0f64 { v = 0.0f64 }
+            d1[t * q] = v
+            var c = 0usize
+            while c < p {
+                d1[t * q + 1usize + c] = xreg[t * p + c]
+                c += 1usize
+            }
+            t += 1usize
+        }
+        let start = mem.mark(a)
+        let ge = ar.glm_fit(a, d1, y, n, q, family, eta0, b1, c1)
+        if ge == ok {
+            let dev = glm_dev(a, d1, y, n, q, family, b1)
+            var dd = dev0 - dev
+            if dd < 0.0f64 { dd = 0.0f64 }
+            var sg = 1.0f64
+            if b1[0usize] < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+            ris[cnt] = math.sqrt[f64](dd) * sg
+            vals[cnt] = psi
+            cnt += 1usize
+        }
+        mem.reset(a, start)
+        i += 1usize
+    }
+    var vsum = 0.0f64
+    i = 1usize
+    while i < cnt {
+        vsum += math.abs[f64](ris[i] - ris[i - 1usize])
+        i += 1usize
+    }
+    var m_ = ris[0usize]
+    var best = vals[0usize]
+    i = 0usize
+    while i < cnt {
+        var cand = ris[i]
+        if alt == 0usize { cand = math.abs[f64](ris[i]) }
+        var cur = m_
+        if alt == 0usize { cur = math.abs[f64](m_) }
+        var better = false
+        if i == 0usize { better = false } else if alt == 1usize { better = cand < cur } else { better = cand > cur }
+        if better {
+            m_ = ris[i]
+            best = vals[i]
+        }
+        i += 1usize
+    }
+    var mm = m_
+    if alt == 0usize { mm = math.abs[f64](m_) }
+    var pn = dist.pnorm(mm, 0.0f64, 1.0f64, false, false)
+    if alt == 1usize { pn = dist.pnorm(mm, 0.0f64, 1.0f64, true, false) }
+    var padj = pn + vsum * math.exp[f64](0.0f64 - mm * mm / 2.0f64) / math.sqrt[f64](8.0f64 * 3.141592653589793f64)
+    if alt == 0usize { padj = 2.0f64 * padj }
+    if padj > 1.0f64 { padj = 1.0f64 }
+    out[0usize] = best
+    out[1usize] = padj
+    out[2usize] = f64(cnt)
     ret ok
 }
