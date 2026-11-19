@@ -855,3 +855,17 @@ fn dunn_many_single(q: Ranks, rbar: []const f64, rn: []const f64, k: usize, j: u
     if az < 0.0f64 { az = 0.0f64 - az }
     ret (z, 1.0f64 - mvn_one_factor(az, lam[0usize..k - 1usize]))
 }
+
+// kwManyOneNdwTest (Nemenyi-Damico-Wolfe, single-step): the statistic is the many-to-one rank difference over sqrt(n (n + 1) / 12 (1 / n_j + 1 / n_0)), without Dunn's tie correction,
+// and the p value 1 - P(|Z_i| < |z_j| for all i) with the one-factor correlation of group sizes; answers (z, p)
+fn ndw_many(q: Ranks, rbar: []const f64, rn: []const f64, k: usize, j: usize, lam: []f64) -> (f64, f64) {
+    var m = 1usize
+    while m < k {
+        lam[m - 1usize] = math.sqrt[f64](rn[m] / (rn[m] + rn[0usize]))
+        m += 1usize
+    }
+    let z = (rbar[j] - rbar[0usize]) / math.sqrt[f64](q.n * (q.n + 1.0f64) / 12.0f64 * (1.0f64 / rn[j] + 1.0f64 / rn[0usize]))
+    var az = z
+    if az < 0.0f64 { az = 0.0f64 - az }
+    ret (z, 1.0f64 - mvn_one_factor(az, lam[0usize..k - 1usize]))
+}

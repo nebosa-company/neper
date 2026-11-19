@@ -50344,3 +50344,6 @@ The many-to-one single-step tests take their p value from R's pmvnorm on a corre
 
 ## D7403 — a one-factor normal integral and kwManyOneDunnTest single-step
 `mvn_one_factor` generalises the equicorrelated integral to the many-to-one correlation of unequal group sizes, which factors as rho_ij = lam_i lam_j with lam_i = sqrt(n_i / (n_i + n_0)): the orthant probability P(|Z_i| < c for all i) is the integral over the common factor of the product of the conditional interval probabilities. kwManyOneDunnTest(p.adjust.method = "single-step") takes 1 - that at c = |z_j|; equal to R's Monte Carlo pmvnorm within 3e-3 on twelve unequal-size data sets. The t-based single-step tests (Conover, van der Waerden) need R's pmvt and stay open. L487 at 0.86.
+
+## D7404 — PMCMRplus kwManyOneNdwTest
+`ndw_many` is the Nemenyi-Damico-Wolfe many-to-one test: the rank difference of group j against group 1 over sqrt(n (n + 1)/12 (1/n_j + 1/n_1)) with no tie correction (unlike Dunn's), and the single-step p from the one-factor normal integral of D7403. Statistics equal R and p values are within 3e-3 on twelve data sets, half of them with ties. L487 at 0.88.

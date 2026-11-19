@@ -23,4 +23,11 @@ for (rep in 1:12) {
   ss <- suppressWarnings(kwManyOneDunnTest(x, g, p.adjust.method = "single-step"))
   for (j in 1:(k - 1)) add(c(n, k, 6, j, x, as.numeric(g)), ss$p.value[j, 1], abs = 3e-3)
 }
+# kwManyOneNdwTest single-step (kinds 7 statistic, 8 p), with ties in half of the data sets (the test does not correct for them).
+for (rep in 1:12) {
+  k <- sample(3:6, 1); sz <- sample(4:9, k, replace = TRUE); n <- sum(sz); g <- factor(rep(1:k, sz))
+  x <- round(rnorm(n) + as.numeric(g) * runif(1, 0, 0.6), if (rep %% 2 == 0) 0 else 4)
+  nd <- suppressWarnings(kwManyOneNdwTest(x, g, p.adjust.method = "single-step"))
+  for (j in 1:(k - 1)) { add(c(n, k, 7, j, x, as.numeric(g)), nd$statistic[j, 1]); add(c(n, k, 8, j, x, as.numeric(g)), nd$p.value[j, 1], abs = 3e-3) }
+}
 emit("pmcmr_many", "PMCMRplus", list(cases))

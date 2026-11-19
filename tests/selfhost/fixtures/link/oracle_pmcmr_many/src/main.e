@@ -37,6 +37,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         t += 1usize
     }
+    if kind == 7usize || kind == 8usize {
+        let (lam2, e9) = mem.alloc[f64](a, k)
+        if e9 != ok { os.exit(7) }
+        let (zn, pn) = pm.ndw_many(q, rbar, rn, k, jj, lam2)
+        if kind == 7usize { ret zn }
+        ret pn
+    }
     if kind == 6usize {
         let (lam, e8) = mem.alloc[f64](a, k)
         if e8 != ok { os.exit(7) }
