@@ -46,4 +46,12 @@ for (rep in 1:30) {
     for (pt in 0:2) cases[[length(cases) + 1]] <- case("pc", c(x, n, mi, pt), v[pt + 1], rel = 1e-8, abs = 1e-12)
   }
 }
+# epi.2by2 case.control: "cc" args (a, b, c, d, which 0..2 score odds ratio (est, lower, upper), 3..5 attributable fraction)
+for (rep in 1:25) {
+  a <- sample(10:200, 1); b <- sample(10:200, 1); cc <- sample(10:300, 1); d <- sample(10:300, 1)
+  dat <- as.table(matrix(c(a, b, cc, d), 2, byrow = TRUE))
+  r <- epi.2by2(dat, method = "case.control", interpret = FALSE, outcome = "as.columns")$massoc.detail
+  for (i in 1:3) cases[[length(cases) + 1]] <- case("cc", c(a, b, cc, d, i - 1), unlist(r$OR.strata.score[1, ])[i], rel = 1e-8, abs = 1e-12)
+  for (i in 1:3) cases[[length(cases) + 1]] <- case("cc", c(a, b, cc, d, 2 + i), unlist(r$AFest.strata.wald[1, ])[i], rel = 1e-8, abs = 1e-12)
+}
 emit("epir", "epiR", list(cases))

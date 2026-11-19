@@ -51157,3 +51157,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7554 — epiR epi.conf proportion intervals
 `prop_ci` gives the interval of a proportion x / n by method: exact (Clopper-Pearson), Wilson, Agresti-Coull (the estimate is the adjusted proportion, as in epiR) and Jeffreys (beta quantiles at x + 1/2, n - x + 1/2). Equal to epi.conf(ctype = "prevalence") on 30 draws in the four methods (360 values added to oracle_epir, 2160 in all). The other ctypes (incidence, odds, ratios), the design effect and the standard errors stay open.
+
+## D7555 — epiR case-control score odds ratio and attributable fraction
+`or_score` ports zORscore for interior tables, walking theta by factors of 1.001 through `or_zlimit` (epiR's zlimit) until the score statistic passes the chi-squared quantile, so the limits are the same grid points as epiR's; `af_est` is the case-control attributable fraction (OR - 1) / OR with the min and max of the two limit maps, taken from the score interval because epi.2by2 reports its crude path. Equal to epiR on 25 tables (150 values added to oracle_epir, 2310 in all). The population attributable fraction (qbinom-based intervals), the boundary tables, the MLE and Cornfield odds-ratio intervals stay open.

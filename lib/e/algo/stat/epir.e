@@ -263,3 +263,55 @@ fn prop_ci(x: f64, n: f64, level: f64, method: usize) -> (f64, f64, f64) {
     let al = 1.0f64 - level
     ret (p, nb.qbeta(al / 2.0f64, x + 0.5f64, n - x + 0.5f64, true, false), nb.qbeta(1.0f64 - al / 2.0f64, x + 0.5f64, n - x + 0.5f64, true, false))
 }
+
+// epiR zlimit: walk theta by factors of 1.001 (down for the lower limit, up for the upper) until the score statistic passes the chi-squared quantile
+fn or_zlimit(x1: f64, n1: f64, x2: f64, n2: f64, level: f64, start: f64, upper: bool) -> f64 {
+    let zq = nm.qchisq(level, 1.0f64, true, false)
+    let px = x1 / n1
+    var lim = start
+    var ci = start
+    var it = 0usize
+    while it < 100000usize {
+        var p2d = 0.0f64
+        var p1d = 0.0f64
+        if math.abs[f64](lim - 1.0f64) < 1.0e-10f64 {
+            p2d = (x1 + x2) / (n1 + n2)
+            p1d = p2d
+        } else {
+            let a1 = n2 * (lim - 1.0f64)
+            let b1 = n1 * lim + n2 - (x1 + x2) * (lim - 1.0f64)
+            let c1 = 0.0f64 - (x1 + x2)
+            p2d = (0.0f64 - b1 + math.sqrt[f64](b1 * b1 - 4.0f64 * a1 * c1)) / (2.0f64 * a1)
+            p1d = p2d * lim / (1.0f64 + p2d * (lim - 1.0f64))
+        }
+        let d1 = n1 * (px - p1d)
+        let score = d1 * d1 * (1.0f64 / (n1 * p1d * (1.0f64 - p1d)) + 1.0f64 / (n2 * p2d * (1.0f64 - p2d)))
+        ci = lim
+        if upper { lim = ci * 1.001f64 } else { lim = ci / 1.001f64 }
+        if score > zq { break }
+        it += 1usize
+    }
+    ret ci
+}
+
+// epiR zORscore for an interior table (0 < a < a + b, 0 < c < c + d): the score interval of the odds ratio; (est, lower, upper)
+fn or_score(t: Table2, level: f64) -> (f64, f64, f64) {
+    let x1 = t.a
+    let n1 = t.a + t.b
+    let x2 = t.c
+    let n2 = t.c + t.d
+    let px = x1 / n1
+    let py = x2 / n2
+    let base = px / (1.0f64 - px) / (py / (1.0f64 - py))
+    let lo = or_zlimit(x1, n1, x2, n2, level, base / 1.1f64, false)
+    let hi = or_zlimit(x1, n1, x2, n2, level, base * 1.1f64, true)
+    ret ((t.a / t.b) / (t.c / t.d), lo, hi)
+}
+
+// attributable fraction of the case-control table from the score odds-ratio interval (epi.2by2 reports the crude path): (est, lower, upper)
+fn af_est(t: Table2, level: f64) -> (f64, f64, f64) {
+    let (o, lo, hi) = or_score(t, level)
+    let f1 = (lo - 1.0f64) / lo
+    let f2 = (hi - 1.0f64) / hi
+    ret ((o - 1.0f64) / o, math.min[f64](f1, f2), math.max[f64](f1, f2))
+}

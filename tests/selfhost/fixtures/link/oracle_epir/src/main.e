@@ -10,6 +10,27 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "cc") {
+        let tc = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
+        let wc = usize(x[4usize])
+        var ce = 0.0f64
+        var cl = 0.0f64
+        var ch = 0.0f64
+        if wc < 3usize {
+            let (e9, l9, h9) = ep.or_score(tc, 0.95f64)
+            ce = e9
+            cl = l9
+            ch = h9
+        } else {
+            let (e10, l10, h10) = ep.af_est(tc, 0.95f64)
+            ce = e10
+            cl = l10
+            ch = h10
+        }
+        if wc % 3usize == 0usize { ret ce }
+        if wc % 3usize == 1usize { ret cl }
+        ret ch
+    }
     if str.eq(c.name, "pc") {
         let (e8, l8, h8) = ep.prop_ci(x[0usize], x[1usize], 0.95f64, usize(x[2usize]))
         if usize(x[3usize]) == 0usize { ret e8 }
