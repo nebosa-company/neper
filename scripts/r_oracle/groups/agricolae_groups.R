@@ -109,4 +109,12 @@ invisible(capture.output(suppressMessages({
     for (i in seq_len(nrow(bk))) cases[[length(cases) + 1]] <- case("bb", c(15, seed, sd, v, k, i - 1), match(as.character(bk[[3]][i]), trt) - 1, rel = 0, abs = 0)
   }
 })))
+# design.lattice: op 16 (16, seed, sd, k, r, idx) fn "lt" the treatment code at book row idx (r replicates of k * k plots)
+invisible(capture.output(suppressMessages({
+  for (k in 3:5) for (r in 2:3) for (sd in 0:1) {
+    seed <- 1000 + k * 10 + r + 100 * sd; trt <- letters[1:(k * k)]
+    bk <- design.lattice(trt, r = r, serie = 2, seed = seed, kinds = if (sd == 1) "Super-Duper" else "Mersenne-Twister")$book
+    for (i in seq_len(nrow(bk))) cases[[length(cases) + 1]] <- case("lt", c(16, seed, sd, k, r, i - 1), match(as.character(bk[[4]][i]), trt) - 1, rel = 0, abs = 0)
+  }
+})))
 emit("agricolae_groups", "agricolae", list(cases))

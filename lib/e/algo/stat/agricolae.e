@@ -764,3 +764,90 @@ fn ammi(a: *mem.Arena, y: []const f64, ngen: usize, nenv: usize, nrep: f64, mse:
     out.emean = em
     ret (out, ok)
 }
+
+// design.lattice(trt, r) for k * k treatments: the book's treatment codes (0-based) of the r = 2 or 3 replicates in plot order (r > 3 not available). Under the hood it
+// reproduces a quirk: the Latin square it needs comes from design.lsd(1:k), called with seed 0, which draws runif(1) from the running stream, takes .Random.seed[3] (the
+// second state word of Super-Duper, the first Mersenne-Twister word otherwise) as its seed and reseeds with the Super-Duper generator, so the last three draws come from that
+// new stream.
+fn design_lattice(a: *mem.Arena, rng: *rr.Rng, k: usize, r: usize, out: []usize) -> err {
+    let nt = k * k
+    let (s0, e0) = rr.sample_int(a, rng, i64(nt), i64(nt), false)
+    if e0 != ok { ret e0 }
+    let (c1, e1) = mem.alloc[usize](a, nt)
+    let (c2, e2) = mem.alloc[usize](a, nt)
+    let (c3, e3) = mem.alloc[usize](a, nt)
+    let (lat, e4) = mem.alloc[usize](a, nt)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret e1 }
+    var i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            // c1[a, b] = s[k (a - 1) + b], 0-based codes
+            c1[i * k + j] = usize(s0[i * k + j]) - 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // design.lsd(1:k) with seed 0: one uniform from the running stream, its state word as the new seed
+    let _ = rr.unif(rng)
+    var word = rng.i2
+    if rng.kind != 1i64 { word = rng.mt[0usize] }
+    var lrng: rr.Rng = zero
+    rr.seed_super(&lrng, i64(word))
+    let el = design_lsd(a, &lrng, k, true, lat)
+    if el != ok { ret el }
+    // c3 = t(matrix(Z[order(latino)], k)) with Z the row-major c1 and latino the square's treatment codes (as strings; a stable order)
+    let (ord, e5) = mem.alloc[usize](a, nt)
+    if e5 != ok { ret e5 }
+    i = 0usize
+    while i < nt {
+        var rank = 0usize
+        var q = 0usize
+        while q < nt {
+            if lat[q] < lat[i] || (lat[q] == lat[i] && q < i) { rank += 1usize }
+            q += 1usize
+        }
+        ord[rank] = i
+        i += 1usize
+    }
+    // matrix(Z[ord], k) is column-major, so its transpose has element (u, v) = Z[ord[v * k + u]]... entry (u, v) of t(.) is entry (v, u) of the matrix = Z[ord[u * k + v]]
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            c3[i * k + j] = c1[ord[i * k + j]]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // c2 = t(c1)
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            c2[i * k + j] = c1[j * k + i]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // the three row permutations from the reseeded stream
+    let (p1, e6) = rr.sample_int(a, &lrng, i64(k), i64(k), false)
+    if e6 != ok { ret e6 }
+    let (p2, e7) = rr.sample_int(a, &lrng, i64(k), i64(k), false)
+    if e7 != ok { ret e7 }
+    let (p3, e8) = rr.sample_int(a, &lrng, i64(k), i64(k), false)
+    if e8 != ok { ret e8 }
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            out[i * k + j] = c1[(usize(p1[i]) - 1usize) * k + j]
+            out[nt + i * k + j] = c2[(usize(p2[i]) - 1usize) * k + j]
+            out[2usize * nt + i * k + j] = c3[(usize(p3[i]) - 1usize) * k + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let _ = r
+    ret ok
+}

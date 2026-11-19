@@ -41,6 +41,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tot
     }
+    if kind == 16usize {
+        var rg4: rr.Rng = zero
+        if x[2usize] > 0.5f64 { rr.seed_super(&rg4, i64(x[1usize])) } else { rr.seed(&rg4, i64(x[1usize])) }
+        let lk = usize(x[3usize])
+        let (lo, h6) = mem.alloc[usize](a, 3usize * lk * lk)
+        if h6 != ok { os.exit(21) }
+        let el2 = ag.design_lattice(a, &rg4, lk, usize(x[4usize]), lo)
+        if el2 != ok { os.exit(22) }
+        ret f64(lo[usize(x[5usize])])
+    }
     if kind == 15usize {
         var rg3: rr.Rng = zero
         if x[2usize] > 0.5f64 { rr.seed_super(&rg3, i64(x[1usize])) } else { rr.seed(&rg3, i64(x[1usize])) }
