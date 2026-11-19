@@ -119,7 +119,7 @@ L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
 L496	library	0.42	838	fda: functional data analysis	Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda;
 L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
 L515	library	0	241	unmarked: occupancy and abundance models	Open (CRAN rank 905).
-L353	library	0.23	1430	mgcv: generalized additive models	Partial (D7340).
+L353	library	0.26	1522	mgcv: generalized additive models	Partial (D7340).
 L354	library	0	286	lavaan: structural equation models	Open (CRAN rank 275).
 L381	library	0.42	591	ade4: multivariate analysis of ecological data	Partial (D7148 to D7152, D7158, D7160, D7161: as.dudi, dudi.pca, dudi.coa, dudi.acm with its correlation ratios, bca, wca, coinertia (main branch), procuste with rotations, dudi.fca, rlq and dudi.mix 
 L382	library	0	298	VGAM: vector generalized linear and additive models	Open (CRAN rank 382).

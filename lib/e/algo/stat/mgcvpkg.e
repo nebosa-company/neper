@@ -871,3 +871,106 @@ fn pls_fit(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen: []const f64,
     }
     ret (edf, rss, ok)
 }
+
+// ---- predict: the constraint matrix Z of absorb_sum_zero (k by k - 1, row-major) from the training basis x (n by k), and the fit with its predictions and standard errors at new
+// design rows. gam_predict fits (dm'dm + pen) beta = dm'y as pls_fit does, then for each new row r (m by p) answers the prediction r beta and the standard error
+// sqrt(sig2 r (dm'dm + pen)^-1 r') with sig2 = rss / (n - edf), the Bayesian posterior standard error of predict.gam(se.fit = TRUE).
+fn sum_zero_z(a: *mem.Arena, x: []const f64, n: usize, k: usize, z: []f64) -> err {
+    let (c, e0) = mem.alloc[f64](a, k)
+    if e0 != ok { ret e0 }
+    var j = 0usize
+    while j < k {
+        var cs = 0.0f64
+        var i = 0usize
+        while i < n {
+            cs += x[i * k + j]
+            i += 1usize
+        }
+        c[j] = cs
+        j += 1usize
+    }
+    var nrm = 0.0f64
+    j = 0usize
+    while j < k {
+        nrm += c[j] * c[j]
+        j += 1usize
+    }
+    nrm = math.sqrt[f64](nrm)
+    if c[0usize] < 0.0f64 { nrm = 0.0f64 - nrm }
+    j = 0usize
+    while j < k {
+        c[j] = c[j] / nrm
+        j += 1usize
+    }
+    c[0usize] += 1.0f64
+    var r = 0usize
+    while r < k {
+        var q = 1usize
+        while q < k {
+            var h = 0.0f64
+            if r == q { h = 1.0f64 }
+            z[r * (k - 1usize) + q - 1usize] = h - c[r] * c[q] / c[0usize]
+            q += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+fn gam_predict(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen: []const f64, y: []const f64, rows: []const f64, m: usize, pred: []f64, se: []f64) -> err {
+    let (coef, e0) = mem.alloc[f64](a, p)
+    let (fit, e1) = mem.alloc[f64](a, n)
+    let (xtx, e2) = mem.alloc[f64](a, p * p)
+    let (am, e3) = mem.alloc[f64](a, p * p)
+    let (ident, e4) = mem.alloc[f64](a, p * p)
+    let (ainv, e5) = mem.alloc[f64](a, p * p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    let (edf, rss, ef) = pls_fit(a, dm, n, p, pen, y, coef, fit)
+    if ef != ok { ret ef }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var v = 0.0f64
+            var i = 0usize
+            while i < n {
+                v += dm[i * p + r] * dm[i * p + c]
+                i += 1usize
+            }
+            am[r * p + c] = v + pen[r * p + c]
+            ident[r * p + c] = 0.0f64
+            if r == c { ident[r * p + c] = 1.0f64 }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let es = solve_dense(a, am, p, ident, p, ainv)
+    if es != ok { ret es }
+    let sig2 = rss / (f64(n) - edf)
+    let _ = xtx
+    var i = 0usize
+    while i < m {
+        var v = 0.0f64
+        var j = 0usize
+        while j < p {
+            v += rows[i * p + j] * coef[j]
+            j += 1usize
+        }
+        pred[i] = v
+        var q = 0.0f64
+        j = 0usize
+        while j < p {
+            var t = 0.0f64
+            var l = 0usize
+            while l < p {
+                t += ainv[j * p + l] * rows[i * p + l]
+                l += 1usize
+            }
+            q += rows[i * p + j] * t
+            j += 1usize
+        }
+        se[i] = math.sqrt[f64](sig2 * q)
+        i += 1usize
+    }
+    ret ok
+}
