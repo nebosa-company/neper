@@ -975,3 +975,131 @@ fn design_alpha(a: *mem.Arena, rng: *rr.Rng, ntr: usize, k: usize, r: usize, out
     }
     ret ok
 }
+
+// ---- stability.nonpar: the nonparametric stability measures of Huehn and Nassar for a k genotypes by n environments table (row-major): per genotype the mean, the rank of
+// the mean, s1 (the mean absolute difference of the adjusted-yield ranks over the pairs of environments), s2 (their variance), and the Z statistics against the
+// expectations es1, es2 and variances vs1, vs2
+type StabNp = struct { es1: f64, es2: f64, vs1: f64, vs2: f64, chi_ind: f64, chi_sum: f64, sum_z1: f64, sum_z2: f64 }
+
+// column-wise average-tie ranks of an k by n table
+fn rank_cols(m: []const f64, k: usize, n: usize, out: []f64) {
+    var j = 0usize
+    while j < n {
+        var i = 0usize
+        while i < k {
+            var less = 0usize
+            var eq = 0usize
+            var q = 0usize
+            while q < k {
+                if m[q * n + j] < m[i * n + j] { less += 1usize }
+                if m[q * n + j] == m[i * n + j] { eq += 1usize }
+                q += 1usize
+            }
+            out[i * n + j] = f64(less) + (f64(eq) + 1.0f64) / 2.0f64
+            i += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// mean, rank, s1, z1, s2 and z2 go to the k-entry arrays
+fn stability_nonpar(a: *mem.Arena, y: []const f64, k: usize, n: usize, mean: []f64, rank: []f64, s1: []f64, z1: []f64, s2: []f64, z2: []f64) -> (StabNp, err) {
+    var out: StabNp = zero
+    let (cy, e0) = mem.alloc[f64](a, k * n)
+    let (rc, e1) = mem.alloc[f64](a, k * n)
+    if e0 != ok || e1 != ok { ret (out, mem.Full) }
+    var grand = 0.0f64
+    var i = 0usize
+    while i < k {
+        var m = 0.0f64
+        var j = 0usize
+        while j < n {
+            m += y[i * n + j] / f64(n)
+            j += 1usize
+        }
+        mean[i] = m
+        grand += m / f64(k)
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < n {
+            cy[i * n + j] = y[i * n + j] - (mean[i] - grand)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    rank_cols(cy, k, n, rc)
+    let nn = f64(n) * (f64(n) - 1.0f64) / 2.0f64
+    i = 0usize
+    while i < k {
+        var sq = 0.0f64
+        var j = 0usize
+        while j + 1usize < n {
+            var jj = j + 1usize
+            while jj < n {
+                var d = rc[i * n + j] - rc[i * n + jj]
+                if d < 0.0f64 { d = 0.0f64 - d }
+                sq += d
+                jj += 1usize
+            }
+            j += 1usize
+        }
+        s1[i] = sq / nn
+        var rm = 0.0f64
+        j = 0usize
+        while j < n {
+            rm += rc[i * n + j] / f64(n)
+            j += 1usize
+        }
+        var v = 0.0f64
+        j = 0usize
+        while j < n {
+            v += (rc[i * n + j] - rm) * (rc[i * n + j] - rm)
+            j += 1usize
+        }
+        s2[i] = v / (f64(n) - 1.0f64)
+        i += 1usize
+    }
+    let kk = f64(k)
+    let fnn = f64(n)
+    let k2 = kk * kk
+    let es1 = (k2 - 1.0f64) / (3.0f64 * kk)
+    let es2 = (k2 - 1.0f64) / 12.0f64
+    let vs1 = k2 * ((kk * kk - 4.0f64) * (fnn + 3.0f64) + 30.0f64) / (45.0f64 * kk * kk * fnn * (fnn - 1.0f64))
+    let vs2 = (k2 - 1.0f64) * (2.0f64 * (k2 - 4.0f64) * (fnn - 1.0f64) + 5.0f64 * (k2 - 1.0f64)) / (360.0f64 * fnn * (fnn - 1.0f64))
+    var sz1 = 0.0f64
+    var sz2 = 0.0f64
+    i = 0usize
+    while i < k {
+        z1[i] = (s1[i] - es1) * (s1[i] - es1) / vs1
+        z2[i] = (s2[i] - es2) * (s2[i] - es2) / vs2
+        sz1 += z1[i]
+        sz2 += z2[i]
+        i += 1usize
+    }
+    // the rank of the genotype means (average ties)
+    i = 0usize
+    while i < k {
+        var less = 0usize
+        var eq = 0usize
+        var q = 0usize
+        while q < k {
+            if mean[q] < mean[i] { less += 1usize }
+            if mean[q] == mean[i] { eq += 1usize }
+            q += 1usize
+        }
+        rank[i] = f64(less) + (f64(eq) + 1.0f64) / 2.0f64
+        i += 1usize
+    }
+    out.es1 = es1
+    out.es2 = es2
+    out.vs1 = vs1
+    out.vs2 = vs2
+    out.chi_ind = nm.qchisq(1.0f64 - 0.05f64 / kk, 1.0f64, true, false)
+    out.chi_sum = nm.qchisq(0.95f64, kk, true, false)
+    out.sum_z1 = sz1
+    out.sum_z2 = sz2
+    ret (out, ok)
+}

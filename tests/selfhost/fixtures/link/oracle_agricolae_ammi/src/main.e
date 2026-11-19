@@ -5,10 +5,40 @@ use e.algo.stat.agricolae as ag
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "sn") {
+        let k = usize(x[0usize])
+        let n = usize(x[1usize])
+        let w = usize(x[2usize])
+        let idx = usize(x[3usize])
+        let (mn, g0) = mem.alloc[f64](a, k)
+        let (rk, g1) = mem.alloc[f64](a, k)
+        let (s1, g2) = mem.alloc[f64](a, k)
+        let (z1, g3) = mem.alloc[f64](a, k)
+        let (s2, g4) = mem.alloc[f64](a, k)
+        let (z2, g5) = mem.alloc[f64](a, k)
+        if g0 != ok || g1 != ok || g2 != ok || g3 != ok || g4 != ok || g5 != ok { os.exit(6) }
+        let (st, se) = ag.stability_nonpar(a, x[4usize..4usize + k * n], k, n, mn, rk, s1, z1, s2, z2)
+        if se != ok { os.exit(7) }
+        if w == 0usize { ret mn[idx] }
+        if w == 1usize { ret rk[idx] }
+        if w == 2usize { ret s1[idx] }
+        if w == 3usize { ret z1[idx] }
+        if w == 4usize { ret s2[idx] }
+        if w == 5usize { ret z2[idx] }
+        if w == 6usize { ret st.es1 }
+        if w == 7usize { ret st.es2 }
+        if w == 8usize { ret st.vs1 }
+        if w == 9usize { ret st.vs2 }
+        if w == 10usize { ret st.chi_ind }
+        if w == 11usize { ret st.chi_sum }
+        if w == 12usize { ret st.sum_z1 }
+        ret st.sum_z2
+    }
     let ng = usize(x[0usize])
     let ne = usize(x[1usize])
     let what = usize(x[4usize])

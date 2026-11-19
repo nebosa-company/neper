@@ -23,4 +23,17 @@ for (rep in 1:8) {
   for (gi in seq_len(ng)) { add(hdr(9, gi - 1), b[[2]][gi]); for (c in seq_len(nss)) add(hdr(7, (gi - 1) * m + c - 1), b[gi, 2 + c]) }
   for (ei in seq_len(ne)) { add(hdr(10, ei - 1), b[[2]][ng + ei]); for (c in seq_len(nss)) add(hdr(8, (ei - 1) * m + c - 1), b[ng + ei, 2 + c]) }
 }
+# stability.nonpar: fn "sn" args (k, n, what, idx, y[k n] genotype-major); what 0 Mean, 1 Rank, 2 s1, 3 Z1, 4 s2, 5 Z2 (idx a genotype), 6 es1, 7 es2, 8 vs1, 9 vs2, 10 chi.ind, 11 chi.sum, 12 sum Z1, 13 sum Z2
+for (rep in 1:8) {
+  k <- sample(4:9, 1); n <- sample(4:8, 1)
+  y <- outer(rnorm(k, 5, 1.5), rep(1, n)) + matrix(rnorm(k * n, 0, 1), k, n) + outer(rep(1, k), rnorm(n))
+  if (rep %% 3 == 0) y <- round(y)
+  d <- data.frame(G = paste0("G", seq_len(k)), y); colnames(d)[-1] <- paste0("E", seq_len(n))
+  r <- stability.nonpar(d)
+  st <- r$ranking; sx <- r$statistics
+  addn <- function(w, i, v) cases[[length(cases) + 1]] <<- case("sn", c(k, n, w, i, as.vector(t(y))), v, rel = 1e-9, abs = 1e-10)
+  for (i in seq_len(k)) for (w in 0:5) addn(w, i - 1, st[i, w + 1])
+  addn(6, 0, sx$es1); addn(7, 0, sx$es2); addn(8, 0, sx$vs1); addn(9, 0, sx$vs2); addn(10, 0, sx$chi.ind); addn(11, 0, sx$chi.sum)
+  addn(12, 0, sum(st$Z1)); addn(13, 0, sum(st$Z2))
+}
 emit("agricolae_ammi", "agricolae", list(cases))
