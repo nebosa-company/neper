@@ -5,6 +5,7 @@
 use e.algo.stat.gparot as gp
 use e.math
 use e.mem
+use e.algo.stat.rbfgs as bf
 
 // returns the deviance, -2 log-likelihood (NaN if the Hessian is singular); iterations in it
 fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, decay: f64, wts: []const f64, coef: []f64) -> f64 {
@@ -148,4 +149,95 @@ fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
         i += 1usize
     }
     ret dev + 2.0f64 * decay * pen
+}
+
+// nnet() for a single linear response with one hidden layer of logistic units (linout = TRUE, no skip-layer): sum of squares plus decay times the squared weights, fitted by optim's BFGS
+// (nnet's own vmmin is that algorithm: verified against optim(method = "BFGS") to 1e-12 in R) from weights given by the caller (R draws runif(nwts, -rang, rang)). The weights run unit by unit,
+// each hidden unit as bias then the p inputs, then the output as bias then the hidden units; the hidden activation is clamped at +-15 as nnet's C code does.
+type NetCtx = struct { x: []const f64, y: []const f64, w: []const f64, n: usize, p: usize, h: usize, decay: f64 }
+
+fn net_hidden(c: *NetCtx, wts: []const f64, t: usize, hid: []f64) -> f64 {
+    var j = 0usize
+    while j < c.h {
+        let base = j * (c.p + 1usize)
+        var s = wts[base]
+        var k = 0usize
+        while k < c.p {
+            s += wts[base + 1usize + k] * c.x[t * c.p + k]
+            k += 1usize
+        }
+        var sg = 1.0f64
+        if s < -15.0f64 { sg = 0.0f64 } else if s <= 15.0f64 { sg = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - s)) }
+        hid[j] = sg
+        j += 1usize
+    }
+    let ob = c.h * (c.p + 1usize)
+    var o = wts[ob]
+    j = 0usize
+    while j < c.h {
+        o += wts[ob + 1usize + j] * hid[j]
+        j += 1usize
+    }
+    ret o
+}
+
+fn net_f(c: *NetCtx, wts: []const f64) -> f64 {
+    var hid: [64]f64 = zero
+    var e = 0.0f64
+    var t = 0usize
+    while t < c.n {
+        let o = net_hidden(c, wts, t, hid[0usize..64usize])
+        e += c.w[t] * (o - c.y[t]) * (o - c.y[t])
+        t += 1usize
+    }
+    var pen = 0.0f64
+    var i = 0usize
+    while i < wts.len {
+        pen += wts[i] * wts[i]
+        i += 1usize
+    }
+    ret e + c.decay * pen
+}
+
+fn net_g(c: *NetCtx, wts: []const f64, g: []f64) {
+    var hid: [64]f64 = zero
+    var i = 0usize
+    while i < wts.len {
+        g[i] = 2.0f64 * c.decay * wts[i]
+        i += 1usize
+    }
+    let ob = c.h * (c.p + 1usize)
+    var t = 0usize
+    while t < c.n {
+        let o = net_hidden(c, wts, t, hid[0usize..64usize])
+        let d = 2.0f64 * c.w[t] * (o - c.y[t])
+        g[ob] += d
+        var j = 0usize
+        while j < c.h {
+            g[ob + 1usize + j] += d * hid[j]
+            let dh = d * wts[ob + 1usize + j] * hid[j] * (1.0f64 - hid[j])
+            let base = j * (c.p + 1usize)
+            g[base] += dh
+            var k = 0usize
+            while k < c.p {
+                g[base + 1usize + k] += dh * c.x[t * c.p + k]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        t += 1usize
+    }
+}
+
+// fit: wts holds the start values and receives the solution; the answer is the objective value; fitted receives the outputs
+fn nnet_fit(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usize, p: usize, h: usize, decay: f64, maxit: usize, reltol: f64, abstol: f64, wts: []f64, fitted: []f64) -> f64 {
+    var c = NetCtx { x: x, y: y, w: w, n: n, p: p, h: h, decay: decay }
+    let v = bf.vmmin_abs[NetCtx](a, &c, net_f, net_g, wts, reltol, maxit, abstol)
+    var hid: [64]f64 = zero
+    var t = 0usize
+    while t < n {
+        fitted[t] = net_hidden(&c, wts, t, hid[0usize..64usize])
+        t += 1usize
+    }
+    ret v
 }

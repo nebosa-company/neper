@@ -11,6 +11,39 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "netv") || str.eq(c.name, "nets") || str.eq(c.name, "netw") {
+        let nn_ = usize(z[0usize])
+        let pp = usize(z[1usize])
+        let hh = usize(z[2usize])
+        let nw = hh * (pp + 1usize) + hh + 1usize
+        let (wv, ew) = mem.alloc[f64](a, nw)
+        let (fit, ef) = mem.alloc[f64](a, nn_)
+        if ew != ok || ef != ok { ret nan }
+        var q = 0usize
+        while q < nw {
+            wv[q] = z[5usize + q]
+            q += 1usize
+        }
+        let xo = 5usize + nw
+        let yo = xo + nn_ * pp
+        let wo = yo + nn_
+        let val = nn.nnet_fit(a, z[xo..yo], z[yo..wo], z[wo..wo + nn_], nn_, pp, hh, z[3usize], usize(z[4usize]), 1.0e-8f64, 1.0e-4f64, wv, fit)
+        if str.eq(c.name, "netv") { ret val }
+        var sm = 0.0f64
+        q = 0usize
+        if str.eq(c.name, "nets") {
+            while q < nn_ {
+                sm += fit[q]
+                q += 1usize
+            }
+            ret sm
+        }
+        while q < nw {
+            sm += wv[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret sm
+    }
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let nk = usize(z[2usize])

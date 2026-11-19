@@ -29,4 +29,16 @@ for (rep in 1:20) {
   aw <- c(n, p, K, dc, y, as.vector(t(x)), wv)
   add("dev", aw, deviance(fw)); add("coef", aw, sum(as.vector(t(cw)) * seq_along(cw)))
 }
+# nnet() regression (linout = TRUE), one hidden layer, no skip: "netv" the value, "nets" the sum of fitted values, "netw" the position-weighted sum of the final weights; args (n, p, h, decay, maxit, wts0[nw], x[n p] row-major, y[n], case weights[n])
+for (rep in 1:25) {
+  n <- sample(40:120, 1); p <- sample(1:3, 1); h <- sample(1:4, 1); dc <- c(0, 0.01, 0.1)[rep %% 3 + 1]
+  x <- matrix(rnorm(n * p), n); y <- sin(x[, 1]) + 0.5 * rowSums(x) + rnorm(n, 0, 0.2); wv <- rep(1, n)
+  nw <- h * (p + 1) + h + 1; set.seed(rep * 17); w0 <- runif(nw, -0.7, 0.7)
+  f <- nnet(x, y, size = h, linout = TRUE, decay = dc, Wts = w0, maxit = 100, trace = FALSE)
+  if (f$convergence != 0) next  # a run that hits the iteration cap amplifies rounding differences between the two programs
+  a <- c(n, p, h, dc, 100, w0, as.vector(t(x)), y, wv)
+  cases[[length(cases) + 1]] <- case("netv", a, f$value, rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("nets", a, sum(f$fitted.values), rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("netw", a, sum(f$wts * seq_along(f$wts)), rel = 1e-7, abs = 1e-9)
+}
 emit("nnet", "nnet", list(cases))

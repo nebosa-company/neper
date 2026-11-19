@@ -4475,4 +4475,5 @@ D7617	425	L460 (epiR) closed
 D7618	866	actuar rcompound and the simulation aggregate
 D7619	825	actuar linear Bayes credibility (bayes)
 D7620	1283	actuar regression credibility (Hachemeister, hache.origin)
-D7621	591	sm.density variability band
+D7621	592	sm.density variability band
+D7622	1378	nnet hidden-layer regression network
