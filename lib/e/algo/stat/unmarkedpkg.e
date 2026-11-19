@@ -7,6 +7,7 @@ use e.math
 use e.math.opt as opt
 use e.math.nmath as nm
 use e.mem
+use e.algo.stat.quantreg as qrb
 
 type OccCtx = struct { x: []const f64, z: []const f64, y: []const f64, m: usize, j: usize, p1: usize, p2: usize, q: []f64 }
 
@@ -217,5 +218,75 @@ fn pcount(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: usiz
         t += 1usize
     }
     out[k] = 0.0f64 - pc_f(&c, par)
+    ret true
+}
+
+// the standard errors of the `occu` fit: the square roots of the diagonal of the inverse of the Hessian of minus the log-likelihood at its estimates (second central differences of the objective, step 1e-4), as unmarked reports from optim's Hessian;
+// out receives the p1 + p2 values, false when the Hessian is singular
+fn occu_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, m: usize, j: usize, p1: usize, p2: usize, est: []const f64, out: []f64) -> bool {
+    let k = p1 + p2
+    let (qq, e1) = mem.alloc[f64](a, k)
+    let (par, e2) = mem.alloc[f64](a, k)
+    let (hs, e3) = mem.alloc[f64](a, k * k)
+    let (col, e4) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret false }
+    var c = OccCtx { x: x, z: z, y: y, m: m, j: j, p1: p1, p2: p2, q: qq }
+    var i = 0usize
+    while i < k {
+        par[i] = est[i]
+        i += 1usize
+    }
+    let h = 1.0e-4f64
+    let f0 = occ_f(&c, par[0usize..k])
+    i = 0usize
+    while i < k {
+        var l = i
+        while l < k {
+            var v = 0.0f64
+            if i == l {
+                par[i] = est[i] + h
+                let fp = occ_f(&c, par[0usize..k])
+                par[i] = est[i] - h
+                let fm = occ_f(&c, par[0usize..k])
+                par[i] = est[i]
+                v = (fp - 2.0f64 * f0 + fm) / (h * h)
+            } else {
+                par[i] = est[i] + h
+                par[l] = est[l] + h
+                let fpp = occ_f(&c, par[0usize..k])
+                par[l] = est[l] - h
+                let fpm = occ_f(&c, par[0usize..k])
+                par[i] = est[i] - h
+                let fmm = occ_f(&c, par[0usize..k])
+                par[l] = est[l] + h
+                let fmp = occ_f(&c, par[0usize..k])
+                par[i] = est[i]
+                par[l] = est[l]
+                v = (fpp - fpm - fmp + fmm) / (4.0f64 * h * h)
+            }
+            hs[i * k + l] = v
+            hs[l * k + i] = v
+            l += 1usize
+        }
+        i += 1usize
+    }
+    var cj = 0usize
+    while cj < k {
+        var t = 0usize
+        var mat: [64]f64 = zero
+        while t < k * k {
+            mat[t] = hs[t]
+            t += 1usize
+        }
+        t = 0usize
+        while t < k {
+            col[t] = 0.0f64
+            t += 1usize
+        }
+        col[cj] = 1.0f64
+        if !qrb.solve_dense(mat[0usize..k * k], col, k) { ret false }
+        out[cj] = math.sqrt[f64](col[cj])
+        cj += 1usize
+    }
     ret true
 }

@@ -9,9 +9,9 @@ for (rep in 1:10) {
   umf <- unmarkedFrameOccu(y = y, siteCovs = data.frame(x = x, z = z))
   f <- tryCatch(occu(~z ~x, umf), error = function(e) NULL)
   if (is.null(f)) next
-  v <- c(coef(f), -f@opt$value)
+  v <- c(coef(f), -f@opt$value, sqrt(diag(vcov(f))))
   X <- cbind(1, x); Z <- cbind(1, z)
-  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("occu", c(m, J, 2, 2, as.vector(t(y)), as.vector(t(X)), as.vector(t(Z)), k - 1), as.numeric(v[k]), rel = if (k == length(v)) 1e-6 else 3e-3, abs = if (k == length(v)) 1e-4 else 1e-3)
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("occu", c(m, J, 2, 2, as.vector(t(y)), as.vector(t(X)), as.vector(t(Z)), k - 1), as.numeric(v[k]), rel = if (k == 5) 1e-6 else if (k > 5) 1e-2 else 3e-3, abs = if (k == 5) 1e-4 else if (k > 5) 5e-3 else 1e-3)
 }
 # pcount(~ z ~ x, K): "pcnt" args (m, j, p1, p2, K, y[m * j] counts row-major, x, z as above, k) the same coefficient layout, then the log-likelihood
 for (rep in 1:10) {
