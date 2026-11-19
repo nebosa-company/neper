@@ -1325,3 +1325,11 @@ fn legendre_h3d(l: usize, lam: f64, et: f64) -> f64 {
 
 // gsl hazard(x): the hazard rate of the standard normal, its density over its upper tail
 fn hazard(x: f64) -> f64 { ret math.exp[f64](dist.dnorm(x, 0.0f64, 1.0f64, true) - dist.pnorm(x, 0.0f64, 1.0f64, false, true)) }
+
+// gsl coulomb_CL(L, eta): the Coulomb wave function normalisation 2^L exp(-pi eta / 2 + ln |Gamma(L + 1 + i eta)| - ln Gamma(2 L + 2)) for L > -1
+fn coulomb_cl(l: f64, et: f64) -> f64 {
+    var go: [2]f64 = zero
+    var gt: [2]f64 = zero
+    lngamma_complex(l + 1.0f64, et, go[0usize..2usize], gt[0usize..2usize])
+    ret math.exp[f64](l * math.log[f64](2.0f64) - 3.141592653589793238462643383279f64 * et / 2.0f64 + go[0usize] - sp.lgamma(2.0f64 * l + 2.0f64))
+}

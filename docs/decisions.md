@@ -50941,3 +50941,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7488 — gsl hazard
 `hazard(x)` is the standard normal hazard rate, taken on the log scale (exp(log dnorm - log upper-tail pnorm)) because the upper tail underflows to zero from x of about 38 and the plain ratio is then 0 / 0; equal to gsl hazard at rel 1e-12 on 30 points from -8 to 100 (30 values added to oracle_gsl_bzero). Open for L417: Coulomb wave functions, the error estimates.
+
+## D7489 — gsl coulomb_CL
+`coulomb_cl(L, eta)` is the Coulomb wave function normalisation 2^L exp(-pi eta / 2 + ln |Gamma(L + 1 + i eta)| - ln Gamma(2 L + 2)), the real part of the complex log-gamma (`lngamma_complex`) in the middle term; equal to gsl coulomb_CL at rel 1e-9 on 50 draws (L from -0.9 to 6, eta from -5 to 5). Open for L417: the Coulomb wave functions F and G themselves (coulomb_wave_FG), the error estimates.

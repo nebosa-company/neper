@@ -4340,4 +4340,5 @@ D7484	421	gamlss.dist qexGAUS verified
 D7485	767	gsl bessel_zero_Jnu
 D7486	644	gsl Airy derivatives and zeros
 D7487	709	gsl legendre_H3d
-D7488	391	gsl hazard
+D7488	392	gsl hazard
+D7489	428	gsl coulomb_CL

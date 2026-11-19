@@ -23,4 +23,5 @@ for (rep in 1:50) {
   cases[[length(cases) + 1]] <- case("h3", c(l, lam, eta), legendre_H3d(l, lam, eta), rel = 1e-9, abs = 1e-12)
 }
 for (x in c(-8, -3, -1, 0, 0.5, 2, 5, 10, 30, 100, runif(20, -6, 40))) cases[[length(cases) + 1]] <- case("hz", c(x), hazard(x), rel = 1e-12, abs = 1e-300)
+for (rep in 1:50) { l <- runif(1, -0.9, 6); et <- runif(1, -5, 5); cases[[length(cases) + 1]] <- case("cl", c(l, et), coulomb_CL(l, et), rel = 1e-9, abs = 1e-300) }
 emit("gsl_bzero", "gsl", list(cases))
