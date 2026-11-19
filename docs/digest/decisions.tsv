@@ -4325,4 +4325,5 @@ D7471	649	MASS fitdistr for the t family
 D7371	1104	lavaan: several correlated factors
 D7472	749	MASS fitdistr for the beta and F families
 D7473	548	MASS fitdistr for the chi-squared family
-D7474	674	fpc bhattacharyya.dist
+D7474	675	fpc bhattacharyya.dist
+D7475	888	fpc mergenormals, bhat method

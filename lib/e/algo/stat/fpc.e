@@ -1349,3 +1349,136 @@ fn bhattacharyya_dist(a: *mem.Arena, mu1: []const f64, mu2: []const f64, s1: []c
     }
     ret (mh / 8.0f64 + 0.5f64 * lds - 0.25f64 * lds1 - 0.25f64 * lds2, ok)
 }
+
+// mergenormals(xdata, clustering, probs, muarray, Sigmaarray, z, method = "bhat", cutoff): merge Gaussian mixture components while the largest exp(-Bhattacharyya distance) among the live pairs reaches the cutoff.
+// x is n by d (row-major), mu is k by d (row j the mean of component j), sg is k blocks of d by d, z is n by k; probs, mu, sg and z are updated in place by the merges (mergeparameters: summed z weights, weighted ML mean and covariance of the data).
+// map receives mergedtonumbers (1-based, renumbered to 1..m in increasing order of the surviving numbers, as renumber = TRUE does when every component owns some data) and vals the decision values valuemerged; the answer is how many values.
+fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs: []f64, mu: []f64, sg: []f64, z: []f64, cutoff: f64, map: []usize, vals: []f64) -> (usize, err) {
+    let (bm, e0) = mem.alloc[f64](a, k * k)
+    let (dead, e1) = mem.alloc[bool](a, k)
+    let (dec, e2) = mem.alloc[f64](a, k * k)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0usize, mem.Full) }
+    var i = 0usize
+    while i < k {
+        dead[i] = false
+        map[i] = i
+        i += 1usize
+    }
+    var nv = 0usize
+    var all = true
+    var upi = 0usize
+    var loop = true
+    while loop {
+        // refresh the bhat matrix: every pair the first time, then the pairs against the merged component (upi)
+        var p = 0usize
+        while p < k {
+            var q = p + 1usize
+            while q < k {
+                var need = all
+                if !all && ((p == upi && q != upi) || (q == upi && p != upi)) { need = true }
+                if need && !dead[p] && !dead[q] {
+                    let (bd, eb) = bhattacharyya_dist(a, mu[p * d..p * d + d], mu[q * d..q * d + d], sg[p * d * d..(p + 1usize) * d * d], sg[q * d * d..(q + 1usize) * d * d], d)
+                    if eb != ok { ret (0usize, eb) }
+                    bm[p * k + q] = math.exp[f64](0.0f64 - bd)
+                }
+                q += 1usize
+            }
+            p += 1usize
+        }
+        all = false
+        // the decision matrix: live upper-triangle entries only
+        var best = 0.0f64
+        var bi = k
+        var bj = k
+        var any = false
+        var c = 0usize
+        while c < k {
+            var r = 0usize
+            while r < c {
+                var v = 0.0f64
+                if !dead[r] && !dead[c] { v = bm[r * k + c] }
+                dec[r * k + c] = v
+                if v >= cutoff { any = true }
+                if bi == k || v > best {
+                    best = v
+                    bi = r
+                    bj = c
+                }
+                r += 1usize
+            }
+            c += 1usize
+        }
+        vals[nv] = best
+        nv += 1usize
+        if !any { break }
+        // merge component bj into bi
+        dead[bj] = true
+        i = 0usize
+        while i < k {
+            if map[i] == bj { map[i] = bi }
+            i += 1usize
+        }
+        probs[bi] = probs[bi] + probs[bj]
+        var tot = 0.0f64
+        i = 0usize
+        while i < n {
+            z[i * k + bi] = z[i * k + bi] + z[i * k + bj]
+            tot += z[i * k + bi]
+            i += 1usize
+        }
+        var r2 = 0usize
+        while r2 < d {
+            var s = 0.0f64
+            i = 0usize
+            while i < n {
+                s += z[i * k + bi] * x[i * d + r2]
+                i += 1usize
+            }
+            mu[bi * d + r2] = s / tot
+            r2 += 1usize
+        }
+        r2 = 0usize
+        while r2 < d {
+            var c2 = 0usize
+            while c2 < d {
+                var s = 0.0f64
+                i = 0usize
+                while i < n {
+                    s += z[i * k + bi] * (x[i * d + r2] - mu[bi * d + r2]) * (x[i * d + c2] - mu[bi * d + c2])
+                    i += 1usize
+                }
+                sg[bi * d * d + r2 * d + c2] = s / tot
+                c2 += 1usize
+            }
+            r2 += 1usize
+        }
+        upi = bi
+    }
+    // renumber the surviving numbers to 1 .. m in increasing order
+    var cln = 1usize
+    var lab = 0usize
+    while lab < k {
+        var used = false
+        i = 0usize
+        while i < k {
+            if map[i] == lab { used = true }
+            i += 1usize
+        }
+        if used {
+            i = 0usize
+            while i < k {
+                if map[i] == lab { map[i] = 1000usize + cln }
+                i += 1usize
+            }
+            cln += 1usize
+        }
+        lab += 1usize
+    }
+    i = 0usize
+    while i < k {
+        map[i] = map[i] - 1000usize
+        i += 1usize
+    }
+    if nv == k { nv -= 1usize }
+    ret (nv, ok)
+}
