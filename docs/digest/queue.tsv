@@ -52,7 +52,7 @@ L456	library	0.15	1322	mlogit: discrete-choice models	D7367: Wald tests of condi
 L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN rank 780).
 L459	library	0.8	896	energy: energy statistics	Partial (D6188).
 L460	library	0.25	621	epiR: epidemiology	Partial (D6187).
-L461	library	0.25	828	systemfit: equation systems	Partial (D6622).
+L461	library	0.25	838	systemfit: equation systems	Partial (D6622).
 L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L486	library	0.25	473	mixtools: mixture models by EM	Partial (D6194).
 L488	library	0.2	475	drc: dose-response models	Partial (D6411).
