@@ -504,3 +504,28 @@ fn svds_op[Ctx: type](a: *mem.Arena, ctx: *Ctx, f: fn(*Ctx, []const f64, []f64),
     }
     ret svds(a, dense, m, n, k, d, u, v)
 }
+
+// RSpectra::eigs with a general (non-symmetric) real operator f(ctx, x, y) = A x: the matrix is recovered from the unit vectors (column-major, as eigs_general takes it) and eigs_general answers
+fn eigs_op[Ctx: type](a: *mem.Arena, ctx: *Ctx, f: fn(*Ctx, []const f64, []f64), n: usize, k: usize, which: usize, re: []f64, im: []f64, vmod: []f64) -> err {
+    let (dense, e0) = mem.alloc[f64](a, n * n)
+    let (ex, e1) = mem.alloc[f64](a, n)
+    let (ey, e2) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    var j = 0usize
+    while j < n {
+        var i = 0usize
+        while i < n {
+            ex[i] = 0.0f64
+            i += 1usize
+        }
+        ex[j] = 1.0f64
+        f(ctx, ex, ey)
+        i = 0usize
+        while i < n {
+            dense[j * n + i] = ey[i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret eigs_general(a, dense, n, k, which, re, im, vmod)
+}

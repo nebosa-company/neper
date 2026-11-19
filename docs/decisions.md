@@ -50776,3 +50776,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7437 — RSpectra svds with an operator
 `svds_op` recovers the m by n matrix from the operator applied to the n unit vectors and goes through `svds`; equal to RSpectra::svds(A = function, Atrans = function, dim) on 20 draws of a diagonal-plus-rank-one operator to 1e-6 (R's function interface needs (x, args) signatures, which the first oracle script lacked). The recovery makes n operator calls, as for eigs_sym_op. L334 at 0.72.
+
+## D7438 — RSpectra eigs with a general operator
+`eigs_op` recovers a general real matrix from its operator and calls `eigs_general`, so the operator forms of eigs, eigs_sym and svds are all covered by recovery plus the dense solvers; equal to RSpectra::eigs(function, k, n, which) for the five which options on 25 random matrices (values, draws where the cut splits a conjugate pair skipped as before). L334 at 0.75.
