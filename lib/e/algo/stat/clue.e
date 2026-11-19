@@ -5,6 +5,7 @@
 // Not here: the hierarchy measures, the other agreement and dissimilarity methods, consensus and membership of soft partitions.
 
 use e.algo.graph.match as mt
+use e.algo.stat.hclust as hc
 use e.math
 use e.mem
 
@@ -342,4 +343,82 @@ fn partition_measure2(a: *mem.Arena, cx: []const usize, cy: []const usize, n: us
     let (v, e9) = mt.hungarian(costs, k, asg, scratch, used)
     if e9 != ok { ret (0.0f64, e9) }
     ret (math.sqrt[f64](v), ok)
+}
+
+// cl_dissimilarity of two hclust trees on n objects through their ultrametrics (the cophenetic distances of the n (n - 1) / 2 pairs): kind 0 euclidean, 1 manhattan, 2 cophenetic (1 - cor^2), 3 gamma (twice the discordant pairs of ultrametric entries over choose(m, 2)), 4 Chebyshev
+fn hier_dissimilarity(a: *mem.Arena, t1: *const hc.Tree, t2: *const hc.Tree, n: usize, kind: usize) -> (f64, err) {
+    let m = n * (n - 1usize) / 2usize
+    let (u, e0) = mem.alloc[f64](a, m)
+    let (v, e1) = mem.alloc[f64](a, m)
+    if e0 != ok || e1 != ok { ret (0.0f64, mem.Full) }
+    var q = 0usize
+    var i = 0usize
+    while i + 1usize < n {
+        var j = i + 1usize
+        while j < n {
+            u[q] = hc.cophenetic(a, t1, n, i, j)
+            v[q] = hc.cophenetic(a, t2, n, i, j)
+            q += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var s = 0.0f64
+    var k = 0usize
+    if kind == 0usize {
+        while k < m {
+            s += (u[k] - v[k]) * (u[k] - v[k])
+            k += 1usize
+        }
+        ret (math.sqrt[f64](s), ok)
+    }
+    if kind == 1usize {
+        while k < m {
+            s += math.abs[f64](u[k] - v[k])
+            k += 1usize
+        }
+        ret (s, ok)
+    }
+    if kind == 4usize {
+        while k < m {
+            let d = math.abs[f64](u[k] - v[k])
+            if d > s { s = d }
+            k += 1usize
+        }
+        ret (s, ok)
+    }
+    if kind == 2usize {
+        var mu = 0.0f64
+        var mv = 0.0f64
+        while k < m {
+            mu += u[k]
+            mv += v[k]
+            k += 1usize
+        }
+        mu = mu / f64(m)
+        mv = mv / f64(m)
+        var suv = 0.0f64
+        var suu = 0.0f64
+        var svv = 0.0f64
+        k = 0usize
+        while k < m {
+            suv += (u[k] - mu) * (v[k] - mv)
+            suu += (u[k] - mu) * (u[k] - mu)
+            svv += (v[k] - mv) * (v[k] - mv)
+            k += 1usize
+        }
+        ret (1.0f64 - suv * suv / (suu * svv), ok)
+    }
+    var disc = 0.0f64
+    k = 0usize
+    while k < m {
+        var l = k + 1usize
+        while l < m {
+            let p = (u[k] - u[l]) * (v[k] - v[l])
+            if p < 0.0f64 { disc += 1.0f64 }
+            l += 1usize
+        }
+        k += 1usize
+    }
+    ret (2.0f64 * disc / (f64(m) * (f64(m) - 1.0f64) / 2.0f64), ok)
 }
