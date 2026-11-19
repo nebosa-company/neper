@@ -19,7 +19,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = x[4usize + n * p + n + p..4usize + n * p + 2usize * n + p]
     let (g, e1) = mem.alloc[f64](a, n)
     if e1 != ok { os.exit(4) }
-    let it = sp.calib(a, xs, d, total, q, n, p, method, g)
+    var it = 0usize
+    if method == 2usize {
+        let tail = 4usize + n * p + 2usize * n + p
+        it = sp.calib_truncated(a, xs, d, total, q, n, p, x[tail], x[tail + 1usize], g)
+    } else {
+        it = sp.calib(a, xs, d, total, q, n, p, method, g)
+    }
     if it == 0usize { ret 0.0f64 / 0.0f64 }
     ret g[ii]
 }
