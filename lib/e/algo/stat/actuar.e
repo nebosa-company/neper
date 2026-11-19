@@ -242,3 +242,63 @@ fn agg_npower(x: f64, mean: f64, variance: f64, skewness: f64) -> f64 {
     if x <= mean { ret 0.0f64 / 0.0f64 }
     ret dsa.pnorm(math.sqrt[f64](1.0f64 + 9.0f64 / (skewness * skewness) + 6.0f64 * (x - mean) / (math.sqrt[f64](variance) * skewness)) - 3.0f64 / skewness, 0.0f64, 1.0f64, true, false)
 }
+
+// actuar grouped data with class boundaries cj (r + 1 values) and class counts nj (r values): ogive(gd)(x), the piecewise-linear empirical cdf through the cumulative proportions at the boundaries
+fn grouped_ogive(cj: []const f64, nj: []const f64, x: f64) -> f64 {
+    let r = nj.len
+    var tot = 0.0f64
+    var j = 0usize
+    while j < r {
+        tot += nj[j]
+        j += 1usize
+    }
+    if x <= cj[0usize] { ret 0.0f64 }
+    if x >= cj[r] { ret 1.0f64 }
+    var cum = 0.0f64
+    j = 0usize
+    while j < r {
+        if x < cj[j + 1usize] {
+            ret (cum + nj[j] * (x - cj[j]) / (cj[j + 1usize] - cj[j])) / tot
+        }
+        cum += nj[j]
+        j += 1usize
+    }
+    ret 1.0f64
+}
+
+// emm(gd, order): the empirical raw moment of order k of grouped data under the uniform-within-class assumption
+fn grouped_emm(cj: []const f64, nj: []const f64, k: f64) -> f64 {
+    var tot = 0.0f64
+    var s = 0.0f64
+    var j = 0usize
+    while j < nj.len {
+        tot += nj[j]
+        s += nj[j] * (math.pow[f64](cj[j + 1usize], k + 1.0f64) - math.pow[f64](cj[j], k + 1.0f64)) / ((k + 1.0f64) * (cj[j + 1usize] - cj[j]))
+        j += 1usize
+    }
+    ret s / tot
+}
+
+// elev(gd)(x): the empirical limited expected value E[min(X, x)] of grouped data, uniform within each class
+fn grouped_elev(cj: []const f64, nj: []const f64, x: f64) -> f64 {
+    var tot = 0.0f64
+    var s = 0.0f64
+    var j = 0usize
+    while j < nj.len {
+        tot += nj[j]
+        let lo = cj[j]
+        let hi = cj[j + 1usize]
+        let w = hi - lo
+        var m = 0.0f64
+        if x >= hi {
+            m = 0.5f64 * (lo + hi)
+        } else if x <= lo {
+            m = x
+        } else {
+            m = (x * x - lo * lo) / (2.0f64 * w) + x * (hi - x) / w
+        }
+        s += nj[j] * m
+        j += 1usize
+    }
+    ret s / tot
+}

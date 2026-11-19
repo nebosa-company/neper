@@ -94,4 +94,12 @@ for (rep in 1:40) {
   Fp <- suppressWarnings(aggregateDist("npower", moments = c(mu, v, sk))); r <- suppressWarnings(Fp(xx))
   if (is.finite(r)) cases[[length(cases) + 1]] <- case("ap", c(mu, v, sk, xx), r, rel = 1e-10, abs = 1e-13)
 }
+# grouped data: "gg" args (r, cj[r + 1], nj[r], stat 0 ogive 1 emm 2 elev, argument)
+for (rep in 1:40) {
+  r <- sample(3:9, 1); cj <- c(0, cumsum(runif(r, 5, 60))); nj <- sample(3:80, r, TRUE)
+  gd <- grouped.data(Group = cj, Frequency = nj); xx <- runif(1, -5, max(cj) * 1.1); kk <- sample(1:4, 1)
+  cases[[length(cases) + 1]] <- case("gg", c(r, cj, nj, 0, xx), ogive(gd)(xx), rel = 1e-10, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("gg", c(r, cj, nj, 1, kk), emm(gd, kk), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("gg", c(r, cj, nj, 2, abs(xx)), elev(gd)(abs(xx)), rel = 1e-10, abs = 1e-12)
+}
 emit("actuar", "actuar", list(cases))

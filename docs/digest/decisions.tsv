@@ -4388,4 +4388,5 @@ D7529	754	ordinal clm with nominal effects
 D7530	761	actuar aggregateDist recursive (Panjer)
 D7531	832	actuar discretize (upper, lower, rounding)
 D7532	698	actuar aggregateDist convolution
-D7533	683	actuar aggregateDist normal and Normal Power
+D7533	684	actuar aggregateDist normal and Normal Power
+D7534	1001	actuar grouped data: ogive, emm and elev

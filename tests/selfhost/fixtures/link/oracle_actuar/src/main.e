@@ -10,6 +10,16 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "gg") {
+        let rg = usize(x[0usize])
+        let st = usize(x[2usize + 2usize * rg])
+        let av = x[2usize + 2usize * rg + 1usize]
+        let cjg = x[1usize..1usize + rg + 1usize]
+        let njg = x[2usize + rg..2usize + 2usize * rg]
+        if st == 0usize { ret ac.grouped_ogive(cjg, njg, av) }
+        if st == 1usize { ret ac.grouped_emm(cjg, njg, av) }
+        ret ac.grouped_elev(cjg, njg, av)
+    }
     if str.eq(c.name, "an") { ret ac.agg_normal(x[2usize], x[0usize], x[1usize]) }
     if str.eq(c.name, "ap") { ret ac.agg_npower(x[3usize], x[0usize], x[1usize], x[2usize]) }
     if str.eq(c.name, "cv") {
