@@ -391,3 +391,45 @@ fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: u
     }
     ret (tv, 2.0f64 * nb.pt(0.0f64 - at, df, true, false), ok)
 }
+
+// van der Waerden all-pairs test: normal scores qnorm(rank / (n + 1)) of the pooled sample; the statistic of cell (row i, column j), i > j, is
+// |mean score_i - mean score_j| / sqrt(s2 (n - 1 - T) / (n - k) (1 / n_i + 1 / n_j)). Answers (t, unadjusted two-sided p, single-step Tukey p).
+fn vdw_pair(a: *mem.Arena, n: usize, k: usize, x: []const f64, grp: []const usize, i: usize, j: usize) -> (f64, f64, f64, err) {
+    let (r, e0) = mem.alloc[f64](a, n)
+    let (aj, e1) = mem.alloc[f64](a, k)
+    let (nj, e2) = mem.alloc[f64](a, k)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, 0.0f64, mem.Full) }
+    let er = rank_avg(a, x, r)
+    if er != ok { ret (0.0f64, 0.0f64, 0.0f64, er) }
+    var c = 0usize
+    while c < k {
+        aj[c] = 0.0f64
+        nj[c] = 0.0f64
+        c += 1usize
+    }
+    let nf = f64(n)
+    var ss = 0.0f64
+    var t = 0usize
+    while t < n {
+        let z = dist.qnorm(r[t] / (nf + 1.0f64), 0.0f64, 1.0f64, true, false)
+        aj[grp[t]] += z
+        nj[grp[t]] += 1.0f64
+        ss += z * z
+        t += 1usize
+    }
+    let s2 = ss / (nf - 1.0f64)
+    var stat = 0.0f64
+    c = 0usize
+    while c < k {
+        stat += aj[c] * aj[c] / nj[c]
+        c += 1usize
+    }
+    stat = stat / s2
+    let kf = f64(k)
+    var dif = aj[i] / nj[i] - aj[j] / nj[j]
+    if dif < 0.0f64 { dif = 0.0f64 - dif }
+    let tv = dif / math.sqrt[f64](s2 * (nf - 1.0f64 - stat) / (nf - kf) * (1.0f64 / nj[i] + 1.0f64 / nj[j]))
+    let p = 2.0f64 * nb.pt(0.0f64 - tv, nf - kf, true, false)
+    let pt = nb.ptukey(math.sqrt[f64](2.0f64) * tv, 1.0f64, kf, nf - kf, false, false)
+    ret (tv, p, pt, ok)
+}

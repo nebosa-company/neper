@@ -50197,3 +50197,6 @@ For `coxph(Surv(Tstart, Tstop, status) ~ strata(trans), method = "breslow")` the
 
 ## D7356 — PMCMRplus Friedman all-pairs tests
 `frd_pair` ranks within each block (ties averaged) and answers for one table cell (row i, column j, i > j): Nemenyi's sqrt(2) |mean rank difference| / sqrt(k(k+1)/(6n)) with the Tukey p at infinite df, and Conover's A, B and df = nk - k - n + 1 with the signed statistic R_j - R_i (times sqrt(2) in the single-step form), its Tukey p, and the unadjusted two-sided t p. Equal to R on ten random block designs with and without ties. L487 at 0.4; the remaining post-hoc families are open.
+
+## D7357 — PMCMRplus van der Waerden all-pairs
+`vdw_pair` scores the pooled ranks as qnorm(rank / (n + 1)) and tests cell (i, j) with |mean score difference| / sqrt(s2 (n - 1 - T)/(n - k) (1/n_i + 1/n_j)), T the van der Waerden statistic; the p values are the two-sided t at n - k df and the single-step Tukey p of sqrt(2) times the statistic. Equal to R on ten random k-group data sets with and without ties. L487 at 0.45.
