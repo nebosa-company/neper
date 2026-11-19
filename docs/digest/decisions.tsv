@@ -4335,4 +4335,5 @@ D7480	665	caret varImp for a Gamma(log) glm
 D7481	689	clue cl_dissimilarity of hierarchies
 D7372	893	lavaan: fit measures
 D7482	758	clue hierarchy agreements and the symmetric-difference dissimilarity
-D7483	600	clue Euclidean dissimilarity of soft partitions
+D7483	601	clue Euclidean dissimilarity of soft partitions
+D7484	420	gamlss.dist qexGAUS verified

@@ -50926,3 +50926,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7483 — clue Euclidean dissimilarity of soft partitions
 `euclid_soft` is cl_dissimilarity(as.cl_partition(U), as.cl_partition(V), "euclidean") for n by k membership matrices: the classes of V matched to those of U by the maximal cross-product assignment (solve_LSAP(crossprod(U, V), maximum = TRUE), `mt.hungarian`), then the root of the summed squared membership differences; equal to clue on 40 random soft partitions (40 values added to oracle_clue_hier). Open for L367: the other soft-partition methods, consensus, the remaining hierarchy methods, lpSolveAPI, sensitivity for equality rows.
+
+## D7484 — gamlss.dist qexGAUS verified
+`qexgaus` (the bracket grown from mu in steps of sigma, then Brent zeroin at tolerance eps^0.25 from `e.algo.stat.pwr`) already existed without an oracle; 60 random (mu, sigma, nu, p) draws added to oracle_gamlss_exgaus equal gamlss.dist qexGAUS at rel 1e-9 (120 cases in all), so the queue's exGAUS quantile gap is closed. Open for L464: the other families, r, moments, links.

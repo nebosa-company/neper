@@ -16,6 +16,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nu = z[3usize]
     let x = z[4usize]
     if which == 0usize { ret gd.dexgaus(x, mu, sigma, nu) }
+    if which == 2usize { ret gd.qexgaus(x, mu, sigma, nu) }
     ret gd.pexgaus(x, mu, sigma, nu)
 }
 
