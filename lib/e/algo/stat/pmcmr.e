@@ -815,3 +815,43 @@ fn mvn_equicorr_half(c: f64, m: usize) -> f64 {
     }
     ret s * h / 3.0f64
 }
+
+// P(|Z_i| < c for all i) for standard normals with correlations lam_i lam_j (a one-factor structure, the many-to-one correlation of group sizes n_i and a control n_0 with
+// lam_i = sqrt(n_i / (n_i + n_0))): the integral over the common factor of the product of the conditional interval probabilities, by Simpson's rule
+fn mvn_one_factor(c: f64, lam: []const f64) -> f64 {
+    let steps = 4000usize
+    let lo = 0.0f64 - 9.0f64
+    let h = 18.0f64 / f64(steps)
+    var s = 0.0f64
+    var i = 0usize
+    while i <= steps {
+        let z = lo + h * f64(i)
+        var prod = 1.0f64
+        var q = 0usize
+        while q < lam.len {
+            let rs = math.sqrt[f64](1.0f64 - lam[q] * lam[q])
+            prod *= dist.pnorm((c + lam[q] * z) / rs, 0.0f64, 1.0f64, true, false) - dist.pnorm((0.0f64 - c + lam[q] * z) / rs, 0.0f64, 1.0f64, true, false)
+            q += 1usize
+        }
+        let f = math.exp[f64](0.0f64 - z * z / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64) * prod
+        var wgt = 2.0f64
+        if i == 0usize || i == steps { wgt = 1.0f64 } else if i % 2usize == 1usize { wgt = 4.0f64 }
+        s += wgt * f
+        i += 1usize
+    }
+    ret s * h / 3.0f64
+}
+
+// kwManyOneDunnTest(p.adjust.method = "single-step"): the single-step p value 1 - P(|Z_i| < |z_j| for all i) of comparison j (1-based)
+fn dunn_many_single(q: Ranks, rbar: []const f64, rn: []const f64, k: usize, j: usize, lam: []f64) -> (f64, f64) {
+    var m = 1usize
+    while m < k {
+        lam[m - 1usize] = math.sqrt[f64](rn[m] / (rn[m] + rn[0usize]))
+        m += 1usize
+    }
+    let (z, p) = dunn_many(q, rbar, rn, j)
+    let _ = p
+    var az = z
+    if az < 0.0f64 { az = 0.0f64 - az }
+    ret (z, 1.0f64 - mvn_one_factor(az, lam[0usize..k - 1usize]))
+}

@@ -37,6 +37,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         t += 1usize
     }
+    if kind == 6usize {
+        let (lam, e8) = mem.alloc[f64](a, k)
+        if e8 != ok { os.exit(7) }
+        let (zs, ps1) = pm.dunn_many_single(q, rbar, rn, k, jj, lam)
+        let _ = zs
+        ret ps1
+    }
     if kind == 0usize {
         let (zv, pv) = pm.dunn_many(q, rbar, rn, jj)
         let _ = pv
