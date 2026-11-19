@@ -1187,3 +1187,13 @@ fn ct_pafrate(a: f64, b: f64, c: f64, d: f64, level: f64) -> (f64, f64, f64) {
     let r2 = (pu - ou) / pu
     ret ((pe - oe) / pe, math.min[f64](r1, r2), math.max[f64](r1, r2))
 }
+
+// the case-control population attributable fraction epi.2by2 reports (PAFest): (odds of the population - odds of the second row) / odds of the population, with the qbinom odds intervals of
+// `conf_odds` for the totals (a + c over b + d) and for the row (c over d), the bounds the min and max of the two limit ratios
+fn paf_est(a: f64, b: f64, c: f64, d: f64, level: f64) -> (f64, f64, f64) {
+    let (pe, pl, pu) = conf_odds(a + c, b + d, level)
+    let (oe, ol, ou) = conf_odds(c, d, level)
+    let r1 = (pl - ol) / pl
+    let r2 = (pu - ou) / pu
+    ret ((pe - oe) / pe, math.min[f64](r1, r2), math.max[f64](r1, r2))
+}

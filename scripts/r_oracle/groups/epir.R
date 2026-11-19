@@ -238,4 +238,11 @@ for (rep in 1:30) {
   v <- c(unlist(r$IRR.strata.wald[1, ]), unlist(r$ARate.strata.wald[1, ]), unlist(r$AFRate.strata.wald[1, ]), unlist(r$PARate.strata.wald[1, ]), unlist(r$PAFRate.strata.wald[1, ]))
   for (w in 0:14) cases[[length(cases) + 1]] <- case("ct", c(a, b, cc, d, un, w), unname(v[w + 1]), rel = 1e-8, abs = 1e-11)
 }
+# case-control PAFest (epi.2by2 PAFest.strata.wald): "pe" args (a, b, c, d, which 0 est 1 lower 2 upper)
+for (rep in 1:25) {
+  a <- sample(10:200, 1); b <- sample(10:200, 1); cc <- sample(10:300, 1); d <- sample(10:300, 1)
+  dat <- as.table(matrix(c(a, b, cc, d), 2, byrow = TRUE))
+  r <- epi.2by2(dat, method = "case.control", interpret = FALSE, outcome = "as.columns")$massoc.detail$PAFest.strata.wald
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("pe", c(a, b, cc, d, w), unlist(r[1, ])[w + 1], rel = 1e-8, abs = 1e-11)
+}
 emit("epir", "epiR", list(cases))
