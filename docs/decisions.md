@@ -51169,3 +51169,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7558 — epiR epi.sscc unmatched sample size and power
 `sscc_n` gives the case, control and total sample sizes of an unmatched case-control study for an odds ratio, the control exposure and a power (ratio r, design effect, finite population, sided test, fractional or rounded-up counts) and `sscc_power` the power a total n reaches, as epi.sscc does for method "unmatched". Equal to epiR on 40 draws (160 values added to oracle_epir, 2930 in all). The Fleiss correction, the matched method and the mode that solves for the odds ratio stay open.
+
+## D7559 — epiR epi.dsl for odds ratios
+`epi_dsl_or` pools k two-by-two tables by DerSimonian-Laird: study log odds ratios weighted by their inverse variance for Cochran's Q, tau squared as (Q - (k - 1)) over the weight spread (zero when Q is below k - 1), random-effects weights 1 / (v + tau squared), the pooled odds ratio with its Wald interval, the heterogeneity p value and I squared. Equal to epiR on 25 meta-analyses of 4 to 10 studies (175 values added to oracle_epir, 3105 in all). The risk-ratio method, the Mantel-Haenszel summary and the H squared interval stay open.

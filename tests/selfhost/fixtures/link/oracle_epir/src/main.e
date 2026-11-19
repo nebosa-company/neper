@@ -10,6 +10,12 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "dsl") {
+        let kd = usize(x[0usize])
+        var dv: [8]f64 = zero
+        ep.epi_dsl_or(x[1usize..1usize + kd], x[1usize + kd..1usize + 2usize * kd], x[1usize + 2usize * kd..1usize + 3usize * kd], x[1usize + 3usize * kd..1usize + 4usize * kd], 0.95f64, dv[0usize..8usize])
+        ret dv[usize(x[1usize + 4usize * kd])]
+    }
     if str.eq(c.name, "ss") {
         let wq = usize(x[8usize])
         if wq == 3usize { ret ep.sscc_power(x[0usize], x[1usize], x[7usize], x[2usize], x[5usize], 0.95f64) }

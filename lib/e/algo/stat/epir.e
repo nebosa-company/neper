@@ -457,3 +457,86 @@ fn sscc_power(orr: f64, p0: f64, n: f64, r: f64, sided: f64, level: f64) -> f64 
     let td2 = r * p0 * (1.0f64 - p0)
     ret dist.pnorm((tn1 - tn2) / math.sqrt[f64](td1 + td2), 0.0f64, 1.0f64, true, false)
 }
+
+// epi.dsl for odds ratios: DerSimonian-Laird random-effects pooling of k two-by-two tables (ev_t, n_t, ev_c, n_c per study, a half added to a table with a cell below 1);
+// out = (tau squared, pooled OR, lower, upper, Cochran's Q, heterogeneity p value, I squared in percent)
+fn epi_dsl_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f64, level: f64, out: []f64) {
+    let k = evt.len
+    let z = z_of(level)
+    var sw = 0.0f64
+    var sw2 = 0.0f64
+    var swo = 0.0f64
+    var i = 0usize
+    while i < k {
+        var a = evt[i]
+        var b = nt[i] - evt[i]
+        var c = evc[i]
+        var d = nc[i] - evc[i]
+        if a < 1.0f64 || b < 1.0f64 || c < 1.0f64 || d < 1.0f64 {
+            a += 0.5f64
+            b += 0.5f64
+            c += 0.5f64
+            d += 0.5f64
+        }
+        let orr = a * d / (b * c)
+        let se = math.sqrt[f64](1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d)
+        let w = 1.0f64 / (se * se)
+        sw += w
+        sw2 += w * w
+        swo += w * orr
+        i += 1usize
+    }
+    let lnmh = math.log[f64](swo / sw)
+    var q = 0.0f64
+    i = 0usize
+    while i < k {
+        var a = evt[i]
+        var b = nt[i] - evt[i]
+        var c = evc[i]
+        var d = nc[i] - evc[i]
+        if a < 1.0f64 || b < 1.0f64 || c < 1.0f64 || d < 1.0f64 {
+            a += 0.5f64
+            b += 0.5f64
+            c += 0.5f64
+            d += 0.5f64
+        }
+        let ln = math.log[f64](a * d / (b * c))
+        let se = math.sqrt[f64](1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d)
+        q += (ln - lnmh) * (ln - lnmh) / (se * se)
+        i += 1usize
+    }
+    let df = f64(k) - 1.0f64
+    var tau2 = 0.0f64
+    if q >= df { tau2 = (q - df) / (sw - sw2 / sw) }
+    var swd = 0.0f64
+    var swdl = 0.0f64
+    i = 0usize
+    while i < k {
+        var a = evt[i]
+        var b = nt[i] - evt[i]
+        var c = evc[i]
+        var d = nc[i] - evc[i]
+        if a < 1.0f64 || b < 1.0f64 || c < 1.0f64 || d < 1.0f64 {
+            a += 0.5f64
+            b += 0.5f64
+            c += 0.5f64
+            d += 0.5f64
+        }
+        let ln = math.log[f64](a * d / (b * c))
+        let v = 1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d
+        let wd = 1.0f64 / (v + tau2)
+        swd += wd
+        swdl += wd * ln
+        i += 1usize
+    }
+    let lnd = swdl / swd
+    let sed = 1.0f64 / math.sqrt[f64](swd)
+    let hsq = q / df
+    out[0usize] = tau2
+    out[1usize] = math.exp[f64](lnd)
+    out[2usize] = math.exp[f64](lnd - z * sed)
+    out[3usize] = math.exp[f64](lnd + z * sed)
+    out[4usize] = q
+    out[5usize] = 1.0f64 - nm.pchisq(q, df, true, false)
+    out[6usize] = (hsq - 1.0f64) / hsq * 100.0f64
+}

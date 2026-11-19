@@ -79,4 +79,12 @@ for (rep in 1:40) {
   rp <- epi.sscc(N = NA, OR = orr, p1 = NA, p0 = p0, n = nn, power = NA, r = r, design = 1, sided.test = sd)
   cases[[length(cases) + 1]] <- case("ss", c(orr, p0, r, 1, 0, sd, 0, nn, 3), rp$power, rel = 1e-8, abs = 1e-10)
 }
+# epi.dsl (odds ratios): "dsl" args (k, ev_t[k], n_t[k], ev_c[k], n_c[k], which 0 tau2, 1 pooled OR, 2 lower, 3 upper, 4 Q, 5 p, 6 I2)
+for (rep in 1:25) {
+  k <- sample(4:10, 1); nt <- sample(60:300, k); nc <- sample(60:300, k); evt <- rbinom(k, nt, runif(1, 0.05, 0.2)); evc <- rbinom(k, nc, runif(1, 0.1, 0.3))
+  m <- suppressWarnings(epi.dsl(evt, nt, evc, nc, names = as.character(1:k), method = "odds.ratio"))
+  v <- c(m$tau.sq, m$OR.summary$est, m$OR.summary$lower, m$OR.summary$upper, unname(m$heterogeneity["Q"]), unname(m$heterogeneity["p.value"]), m$Isq$est)
+  if (any(!is.finite(v))) next
+  for (w in 0:6) cases[[length(cases) + 1]] <- case("dsl", c(k, evt, nt, evc, nc, w), v[w + 1], rel = 1e-8, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))
