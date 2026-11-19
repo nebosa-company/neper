@@ -51028,3 +51028,6 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7513 — ordinal clm anova
 `clm_anova` is anova(fit0, fit1) of nested clm fits: the likelihood-ratio statistic 2 (ll1 - ll0) and its chi-square upper tail on the difference of the parameter counts; the fixture fits the full model and the one without its last covariate through `clm` and compares both numbers with ordinal on 18 draws (36 values added to oracle_ordinal, 402 in all). Open for L393: cauchit and the flexible links, nominal and scale effects, clmm, profile.
+
+## D7514 — tm stopwords("english")
+`e.algo.stat.tmstop` holds the 174 words of tm stopwords("english"), generated from tm and sorted, with `is_stopword_en` answering by binary search on `str.compare`; the fixture checks all 174 and 16 non-members and near-misses (the, i'm without its apostrophe, mustn't, also, would) against tm (190 membership answers in oracle_tm_stop). Other languages are not generated. Open for L380: the other stopword lists, removePunctuation, tokenisation, stemming, corpora, tidytext unnest_tokens, topic models.
