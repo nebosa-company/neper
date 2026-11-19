@@ -4344,4 +4344,5 @@ D7488	392	gsl hazard
 D7489	429	gsl coulomb_CL
 D7490	661	gamlss.dist BCCGo
 D7491	578	gamlss.dist ST3C
-D7492	698	gamlss.dist SI
+D7492	699	gamlss.dist SI
+D7493	431	gamlss.dist qSI

@@ -10,6 +10,7 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if str.eq(c.name, "siq") { ret gd.qsi(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(c.name, "sid") { ret gd.dsi(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(c.name, "sip") { ret gd.psi_cdf(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(c.name, "s3d") { ret gd.dst3(z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }

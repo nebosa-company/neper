@@ -50953,3 +50953,6 @@ ST3C is the compiled-code implementation of ST3 (dST3C, pST3C and qST3C return e
 
 ## D7492 — gamlss.dist SI
 `dsi` is the Sichel probability function in the original parametrisation, found by fitting the closed form to dSI rather than porting its compiled recursion: exp(-lgamma(y + 1) - nu log(sigma alpha) + y log(mu / (sigma alpha)) + log K_{y + nu}(alpha) - log K_nu(1 / sigma)) with alpha = sqrt(1 + 2 sigma mu) / sigma (K of the absolute order); `psi_cdf` sums it, as pSI sums its recursion. Equal to gamlss.dist on 50 draws each (mu 0.3 to 8, sigma 0.1 to 2, nu -2 to 2, y 0 to 25; 100 values added to oracle_gamlss_bccgo, 400 in all). Every gamlss.dist family but the multinomials MN3, MN4, MN5 now has a density. Open for L464: qSI, the multinomials, r, moments, links.
+
+## D7493 — gamlss.dist qSI
+`qsi` is the quantile of the SI distribution by the same search as qSI: the smallest j up to 10000 whose cumulative probability reaches p (here the running sum of `dsi`), with p within 1e-9 of 1 answering Inf; exact equality with gamlss.dist qSI on 50 draws (integers, so tolerance 0) in oracle_gamlss_bccgo (450 cases in all). Open for L464: the multinomial families MN3, MN4, MN5, r, moments, links.

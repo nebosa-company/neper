@@ -2500,3 +2500,17 @@ fn psi_cdf(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     }
     ret s
 }
+
+// qSI: the smallest j (up to 10000) whose cumulative probability reaches p, p within 1e-9 of 1 giving Inf
+fn qsi(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p + 1.0e-9f64 >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var j = 0.0f64
+    var cum = 0.0f64
+    while j <= 10000.0f64 {
+        cum += dsi(j, mu, sigma, nu)
+        if p <= cum { ret j }
+        j += 1.0f64
+    }
+    ret 10000.0f64
+}

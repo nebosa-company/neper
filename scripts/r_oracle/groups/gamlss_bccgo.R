@@ -23,4 +23,8 @@ for (rep in 1:50) {
   cases[[length(cases) + 1]] <- case("sid", c(mu, sg, nu, y), dSI(y, mu, sg, nu), rel = 1e-8, abs = 1e-14)
   cases[[length(cases) + 1]] <- case("sip", c(mu, sg, nu, y), pSI(y, mu, sg, nu), rel = 1e-8, abs = 1e-12)
 }
+for (rep in 1:50) {
+  mu <- runif(1, 0.3, 8); sg <- runif(1, 0.1, 2); nu <- runif(1, -2, 2); p <- runif(1, 0.01, 0.99)
+  cases[[length(cases) + 1]] <- case("siq", c(mu, sg, nu, p), qSI(p, mu, sg, nu), rel = 0, abs = 0)
+}
 emit("gamlss_bccgo", "gamlss.dist", list(cases))
