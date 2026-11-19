@@ -379,14 +379,14 @@ fn pois_glm_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
 }
 
 // the contrast coefficients of emmeans' *.emmc functions for k levels, level i of contrast j at out[i m + j] (m returned, 0 when the kind is unknown): kind 0 pairwise, 1 revpairwise, 2 trt.vs.ctrl (first level the control),
-// 3 trt.vs.ctrlk (last level), 4 consec, 5 eff, 6 del.eff, 7 poly (orthogonal polynomials of degree 1 .. k - 1 on 1 .. k, scaled to the smallest whole numbers, the last entry positive)
+// 3 trt.vs.ctrlk (last level), 4 consec, 5 eff, 6 del.eff, 8 mean_chg, 9 identity, 7 poly (orthogonal polynomials of degree 1 .. k - 1 on 1 .. k, scaled to the smallest whole numbers, the last entry positive)
 fn contrast_coefs(kind: usize, k: usize, out: []f64) -> usize {
     var m = 0usize
     if kind == 0usize || kind == 1usize {
         m = k * (k - 1usize) / 2usize
-    } else if kind == 2usize || kind == 3usize || kind == 4usize || kind == 7usize {
+    } else if kind == 2usize || kind == 3usize || kind == 4usize || kind == 7usize || kind == 8usize {
         m = k - 1usize
-    } else if kind == 5usize || kind == 6usize {
+    } else if kind == 5usize || kind == 6usize || kind == 9usize {
         m = k
     } else {
         ret 0usize
@@ -453,6 +453,23 @@ fn contrast_coefs(kind: usize, k: usize, out: []f64) -> usize {
         while j < m {
             out[j * m + j] = 0.0f64 - 1.0f64
             out[(j + 1usize) * m + j] = 1.0f64
+            j += 1usize
+        }
+    } else if kind == 9usize {
+        var j = 0usize
+        while j < k {
+            out[j * m + j] = 1.0f64
+            j += 1usize
+        }
+    } else if kind == 8usize {
+        // mean_chg: contrast j is the mean of the levels above j less the mean of the levels up to j
+        var j = 0usize
+        while j < m {
+            var i = 0usize
+            while i < k {
+                if i <= j { out[i * m + j] = 0.0f64 - 1.0f64 / f64(j + 1usize) } else { out[i * m + j] = 1.0f64 / f64(k - 1usize - j) }
+                i += 1usize
+            }
             j += 1usize
         }
     } else if kind == 5usize || kind == 6usize {
