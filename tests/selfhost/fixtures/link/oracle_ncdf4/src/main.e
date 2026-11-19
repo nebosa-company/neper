@@ -25,6 +25,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if re != ok { os.exit(6) }
     let (f, pe) = nc.parse(a, bytes)
     if pe != ok { os.exit(7) }
+    if str.eq(c.name, "nca") {
+        var av = f.nvars
+        if c.inputs[0usize].len > 0usize { av = nc.find_var(&f, c.inputs[0usize]) }
+        if usize(x[2usize]) == 2usize { ret f64(nc.att_count(a, &f, bytes, av, c.inputs[1usize])) }
+        ret nc.att_value(a, &f, bytes, av, c.inputs[1usize], usize(x[1usize]))
+    }
     let name = c.inputs[0usize]
     if str.eq(c.name, "ncd") {
         let d = nc.find_dim(&f, name)

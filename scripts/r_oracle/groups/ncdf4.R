@@ -1,4 +1,5 @@
 # ncdf4 on netCDF classic files: the files tests/oracle/data/ncdf4_<i>.nc are written here by ncdf4. Cases take the variable name in "in":
+# "nca" (file, element k, kind 0 value 1 value 2 count) an attribute: input (variable name or "" for global, attribute name)
 # "ncn" (file, 0) the number of elements, "ncd" (file, dim index by the order of the dimensions in the file) the dimension length, "ncv" (file, flat index in file order, which is the R column-major order of the array) a value, "ncs" (file, 0) the sum
 suppressMessages(library(ncdf4))
 cases <- list()
@@ -12,7 +13,7 @@ for (i in 1:6) {
   f <- file.path(root, sprintf("tests/oracle/data/ncdf4_%d.nc", i)); nc <- nc_create(f, list(v1, v2, v3, v4))
   a1 <- array(if (prec %in% c("integer", "short")) as.numeric(sample(-50:100, nx * ny * nt, TRUE)) else round(rnorm(nx * ny * nt, 5, 3), 3), c(nx, ny, nt))
   a2 <- sample(-5:20, nx); a3 <- matrix(round(runif(nx * ny, -4, 4) * 4) / 4, nx, ny); a4 <- sample(-100:100, ny)
-  ncvar_put(nc, v1, a1); ncvar_put(nc, v2, a2); ncvar_put(nc, v3, a3); ncvar_put(nc, v4, a4); ncatt_put(nc, 0, "title", "t"); nc_close(nc)
+  ncvar_put(nc, v1, a1); ncvar_put(nc, v2, a2); ncvar_put(nc, v3, a3); ncvar_put(nc, v4, a4); ncatt_put(nc, 0, "title", "t"); ncatt_put(nc, 0, "gain", c(1.5, -2.25, 8), prec = "double"); ncatt_put(nc, "id", "offs", 7L, prec = "integer"); ncatt_put(nc, "g", "cutoff", c(0.5, 0.25), prec = "float"); nc_close(nc)
   nc <- nc_open(f)
   for (d in names(nc$dim)) cases[[length(cases) + 1]] <- case("ncd", c(i, match(d, c("x", "y", "time"))), nc$dim[[d]]$len, rel = 0, abs = 0, input = d)
   for (vn in c("temp", "id", "g", "sh", "x", "y", "time")) {
@@ -21,6 +22,10 @@ for (i in 1:6) {
     cases[[length(cases) + 1]] <- case("ncs", c(i, 0), sum(flat), rel = 1e-9, abs = 1e-9, input = vn)
     for (k in unique(c(1, length(flat), ceiling(length(flat) / 2)))) cases[[length(cases) + 1]] <- case("ncv", c(i, k - 1), flat[k], rel = 1e-9, abs = 1e-9, input = vn)
   }
+  for (k in 1:3) cases[[length(cases) + 1]] <- case("nca", c(i, k - 1, 0), c(1.5, -2.25, 8)[k], rel = 1e-12, abs = 0, input = c("", "gain"))
+  cases[[length(cases) + 1]] <- case("nca", c(i, 0, 1), 7, rel = 0, abs = 0, input = c("id", "offs"))
+  for (k in 1:2) cases[[length(cases) + 1]] <- case("nca", c(i, k - 1, 1), c(0.5, 0.25)[k], rel = 1e-12, abs = 0, input = c("g", "cutoff"))
+  cases[[length(cases) + 1]] <- case("nca", c(i, 0, 2), 3, rel = 0, abs = 0, input = c("", "gain"))
   nc_close(nc)
 }
 emit("ncdf4", "ncdf4", list(cases))

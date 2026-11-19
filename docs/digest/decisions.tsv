@@ -4520,4 +4520,5 @@ D7697	1479	segmented davies.test for a binomial or poisson glm
 D7698	937	segmented pscore.test for a binomial or poisson glm
 D7699	1000	Rtsne random start
 D7700	1382	actuar cm hierarchical credibility
-D7701	1346	netCDF classic reader (ncdf4)
+D7701	1347	netCDF classic reader (ncdf4)
+D7702	594	netCDF classic attributes

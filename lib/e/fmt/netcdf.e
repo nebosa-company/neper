@@ -22,7 +22,9 @@ type Nc = struct {
     var_vsize: []usize,
     recsize: usize,
     rec_dim: usize,
-    natts: usize
+    natts: usize,
+    gatt_at: usize,
+    var_att_at: []usize
 }
 
 error BadNetcdf
@@ -100,6 +102,7 @@ fn parse(a: *mem.Arena, b: []const u8) -> (Nc, err) {
     }
     nc.dim_name = dn
     nc.dim_len = dl
+    nc.gatt_at = at
     let (at2, ng) = skip_atts(b, at)
     at = at2
     nc.natts = ng
@@ -113,7 +116,8 @@ fn parse(a: *mem.Arena, b: []const u8) -> (Nc, err) {
     let (vd, e6) = mem.alloc[usize](a, 8usize * nv + 8usize)
     let (vb, e7) = mem.alloc[usize](a, nv + 1usize)
     let (vs, e8) = mem.alloc[usize](a, nv + 1usize)
-    if e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (nc, e3) }
+    let (vaa, e8b) = mem.alloc[usize](a, nv + 1usize)
+    if e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e8b != ok { ret (nc, e3) }
     var rs = 0usize
     var nrecvars = 0usize
     var lastrec = 0usize
@@ -131,6 +135,7 @@ fn parse(a: *mem.Arena, b: []const u8) -> (Nc, err) {
             at += 4usize
             j += 1usize
         }
+        vaa[i] = at
         let (at3, _nv) = skip_atts(b, at)
         at = at3
         vt[i] = be32(b, at)
@@ -158,6 +163,7 @@ fn parse(a: *mem.Arena, b: []const u8) -> (Nc, err) {
     nc.var_dims = vd
     nc.var_begin = vb
     nc.var_vsize = vs
+    nc.var_att_at = vaa
     nc.recsize = rs
     let _ = tag
     ret (nc, ok)
@@ -255,4 +261,45 @@ fn var_values(nc: *const Nc, b: []const u8, v: usize, out: []f64) {
         }
         r += 1usize
     }
+}
+
+// finds attribute `name` in the list at `list_at`: answers (found, type, element count, value position)
+fn find_att(a: *mem.Arena, b: []const u8, list_at: usize, name: str) -> (bool, usize, usize, usize) {
+    var at = list_at
+    let tag = be32(b, at)
+    let n = be32(b, at + 4usize)
+    at += 8usize
+    if tag == 0usize { ret (false, 0usize, 0usize, 0usize) }
+    var i = 0usize
+    while i < n {
+        let (nm, at1) = read_name(a, b, at)
+        at = at1
+        let t = be32(b, at)
+        let ne = be32(b, at + 4usize)
+        at += 8usize
+        if str.eq(nm, name) { ret (true, t, ne, at) }
+        at += pad4(ne * type_size(t))
+        i += 1usize
+    }
+    ret (false, 0usize, 0usize, 0usize)
+}
+
+// the numeric value k of attribute `name` of variable v (v = nvars for a global attribute); NaN when the attribute is absent; a char attribute answers its k-th byte
+fn att_value(a: *mem.Arena, nc: *const Nc, b: []const u8, v: usize, name: str, k: usize) -> f64 {
+    var list = nc.gatt_at
+    if v < nc.nvars { list = nc.var_att_at[v] }
+    let (found, t, ne, pos) = find_att(a, b, list, name)
+    if !found || k >= ne { ret 0.0f64 / 0.0f64 }
+    ret element(b, pos + k * type_size(t), t)
+}
+
+// the element count of attribute `name` (0 when absent)
+fn att_count(a: *mem.Arena, nc: *const Nc, b: []const u8, v: usize, name: str) -> usize {
+    var list = nc.gatt_at
+    if v < nc.nvars { list = nc.var_att_at[v] }
+    let (found, t, ne, pos) = find_att(a, b, list, name)
+    let _ = t
+    let _ = pos
+    if !found { ret 0usize }
+    ret ne
 }

@@ -1079,7 +1079,7 @@
       "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D7701): e.fmt.netcdf reads netCDF classic CDF-1 and CDF-2 files (dimensions, variables, record variables) and gives every variable as doubles; the dimension lengths, element counts, sums and values equal ncdf4 on 6 files written by ncdf4 (oracle_ncdf4, 217 cases; Linux pending). Open: CDF-5, NetCDF-4 over HDF5, attributes, writing. Was: Open (CRAN rank 237). Large. Acceptance, equal to ncdf4 on real files: NetCDF classic (CDF-1, 2, 5) and NetCDF-4 over HDF5 (object headers, B-trees, chunked and deflate and shuffle-filtered datasets, groups, attributes, unlimited dimensions), reading variables, dimensions and attributes."
+      "evidence": "Partial (D7701): e.fmt.netcdf reads netCDF classic CDF-1 and CDF-2 files (dimensions, variables, record variables) and gives every variable as doubles; the dimension lengths, element counts, sums and values equal ncdf4 on 6 files written by ncdf4 (oracle_ncdf4, 217 cases; Linux pending). Numeric and char attribute values (global and per variable) equal too (D7702, 259 cases). Open: CDF-5, NetCDF-4 over HDF5, writing. Was: Open (CRAN rank 237). Large. Acceptance, equal to ncdf4 on real files: NetCDF classic (CDF-1, 2, 5) and NetCDF-4 over HDF5 (object headers, B-trees, chunked and deflate and shuffle-filtered datasets, groups, attributes, unlimited dimensions), reading variables, dimensions and attributes."
     },
     {
       "id": "L371",
