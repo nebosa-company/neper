@@ -59,4 +59,22 @@ for (rep in 1:8) {
     adds(20, i - 1, sb[i, 7], 0, 0); adds(21, i - 1, as.numeric(as.character(sb[i, 8]) == "+"), 0, 0)
   }
 }
+# AMMI from raw data (balanced, REP coded within the environment): fn "ar" args (nenv, ngen, nrep, what, idx, then env[n], gen[n], rep[n], y[n] with codes 0-based); what 0 Df, 1 Sum Sq, 2 Mean Sq (ANOVA rows 1..5 as idx 0..4),
+# 3 F, 4 Pr(F) (rows 1..4), 5 MSE, 6 percent, 7 acum, 8 analysis Df, 9 F of the analysis, 10 genotype score at idx, 11 environment score at idx
+for (rep in 1:6) {
+  ne <- sample(3:5, 1); ng <- sample(4:6, 1); nr <- sample(2:4, 1)
+  d <- expand.grid(REP = seq_len(nr), GEN = seq_len(ng), ENV = seq_len(ne))
+  d$Y <- round(5 + 0.8 * d$ENV + 0.5 * d$GEN + 0.4 * sin(d$ENV * d$GEN) + rnorm(nrow(d), 0, 0.5) + rnorm(ne * nr, 0, 0.2)[(d$ENV - 1) * nr + d$REP], 4)
+  r <- AMMI(factor(paste0("E", d$ENV)), factor(paste0("G", d$GEN)), factor(d$REP), d$Y)
+  mm <- r$ANOVA; an <- r$analysis; b <- r$biplot; nss <- nrow(an)
+  hdr <- function(w, i) c(ne, ng, nr, w, i, d$ENV - 1, d$GEN - 1, d$REP - 1, d$Y)
+  adda <- function(w, i, v, rel = 1e-8, abs = 1e-9) if (is.finite(v)) cases[[length(cases) + 1]] <<- case("ar", hdr(w, i), v, rel = rel, abs = abs)
+  for (i in 1:5) { adda(0, i - 1, mm[i, 1]); adda(1, i - 1, mm[i, 2]); adda(2, i - 1, mm[i, 3]) }
+  for (i in 1:4) { adda(3, i - 1, mm[i, 4]); adda(4, i - 1, mm[i, 5]) }
+  adda(5, 0, mm[5, 3])
+  for (i in seq_len(nss)) { adda(6, i - 1, an$percent[i]); adda(7, i - 1, an$acum[i]); adda(8, i - 1, an$Df[i]); adda(9, i - 1, an$F.value[i]) }
+  m <- min(ne, ng)
+  for (gi in seq_len(ng)) for (c in seq_len(nss)) adda(10, (gi - 1) * m + c - 1, b[gi, 2 + c])
+  for (ei in seq_len(ne)) for (c in seq_len(nss)) adda(11, (ei - 1) * m + c - 1, b[ng + ei, 2 + c])
+}
 emit("agricolae_ammi", "agricolae", list(cases))

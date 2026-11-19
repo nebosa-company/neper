@@ -18,6 +18,32 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (sr, es) = mem.alloc[f64](a, k)
         if es != ok { os.exit(7) }
         let fr = ag.friedman(a, x[3usize..3usize + n * k], n, k, sr)
+        if str.eq(c.name, "fgm") || str.eq(c.name, "fgo") {
+            let (pvf, q1) = mem.alloc[f64](a, k * k)
+            let (qo, q2) = mem.alloc[usize](a, k)
+            let (qm, q3) = mem.alloc[u64](a, k)
+            if q1 != ok || q2 != ok || q3 != ok { os.exit(25) }
+            var u = 0usize
+            while u < k * k {
+                pvf[u] = 1.0f64
+                u += 1usize
+            }
+            u = 0usize
+            while u < k {
+                var v = u + 1usize
+                while v < k {
+                    let (dd0, pp0, lo0, hi0) = ag.friedman_pair(fr, sr, n, u, v, 0.05f64)
+                    pvf[u * k + v] = pp0
+                    pvf[v * k + u] = pp0
+                    v += 1usize
+                }
+                u += 1usize
+            }
+            ag.group_letters(sr, pvf, k, 0.05f64, qo, qm)
+            let gi = usize(x[3usize + n * k])
+            if str.eq(c.name, "fgo") { ret f64(qo[gi] + 1usize) }
+            ret f64(qm[gi])
+        }
         if str.eq(c.name, "fc") { ret fr.chisq }
         if str.eq(c.name, "fp") { ret fr.pchisq }
         if str.eq(c.name, "ff") { ret fr.f }
@@ -211,6 +237,32 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     if kind == 5usize {
         let kw = ag.kruskal(a, y, grp, k, mean, size)
+        if str.eq(c.name, "kgm") || str.eq(c.name, "kgo") {
+            let (pvk, q1) = mem.alloc[f64](a, k * k)
+            let (qo, q2) = mem.alloc[usize](a, k)
+            let (qm, q3) = mem.alloc[u64](a, k)
+            if q1 != ok || q2 != ok || q3 != ok { os.exit(26) }
+            var u = 0usize
+            while u < k * k {
+                pvk[u] = 1.0f64
+                u += 1usize
+            }
+            u = 0usize
+            while u < k {
+                var v = u + 1usize
+                while v < k {
+                    let (dd0, pp0, lo0, hi0) = ag.kruskal_pair(kw, mean, size, u, v, 0.05f64)
+                    pvk[u * k + v] = pp0
+                    pvk[v * k + u] = pp0
+                    v += 1usize
+                }
+                u += 1usize
+            }
+            ag.group_letters(mean, pvk, k, 0.05f64, qo, qm)
+            let gi = usize(x[3usize + 2usize * n])
+            if str.eq(c.name, "kgo") { ret f64(qo[gi] + 1usize) }
+            ret f64(qm[gi])
+        }
         if str.eq(c.name, "kh") { ret kw.h }
         if str.eq(c.name, "kp") { ret kw.pchisq }
         var s = 0.0f64

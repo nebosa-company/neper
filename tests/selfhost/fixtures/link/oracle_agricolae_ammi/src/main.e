@@ -10,6 +10,39 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "ar") {
+        let ne = usize(x[0usize])
+        let ng = usize(x[1usize])
+        let nr = usize(x[2usize])
+        let w = usize(x[3usize])
+        let idx = usize(x[4usize])
+        let n = ne * ng * nr
+        let (ev, h0) = mem.alloc[usize](a, n)
+        let (gv, h1) = mem.alloc[usize](a, n)
+        let (rv, h2) = mem.alloc[usize](a, n)
+        if h0 != ok || h1 != ok || h2 != ok { os.exit(9) }
+        var q = 0usize
+        while q < n {
+            ev[q] = usize(x[5usize + q])
+            gv[q] = usize(x[5usize + n + q])
+            rv[q] = usize(x[5usize + 2usize * n + q])
+            q += 1usize
+        }
+        let (am, aov, ee) = ag.ammi_raw(a, x[5usize + 3usize * n..5usize + 4usize * n], ev, gv, rv, ne, ng, nr)
+        if ee != ok { os.exit(10) }
+        if w == 0usize { ret aov.df[idx] }
+        if w == 1usize { ret aov.ss[idx] }
+        if w == 2usize { ret aov.ms[idx] }
+        if w == 3usize { ret aov.f[idx] }
+        if w == 4usize { ret aov.p[idx] }
+        if w == 5usize { ret aov.mse }
+        if w == 6usize { ret am.percent[idx] }
+        if w == 7usize { ret am.acum[idx] }
+        if w == 8usize { ret am.df[idx] }
+        if w == 9usize { ret am.f[idx] }
+        if w == 10usize { ret am.scoreg[idx] }
+        ret am.scoree[idx]
+    }
     if str.eq(c.name, "sp") {
         let na = usize(x[0usize])
         let nmm = usize(x[1usize])

@@ -4120,4 +4120,5 @@ D7324	1157	agricolae: AMMI
 D7325	1018	agricolae: design.lattice
 D7326	1093	agricolae: design.alpha
 D7327	1025	agricolae: stability.nonpar
-D7328	1114	agricolae: stability.par
+D7328	1115	agricolae: stability.par
+D7329	1272	agricolae: AMMI from raw data, the grouped Kruskal and Friedman tests; L396 closed

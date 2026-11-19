@@ -1403,3 +1403,122 @@ fn stability_par(a: *mem.Arena, y: []const f64, na: usize, nm_: usize, nrep: f64
     o.sel = sel
     ret (o, ok)
 }
+
+// ---- AMMI from raw data of a balanced complete layout (every environment by genotype cell has the same replicates, the replicates coded within an environment): the
+// analysis of variance Y ~ ENV + REP %in% ENV + GEN + ENV:GEN (rows ENV, REP(ENV), GEN, ENV:GEN, Residuals, with the environment tested against REP(ENV)), the error mean
+// square from its residuals, and then ammi on the cell means. env, gen and rep are 0-based codes of the n observations.
+type AmmiAov = struct { df: [5]f64, ss: [5]f64, ms: [5]f64, f: [4]f64, p: [4]f64, mse: f64, dfe: f64 }
+
+fn ammi_raw(a: *mem.Arena, y: []const f64, env: []const usize, gen: []const usize, rep: []const usize, nenv: usize, ngen: usize, nrep: usize) -> (Ammi, AmmiAov, err) {
+    var aov: AmmiAov = zero
+    var none: Ammi = zero
+    let n = y.len
+    let (cell, e0) = mem.alloc[f64](a, nenv * ngen)
+    let (renv, e1) = mem.alloc[f64](a, nenv * nrep)
+    let (em, e2) = mem.alloc[f64](a, nenv)
+    let (gm, e3) = mem.alloc[f64](a, ngen)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret (none, aov, mem.Full) }
+    var i = 0usize
+    while i < nenv * ngen {
+        cell[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < nenv * nrep {
+        renv[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < nenv {
+        em[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < ngen {
+        gm[i] = 0.0f64
+        i += 1usize
+    }
+    var grand = 0.0f64
+    i = 0usize
+    while i < n {
+        cell[env[i] * ngen + gen[i]] += y[i] / f64(nrep)
+        renv[env[i] * nrep + rep[i]] += y[i] / f64(ngen)
+        em[env[i]] += y[i] / f64(ngen * nrep)
+        gm[gen[i]] += y[i] / f64(nenv * nrep)
+        grand += y[i] / f64(n)
+        i += 1usize
+    }
+    var ssenv = 0.0f64
+    var ssrep = 0.0f64
+    var ssgen = 0.0f64
+    var ssint = 0.0f64
+    var rss = 0.0f64
+    var e = 0usize
+    while e < nenv {
+        ssenv += f64(ngen * nrep) * (em[e] - grand) * (em[e] - grand)
+        var r = 0usize
+        while r < nrep {
+            ssrep += f64(ngen) * (renv[e * nrep + r] - em[e]) * (renv[e * nrep + r] - em[e])
+            r += 1usize
+        }
+        var g = 0usize
+        while g < ngen {
+            let d = cell[e * ngen + g] - em[e] - gm[g] + grand
+            ssint += f64(nrep) * d * d
+            g += 1usize
+        }
+        e += 1usize
+    }
+    var g2 = 0usize
+    while g2 < ngen {
+        ssgen += f64(nenv * nrep) * (gm[g2] - grand) * (gm[g2] - grand)
+        g2 += 1usize
+    }
+    i = 0usize
+    while i < n {
+        let r = y[i] - cell[env[i] * ngen + gen[i]] - renv[env[i] * nrep + rep[i]] + em[env[i]]
+        rss += r * r
+        i += 1usize
+    }
+    let dfe = f64(nenv) * (f64(ngen) - 1.0f64) * (f64(nrep) - 1.0f64)
+    let mse = rss / dfe
+    aov.df[0usize] = f64(nenv) - 1.0f64
+    aov.df[1usize] = f64(nenv) * (f64(nrep) - 1.0f64)
+    aov.df[2usize] = f64(ngen) - 1.0f64
+    aov.df[3usize] = (f64(nenv) - 1.0f64) * (f64(ngen) - 1.0f64)
+    aov.df[4usize] = dfe
+    aov.ss[0usize] = ssenv
+    aov.ss[1usize] = ssrep
+    aov.ss[2usize] = ssgen
+    aov.ss[3usize] = ssint
+    aov.ss[4usize] = rss
+    i = 0usize
+    while i < 5usize {
+        aov.ms[i] = aov.ss[i] / aov.df[i]
+        i += 1usize
+    }
+    aov.f[0usize] = aov.ms[0usize] / aov.ms[1usize]
+    aov.p[0usize] = 1.0f64 - nb.pf(aov.f[0usize], aov.df[0usize], aov.df[1usize], true, false)
+    i = 1usize
+    while i < 4usize {
+        aov.f[i] = aov.ms[i] / mse
+        aov.p[i] = 1.0f64 - nb.pf(aov.f[i], aov.df[i + 0usize], dfe, true, false)
+        i += 1usize
+    }
+    aov.mse = mse
+    aov.dfe = dfe
+    // the table of means, genotypes in rows
+    let (tab, e4) = mem.alloc[f64](a, ngen * nenv)
+    if e4 != ok { ret (none, aov, mem.Full) }
+    var gg = 0usize
+    while gg < ngen {
+        e = 0usize
+        while e < nenv {
+            tab[gg * nenv + e] = cell[e * ngen + gg]
+            e += 1usize
+        }
+        gg += 1usize
+    }
+    let (am, ae) = ammi(a, tab, ngen, nenv, f64(nrep), mse)
+    ret (am, aov, ae)
+}

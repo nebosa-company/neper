@@ -488,17 +488,6 @@
       "evidence": "Open (CRAN rank 463). Mid. e.ml.knn is exact. Acceptance, equal to RcppAnnoy: index building with its seeded random-projection splits, Euclidean, angular, Manhattan and Hamming metrics, getNNsByVector and getNNsByItem with search_k, and the index file format."
     },
     {
-      "id": "L396",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 715,
-      "title": "agricolae: experimental designs and post-hoc tests",
-      "score": 0.94,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6185). LSD.test, HSD.test and scheffe.test pairwise differences, p values and limits equal agricolae on Windows (oracle_agricolae; Linux pending). SNK and Duncan comparisons equal agricolae (oracle_agricolae, 280 cases). Grouping letters (LSD, HSD, SNK, Duncan) and the kruskal post-hoc equal agricolae (oracle_agricolae_groups, 716 values). The friedman test and post-hoc equal agricolae (796 values in all). waller.test equal agricolae (890 values in all). Open: design.crd and design.rcbd under the Mersenne-Twister kind equal agricolae (1299 values in all). The Super-Duper generator is in e.algo.rand.r and design.crd and design.rcbd equal agricolae under it (1621 values in all). design.lsd and design.split equal agricolae (2627 values in all). design.bib equals agricolae (2849 values in all). AMMI on a table of means equals agricolae (oracle_agricolae_ammi, 503 values). design.lattice equals agricolae (3349 values in all). design.alpha equals agricolae (3983 values in all). stability.nonpar equals agricolae (oracle_agricolae_ammi, 903 values in all). stability.par equals agricolae (1623 values in all). Open: the raw-data AMMI form. Was: Open (CRAN rank 500). Mid. Acceptance, equal to agricolae: LSD.test, HSD.test, duncan.test, SNK.test, scheffe.test, waller.test, kruskal and friedman post-hoc with groups, design.crd, design.rcbd, design.lsd, design.bib, design.split, design.alpha and design.lattice under set.seed, AMMI, stability measures."
-    },
-    {
       "id": "L412",
       "category": "library",
       "group": "CRAN parity",

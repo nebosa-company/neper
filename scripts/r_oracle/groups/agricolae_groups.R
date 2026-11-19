@@ -126,4 +126,24 @@ invisible(capture.output(suppressMessages({
     for (i in seq_len(nrow(bk))) cases[[length(cases) + 1]] <- case("ab", c(17, seed, sd, ntr, k, r, i - 1), match(as.character(bk[[4]][i]), trt) - 1, rel = 0, abs = 0)
   }
 })))
+# the grouping letters of kruskal and friedman with group = TRUE: fn "kgm"/"kgo" (kind 5 args plus idx) and "fgm"/"fgo" (kind 6 args plus idx), the mask and the treatment at sorted position idx
+for (rep in 1:8) {
+  k <- sample(4:6, 1); sz <- sample(4:7, 1); n <- k * sz
+  g <- factor(rep(1:k, each = sz)); y <- round(rnorm(n) + as.numeric(g) * runif(1, 0, 0.6), 4)
+  kr <- kruskal(y, g, group = TRUE)$groups
+  for (i in seq_len(nrow(kr))) {
+    a <- c(5, n, k, y, as.numeric(g), i - 1)
+    cases[[length(cases) + 1]] <- case("kgm", a, mask(as.character(kr$groups[i])), rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("kgo", a, as.numeric(rownames(kr)[i]), rel = 0, abs = 0)
+  }
+  nb <- sample(5:10, 1); nt <- sample(3:6, 1)
+  m <- matrix(round(rnorm(nb * nt) + rep(seq_len(nt) * runif(1, 0, 0.5), each = nb), 3), nb, nt)
+  dd <- data.frame(judge = factor(rep(seq_len(nb), nt)), trt = factor(rep(seq_len(nt), each = nb)), ev = as.vector(m))
+  fg <- friedman(dd$judge, dd$trt, dd$ev, group = TRUE)$groups
+  for (i in seq_len(nrow(fg))) {
+    a <- c(6, nb, nt, as.vector(t(m)), i - 1)
+    cases[[length(cases) + 1]] <- case("fgm", a, mask(as.character(fg$groups[i])), rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("fgo", a, as.numeric(rownames(fg)[i]), rel = 0, abs = 0)
+  }
+}
 emit("agricolae_groups", "agricolae", list(cases))
