@@ -51175,3 +51175,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7560 — epiR epi.iv for odds ratios
 `epi_iv_or` is the inverse-variance fixed-effect summary of k two-by-two tables: pooled odds ratio and Wald interval, Cochran's Q with its p value, H squared and I squared with the intervals epiR derives from the standard error of ln H squared (a different formula when Q exceeds k), and the effect z and its two-sided p. `study_lnor` is the shared per-study log odds ratio and variance with the half correction. Equal to epiR on 25 meta-analyses (325 values added to oracle_epir, 3430 in all). The risk-ratio method stays open.
+
+## D7561 — epiR epi.sssimpleestb
+`sssimpleestb` is the sample size to estimate a true prevalence from an imperfect test by simple random sampling: (z / epsilon)^2 times the apparent-prevalence variance over (se + sp - 1)^2, with the relative or absolute error, an optional finite population and the rounding choice. Equal to epiR on 40 draws (40 values added to oracle_epir, 3470 in all). This closes the sample-size family the acceptance names (epi.sscohortc D7557, epi.sscc D7558, epi.sssimpleestb); their other modes stay open.

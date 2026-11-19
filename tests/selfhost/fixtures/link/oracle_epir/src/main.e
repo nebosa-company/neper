@@ -10,6 +10,7 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "sb") { ret ep.sssimpleestb(x[0usize], x[1usize], x[2usize], x[3usize] > 0.5f64, x[4usize], x[5usize], x[6usize] > 0.5f64, 0.95f64) }
     if str.eq(c.name, "iv") {
         let ki = usize(x[0usize])
         var iv: [16]f64 = zero

@@ -604,3 +604,19 @@ fn epi_iv_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f6
     out[11usize] = ez
     out[12usize] = 2.0f64 * dist.pnorm(math.abs[f64](ez), 0.0f64, 1.0f64, false, false)
 }
+
+// epi.sssimpleestb: sample size to estimate a true prevalence py from a test of sensitivity se and specificity sp within epsilon (relative or absolute error); finite <= 0 means no finite population
+fn sssimpleestb(finite: f64, py: f64, epsilon: f64, absolute: bool, se: f64, sp: f64, frac: bool, level: f64) -> f64 {
+    let z = z_of(level)
+    var ea = py * epsilon
+    if absolute { ea = epsilon }
+    let p01 = (z / ea) * (z / ea)
+    let ap = se * py + (1.0f64 - sp) * (1.0f64 - py)
+    let p02u = ap * (1.0f64 - ap)
+    let p02l = (se + sp - 1.0f64) * (se + sp - 1.0f64)
+    let nc = p01 * (p02u / p02l)
+    var n = nc
+    if finite > 0.0f64 { n = nc / (1.0f64 + nc / finite) }
+    if frac { ret n }
+    ret math.ceil[f64](n)
+}

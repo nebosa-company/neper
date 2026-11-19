@@ -95,4 +95,10 @@ for (rep in 1:25) {
   if (any(!is.finite(v))) next
   for (w in 0:12) cases[[length(cases) + 1]] <- case("iv", c(k, evt, nt, evc, nc, w), v[w + 1], rel = 1e-8, abs = 1e-10)
 }
+# epi.sssimpleestb: "sb" args (N (0 none), Py, epsilon, absolute, se, sp, frac)
+for (rep in 1:40) {
+  NN <- if (rep %% 2 == 0) NA else sample(5000:90000, 1); py <- runif(1, 0.05, 0.5); ab <- rep %% 3 == 0; eps <- if (ab) runif(1, 0.02, 0.1) else runif(1, 0.1, 0.3); se <- runif(1, 0.7, 0.99); sp <- runif(1, 0.7, 0.99); fr <- rep %% 4 == 0
+  v <- epi.sssimpleestb(N = NN, Py = py, epsilon = eps, error = if (ab) "absolute" else "relative", se = se, sp = sp, nfractional = fr)
+  cases[[length(cases) + 1]] <- case("sb", c(if (is.na(NN)) 0 else NN, py, eps, as.numeric(ab), se, sp, as.numeric(fr)), v, rel = 1e-9, abs = 1e-9)
+}
 emit("epir", "epiR", list(cases))
