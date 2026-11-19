@@ -12,10 +12,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let jn = usize(z[2usize])
+    let lk = usize(z[3usize])
     let (out, e1) = mem.alloc[f64](a, 2usize * (jn - 1usize + p) + 2usize)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
-    if !vg.cum_logit(a, z[3usize + n..3usize + n + n * p], z[3usize..3usize + n], n, p, jn, out) { ret 0.0f64 / 0.0f64 }
-    ret out[usize(z[3usize + n + n * p])]
+    if !vg.cum_logit(a, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], n, p, jn, lk, out) { ret 0.0f64 / 0.0f64 }
+    ret out[usize(z[4usize + n + n * p])]
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

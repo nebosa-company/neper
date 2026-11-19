@@ -6,12 +6,24 @@
 
 use e.algo.stat.quantreg as qrb
 use e.math
+use e.math.dist as dist
 use e.mem
 
-fn lg(t: f64) -> f64 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t)) }
+// the link's inverse and its density: lk 0 logit, 1 probit, 2 cloglog
+fn lg(t: f64, lk: usize) -> f64 {
+    if lk == 1usize { ret dist.pnorm(t, 0.0f64, 1.0f64, true, false) }
+    if lk == 2usize { ret 1.0f64 - math.exp[f64](0.0f64 - math.exp[f64](t)) }
+    ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
+}
+
+fn lgd(t: f64, f: f64, lk: usize) -> f64 {
+    if lk == 1usize { ret dist.dnorm(t, 0.0f64, 1.0f64, false) }
+    if lk == 2usize { ret math.exp[f64](t) * (1.0f64 - f) }
+    ret f * (1.0f64 - f)
+}
 
 // the cumulative probabilities F_k = logistic(alpha_k + eta) for k = 0 .. J - 2 with F_-1 = 0 and F_(J-1) = 1 held implicit
-fn cum_obs(par: []const f64, x: []const f64, p: usize, jn: usize, cls: usize, sc: []f64) -> f64 {
+fn cum_obs(par: []const f64, x: []const f64, p: usize, jn: usize, cls: usize, lk: usize, sc: []f64) -> f64 {
     // the outcome cls of one case: returns its probability and writes the score (length jn - 1 + p) of log p
     let na = jn - 1usize
     var eta = 0.0f64
@@ -25,12 +37,12 @@ fn cum_obs(par: []const f64, x: []const f64, p: usize, jn: usize, cls: usize, sc
     var gu = 0.0f64
     var gl = 0.0f64
     if cls < na {
-        fu = lg(par[cls] + eta)
-        gu = fu * (1.0f64 - fu)
+        fu = lg(par[cls] + eta, lk)
+        gu = lgd(par[cls] + eta, fu, lk)
     }
     if cls > 0usize {
-        fl = lg(par[cls - 1usize] + eta)
-        gl = fl * (1.0f64 - fl)
+        fl = lg(par[cls - 1usize] + eta, lk)
+        gl = lgd(par[cls - 1usize] + eta, fl, lk)
     }
     let pr = fu - fl
     t = 0usize
@@ -49,7 +61,7 @@ fn cum_obs(par: []const f64, x: []const f64, p: usize, jn: usize, cls: usize, sc
 }
 
 // the model for y (0-based class codes 0 .. jn - 1) on x (n by p row-major, no intercept column). out: alpha (jn - 1), beta (p), the log-likelihood, then the standard errors of alpha and beta; false when it fails
-fn cum_logit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, jn: usize, out: []f64) -> bool {
+fn cum_logit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, jn: usize, lk: usize, out: []f64) -> bool {
     let na = jn - 1usize
     let q = na + p
     let (par, e1) = mem.alloc[f64](a, q)
@@ -101,7 +113,7 @@ fn cum_logit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
         i = 0usize
         while i < n {
             let xi = x[i * p..(i + 1usize) * p]
-            let pr = cum_obs(par, xi, p, jn, usize(y[i]), sc)
+            let pr = cum_obs(par, xi, p, jn, usize(y[i]), lk, sc)
             cur += math.log[f64](pr)
             var u = 0usize
             while u < q {
@@ -112,7 +124,7 @@ fn cum_logit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
             var oc = 0usize
             while oc < jn {
                 var sc2: [32]f64 = zero
-                let po = cum_obs(par, xi, p, jn, oc, sc2[0usize..q])
+                let po = cum_obs(par, xi, p, jn, oc, lk, sc2[0usize..q])
                 var u1 = 0usize
                 while u1 < q {
                     var u2 = 0usize
@@ -160,7 +172,7 @@ fn cum_logit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
             if ok2 {
                 i = 0usize
                 while i < n {
-                    let pr = cum_obs(trial, x[i * p..(i + 1usize) * p], p, jn, usize(y[i]), sc)
+                    let pr = cum_obs(trial, x[i * p..(i + 1usize) * p], p, jn, usize(y[i]), lk, sc)
                     if pr <= 0.0f64 { ok2 = false }
                     if ok2 { tl += math.log[f64](pr) }
                     i += 1usize
