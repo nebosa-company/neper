@@ -42,8 +42,8 @@ fn svds(a: *mem.Arena, x: []const f64, m: usize, n: usize, k: usize, d: []f64, u
     ret ok
 }
 
-// eigs_sym: which 0 LM, 1 LA, 2 SA, 3 SM; the k values into vals, selected by which and listed decreasing, as RSpectra does and their vectors into vecs (n by k)
-fn eigs_sym(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize, vals: []f64, vecs: []f64) -> err {
+// eigs_sym: which 0 LM, 1 LA, 2 SA, 3 SM, 4 the eigenvalues nearest sigma (shift-invert, sigma unused otherwise); the k values into vals, selected by which and listed decreasing, as RSpectra does and their vectors into vecs (n by k)
+fn eigs_sym(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize, sigma: f64, vals: []f64, vecs: []f64) -> err {
     let (vf, e1) = mem.alloc[f64](a, n * n)
     let (ev, e2) = mem.alloc[f64](a, n)
     let (key, e3) = mem.alloc[f64](a, n)
@@ -65,6 +65,7 @@ fn eigs_sym(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize, val
         if which == 1usize { key[i] = ev[i] }
         if which == 2usize { key[i] = 0.0f64 - ev[i] }
         if which == 3usize { key[i] = 0.0f64 - math.abs[f64](ev[i]) }
+        if which == 4usize { key[i] = 0.0f64 - math.abs[f64](ev[i] - sigma) }
         i += 1usize
     }
     i = 1usize

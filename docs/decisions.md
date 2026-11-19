@@ -50218,3 +50218,6 @@ kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and una
 
 ## D7363 — PMCMRplus frdManyOneDemsarTest
 `frd_pair` kind 3 answers Demsar's many-to-one z, the signed mean rank difference of treatment j against treatment 1 over sqrt(k(k+1)/(6n)) with the two-sided normal p; Holm over k - 1. Equal to R on twelve block designs. normalScoresManyOneTest needs the expected normal order statistics and random tie breaking, and frdManyOneNemenyiTest needs pmvnorm, so both wait. L487 at 0.75.
+
+## D7364 — RSpectra eigs_sym shift-invert
+`eigs_sym` takes a `sigma` and `which` 4: the k eigenvalues nearest sigma (selection key minus |lambda - sigma|), then listed in decreasing order like the other modes, which is what `eigs_sym(A, k, sigma = s)` returns. Done through the existing full decomposition, so it is exact and not an iteration; six cases join oracle_spectra (the golden was regenerated, which reshuffles the random streams of the existing cases, all still passing). L334 at 0.35.

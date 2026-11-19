@@ -23,7 +23,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (v, e3) = mem.alloc[f64](a, n * k)
     if e1 != ok || e2 != ok || e3 != ok { ret nan }
     if kind == 1usize {
-        if sp.eigs_sym(a, x, n, k, wh, d, u) != ok { ret nan }
+        var sigma = 0.0f64
+        if wh == 4usize { sigma = z[5usize + m * n] }
+        if sp.eigs_sym(a, x, n, k, wh, sigma, d, u) != ok { ret nan }
     } else {
         if sp.svds(a, x, m, n, k, d, u, v) != ok { ret nan }
     }

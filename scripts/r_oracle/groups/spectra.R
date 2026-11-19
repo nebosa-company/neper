@@ -9,10 +9,10 @@ ws <- function(x) sum(as.vector(x) * seq_along(x))
 for (rep in 1:30) {
   kind <- (rep - 1) %% 3
   if (kind == 2) { m <- sample(20:30, 1); n <- sample(14:18, 1); x <- matrix(rnorm(m * n), m) } else if (kind == 1) { n <- sample(5:12, 1); m <- n; B <- matrix(rnorm(n * n), n); x <- (B + t(B)) / 2 } else { m <- sample(8:20, 1); n <- sample(5:min(m, 12), 1); x <- matrix(rnorm(m * n), m) }
-  k <- sample(1:min(3, n - 2), 1); wh <- if (kind == 1) sample(0:3, 1) else 0
-  a <- c(kind, m, n, k, wh, as.vector(t(x)))
+  k <- sample(1:min(3, n - 2), 1); wh <- if (kind == 1) sample(0:4, 1) else 0; sg <- if (kind == 1 && wh == 4) round(runif(1, -1.5, 1.5), 3) else NULL
+  a <- c(kind, m, n, k, wh, as.vector(t(x)), sg)
   if (kind == 2) { m <- sample(20:30, 1); n <- sample(14:18, 1); x <- matrix(rnorm(m * n), m) } else if (kind == 1) {
-    o <- eigs_sym(x, k, which = c("LM", "LA", "SA", "SM")[wh + 1], opts = list(tol = 1e-14, maxitr = 5000))
+    o <- if (wh == 4) eigs_sym(x, k, sigma = sg, opts = list(tol = 1e-14, maxitr = 5000)) else eigs_sym(x, k, which = c("LM", "LA", "SA", "SM")[wh + 1], opts = list(tol = 1e-14, maxitr = 5000))
     add("d", a, ws(o$values)); add("uabs", a, ws(abs(o$vectors)))
   } else if (kind == 0) {
     o <- svds(x, k, opts = list(tol = 1e-14, maxitr = 5000))
