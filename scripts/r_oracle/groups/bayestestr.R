@@ -29,4 +29,10 @@ for (rep in 1:20) {
   cases[[length(cases) + 1]] <- case("map", c(0, 0, n, x), as.numeric(m), rel = 1e-6, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("map", c(0, 1, n, x), as.numeric(attr(m, "MAP_density")), rel = 1e-6, abs = 1e-9)
 }
+# p_map and p_significance: "pmap" (null, 0, n, x...), "psig" (threshold, 0, n, x...)
+for (rep in 1:25) {
+  n <- sample(80:500, 1); x <- round(if (rep %% 3 == 0) rgamma(n, 2, 1) else rnorm(n, runif(1, -1, 1), runif(1, 0.5, 2)), 5); nl <- round(runif(1, -0.5, 0.5), 3); th <- round(runif(1, 0.05, 0.4), 3)
+  cases[[length(cases) + 1]] <- case("pmap", c(nl, 0, n, x), as.numeric(suppressWarnings(p_map(x, null = nl))), rel = 1e-6, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("psig", c(th, 0, n, x), as.numeric(suppressWarnings(p_significance(x, threshold = th))), rel = 1e-9, abs = 1e-12)
+}
 emit("bayestestr", "bayestestR", list(cases))

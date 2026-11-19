@@ -145,3 +145,51 @@ fn map_estimate(a: *mem.Arena, x: []const f64, out: []f64) -> err {
     out[1usize] = dy[best]
     ret ok
 }
+
+// bayestestR::p_map(x, null): the posterior density at the null value over the density at the MAP, both read from the 1024-point kernel density (Sheather-Jones bandwidth) over the range of x as `map_estimate` does, the density at
+// the null by linear interpolation of that grid (zero outside its range)
+fn p_map(a: *mem.Arena, x: []const f64, null: f64) -> f64 {
+    let nout = 1024usize
+    let (dy, e1) = mem.alloc[f64](a, nout)
+    let (sc, e2) = mem.alloc[f64](a, 8usize * 1024usize)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var lo = x[0usize]
+    var hi = x[0usize]
+    var i = 1usize
+    while i < x.len {
+        if x[i] < lo { lo = x[i] }
+        if x[i] > hi { hi = x[i] }
+        i += 1usize
+    }
+    let bw = bws.bw_sj(a, x)
+    rdn.density_range(x, bw, nout, lo, hi, dy, sc)
+    var best = 0usize
+    i = 1usize
+    while i < nout {
+        if dy[i] > dy[best] { best = i }
+        i += 1usize
+    }
+    if null < lo || null > hi { ret 0.0f64 }
+    let pos = (null - lo) / (hi - lo) * f64(nout - 1usize)
+    var k = usize(math.floor[f64](pos))
+    if k >= nout - 1usize { k = nout - 2usize }
+    let fr = pos - f64(k)
+    let d0 = dy[k] + fr * (dy[k + 1usize] - dy[k])
+    ret d0 / dy[best]
+}
+
+// bayestestR::p_significance(x, threshold): the share of the posterior outside the interval [-threshold, threshold] on the side of the median's sign, which is the share beyond the threshold in the direction of the effect
+fn p_significance(x: []const f64, threshold: f64) -> f64 {
+    var n = 0.0f64
+    var pos = 0.0f64
+    var neg = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        if x[i] > threshold { pos += 1.0f64 }
+        if x[i] < 0.0f64 - threshold { neg += 1.0f64 }
+        n += 1.0f64
+        i += 1usize
+    }
+    if pos > neg { ret pos / n }
+    ret neg / n
+}

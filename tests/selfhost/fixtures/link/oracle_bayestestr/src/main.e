@@ -27,6 +27,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if bt.map_estimate(a, x[3usize..3usize + mn], mo[0usize..2usize]) != ok { ret 0.0f64 / 0.0f64 }
         ret mo[usize(x[1usize])]
     }
+    if str.eq(c.name, "pmap") { ret bt.p_map(a, s, x[0usize]) }
+    if str.eq(c.name, "psig") { ret bt.p_significance(s, x[0usize]) }
     if str.eq(c.name, "hdi") { ret bt.hdi(a, s, x[0usize], usize(x[1usize])) }
     if str.eq(c.name, "eti") { ret bt.eti(a, s, x[0usize], usize(x[1usize])) }
     if str.eq(c.name, "pd") { ret bt.p_direction(s) }
