@@ -4256,4 +4256,5 @@ D7347	528	gamlss.dist: SICHEL and ZASICHEL distribution functions
 D7348	565	gamlss.dist: SICHEL and ZASICHEL quantiles
 D7349	550	gamlss.dist: ZISICHEL distribution and quantile
 D7350	486	gamlss.dist: pSEP
-D7351	467	gamlss.dist: qSEP
+D7351	468	gamlss.dist: qSEP
+D7352	644	gamlss.dist: random numbers by the quantile function

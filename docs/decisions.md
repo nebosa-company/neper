@@ -50626,3 +50626,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `gamlssdist.qsep` repeats the package's golden-section search (ratio 0.61803399, relative tolerance 1e-6) of (pSEP(q) - p)^2 on (mu - 5 sigma, mu + 5 sigma), so it follows the same bracket updates and stops at the same iterate.
 
 **Result.** `oracle_gamlss_dpo` (840 cases, 30 new) equals gamlss.dist on Windows to 1e-6. Linux pending. L464 stays partial: SI, MN3-5, ST3C, the remaining random-number generators, moments.
+
+## D7352 — gamlss.dist: random numbers by the quantile function
+
+**Decision.** For the families whose `r` function is `q(runif(n), ...)` the fixture draws the uniforms with the R generator (`set.seed`, Mersenne twister) and applies the quantile function already ported: GG, BCCG, IG, BCT, BCPE, LNO, JSU, GAF, SICHEL (integer) and NBII.
+
+**Result.** `oracle_gamlss_dpo` (878 cases, 38 new random-number checks, the position-weighted sum of six draws) equals gamlss.dist on Windows to 1e-6. Linux pending. L464 stays partial: random numbers for the families that draw differently (WEI and EXP use rweibull and rexp), SI, MN3-5, ST3C, moments.

@@ -4,6 +4,7 @@
 use e.algo.stat.gamlssdist as gd
 use e.io
 use e.mem
+use e.algo.rand.r as rrg
 use e.os
 use e.str
 use e.test.oracle as oracle
@@ -11,6 +12,35 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let which = usize(z[0usize])
+    if which >= 100usize {
+        var g: rrg.Rng = zero
+        rrg.seed(&g, i64(z[1usize]))
+        let nn = usize(z[2usize])
+        let m = z[3usize]
+        let sg = z[4usize]
+        let v = z[5usize]
+        let t = z[6usize]
+        var tot = 0.0f64
+        var i = 0usize
+        while i < nn {
+            let u = rrg.unif(&g)
+            var x = 0.0f64
+            let fam = which - 100usize
+            if fam == 0usize { x = gd.qgg(u, m, sg, v) }
+            if fam == 1usize { x = gd.qbccg(u, m, sg, v) }
+            if fam == 2usize { x = gd.qig(u, m, sg) }
+            if fam == 3usize { x = gd.qbct(u, m, sg, v, t) }
+            if fam == 4usize { x = gd.qbcpe(u, m, sg, v, t) }
+            if fam == 5usize { x = gd.qlno(u, m, sg, v) }
+            if fam == 6usize { x = gd.qjsu(u, m, sg, v, t) }
+            if fam == 7usize { x = gd.qgaf(u, m, sg, v) }
+            if fam == 8usize { x = gd.qsichel(u, m, sg, v) }
+            if fam == 9usize { x = gd.qnbii(u, m, sg) }
+            tot += f64(i + 1usize) * x
+            i += 1usize
+        }
+        ret tot
+    }
     if which == 0usize { ret gd.ddpo(z[3usize], z[1usize], z[2usize]) }
     if which == 1usize { ret gd.pdpo(z[3usize], z[1usize], z[2usize]) }
     if which == 2usize { ret gd.qdpo(z[3usize], z[1usize], z[2usize]) }

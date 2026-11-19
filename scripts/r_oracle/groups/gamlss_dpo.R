@@ -67,4 +67,25 @@ for (rep in 1:30) {
   add("dp", c(21, mu, sg, x, nu, tau), pSEP(x, mu = mu, sigma = sg, nu = nu, tau = tau), 1e-7, 1e-12)
   pr <- runif(1, 0.05, 0.95); add("dp", c(22, mu, sg, pr, nu, tau), suppressWarnings(qSEP(pr, mu = mu, sigma = sg, nu = nu, tau = tau)), 1e-6, 1e-9)
 }
+# random numbers made by the quantile function of runif (fn 100 + family, seed, n, mu, sigma, nu, tau): the position-weighted sum of the n draws after set.seed(seed)
+fams <- list(
+  list(id = 0, f = function(n, m, s, v, t) rGG(n, mu = m, sigma = s, nu = v), ok = function(m, s, v, t) TRUE),
+  list(id = 1, f = function(n, m, s, v, t) rBCCG(n, mu = m, sigma = s, nu = v), ok = function(m, s, v, t) TRUE),
+  list(id = 2, f = function(n, m, s, v, t) rIG(n, mu = m, sigma = s), ok = function(m, s, v, t) TRUE),
+  list(id = 3, f = function(n, m, s, v, t) rBCT(n, mu = m, sigma = s, nu = v, tau = t), ok = function(m, s, v, t) TRUE),
+  list(id = 4, f = function(n, m, s, v, t) rBCPE(n, mu = m, sigma = s, nu = v, tau = t), ok = function(m, s, v, t) TRUE),
+  list(id = 5, f = function(n, m, s, v, t) rLNO(n, mu = m, sigma = s, nu = v), ok = function(m, s, v, t) TRUE),
+  list(id = 6, f = function(n, m, s, v, t) rJSU(n, mu = m, sigma = s, nu = v, tau = t), ok = function(m, s, v, t) TRUE),
+  list(id = 7, f = function(n, m, s, v, t) rGAF(n, mu = m, sigma = s, nu = v), ok = function(m, s, v, t) TRUE),
+  list(id = 8, f = function(n, m, s, v, t) rSICHEL(n, mu = m, sigma = s, nu = v), ok = function(m, s, v, t) TRUE),
+  list(id = 9, f = function(n, m, s, v, t) rNBII(n, mu = m, sigma = s), ok = function(m, s, v, t) TRUE))
+for (rep in 1:40) {
+  fm <- fams[[(rep - 1) %% length(fams) + 1]]
+  m <- runif(1, 0.8, 4); s <- runif(1, 0.3, 1.2); v <- if (fm$id %in% c(8)) runif(1, -1, 1) else runif(1, 0.3, 2); t <- runif(1, 1.5, 6); sd0 <- sample(1000:99999, 1); nn <- 6
+  if (fm$id %in% c(5, 6)) v <- rnorm(1, 0, 1)
+  if (fm$id == 6) m <- rnorm(1)
+  set.seed(sd0); x <- tryCatch(suppressWarnings(fm$f(nn, m, s, v, t)), error = function(e) NULL)
+  if (is.null(x) || any(!is.finite(x))) next
+  add("dp", c(100 + fm$id, sd0, nn, m, s, v, t), sum(seq_along(x) * as.numeric(x)), 1e-6, 1e-9)
+}
 emit("gamlss_dpo", "gamlss.dist", list(cases))
