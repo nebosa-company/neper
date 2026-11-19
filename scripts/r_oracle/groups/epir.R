@@ -197,4 +197,24 @@ for (rep in 1:25) {
   if (is.null(r) || any(is.na(unlist(r[1, ])))) next
   for (w in 0:2) cases[[length(cases) + 1]] <- case("cf", c(a, b, cc, d, w), unlist(r[1, ])[w + 1], rel = 1e-7, abs = 1e-10)
 }
+# epi.conf closed forms: "cm" args (kind, which, n1, n2, data...): kind 0 mean.single (x1), 1 mean.unpaired (x1, x2), 2 mean.paired (x1, x2 equal length); which 0 est 1 se 2 lower 3 upper
+for (rep in 1:30) {
+  kd <- rep %% 3; n1 <- sample(5:40, 1); n2 <- if (kd == 2) n1 else sample(5:40, 1); x1 <- rnorm(n1, 5, 2); x2 <- rnorm(n2, 6, 3)
+  r <- switch(kd + 1, epi.conf(x1, ctype = "mean.single"), epi.conf(data.frame(g = factor(rep(1:2, c(n1, n2))), v = c(x1, x2)), ctype = "mean.unpaired"), epi.conf(data.frame(a = x1, b = x2), ctype = "mean.paired"))
+  v <- c(r$est, r$se, r$lower, r$upper)
+  for (w in 0:3) cases[[length(cases) + 1]] <- case("cm", c(kd, w, n1, n2, x1, x2), v[w + 1], rel = 1e-9, abs = 1e-12)
+}
+# "cr" incidence rate (a, pt, method 0 exact 1 byar, which 0 est 1 lower 2 upper), "cs" smr (k, i, obs[k], pt[k], which 0 est 1 se 2 lower 3 upper), "co" odds (a, b, which 0 est 1 lower 2 upper)
+for (rep in 1:30) {
+  a <- sample(1:60, 1); pt <- runif(1, 50, 900); mth <- rep %% 2
+  r <- epi.conf(as.matrix(cbind(a, pt)), ctype = "inc.rate", method = c("exact", "byar")[mth + 1])
+  v <- c(r$est, r$lower, r$upper)
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("cr", c(a, pt, mth, w), v[w + 1], rel = 1e-9, abs = 1e-12)
+  k <- sample(2:5, 1); obs <- sample(0:40, k, TRUE); ptt <- runif(k, 100, 1000); i <- sample(k, 1)
+  s <- epi.conf(as.matrix(cbind(obs, ptt)), ctype = "smr"); vs <- c(s$est[i], s$se[i], s$lower[i], s$upper[i])
+  for (w in 0:3) cases[[length(cases) + 1]] <- case("cs", c(k, i - 1, obs, ptt, w), vs[w + 1], rel = 1e-9, abs = 1e-12)
+  aa <- sample(2:80, 1); bb <- sample(2:90, 1)
+  o <- epi.conf(as.matrix(cbind(aa, bb)), ctype = "odds"); vo <- c(o$est, o$lower, o$upper)
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("co", c(aa, bb, w), vo[w + 1], rel = 1e-9, abs = 1e-12)
+}
 emit("epir", "epiR", list(cases))

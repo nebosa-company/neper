@@ -69,6 +69,64 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ep.epi_ccc(x[1usize..1usize + nc], x[1usize + nc..1usize + 2usize * nc], 0.95f64, ov[0usize..10usize])
         ret ov[usize(x[1usize + 2usize * nc])]
     }
+    if str.eq(c.name, "cm") {
+        let kd = usize(x[0usize])
+        let n1 = usize(x[2usize])
+        let n2 = usize(x[3usize])
+        let d1 = x[4usize..4usize + n1]
+        let d2 = x[4usize + n1..4usize + n1 + n2]
+        var q0 = 0.0f64
+        var q1 = 0.0f64
+        var q2 = 0.0f64
+        var q3 = 0.0f64
+        if kd == 0usize {
+            let (a0, a1, a2, a3) = ep.conf_mean_single(d1, 0.95f64)
+            q0 = a0
+            q1 = a1
+            q2 = a2
+            q3 = a3
+        } else if kd == 1usize {
+            let (b0, b1, b2, b3) = ep.conf_mean_unpaired(d1, d2, 0.95f64)
+            q0 = b0
+            q1 = b1
+            q2 = b2
+            q3 = b3
+        } else {
+            let (c0, c1, c2, c3) = ep.conf_mean_paired(a, d1, d2, 0.95f64)
+            q0 = c0
+            q1 = c1
+            q2 = c2
+            q3 = c3
+        }
+        let wm = usize(x[1usize])
+        if wm == 0usize { ret q0 }
+        if wm == 1usize { ret q1 }
+        if wm == 2usize { ret q2 }
+        ret q3
+    }
+    if str.eq(c.name, "cr") {
+        let (re, rl, ru) = ep.conf_inc_rate(x[0usize], x[1usize], 0.95f64, usize(x[2usize]) == 1usize)
+        let wr = usize(x[3usize])
+        if wr == 0usize { ret re }
+        if wr == 1usize { ret rl }
+        ret ru
+    }
+    if str.eq(c.name, "cs") {
+        let ks = usize(x[0usize])
+        let (se0, se1, se2, se3) = ep.conf_smr(x[2usize..2usize + ks], x[2usize + ks..2usize + 2usize * ks], usize(x[1usize]), 0.95f64)
+        let ws = usize(x[2usize + 2usize * ks])
+        if ws == 0usize { ret se0 }
+        if ws == 1usize { ret se1 }
+        if ws == 2usize { ret se2 }
+        ret se3
+    }
+    if str.eq(c.name, "co") {
+        let (oe, ol, ou) = ep.conf_odds(x[0usize], x[1usize], 0.95f64)
+        let wo = usize(x[2usize])
+        if wo == 0usize { ret oe }
+        if wo == 1usize { ret ol }
+        ret ou
+    }
     if str.eq(c.name, "cf") {
         let tc2 = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
         let (ce, cl2, ch2, cer) = ep.or_cfield(a, tc2, 0.95f64)

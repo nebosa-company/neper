@@ -1000,3 +1000,95 @@ fn or_cfield(a: *mem.Arena, t: Table2, level: f64) -> (f64, f64, f64, err) {
     let ul = pw.zeroin[FiCtx](&c, fi_f, 1.0e-8f64, 1.0e8f64, tol, 1000i64)
     ret ((t.a / t.b) / (t.c / t.d), ll, ul, ok)
 }
+
+// ---- epi.conf, the closed-form types: mean.single (t interval of a mean), mean.unpaired (pooled-variance t interval of the difference of two group means), mean.paired (t interval of the
+// mean paired difference x2 - x1), inc.rate (exact chi-squared or Byar interval of a count over person-time), smr (exact interval of an observed count over its expectation from the
+// pooled rate) and odds (the qbinom interval of a / b); each answers what epi.conf lists
+fn conf_mean_single(x: []const f64, level: f64) -> (f64, f64, f64, f64) {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        m += x[i]
+        i += 1usize
+    }
+    m = m / n
+    var v = 0.0f64
+    i = 0usize
+    while i < x.len {
+        v += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    v = v / (n - 1.0f64)
+    let se = math.sqrt[f64](v) / math.sqrt[f64](n)
+    let t = math.abs[f64](nb.qt((1.0f64 - level) / 2.0f64, n - 1.0f64, true, false))
+    ret (m, se, m - t * se, m + t * se)
+}
+
+fn conf_mean_unpaired(x1: []const f64, x2: []const f64, level: f64) -> (f64, f64, f64, f64) {
+    let (m1, s1, l1, u1) = conf_mean_single(x1, level)
+    let (m2, s2, l2, u2) = conf_mean_single(x2, level)
+    let n1 = f64(x1.len)
+    let n2 = f64(x2.len)
+    let v1 = s1 * s1 * n1
+    let v2 = s2 * s2 * n2
+    let sp = math.sqrt[f64](((n1 - 1.0f64) * v1 + (n2 - 1.0f64) * v2) / (n1 + n2 - 2.0f64))
+    let se = sp * math.sqrt[f64](1.0f64 / n1 + 1.0f64 / n2)
+    let t = math.abs[f64](nb.qt((1.0f64 - level) / 2.0f64, n1 + n2 - 2.0f64, true, false))
+    let _ = l1
+    let _ = u1
+    let _ = l2
+    let _ = u2
+    ret (m1 - m2, se, m1 - m2 - t * se, m1 - m2 + t * se)
+}
+
+fn conf_mean_paired(a: *mem.Arena, x1: []const f64, x2: []const f64, level: f64) -> (f64, f64, f64, f64) {
+    let (d, e) = mem.alloc[f64](a, x1.len)
+    if e != ok { ret (0.0f64, 0.0f64, 0.0f64, 0.0f64) }
+    var i = 0usize
+    while i < x1.len {
+        d[i] = x2[i] - x1[i]
+        i += 1usize
+    }
+    let (pm, ps, pl, pu) = conf_mean_single(d, level)
+    ret (pm, ps, pl, pu)
+}
+
+// (est, lower, upper) of the incidence rate a / pt by the exact chi-squared method (byar false) or Byar's approximation
+fn conf_inc_rate(a: f64, pt: f64, level: f64, byar: bool) -> (f64, f64, f64) {
+    let nq = 1.0f64 - (1.0f64 - level) / 2.0f64
+    let p = a / pt
+    if !byar { ret (p, nm.qchisq(1.0f64 - nq, 2.0f64 * a, true, false) / 2.0f64 / pt, nm.qchisq(nq, 2.0f64 * (a + 1.0f64), true, false) / 2.0f64 / pt) }
+    let z = z_of(level)
+    let ap = a + 0.5f64
+    let cl = 1.0f64 - 1.0f64 / (9.0f64 * ap) - z / 3.0f64 * math.sqrt[f64](1.0f64 / ap)
+    let cu = 1.0f64 - 1.0f64 / (9.0f64 * ap) + z / 3.0f64 * math.sqrt[f64](1.0f64 / ap)
+    ret (p, ap * cl * cl * cl / pt, ap * cu * cu * cu / pt)
+}
+
+// row i of the standardised mortality ratio table (observed counts obs, person-time pt): (smr, se, lower, upper)
+fn conf_smr(obs: []const f64, pt: []const f64, i: usize, level: f64) -> (f64, f64, f64, f64) {
+    var so = 0.0f64
+    var sp = 0.0f64
+    var j = 0usize
+    while j < obs.len {
+        so += obs[j]
+        sp += pt[j]
+        j += 1usize
+    }
+    let ex = so / sp * pt[i]
+    let nq = 1.0f64 - (1.0f64 - level) / 2.0f64
+    var lo = 0.0f64
+    if obs[i] > 0.0f64 { lo = nm.qchisq(nq, 2.0f64 * obs[i], false, false) / 2.0f64 / ex }
+    var hi = nm.qchisq(1.0f64 - nq, 2.0f64, false, false) / 2.0f64 / ex
+    if obs[i] > 0.0f64 { hi = nm.qchisq(1.0f64 - nq, 2.0f64 * (obs[i] + 1.0f64), false, false) / 2.0f64 / ex }
+    ret (obs[i] / ex, math.sqrt[f64](pt[i]) / ex, lo, hi)
+}
+
+// (odds a / b, lower, upper) with the qbinom ends of epi.conf(ctype = "odds")
+fn conf_odds(a: f64, b: f64, level: f64) -> (f64, f64, f64) {
+    let nq = 1.0f64 - (1.0f64 - level) / 2.0f64
+    let al = nb.qbinom(1.0f64 - nq, a + b, a / (a + b), true, false) / (a + b)
+    let au = nb.qbinom(nq, a + b, a / (a + b), true, false) / (a + b)
+    ret (a / b, al / (1.0f64 - al), au / (1.0f64 - au))
+}
