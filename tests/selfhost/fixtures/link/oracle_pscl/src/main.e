@@ -20,6 +20,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let y = z[4usize..4usize + n]
     let x = z[4usize + n..4usize + n + n * p]
     let zz = z[4usize + n + n * p..4usize + n + n * p + n * q]
+    if str.eq(c.name, "r20") || str.eq(c.name, "r21") || str.eq(c.name, "r22") || str.eq(c.name, "r23") || str.eq(c.name, "r24") || str.eq(c.name, "r25") {
+        let (r2, e9) = mem.alloc[f64](a, 6usize)
+        if e9 != ok { ret nan }
+        if ps.pr2_zeroinfl(a, x, zz, y, n, p, q, r2) != ok { ret nan }
+        var w = 0usize
+        if str.eq(c.name, "r21") { w = 1usize }
+        if str.eq(c.name, "r22") { w = 2usize }
+        if str.eq(c.name, "r23") { w = 3usize }
+        if str.eq(c.name, "r24") { w = 4usize }
+        if str.eq(c.name, "r25") { w = 5usize }
+        ret r2[w]
+    }
     var ll = 0.0f64
     if kind == 0usize { ll = ps.zeroinfl(a, x, zz, y, n, p, q, par) } else { ll = ps.hurdle(a, x, zz, y, n, p, q, par) }
     if str.eq(c.name, "ll") { ret ll }

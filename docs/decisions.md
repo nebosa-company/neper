@@ -50578,3 +50578,6 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 
 ## D7423 — pscl zeroinfl weights and offsets
 The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelihood by its case weight and adds the count offset to the linear predictor, starting from the unweighted exact fit. Equal to pscl::zeroinfl(y ~ x + offset(o) | z, weights = w) on eight simulated sets (log-likelihood within 2e-3, position-weighted count coefficients within 5e-3). The hurdle with weights or an offset is not covered (its truncated count part is still the exact unweighted fit), nor are zero-part offsets. L412 at 0.7.
+
+## D7424 — pscl pR2 for zeroinfl
+`pr2_zeroinfl` fits the intercept-only zeroinfl (y ~ 1 | 1) as the null model and returns pscl's six numbers: the log-likelihoods, G2 = -2 (llhNull - llh), McFadden = 1 - llh / llhNull, r2ML = 1 - exp(-G2 / n) and r2CU = r2ML / (1 - exp(2 llhNull / n)). Equal to pR2 to 1e-4 on twelve zero-inflated Poisson fits (the exact Newton fits of the original oracle). L412 at 0.75; pR2 for the hurdle and the other count families, the hurdle with weights and offsets, and standard errors of the generalised fits remain.

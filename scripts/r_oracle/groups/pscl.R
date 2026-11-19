@@ -20,6 +20,7 @@ for (rep in 1:24) {
   a <- c(n, p, q, kind, y, as.vector(t(x)), as.vector(t(z)))
   cc <- coef(f, "count"); zc <- coef(f, "zero")
   add("ll", a, as.numeric(logLik(f))); add("count", a, sum(cc * seq_along(cc))); add("zero", a, sum(zc * seq_along(zc)))
+  if (kind == 0) { r2 <- tryCatch(suppressMessages(pR2(f)), error = function(e) NULL); if (!is.null(r2)) for (u in 1:6) cases[[length(cases) + 1]] <- case(paste0("r2", u - 1), a, unname(r2[u]), rel = 1e-4, abs = 1e-5) }
   for (ty in 0:2) { pr <- predict(f, type = c("response", "count", "zero")[ty + 1]); cases[[length(cases) + 1]] <- case(paste0("pred", ty), a, sum(pr * seq_along(pr)), rel = 1e-4, abs = 1e-6) }
   if (kind == 0) { out <- tryCatch(suppressWarnings(capture.output(vuong(f, glm(fm1, family = poisson, data = d)))), error = function(e) NULL); st <- if (is.null(out)) NULL else sapply(c("Raw", "AIC-corrected", "BIC-corrected"), function(k) as.numeric(strsplit(trimws(sub(k, "", out[startsWith(out, k)][1])), " +")[[1]][1])); if (!is.null(st) && all(is.finite(st))) for (ty in 0:2) cases[[length(cases) + 1]] <- case(paste0("vuong", ty), a, st[ty + 1], rel = 1e-5, abs = 1e-5) }
   sv <- sqrt(diag(vcov(f))); ns <- names(sv); sc <- sv[grepl("^count_", ns)]; sz <- sv[grepl("^zero_", ns)]

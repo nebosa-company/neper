@@ -791,3 +791,30 @@ fn zero_link_fit(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, 
     }
     ret lk_loglik(&c, par[0usize..m])
 }
+
+// pR2 of a zero-inflated Poisson fit (logit zero part): out = (llh, llhNull, G2, McFadden, r2ML, r2CU) with the null model the intercept-only zeroinfl (y ~ 1 | 1), G2 = -2 (llhNull - llh),
+// McFadden = 1 - llh / llhNull, r2ML = 1 - exp(-G2 / n) and r2CU = r2ML / (1 - exp(2 llhNull / n))
+fn pr2_zeroinfl(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, out: []f64) -> err {
+    let (par, e0) = mem.alloc[f64](a, p + q)
+    let (one, e1) = mem.alloc[f64](a, n)
+    let (pn, e2) = mem.alloc[f64](a, 2usize)
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    let llh = zeroinfl(a, x, z, y, n, p, q, par)
+    var i = 0usize
+    while i < n {
+        one[i] = 1.0f64
+        i += 1usize
+    }
+    let l0 = zeroinfl(a, one, one, y, n, 1usize, 1usize, pn)
+    if llh != llh || l0 != l0 { ret mem.Full }
+    let nf = f64(n)
+    let g2 = 0.0f64 - 2.0f64 * (l0 - llh)
+    out[0usize] = llh
+    out[1usize] = l0
+    out[2usize] = g2
+    out[3usize] = 1.0f64 - llh / l0
+    let ml = 1.0f64 - math.exp[f64](0.0f64 - g2 / nf)
+    out[4usize] = ml
+    out[5usize] = ml / (1.0f64 - math.exp[f64](2.0f64 * l0 / nf))
+    ret ok
+}
