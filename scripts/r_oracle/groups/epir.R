@@ -230,4 +230,12 @@ for (rep in 1:30) {
   v <- c(res$est, res$se, res$lower, res$upper)
   for (w in 0:3) cases[[length(cases) + 1]] <- case("pp", c(kd, w, cnt), v[w + 1], rel = 1e-9, abs = 1e-12)
 }
+# epi.2by2 cohort.time: "ct" args (a, b, c, d, units, which 0..2 IRR, 3..5 ARate, 6..8 AFRate, 9..11 PARate, 12..14 PAFRate); a and c are cases, b and d person-time
+for (rep in 1:30) {
+  a <- sample(5:80, 1); b <- runif(1, 5000, 40000); cc <- sample(5:80, 1); d <- runif(1, 5000, 40000); un <- c(100, 1000, 1)[rep %% 3 + 1]
+  dat <- as.table(matrix(c(a, b, cc, d), 2, byrow = TRUE))
+  r <- epi.2by2(dat, method = "cohort.time", interpret = FALSE, outcome = "as.columns", units = un)$massoc.detail
+  v <- c(unlist(r$IRR.strata.wald[1, ]), unlist(r$ARate.strata.wald[1, ]), unlist(r$AFRate.strata.wald[1, ]), unlist(r$PARate.strata.wald[1, ]), unlist(r$PAFRate.strata.wald[1, ]))
+  for (w in 0:14) cases[[length(cases) + 1]] <- case("ct", c(a, b, cc, d, un, w), unname(v[w + 1]), rel = 1e-8, abs = 1e-11)
+}
 emit("epir", "epiR", list(cases))

@@ -4465,4 +4465,5 @@ D7607	767	arm standardize for glm
 D7608	797	epiR Koopman risk-ratio interval
 D7609	1036	epiR conditional MLE, Cornfield and exact odds-ratio intervals
 D7610	906	epiR epi.conf closed-form types
-D7611	966	epiR epi.conf proportion contrasts and epi.tests for every interval method
+D7611	967	epiR epi.conf proportion contrasts and epi.tests for every interval method
+D7612	878	epiR epi.2by2 for person-time cohorts (cohort.time)

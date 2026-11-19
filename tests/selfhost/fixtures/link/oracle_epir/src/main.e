@@ -69,6 +69,42 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ep.epi_ccc(x[1usize..1usize + nc], x[1usize + nc..1usize + 2usize * nc], 0.95f64, ov[0usize..10usize])
         ret ov[usize(x[1usize + 2usize * nc])]
     }
+    if str.eq(c.name, "ct") {
+        let wt = usize(x[5usize])
+        let kt = wt / 3usize
+        var t0 = 0.0f64
+        var t1 = 0.0f64
+        var t2 = 0.0f64
+        if kt == 0usize {
+            let (a0, a1, a2) = ep.ct_irr(x[0usize], x[1usize], x[2usize], x[3usize], 0.95f64)
+            t0 = a0
+            t1 = a1
+            t2 = a2
+        } else if kt == 1usize {
+            let (b0, b1, b2) = ep.ct_arate(x[0usize], x[1usize], x[2usize], x[3usize], 0.95f64, x[4usize])
+            t0 = b0
+            t1 = b1
+            t2 = b2
+        } else if kt == 2usize {
+            let (c0, c1, c2) = ep.ct_afrate(x[0usize], x[1usize], x[2usize], x[3usize], 0.95f64)
+            t0 = c0
+            t1 = c1
+            t2 = c2
+        } else if kt == 3usize {
+            let (d0, d1, d2) = ep.ct_parate(x[0usize], x[1usize], x[2usize], x[3usize], 0.95f64, x[4usize])
+            t0 = d0
+            t1 = d1
+            t2 = d2
+        } else {
+            let (e0, e1, e2) = ep.ct_pafrate(x[0usize], x[1usize], x[2usize], x[3usize], 0.95f64)
+            t0 = e0
+            t1 = e1
+            t2 = e2
+        }
+        if wt % 3usize == 0usize { ret t0 }
+        if wt % 3usize == 1usize { ret t1 }
+        ret t2
+    }
     if str.eq(c.name, "pp") {
         let kp = usize(x[0usize])
         var v0 = 0.0f64

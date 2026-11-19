@@ -1143,3 +1143,47 @@ fn conf_prop_paired(r: f64, s: f64, t: f64, u: f64, level: f64) -> (f64, f64, f6
     let hi = d + math.sqrt[f64]((p2 - l2) * (p2 - l2) - 2.0f64 * phi * (p2 - l2) * (u1 - p1) + (u1 - p1) * (u1 - p1))
     ret (d, se, lo, hi)
 }
+
+// ---- epi.2by2(method = "cohort.time"): a and c are the cases of the exposed and unexposed, b and d their person-time. Answers are (est, lower, upper) unless noted.
+// IRR: the incidence rate ratio with epiR's exact F-based interval
+fn ct_irr(a: f64, b: f64, c: f64, d: f64, level: f64) -> (f64, f64, f64) {
+    let al = (1.0f64 - level) / 2.0f64
+    let est = (a / b) / (c / d)
+    let lo = d / b * (a / (c + 1.0f64)) / nb.qf(al, 2.0f64 * (c + 1.0f64), 2.0f64 * a, false, false)
+    let hi = d / b * ((a + 1.0f64) / c) * nb.qf(al, 2.0f64 * (a + 1.0f64), 2.0f64 * c, false, false)
+    ret (est, lo, hi)
+}
+
+// the attributable rate (a / b - c / d) units with its Wald interval
+fn ct_arate(a: f64, b: f64, c: f64, d: f64, level: f64, units: f64) -> (f64, f64, f64) {
+    let z = z_of(level)
+    let est = (a / b - c / d) * units
+    let se = math.sqrt[f64](a / (b * b) + c / (d * d)) * units
+    ret (est, est - z * se, est + z * se)
+}
+
+// the attributable fraction in the exposed from the exact rate-ratio interval: (IRR - 1) / IRR at the estimate and both ends
+fn ct_afrate(a: f64, b: f64, c: f64, d: f64, level: f64) -> (f64, f64, f64) {
+    let (e, l, u) = ct_irr(a, b, c, d, level)
+    ret ((e - 1.0f64) / e, (l - 1.0f64) / l, (u - 1.0f64) / u)
+}
+
+// the population attributable rate (M1 / M0 - c / d) units with its Wald interval, M1 = a + c and M0 = b + d
+fn ct_parate(a: f64, b: f64, c: f64, d: f64, level: f64, units: f64) -> (f64, f64, f64) {
+    let z = z_of(level)
+    let m1 = a + c
+    let m0 = b + d
+    let est = (m1 / m0 - c / d) * units
+    let se = math.sqrt[f64](m1 / (m0 * m0) + c / (d * d)) * units
+    ret (est, est - z * se, est + z * se)
+}
+
+// the population attributable fraction (Sullivan): (rate of the population - rate of the unexposed) / rate of the population, the bounds the min and max of the two limit ratios over
+// the exact (chi-squared) intervals of the two rates
+fn ct_pafrate(a: f64, b: f64, c: f64, d: f64, level: f64) -> (f64, f64, f64) {
+    let (pe, pl, pu) = conf_inc_rate(a + c, b + d, level, false)
+    let (oe, ol, ou) = conf_inc_rate(c, d, level, false)
+    let r1 = (pl - ol) / pl
+    let r2 = (pu - ou) / pu
+    ret ((pe - oe) / pe, math.min[f64](r1, r2), math.max[f64](r1, r2))
+}
