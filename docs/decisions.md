@@ -50902,3 +50902,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7477 — caret createFolds for a numeric response
 `create_folds_numeric` is createFolds(y, k, list = FALSE) for numeric y: cuts = floor(n / k) clamped to 2..5, the type-7 quantile breaks with duplicates dropped, cut()'s interval labels ("[lo,hi]" for the first interval, "(lo,hi]" after) built with C %.{dig}g (`fmt_g`, dig widened from 3 until the break labels are distinct), the classes taken in the byte order of those label strings (R 4.6 on this Windows host sorts "(", "-", digits and "[" in byte order, checked against sort() on mixed labels), then the factor routine. Equal to caret under set.seed on 60 numeric responses (normal, rounded, integers, and heavy ties; k 2 to 8). Open for L519: ica, varImp for the other model families.
+
+## D7478 — caret createMultiFolds for a numeric response
+`create_multi_folds_numeric` repeats `create_folds_numeric` from the one generator, as createMultiFolds calls createFolds times times; equal to caret under set.seed on 30 numeric responses (k 2 to 6, 1 to 4 repeats; the fold assignment of each repeat, weighted by repeat and position) in oracle_carets_cfn. Open for L519: preProcess method ica (fastICA with its seeded start), varImp for glm families beyond binomial and for tree and neural models.

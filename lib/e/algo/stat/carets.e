@@ -1180,3 +1180,15 @@ fn create_folds_numeric(a: *mem.Arena, r: *rng.Rng, y: []const f64, k: usize, fo
     }
     ret create_folds(a, r, cls, k, fold)
 }
+
+// createMultiFolds(y, k, times) for a numeric y: createFolds repeated times times from the one generator; fold receives times rows of n fold codes
+fn create_multi_folds_numeric(a: *mem.Arena, r: *rng.Rng, y: []const f64, k: usize, times: usize, fold: []i64) -> err {
+    let n = y.len
+    var t = 0usize
+    while t < times {
+        let e = create_folds_numeric(a, r, y, k, fold[t * n..(t + 1usize) * n])
+        if e != ok { ret e }
+        t += 1usize
+    }
+    ret ok
+}

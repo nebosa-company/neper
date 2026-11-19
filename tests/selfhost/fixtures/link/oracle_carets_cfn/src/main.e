@@ -6,11 +6,33 @@ use e.algo.stat.carets as cr
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[2usize])
+    if str.eq(c.name, "mfn") {
+        let tm = usize(z[3usize])
+        let (fm, em) = mem.alloc[i64](a, n * tm)
+        if em != ok { ret 0.0f64 / 0.0f64 }
+        var gm: rr.Rng = zero
+        rr.seed(&gm, i64(z[0usize]))
+        if cr.create_multi_folds_numeric(a, &gm, z[4usize..4usize + n], usize(z[1usize]), tm, fm) != ok { ret 0.0f64 / 0.0f64 }
+        var tot = 0.0f64
+        var t = 0usize
+        while t < tm {
+            var s2 = 0.0f64
+            var i2 = 0usize
+            while i2 < n {
+                s2 += f64(i2 + 1usize) * f64(fm[t * n + i2])
+                i2 += 1usize
+            }
+            tot += f64(t + 1usize) * s2
+            t += 1usize
+        }
+        ret tot
+    }
     let (fold, e) = mem.alloc[i64](a, n)
     if e != ok { ret 0.0f64 / 0.0f64 }
     var g: rr.Rng = zero
