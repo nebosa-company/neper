@@ -58,6 +58,22 @@ for (rep in 1:10) {
     cases[[length(cases) + 1]] <- case("rst_hi", c(base, i - 1, kind), e$upper.CL[i], rel = 1e-6, abs = 1e-9)
   }
 }
+# logistic regression glm(y ~ A + B + x, binomial) (R's glm stops at a deviance change of 1e-8, so its coefficients are only that close to the maximum, hence 1e-4): "gl_link" "gl_se" the link-scale mean and SE, "gl_est" "gl_rse" "gl_lo" "gl_hi" the response scale; args (n, a, b, y[n], A, B, x, level index, 0)
+for (rep in 1:8) {
+  a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(120:200, 1)
+  A <- c(0:(a - 1), sample(0:(a - 1), n - a, TRUE)); B <- c(sample(0:(b - 1), a, TRUE), sample(0:(b - 1), n - a, TRUE)); B[1:b] <- 0:(b - 1)
+  x <- round(rnorm(n), 3); y <- rbinom(n, 1, plogis(-0.3 + A * 0.4 + B * 0.3 + 0.6 * x))
+  d <- data.frame(y = y, A = factor(A), B = factor(B), x = x)
+  m <- glm(y ~ A + B + x, binomial, d); el <- summary(emmeans(m, "A")); er <- summary(emmeans(m, "A", type = "response")); base <- c(n, a, b, y, A, B, x)
+  for (i in 1:a) {
+    cases[[length(cases) + 1]] <- case("gl_link", c(base, i - 1, 0), el$emmean[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gl_se", c(base, i - 1, 0), el$SE[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gl_est", c(base, i - 1, 0), er$prob[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gl_rse", c(base, i - 1, 0), er$SE[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gl_lo", c(base, i - 1, 0), er$asymp.LCL[i], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("gl_hi", c(base, i - 1, 0), er$asymp.UCL[i], rel = 1e-4, abs = 1e-6)
+  }
+}
 # contrast families (adjust = "none"): "ctr_est" and "ctr_se" with args (base..., type, idx): type 0 trt.vs.ctrl (level idx vs level 0, idx from 1), 1 revpairwise (pair idx in emmeans' order), 2 consec (idx from 1), 3 eff (level idx, from 0), 4 poly (degree idx from 1)
 for (rep in 1:8) {
   a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(40:70, 1)

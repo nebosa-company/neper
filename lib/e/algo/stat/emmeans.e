@@ -11,6 +11,7 @@ use e.algo.stat.psych as ps
 use e.math
 use e.math.nmath_beta as nb
 use e.mem
+use e.algo.stat.flexmixpkg as fxg
 
 type Lm = struct { beta: []f64, cov: []f64, df: f64, p: usize }
 
@@ -266,4 +267,65 @@ fn backtransform(kind: usize, emm: f64, se: f64, df: f64, level: f64, out: []f64
     out[1usize] = r * 2.302585092994046f64 * se
     out[2usize] = math.pow[f64](10.0f64, lo)
     out[3usize] = math.pow[f64](10.0f64, hi)
+}
+
+// the Lm of a logistic regression of the binary y on the design x (n by p column-major): the maximum-likelihood coefficients by IRLS and the covariance (X' W X)^-1 with W = mu (1 - mu); df is infinite (1e300) as emmeans
+// treats a glm with a known dispersion
+fn logit_glm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (Lm, err) {
+    let (beta, e1) = mem.alloc[f64](a, p)
+    let (sz, e2) = mem.alloc[f64](a, n)
+    let (w, e3) = mem.alloc[f64](a, n)
+    let (xwx, e4) = mem.alloc[f64](a, p * p)
+    let (inv, e5) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret (zero, e1) }
+    if e2 != ok { ret (zero, e2) }
+    if e3 != ok { ret (zero, e3) }
+    if e4 != ok { ret (zero, e4) }
+    if e5 != ok { ret (zero, e5) }
+    var i = 0usize
+    while i < n {
+        sz[i] = 1.0f64
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let e6 = fxg.binom_glm(a, x, n, p, y, sz, w, beta, false)
+    if e6 != ok { ret (zero, e6) }
+    var j = 0usize
+    while j < p * p {
+        xwx[j] = 0.0f64
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        j = 0usize
+        while j < p {
+            eta += x[j * n + i] * beta[j]
+            j += 1usize
+        }
+        let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
+        let wv = mu * (1.0f64 - mu)
+        j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                xwx[j * p + k] += wv * x[j * n + i] * x[k * n + i]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !ps.invert(a, xwx, p, inv) { ret (zero, Singular) }
+    ret (Lm { beta: beta, cov: inv, df: 1.0e300f64, p: p }, ok)
+}
+
+// emmeans(m, specs, type = "response") of a logistic regression: plogis(emm), its delta-method standard error p (1 - p) se and the interval plogis(emm +- z se) at `level` (a z quantile, the degrees of freedom being infinite)
+fn backtransform_logit(emm: f64, se: f64, level: f64, out: []f64) {
+    let z = nb.qt(1.0f64 - (1.0f64 - level) / 2.0f64, 1.0e10f64, true, false)
+    let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - emm))
+    out[0usize] = pr
+    out[1usize] = pr * (1.0f64 - pr) * se
+    out[2usize] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - (emm - z * se)))
+    out[3usize] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - (emm + z * se)))
 }

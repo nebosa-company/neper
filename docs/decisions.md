@@ -50680,3 +50680,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `emmeans.backtransform` adds the sqrt transformation (mean emm^2, delta-method standard error 2 emm se, limits (emm +- t se)^2) and log10 (10^emm, standard error 10^emm ln(10) se, limits 10^(emm +- t se)) to the log case of D7359.
 
 **Result.** `oracle_emmeans` (1152 cases, 152 response-scale values (estimate, SE and both limits of 38 means) for sqrt and log10 on 10 models, reshuffled draws aside) equals emmeans on Windows to 1e-6. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, logit and other link-based back-transformations, regrid, joint_tests with interactions.
+
+## D7361 — emmeans: logistic regression
+
+**Decision.** `emmeans.logit_glm` fits a logistic regression by IRLS and keeps the covariance (X' W X)^-1 with an infinite degrees of freedom, so the adjusted means are on the link scale with their standard errors; `backtransform_logit` gives plogis(emm), the delta-method standard error p (1 - p) se and the interval plogis(emm +- z se).
+
+**Result.** `oracle_emmeans` (1382 cases; for 8 models the link mean, its SE, the probability, its SE and both limits of each level, the reshuffled draws changing the other cases' data) equals emmeans on Windows to 1e-4 relative: R's `glm` stops when the deviance changes by less than 1e-8, so its coefficients are only about that close to the maximum the port finds. Linux pending. L313 stays partial: model-frame grid, mixed models, mvt and dunnett adjustments, other links (log, probit) and `regrid`, contrasts on the response scale, joint_tests with interactions.

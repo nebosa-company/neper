@@ -180,7 +180,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     xbar = xbar / f64(n)
-    let (m, fe) = em.fit(a, d, y, n, p)
+    var m: em.Lm = zero
+    var fe = ok
+    if str.starts_with(c.name, "gl_") {
+        let (gm, ge) = em.logit_glm(a, d, y, n, p)
+        m = gm
+        fe = ge
+    } else {
+        let (lm0, le0) = em.fit(a, d, y, n, p)
+        m = lm0
+        fe = le0
+    }
     if fe != ok { ret 0.0f64 / 0.0f64 }
     if str.eq(c.name, "jt_F") || str.eq(c.name, "jt_p") {
         // term li: 0 the factor A (differences of its adjusted means from level 0), 1 the factor B, 2 the covariate x
@@ -237,6 +247,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret math.sqrt[f64](em.variance(&m, rd))
     }
     grid_row(r1, na, nb, li, xbar)
+    if str.starts_with(c.name, "gl_") {
+        let gemm = em.estimate(&m, r1)
+        let gse = math.sqrt[f64](em.variance(&m, r1))
+        if str.eq(c.name, "gl_link") { ret gemm }
+        if str.eq(c.name, "gl_se") { ret gse }
+        var gt: [4]f64 = zero
+        em.backtransform_logit(gemm, gse, 0.95f64, gt[0usize..4usize])
+        if str.eq(c.name, "gl_est") { ret gt[0usize] }
+        if str.eq(c.name, "gl_rse") { ret gt[1usize] }
+        if str.eq(c.name, "gl_lo") { ret gt[2usize] }
+        ret gt[3usize]
+    }
     if str.starts_with(c.name, "rst_") {
         var rt: [4]f64 = zero
         em.backtransform(lj, em.estimate(&m, r1), math.sqrt[f64](em.variance(&m, r1)), m.df, 0.95f64, rt[0usize..4usize])
