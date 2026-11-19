@@ -4513,4 +4513,5 @@ D7690	1202	foreign write.dbf
 D7691	1431	Rtsne with theta = 0
 D7692	527	Rtsne distance-matrix input
 D7693	630	Rtsne PCA step
-D7694	1341	hcubature's adaptive Genz-Malik recursion
+D7694	1342	hcubature's adaptive Genz-Malik recursion
+D7695	849	hcubature in one dimension

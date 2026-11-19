@@ -279,11 +279,92 @@ fn gm_rule(id: usize, d: usize, c: []const f64, hw: []const f64, out: []f64) {
     out[2usize] = f64(bi)
 }
 
-// hcubature for the fixed integrand `id` over the box lo..hi (2 to 7 dimensions): the box is split along the dimension of the largest fourth difference of the region with the largest error,
+// the 15-point Gauss-Kronrod rule (7 point Gauss inside) on c +- hw as cubature's one-dimensional hcubature applies it, with QUADPACK's error: the distance of the two estimates, sharpened by
+// resasc * min(1, (200 err / resasc)^1.5) and kept above 50 eps resabs. Writes (val, err, 0) to out.
+fn gk15_rule(id: usize, c: []const f64, hw: []const f64, out: []f64) {
+    var xgk: [8]f64 = zero
+    var wgk: [8]f64 = zero
+    var wg: [4]f64 = zero
+    xgk[0usize] = 0.991455371120812639206854697526329f64
+    xgk[1usize] = 0.949107912342758524526189684047851f64
+    xgk[2usize] = 0.864864423359769072789712788640926f64
+    xgk[3usize] = 0.741531185599394439863864773280788f64
+    xgk[4usize] = 0.586087235467691130294144838258730f64
+    xgk[5usize] = 0.405845151377397166906606412076961f64
+    xgk[6usize] = 0.207784955007898467600689403773245f64
+    wgk[0usize] = 0.022935322010529224963732008058970f64
+    wgk[1usize] = 0.063092092629978553290700663189204f64
+    wgk[2usize] = 0.104790010322250183839876322541518f64
+    wgk[3usize] = 0.140653259715525918745189590510238f64
+    wgk[4usize] = 0.169004726639267902826583426598550f64
+    wgk[5usize] = 0.190350578064785409913256402421014f64
+    wgk[6usize] = 0.204432940075298892414161999234649f64
+    wgk[7usize] = 0.209482141084727828012999174891714f64
+    wg[0usize] = 0.129484966168869693270611432679082f64
+    wg[1usize] = 0.279705391489276667901467771423780f64
+    wg[2usize] = 0.381830050505118944950369775488975f64
+    wg[3usize] = 0.417959183673469387755102040816327f64
+    var p: [1]f64 = zero
+    var fv: [15]f64 = zero
+    p[0usize] = c[0usize]
+    let fc = integrand(id, 1usize, p[0usize..1usize])
+    fv[7usize] = fc
+    var rk = wgk[7usize] * fc
+    var rg = wg[3usize] * fc
+    var ra = wgk[7usize] * math.abs[f64](fc)
+    var j = 0usize
+    while j < 7usize {
+        p[0usize] = c[0usize] - hw[0usize] * xgk[j]
+        let u = integrand(id, 1usize, p[0usize..1usize])
+        p[0usize] = c[0usize] + hw[0usize] * xgk[j]
+        let v = integrand(id, 1usize, p[0usize..1usize])
+        fv[j] = u
+        fv[14usize - j] = v
+        rk += wgk[j] * (u + v)
+        ra += wgk[j] * (math.abs[f64](u) + math.abs[f64](v))
+        if j % 2usize == 1usize { rg += wg[j / 2usize] * (u + v) }
+        j += 1usize
+    }
+    let rmean = rk / 2.0f64
+    var ras = wgk[7usize] * math.abs[f64](fc - rmean)
+    j = 0usize
+    while j < 7usize {
+        ras += wgk[j] * (math.abs[f64](fv[j] - rmean) + math.abs[f64](fv[14usize - j] - rmean))
+        j += 1usize
+    }
+    let ahw = math.abs[f64](hw[0usize])
+    var er = math.abs[f64]((rk - rg) * hw[0usize])
+    ras *= ahw
+    ra *= ahw
+    if ras != 0.0f64 && er != 0.0f64 {
+        var t = math.pow[f64](200.0f64 * er / ras, 1.5f64)
+        if t > 1.0f64 { t = 1.0f64 }
+        er = ras * t
+    }
+    let eps = 2.220446049250313e-16f64
+    if ra > 2.2250738585072014e-308f64 / (50.0f64 * eps) {
+        let lo = eps * 50.0f64 * ra
+        if lo > er { er = lo }
+    }
+    out[0usize] = rk * hw[0usize]
+    out[1usize] = er
+    out[2usize] = 0.0f64
+}
+
+fn rule_eval(id: usize, d: usize, c: []const f64, hw: []const f64, out: []f64) {
+    if d == 1usize {
+        gk15_rule(id, c, hw, out)
+        ret
+    }
+    gm_rule(id, d, c, hw, out)
+}
+
+// hcubature for the fixed integrand `id` over the box lo..hi (1 to 7 dimensions; one dimension uses the Gauss-Kronrod 7-15 rule, QUADPACK's error formula): the box is split along the dimension of the largest fourth difference of the region with the largest error,
 // until the summed error is within tol * |integral| or max_eval evaluations are spent; out = (integral, error, evaluations)
 fn hcubature_gm(a: *mem.Arena, id: usize, d: usize, lo: []const f64, hi: []const f64, tol: f64, max_eval: usize, out: []f64) -> err {
     var npts = 1usize + 4usize * d + 2usize * d * (d - 1usize)
     npts += 1usize << d
+    if d == 1usize { npts = 15usize }
     let cap = 2usize + max_eval / npts
     let (cc, e1) = mem.alloc[f64](a, cap * d)
     let (hh, e2) = mem.alloc[f64](a, cap * d)
@@ -298,7 +379,7 @@ fn hcubature_gm(a: *mem.Arena, id: usize, d: usize, lo: []const f64, hi: []const
         hh[i] = (hi[i] - lo[i]) / 2.0f64
         i += 1usize
     }
-    gm_rule(id, d, cc[0usize..d], hh[0usize..d], r[0usize..3usize])
+    rule_eval(id, d, cc[0usize..d], hh[0usize..d], r[0usize..3usize])
     vv[0usize] = r[0usize]
     er[0usize] = r[1usize]
     sd[0usize] = usize(r[2usize])
@@ -341,11 +422,11 @@ fn hcubature_gm(a: *mem.Arena, id: usize, d: usize, lo: []const f64, hi: []const
         }
         cc[k * d + dim] = ch[dim] - hw2[dim]
         cc[n * d + dim] = ch[dim] + hw2[dim]
-        gm_rule(id, d, cc[k * d..k * d + d], hh[k * d..k * d + d], r[0usize..3usize])
+        rule_eval(id, d, cc[k * d..k * d + d], hh[k * d..k * d + d], r[0usize..3usize])
         vv[k] = r[0usize]
         er[k] = r[1usize]
         sd[k] = usize(r[2usize])
-        gm_rule(id, d, cc[n * d..n * d + d], hh[n * d..n * d + d], r[0usize..3usize])
+        rule_eval(id, d, cc[n * d..n * d + d], hh[n * d..n * d + d], r[0usize..3usize])
         vv[n] = r[0usize]
         er[n] = r[1usize]
         sd[n] = usize(r[2usize])
