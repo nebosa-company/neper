@@ -15,4 +15,13 @@ for (rep in 1:30) {
   r <- rhg(X, paste0("v", 1:cc))$prob_resp
   for (i in sample(n, min(n, 4))) cases[[length(cases) + 1]] <- case("rh", c(n, cc, i, status, as.vector(t(sel))), r[i], rel = 1e-12, abs = 1e-12)
 }
+# "rs" args (n, c, i, status[n], sel[n * c] row-major, stratum[n]): rhg_strata prob_resp of unit (ID) i
+for (rep in 1:30) {
+  n <- sample(10:30, 1); cc <- 2; nst <- sample(2:3, 1)
+  sel <- matrix(sample(1:3, n * cc, TRUE), n, cc, dimnames = list(NULL, paste0("v", 1:cc))); status <- rbinom(n, 1, 0.7); stv <- sample(1:nst, n, TRUE)
+  X <- data.frame(ID_unit = 1:n, Stratum = stv, status = status, sel)
+  r <- tryCatch(rhg_strata(X, paste0("v", 1:cc)), error = function(e) NULL)
+  if (is.null(r) || nrow(r) != n) next
+  for (i in sample(n, min(n, 4))) cases[[length(cases) + 1]] <- case("rs", c(n, cc, i, status, as.vector(t(sel)), stv), r$prob_resp[r$ID_unit == i][1], rel = 1e-12, abs = 1e-12)
+}
 emit("sampling_hr", "sampling", list(cases))

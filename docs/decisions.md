@@ -50821,3 +50821,6 @@ activeSet(isomat, "Chebyshev") is kind 9: each block takes the weighted mid-rang
 
 ## D7452 — sampling Hajekstrata and rhg
 `hajek_strata` is Hajekstrata (each stratum's Hajek mean times its population size, summed; the mean divides by the total size) and `rhg_prob` is rhg's prob_resp (the respondent share among units with equal selection values, zero for nonrespondents); equal to sampling on 30 stratified samples and 30 response-homogeneity samples (rhg with one selection column fails in R itself, and three build a nested expand.grid that fails, so two columns are the testable shape). Open for L508: the cube method, strata and cluster with several variables, rhg_strata and the other variance estimators.
+
+## D7453 — sampling rhg_strata
+rhg_strata is rhg inside each stratum, so its response probability is `rhg_prob` with the stratum as one more column to match on; equal to sampling on 30 stratified samples (matched by ID_unit, since R returns the rows grouped by stratum). Open for L508: the cube method, strata and cluster with several variables.

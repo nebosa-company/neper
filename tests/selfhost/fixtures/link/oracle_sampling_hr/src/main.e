@@ -20,6 +20,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let i = usize(z[2usize]) - 1usize
     let (prob, e) = mem.alloc[f64](a, n)
     if e != ok { ret nan }
+    if str.eq(c.name, "rs") {
+        // within a stratum, rhg on the selection columns: the stratum is one more column to match on
+        let (sel2, e2) = mem.alloc[f64](a, n * (cc + 1usize))
+        if e2 != ok { ret nan }
+        var u = 0usize
+        while u < n {
+            var k = 0usize
+            while k < cc {
+                sel2[u * (cc + 1usize) + k] = z[3usize + n + u * cc + k]
+                k += 1usize
+            }
+            sel2[u * (cc + 1usize) + cc] = z[3usize + n + n * cc + u]
+            u += 1usize
+        }
+        sp.rhg_prob(z[3usize..3usize + n], sel2, cc + 1usize, prob)
+        ret prob[i]
+    }
     sp.rhg_prob(z[3usize..3usize + n], z[3usize + n..3usize + n + n * cc], cc, prob)
     ret prob[i]
 }
