@@ -50620,3 +50620,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `gamlssdist.psep` integrates `dsep` over (-Inf, q] with the QUADPACK `qagi` port at `integrate()`'s defaults (tolerance eps^0.25, 100 subdivisions), as the package does.
 
 **Result.** `oracle_gamlss_dpo` (810 cases, 30 new) equals gamlss.dist on Windows to 1e-7. Linux pending. L464 stays partial: SEP quantile (the package's golden-section search on the squared distance), SI, MN3-5, ST3C, the remaining random-number generators, moments.
+
+## D7351 — gamlss.dist: qSEP
+
+**Decision.** `gamlssdist.qsep` repeats the package's golden-section search (ratio 0.61803399, relative tolerance 1e-6) of (pSEP(q) - p)^2 on (mu - 5 sigma, mu + 5 sigma), so it follows the same bracket updates and stops at the same iterate.
+
+**Result.** `oracle_gamlss_dpo` (840 cases, 30 new) equals gamlss.dist on Windows to 1e-6. Linux pending. L464 stays partial: SI, MN3-5, ST3C, the remaining random-number generators, moments.

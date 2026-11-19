@@ -65,5 +65,6 @@ for (rep in 1:30) {
 for (rep in 1:30) {
   mu <- rnorm(1, 0, 2); sg <- runif(1, 0.4, 2); nu <- rnorm(1, 0, 1.5); tau <- runif(1, 0.8, 4); x <- rnorm(1, mu, sg)
   add("dp", c(21, mu, sg, x, nu, tau), pSEP(x, mu = mu, sigma = sg, nu = nu, tau = tau), 1e-7, 1e-12)
+  pr <- runif(1, 0.05, 0.95); add("dp", c(22, mu, sg, pr, nu, tau), suppressWarnings(qSEP(pr, mu = mu, sigma = sg, nu = nu, tau = tau)), 1e-6, 1e-9)
 }
 emit("gamlss_dpo", "gamlss.dist", list(cases))

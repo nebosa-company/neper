@@ -2398,3 +2398,49 @@ fn psep(a: *mem.Arena, q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if e != ok { ret 0.0f64 / 0.0f64 }
     ret r.result
 }
+
+type SepQ = struct { a: *mem.Arena, mu: f64, sigma: f64, nu: f64, tau: f64, p: f64 }
+
+fn sep_fq(c: *SepQ, q: f64) -> f64 {
+    let np = psep(c.a, q, c.mu, c.sigma, c.nu, c.tau)
+    ret (np - c.p) * (np - c.p)
+}
+
+// qSEP as the package writes it: a golden-section search (ratio 0.61803399, relative tolerance 1e-6) of the squared distance between pSEP and p on (mu - 5 sigma, mu + 5 sigma)
+fn qsep(a: *mem.Arena, p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var c = SepQ { a: a, mu: mu, sigma: sigma, nu: nu, tau: tau, p: p }
+    let tol = 1.0e-6f64
+    let r = 0.61803399f64
+    var lo = mu - 5.0f64 * sigma
+    var up = mu + 5.0f64 * sigma
+    let b = r * lo + (1.0f64 - r) * up
+    var val1 = b - (1.0f64 - r) * (b - lo)
+    var val2 = b
+    if up - b > b - lo {
+        val1 = b
+        val2 = b + (1.0f64 - r) * (up - b)
+    }
+    var f1 = sep_fq(&c, val1)
+    var f2 = sep_fq(&c, val2)
+    var w1 = true
+    while w1 {
+        if f2 < f1 {
+            lo = val1
+            val1 = val2
+            val2 = r * val1 + (1.0f64 - r) * up
+            f1 = f2
+            f2 = sep_fq(&c, val2)
+        } else {
+            up = val2
+            val2 = val1
+            val1 = r * val2 + (1.0f64 - r) * lo
+            f2 = f1
+            f1 = sep_fq(&c, val1)
+        }
+        w1 = math.abs[f64](up - lo) > tol * (math.abs[f64](val1) + math.abs[f64](val2))
+    }
+    if f1 < f2 { ret val1 }
+    ret val2
+}
