@@ -1,8 +1,140 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. The agent-tooling rows T108, T054, T078, T109, T110, T080, T081, T089, T114, T111, T112 and T062 stand first (D7719), because every later row is built by agents that pay for the gaps they close. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
+    {
+      "id": "T108",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 864,
+      "title": "One entry point for the current compiler: scripts/neper resolves the binary and fills root, arch and OS",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: scripts/neper (shell and PowerShell) picks the host's current compiler, rebuilding it when a file under src/ is newer, with the logic scripts/check-fixture.sh already has; it supplies TOOLCHAIN_ROOT, ARCH, OS and --json so that `scripts/neper context-file FILE --symbol m.f` runs as written; the card and the skill show that exact line; scripts/check_agent_routes.py runs one query through it. Size S. Checked open: no wrapper under scripts/ and no neper on PATH; about 75 neper-*.exe files under build/windows; neper-self.exe dated 2026-11-06 with 14 files under src/ newer on 2026-11-19; the card names the query commands without their four positional arguments. T078 gives the compiler its own short forms; this is the bridge until then and the binary resolver after."
+    },
+    {
+      "id": "T054",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 305,
+      "title": "One shared usage text for --help, -h, help and E-CLI-9999; info.commands lists every dispatched command",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit; not previously a queue row. Acceptance: `neper --help`, `-h` and `help` print the same text the two E-CLI-9999 sites use, naming all dispatched commands, and `info.commands` matches. A conformance check fails if the three disagree with the dispatcher. Size S. Checked open: grep '\"--help\"' in src/main.e: none; src/main.e:1115 usage names only tokens|parse|fmt-file|info; no work-done record. The 2026-11-12 compiler review adds to the acceptance: `scripts/check_agent_routes.py` gains a check that every dispatched command is in `info`; a tools golden pins the capabilities stream. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T078",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 435,
+      "title": "Query commands take flags by name and have short forms",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a tools conformance case runs `context-file` with `--symbol` before and after `--json` and gets identical streams; an unknown flag exits 2 with E-CLI naming it; `neper context --symbol m.f` equals the long form. Card re-rendered, with `docs/llm-neper-card.src.md:189` (\"past 256 locals silently\") corrected to the bootstrap's reported 400. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T109",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 865,
+      "title": "The context budget says what it counts: --budget is records, --bytes is bytes, and the skill asks for bytes",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: the card and tooling.md state the unit of --budget and of --bytes; the skill recommends a --bytes value in place of `--budget 2000`; a tools conformance case pins that a larger --budget never returns fewer records and that --bytes N bounds the stream to within one record. Size S. Checked open: `context-file --module e.mem` returned 16.8 KB with no flag (64 records, 31 omitted), 24.6 KB with --budget 500 (95 records), 2.5 KB with --budget 8 and 2.4 KB with --bytes 2000; the card says only that the three flags page an answer."
+    },
+    {
+      "id": "T110",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 866,
+      "title": "A query subject resolves as the source spells it, and an unknown subject names its nearest matches",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: context-file and uses-file accept the qualifier the operand file binds (`mem.Arena` under `use e.mem`) as well as the full module path, with identical streams; an unknown subject is refused with its own registered code and up to three nearest names from the program's index. Size S. Checked open: `--symbol mem.Arena` is refused and `--symbol e.mem.Arena` answers; the refusal is E-CLI-9999, the subject names no function, type, constant or global of the program, with no fixes and no candidates."
+    },
+    {
+      "id": "T080",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 462,
+      "title": "Bounded, compact answers by default",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: default `uses main.same` is under 8 KB and resumable by cursor; context on `main.dispatch` shows at least 55 body facts; subject `end_line > line`; `--compact` output for `main.same` is under 20 KB for all 503 uses. Schema version bumped and `scripts/validate_stream.py` goldens refreshed. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T081",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 463,
+      "title": "`check --digest`: keep-going text diagnostics with fixes",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the three-error fixture gives three lines under 500 bytes total; output is sorted by path, line, column and stable across `-j 1` and `-j 8`. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T089",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 513,
+      "title": "Many errors per function, no cascades",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: three independent errors in one function give three records; one undefined local used five times gives one; both suites' reject goldens reviewed for count changes. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T114",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 870,
+      "title": "The card lists a standing only where it differs, under a size budget",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: scripts/render_card.py prints a standing table's rows only where they differ from the common value and one line of counts otherwise; the header records the card's byte size and the render fails past a stated budget. Size S. Checked open: the card is 16.2 KB and is read first in every session; its 42 grammar rules all stand at present, and its 15 diagnostic families and 16 commands all at verified."
+    },
+    {
+      "id": "T111",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 867,
+      "title": "Claude Code integration: a project skill and hooks that enforce the agent routes",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: one skill source renders both .opencode/skills/neper/SKILL.md and .claude/skills/neper/SKILL.md; project hooks refuse a shell heredoc or script that carries old/new replacement strings, refuse a whole-file read of docs/decisions.md with a pointer to the digest, and answer a read of a large .e file with the context-file line for it; scripts/check_agent_routes.py checks the Claude skill and the hook file as it checks the OpenCode skill. Size M. Checked open: .claude holds settings.local.json and worktrees only; the skill and the route check cover OpenCode alone (T036), so the rules in AGENTS.md are prose for Claude Code sessions."
+    },
+    {
+      "id": "T112",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 868,
+      "title": "Agent-route adoption is scored on the measured numbers, not on what the docs mention",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: scripts/lang-stats.py writes the adoption measures for a window (context at a landing turn, reads per edit, script share, repeated-code share) in a machine-readable form; T026 and T036 state a target for each and are scored against it; the route check prints the trend. Size S. Checked open: for the 14 days to 2026-11-19 Neper's context at a landing turn was 430 K tokens (Dart 320, Python 198, JS 122), reads per edit 4.5, repeated codes 56.2% and script share 8%; T026 stands at 0.85 on evidence that quotes 515 K from September, and check_agent_routes.py tests only that the routes are written down."
+    },
+    {
+      "id": "T062",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 336,
+      "title": "Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit; not previously a queue row. Acceptance: A Neper binary speaks MCP JSON-RPC over stdio (reusing lib/x/mcp/protocol.e framing) and serves get_symbol_definition, get_build_diagnostics, get_symbol_references and get_ast_subtree from the existing index/check/parse JSONL, with a per-request arena that stays flat across 1000 calls. A conformance test drives it from a scripted client and compares payloads to the CLI output. Size M. Checked open: lib/x/mcp/protocol.e exists but is Appdor table-oriented; no compiler-query MCP binary under tools/ or src/; T032 is the Appdor services/mcp-server only; grep work-done mcp: only L049 builders. The 2026-11-12 compiler review adds to the acceptance: a second query in one session answers in under 50 ms on `src/main.e`. Notes: docs/compiler-hardening-plan.md."
+    },
     {
       "id": "L332",
       "category": "library",
@@ -2589,17 +2721,6 @@
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:363 by the single-list audit; not previously a queue row. Acceptance: `neper pacman init|add|remove|resolve|sync|upgrade|build|run|task|vendor|publish|cache|info` exist with versioned JSON output, shared diagnostics and schema validation. A registry package exporting under a toolchain-reserved `e.*`/`e.algo.*`/`e.ui.*` prefix is rejected and `x.<owner>.*` is accepted. Size L. Checked open: grep 'pacman' in src/main.e: none; no namespace check in src/project.e or resolve.e."
     },
     {
-      "id": "T054",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 305,
-      "title": "One shared usage text for --help, -h, help and E-CLI-9999; info.commands lists every dispatched command",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit; not previously a queue row. Acceptance: `neper --help`, `-h` and `help` print the same text the two E-CLI-9999 sites use, naming all dispatched commands, and `info.commands` matches. A conformance check fails if the three disagree with the dispatcher. Size S. Checked open: grep '\"--help\"' in src/main.e: none; src/main.e:1115 usage names only tokens|parse|fmt-file|info; no work-done record. The 2026-11-12 compiler review adds to the acceptance: `scripts/check_agent_routes.py` gains a check that every dispatched command is in `info`; a tools golden pins the capabilities stream. Notes: docs/compiler-hardening-plan.md."
-    },
-    {
       "id": "T055",
       "category": "tooling",
       "group": "Project tools",
@@ -2928,17 +3049,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/db-perf-plan.md:60 by the single-list audit; not previously a queue row. Acceptance: A call moves an argument already in a register straight to its parameter register and the result straight to its destination register, with the outgoing-slot path kept only for stack args. benchmarks/db/run.py shows the SQLite scan at >=70% of C (now 56-59%) on both hosts, no cell slower, stage 2 = stage 3 fixed point re-baselined. Size L. Checked open: regalloc.e already has crosses_call preference (D1607) but doc records acceptance missed; load_call_arguments path still the rule in src/codegen_x64.e; no queue row mentions call lowering or db scan ratio."
-    },
-    {
-      "id": "T062",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 336,
-      "title": "Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit; not previously a queue row. Acceptance: A Neper binary speaks MCP JSON-RPC over stdio (reusing lib/x/mcp/protocol.e framing) and serves get_symbol_definition, get_build_diagnostics, get_symbol_references and get_ast_subtree from the existing index/check/parse JSONL, with a per-request arena that stays flat across 1000 calls. A conformance test drives it from a scripted client and compares payloads to the CLI output. Size M. Checked open: lib/x/mcp/protocol.e exists but is Appdor table-oriented; no compiler-query MCP binary under tools/ or src/; T032 is the Appdor services/mcp-server only; grep work-done mcp: only L049 builders. The 2026-11-12 compiler review adds to the acceptance: a second query in one session answers in under 50 ms on `src/main.e`. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "T063",
@@ -3843,17 +3953,6 @@
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixture on Windows with the registered module code and the correctly-cased name as the fix. Notes: docs/compiler-hardening-plan.md."
     },
     {
-      "id": "T078",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 435,
-      "title": "Query commands take flags by name and have short forms",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a tools conformance case runs `context-file` with `--symbol` before and after `--json` and gets identical streams; an unknown flag exits 2 with E-CLI naming it; `neper context --symbol m.f` equals the long form. Card re-rendered, with `docs/llm-neper-card.src.md:189` (\"past 256 locals silently\") corrected to the bootstrap's reported 400. Notes: docs/compiler-hardening-plan.md."
-    },
-    {
       "id": "T079",
       "category": "tooling",
       "group": "Tooling",
@@ -4050,28 +4149,6 @@
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: the count is 0 and the suite's goldens are unchanged. Notes: docs/library-hardening-plan.md."
-    },
-    {
-      "id": "T080",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 462,
-      "title": "Bounded, compact answers by default",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: default `uses main.same` is under 8 KB and resumable by cursor; context on `main.dispatch` shows at least 55 body facts; subject `end_line > line`; `--compact` output for `main.same` is under 20 KB for all 503 uses. Schema version bumped and `scripts/validate_stream.py` goldens refreshed. Notes: docs/compiler-hardening-plan.md."
-    },
-    {
-      "id": "T081",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 463,
-      "title": "`check --digest`: keep-going text diagnostics with fixes",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the three-error fixture gives three lines under 500 bytes total; output is sorted by path, line, column and stable across `-j 1` and `-j 8`. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "T082",
@@ -4591,17 +4668,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: adding a helper to a source module needs no docs edit; the pending fences total the 102 declarations `library-fixtures.json` lists. Notes: docs/library-hardening-plan.md."
     },
     {
-      "id": "T089",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 513,
-      "title": "Many errors per function, no cascades",
-      "score": 0,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: three independent errors in one function give three records; one undefined local used five times gives one; both suites' reject goldens reviewed for count changes. Notes: docs/compiler-hardening-plan.md."
-    },
-    {
       "id": "C330",
       "category": "compiler",
       "group": "OS targets",
@@ -5018,6 +5084,28 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-19 from the improvement review (D7718). Acceptance: one decision row for each of the two; if in scope, rows are opened (finite-element assembly for Poisson and linear elasticity on triangle and tetrahedral meshes equal to scikit-fem, finite differences for heat and wave equations; a state-vector simulator with a gate set and measurement equal to Qiskit Aer, running the algorithms docs/algos.md section 16 skips), and if out of scope the reason is recorded and docs/algos.md keeps its skips. Size S for the decision. Checked open: docs/algos.md marks FEM, FDTD and lattice Boltzmann as domain simulation outside a general library and 24 quantum entries as needing hardware or a simulator; D7717 left both undecided."
+    },
+    {
+      "id": "T113",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 869,
+      "title": "llms.txt and the site link to a branch the repository has",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: every repository link in docs/llms.txt, docs/llms-full.txt and the site pages names the default branch from one constant; the site render fails when a linked path is absent from the tree. Size S. Checked open: 4 links in llms.txt and 5 in llms-full.txt use /blob/main/ (grammar, module APIs, decisions, diagnostics), while the remote's branches are baseline-ci, master, unused-debug, unused-imports-ci and wasm-tools-move; 3 files under docs carry such links."
+    },
+    {
+      "id": "L546",
+      "category": "library",
+      "group": "Drivers",
+      "order": 871,
+      "title": "An LLM client library lifted out of the NeperOS AI app",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened 2026-11-19 from the tooling and LLM-integration review (D7719). Acceptance: a module under lib/x builds chat requests with system text, messages and tool definitions, reads a streamed reply through e.fmt.sse, carries a tool call and its result through one round trip, and holds a provider table (Anthropic, OpenAI-compatible endpoints, OpenRouter) with keys that are never logged; retries use e.resilience; a fixture replays recorded exchanges from a local server, with no live network; neperos/src/ai.e is rebuilt on it. Size M. Checked open: neperos/src/ai.e is 79 KB and holds the providers, models, tool messages and request body itself; no anthropic, openai or openrouter in lib; C171 is the app's own remainder."
     }
   ]
 }

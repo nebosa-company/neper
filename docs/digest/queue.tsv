@@ -1,4 +1,16 @@
 id	category	score	evidence_bytes	title	status
+T108	tooling	0	853	One entry point for the current compiler: scripts/neper resolves the binary and fills root, arch and OS	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T054	tooling	0	691	One shared usage text for --help, -h, help and E-CLI-9999; info.commands lists every dispatched command	Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit;
+T078	tooling	0	435	Query commands take flags by name and have short forms	Opened from the 2026-11-12 compiler review.
+T109	tooling	0	612	The context budget says what it counts: --budget is records, --bytes is bytes, and the skill asks for bytes	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T110	tooling	0	579	A query subject resolves as the source spells it, and an unknown subject names its nearest matches	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T080	tooling	0	385	Bounded, compact answers by default	Opened from the 2026-11-12 compiler review.
+T081	tooling	0	236	`check --digest`: keep-going text diagnostics with fixes	Opened from the 2026-11-12 compiler review.
+T089	tooling	0	259	Many errors per function, no cascades	Opened from the 2026-11-12 compiler review.
+T114	tooling	0	483	The card lists a standing only where it differs, under a size budget	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T111	tooling	0	718	Claude Code integration: a project skill and hooks that enforce the agent routes	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T112	tooling	0	686	Agent-route adoption is scored on the measured numbers, not on what the docs mention	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+T062	tooling	0	875	Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools	Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit;
 L332	library	0.55	881	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
 L358	library	0.2	536	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
 L380	library	0.35	1159	tm and tidytext: text mining	Partial (D6618).
@@ -234,7 +246,6 @@ T052	tooling	0	450	`neper dap`: framed-JSON debug adapter plus VS Code and Zed e
 C229	compiler	0	544	Optimiser depth: inlining heuristics, load/store forwarding and instruction scheduling	Opened 2026-11-03 from docs/roadmap.md:194 by the single-list audit;
 C230	compiler	0	463	Vector register class: pass Vec/Mask in xmm/ymm per spec section 5	Opened 2026-11-03 from docs/roadmap.md:196 by the single-list audit;
 T053	tooling	0	516	neper pacman CLI group and e.* namespace-reservation enforcement	Opened 2026-11-03 from docs/roadmap.md:363 by the single-list audit;
-T054	tooling	0	691	One shared usage text for --help, -h, help and E-CLI-9999; info.commands lists every dispatched command	Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit;
 T055	tooling	0	474	`neper eval EXPR`: fold a const initialiser and print it (comptime interpreter, no codegen)	Opened 2026-11-03 from docs/roadmap.md:440 by the single-list audit;
 T056	tooling	0	502	Rename the prose name for the standard library to `e.lib` across the docs	Opened 2026-11-03 from docs/roadmap.md:444 by the single-list audit;
 C231	compiler	0	540	Windows resources part 1: link a precompiled .res into a .rsrc section; os.resource(kind,name)	Opened 2026-11-03 from docs/roadmap.md:450 by the single-list audit;
@@ -265,7 +276,6 @@ L202	library	0	601	Build the unbuilt TcxGrid parity grids on e.ui.datagrid (pric
 T061	tooling	0	530	Promote e.ui/e.gfx from experimental: multi-window keyboard-accessible app workload on three desktops	Opened 2026-11-03 from docs/ui-framework.md:283 by the single-list audit;
 C232	compiler	0	669	GP-09: lower simd.shuffle/interleave to punpck/pshufb so the Base16 codec stops using scalar lane loops	Opened 2026-11-03 from docs/gp-performance.md:29 by the single-list audit;
 C233	compiler	0	674	Direct argument-to-register call lowering in codegen_x64 (finish db-perf item 1 acceptance)	Opened 2026-11-03 from docs/db-perf-plan.md:60 by the single-list audit;
-T062	tooling	0	875	Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools	Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit;
 T063	tooling	0	486	Add --no-trivia to `neper tokens` and `neper parse` (parser-core trivia suppression)	Opened 2026-11-03 from docs/llm-mcp-server.md:68 by the single-list audit;
 T064	tooling	0	733	H33: per-component token-pressure report over whole verified agent trajectories	Opened 2026-11-03 from docs/post-m2-llm-hardening.md:1289 by the single-list audit;
 T065	tooling	0	720	H43: performance-regression obligations with pre-registered statistics bound into receipts	Opened 2026-11-03 from docs/post-m2-llm-hardening.md:1549 by the single-list audit;
@@ -348,7 +358,6 @@ C313	compiler	0	169	Valid large literals are rejected as syntax errors	Opened fr
 C315	compiler	0	196	Type memo key ignores `in_shared` and `foreign`	Opened from the 2026-11-12 compiler review.
 C316	compiler	0	221	Identical-function folding trusts a 64-bit hash	Opened from the 2026-11-12 compiler review.
 C322	compiler	0	194	Module path segments are case-checked	Opened from the 2026-11-12 compiler review.
-T078	tooling	0	435	Query commands take flags by name and have short forms	Opened from the 2026-11-12 compiler review.
 T079	tooling	0	235	Short forms forward every flag	Opened from the 2026-11-12 compiler review.
 T085	tooling	0	187	Every checker diagnostic kind has a registered code	Opened from the 2026-11-12 compiler review.
 T088	tooling	0	165	Float literals are range-checked by the checker	Opened from the 2026-11-12 compiler review.
@@ -367,8 +376,6 @@ L239	library	0	521	WAL replay swallows a failed delete	Opened from the 2026-11-1
 L247	library	0	156	`partial` means partial	Opened from the 2026-11-13 library review.
 L248	library	0	226	Every source module is in the plan	Opened from the 2026-11-13 library review.
 L260	library	0	147	Comments carry no history	Opened from the 2026-11-13 library review.
-T080	tooling	0	385	Bounded, compact answers by default	Opened from the 2026-11-12 compiler review.
-T081	tooling	0	236	`check --digest`: keep-going text diagnostics with fixes	Opened from the 2026-11-12 compiler review.
 T082	tooling	0	221	`neper fix`: apply a diagnostic's own fixes	Opened from the 2026-11-12 compiler review.
 T083	tooling	0	178	`neper explain CODE`	Opened from the 2026-11-12 compiler review.
 T084	tooling	0	232	`neper verify`: the whole repair loop in one call	Opened from the 2026-11-12 compiler review.
@@ -416,7 +423,6 @@ L257	library	0	251	Sheet support code leaves the library	Opened from the 2026-11
 L258	library	0	234	Split `ui/control.e` by platform look	Opened from the 2026-11-13 library review.
 L259	library	0	165	Split the other large UI files	Opened from the 2026-11-13 library review.
 L263	library	0	225	The catalogue is generated, not synced	Opened from the 2026-11-13 library review.
-T089	tooling	0	259	Many errors per function, no cascades	Opened from the 2026-11-12 compiler review.
 C330	compiler	0	246	Width axis for 32-bit targets	Opened from the 2026-11-12 compiler review.
 L287	library	0	513	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
 L283	library	0	538	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
@@ -455,3 +461,5 @@ T105	tooling	0	482	Generated task files stop churning: untracked on purpose, or 
 T106	tooling	0	502	Linux verification batch: the rows marked Linux pending are run and carry their platforms as a field	Opened 2026-11-19 from the improvement review (D7718).
 T107	tooling	0	598	Reconcile local master with origin and restore a push cadence	Opened 2026-11-19 from the improvement review (D7718).
 L545	library	0	732	Scope decision: a PDE and finite-element kernel and a quantum state-vector simulator	Opened 2026-11-19 from the improvement review (D7718).
+T113	tooling	0	542	llms.txt and the site link to a branch the repository has	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
+L546	library	0	724	An LLM client library lifted out of the NeperOS AI app	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
