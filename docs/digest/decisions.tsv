@@ -4551,4 +4551,5 @@ D7650	455	rugarch: iGARCH(1,1)
 D7651	761	unmarked: single-season occupancy
 D7652	898	unmarked: N-mixture abundance
 D7653	1040	mirt: two-parameter logistic model
-D7654	776	mirt: Rasch with a free latent variance
+D7654	825	mirt: Rasch with a free latent variance
+D7655	1069	mirt: graded response model

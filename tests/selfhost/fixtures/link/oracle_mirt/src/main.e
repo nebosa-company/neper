@@ -11,6 +11,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[0usize])
     let j = usize(z[1usize])
+    if c.name.len == 6usize {
+        let kc = usize(z[2usize])
+        let (o3, e3) = mem.alloc[f64](a, j * kc + 1usize)
+        if e3 != ok { ret 0.0f64 / 0.0f64 }
+        if !mi.graded(a, z[3usize..3usize + n * j], n, j, kc, o3) { ret 0.0f64 / 0.0f64 }
+        ret o3[usize(z[3usize + n * j])]
+    }
     if c.name.len == 5usize {
         let (o2, e2) = mem.alloc[f64](a, j + 2usize)
         if e2 != ok { ret 0.0f64 / 0.0f64 }

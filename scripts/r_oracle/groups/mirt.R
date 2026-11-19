@@ -21,4 +21,16 @@ for (rep in 1:4) {
   cf <- coef(f, simplify = TRUE); v <- c(cf$items[, "d"], cf$cov[1, 1], as.numeric(logLik(f)))
   for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("rasch", c(N, J, as.vector(t(Y)), k - 1), as.numeric(v[k]), rel = if (k == length(v)) 1e-6 else 1e-2, abs = if (k == length(v)) 1e-4 else 5e-3)
 }
+# itemtype = "graded", K ordered categories coded 0 .. K - 1: "graded" args (n, j, K, y[n * j], k) k item * K the slope and item * K + 1 .. item * K + K - 1 the intercepts of the item, j K the log-likelihood
+for (rep in 1:6) {
+  N <- sample(250:350, 1); J <- 3; K <- 3; th <- rnorm(N); a <- runif(J, 0.9, 1.8)
+  Y <- sapply(1:J, function(j) { d <- sort(rnorm(K - 1, 0, 1), decreasing = TRUE); pr <- plogis(outer(a[j] * th, d, "+")); u <- runif(N); rowSums(u < pr) }); colnames(Y) <- paste0("i", 1:J)
+  if (any(apply(Y, 2, function(v) length(unique(v))) < K)) next
+  f <- tryCatch(mirt(Y, 1, itemtype = "graded", verbose = FALSE, TOL = 1e-9), error = function(e) NULL)
+  if (is.null(f) || !f@OptimInfo$converged) next
+  cf <- coef(f, simplify = TRUE, IRTpars = FALSE)$items
+  if (any(abs(cf[, 1]) > 4)) next
+  v <- c(as.vector(t(cf[, 1:K])), as.numeric(logLik(f)))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("graded", c(N, J, K, as.vector(t(Y)), k - 1), as.numeric(v[k]), rel = if (k == length(v)) 1e-6 else 2e-2, abs = if (k == length(v)) 1e-4 else 1e-2)
+}
 emit("mirt", "mirt", list(cases))
