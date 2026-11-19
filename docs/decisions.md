@@ -51220,3 +51220,6 @@ epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude
 
 ## D7575 — actuar ruin with phase-type claims
 `ruin_ph_exp` gives the Cramer-Lundberg ruin probability for phase-type claims (prob, sub-intensity T) and exponential waiting times: psi(u) = pi+ exp((T + t pi+) u) 1 with pi+ = (lambda / c) pi (-T)^(-1) and t = -T 1, through the matrix exponential. Probed against ruin(claims = "phase-type") before porting, then equal to actuar on 30 draws with the net profit condition holding (27 values added to oracle_actuar, 5335 in all). Phase-type waiting times, Erlang mixtures and the other wait/claims pairs stay open.
+
+## D7576 — actuar zero-modified generators are not an inversion
+Probed rzmpois, rzmnbinom and rzmgeom against the quantile at the uniform stream: rzmpois(10, 1.56, 0.108) under set.seed(76031) returns 1 0 0 1 1 1 3 2 5 3 while qzmpois at the same uniforms returns 1 1 1 1 1 1 1 0 3 1, and the zeros fall at uniforms (0.111, 0.170) above p0, so the indicator and the count come from different draws and the generator is not a plain inversion. Not ported; rztgeom is in the same position. rztpois, rztnbinom, rztbinom and rlogarithmic are inversions (D7574).
