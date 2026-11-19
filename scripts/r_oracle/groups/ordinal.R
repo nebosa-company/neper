@@ -32,4 +32,18 @@ for (rep in 1:16) {
   a <- c(n, p, K, lk, y, as.vector(t(x)))
   add("ll", a, as.numeric(logLik(f))); add("theta", a, sum(f$alpha * seq_along(f$alpha))); add("beta", a, sum(f$beta * seq_along(f$beta)))
 }
+# threshold = "equidistant" (links 0 .. 2, K >= 4): "eqll", "eqa" (threshold.1), "eqb" (spacing), "eqbeta" (position-weighted coefficients), args as "ll"
+set.seed(20262481)
+for (rep in 1:18) {
+  n <- sample(150:300, 1); p <- sample(1:3, 1); K <- sample(4:6, 1); lk <- (rep - 1) %% 3
+  x <- matrix(rnorm(n * p), n); b <- rnorm(p) * 0.7; th <- sort(rnorm(K - 1, 0, 0.3)) + seq(-1, 1, length.out = K - 1) * 1.2
+  eta <- as.vector(x %*% b); u <- if (lk == 0) rlogis(n) else if (lk == 1) rnorm(n) else log(-log(runif(n)))
+  y <- findInterval(eta + u, th)
+  if (length(unique(y)) < K) next
+  d <- as.data.frame(x); names(d) <- paste0("v", seq_len(p)); d$y <- factor(y, ordered = TRUE)
+  f <- tryCatch(clm(y ~ ., data = d, link = links[lk + 1], threshold = "equidistant", control = clm.control(gradTol = 1e-10, maxIter = 500)), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, p, K, lk, y, as.vector(t(x)))
+  add("eqll", a, as.numeric(logLik(f))); add("eqa", a, unname(f$alpha[1])); add("eqb", a, unname(f$alpha[2])); add("eqbeta", a, sum(f$beta * seq_along(f$beta)))
+}
 emit("ordinal", "ordinal", list(cases))

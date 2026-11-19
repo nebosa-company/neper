@@ -4362,4 +4362,5 @@ D7505	921	systemfit 3SLS with linear restrictions
 D7374	883	lavaan: a regression between two latent variables
 D7506	960	systemfit 2SLS with linear restrictions
 D7507	787	L461 closed
-D7508	847	ordinal clm with the loglog link; cauchit left
+D7508	848	ordinal clm with the loglog link; cauchit left
+D7509	710	ordinal clm with equidistant thresholds

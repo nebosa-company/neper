@@ -201,3 +201,166 @@ fn clm(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: 
     }
     ret ll
 }
+
+// clm(threshold = "equidistant"): the thresholds are theta_j = a + j b (j = 0 .. K - 2), so the parameters are (a, b, beta); Newton with step halving on the exact Hessian reduced by the chain rule (gradient T' g, Hessian T' H T with theta = T (a, b)).
+// par receives the full (theta, beta) vector; the answer is the log-likelihood. K must be at least 3.
+fn eq_tcol(c: usize, r: usize, nt: usize) -> f64 {
+    if r < nt {
+        if c == 0usize { ret 1.0f64 }
+        if c == 1usize { ret f64(r) }
+        ret 0.0f64
+    }
+    if c >= 2usize && c - 2usize == r - nt { ret 1.0f64 }
+    ret 0.0f64
+}
+
+fn clm_equi(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link: usize, par: []f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let q = nk - 1usize + p
+    let qr = 2usize + p
+    let nt = nk - 1usize
+    let (gr, e1) = mem.alloc[f64](a, q)
+    let (h, e2) = mem.alloc[f64](a, q * q)
+    let (gred, e3) = mem.alloc[f64](a, qr)
+    let (hred, e4) = mem.alloc[f64](a, qr * qr)
+    let (red, e5) = mem.alloc[f64](a, qr)
+    let (trial, e6) = mem.alloc[f64](a, qr)
+    let (tfull, e7) = mem.alloc[f64](a, q)
+    let (cum, e8) = mem.alloc[f64](a, nk)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret nan }
+    var k = 0usize
+    while k < nk {
+        cum[k] = 0.0f64
+        k += 1usize
+    }
+    var t = 0usize
+    while t < n {
+        cum[usize(cls[t])] += 1.0f64
+        t += 1usize
+    }
+    var run = 0.0f64
+    var first = 0.0f64
+    var last = 0.0f64
+    k = 0usize
+    while k < nt {
+        run += cum[k]
+        let pq = run / f64(n)
+        var v = 0.0f64
+        if link == 0usize { v = math.log[f64](pq / (1.0f64 - pq)) }
+        if link == 1usize { v = dist.qnorm(pq, 0.0f64, 1.0f64, true, false) }
+        if link == 2usize { v = math.log[f64](0.0f64 - math.log[f64](1.0f64 - pq)) }
+        if link == 3usize { v = 0.0f64 - math.log[f64](0.0f64 - math.log[f64](pq)) }
+        if k == 0usize { first = v }
+        last = v
+        k += 1usize
+    }
+    red[0usize] = first
+    red[1usize] = (last - first) / f64(nt - 1usize)
+    var j = 0usize
+    while j < p {
+        red[2usize + j] = 0.0f64
+        j += 1usize
+    }
+    var ll = 0.0f64
+    var it = 0usize
+    while it < 200usize {
+        k = 0usize
+        while k < nt {
+            tfull[k] = red[0usize] + f64(k) * red[1usize]
+            k += 1usize
+        }
+        j = 0usize
+        while j < p {
+            tfull[nt + j] = red[2usize + j]
+            j += 1usize
+        }
+        ll = loglik(x, cls, n, p, nk, link, tfull, gr, h, true)
+        if ll != ll { ret nan }
+        var c = 0usize
+        while c < qr {
+            var s = 0.0f64
+            var r = 0usize
+            while r < q {
+                s += eq_tcol(c, r, nt) * gr[r]
+                r += 1usize
+            }
+            gred[c] = s
+            var d = 0usize
+            while d < qr {
+                var hs = 0.0f64
+                var r2 = 0usize
+                while r2 < q {
+                    let t2 = eq_tcol(c, r2, nt)
+                    if t2 != 0.0f64 {
+                        var r3 = 0usize
+                        while r3 < q {
+                            hs += t2 * h[r2 * q + r3] * eq_tcol(d, r3, nt)
+                            r3 += 1usize
+                        }
+                    }
+                    r2 += 1usize
+                }
+                hred[c * qr + d] = hs
+                d += 1usize
+            }
+            c += 1usize
+        }
+        let (inv, ie) = gp.invert(a, hred, qr)
+        if ie != ok { ret nan }
+        var scale = 1.0f64
+        var moved = false
+        var tries = 0usize
+        while tries < 40usize {
+            var i = 0usize
+            while i < qr {
+                var dd = 0.0f64
+                var l = 0usize
+                while l < qr {
+                    dd += inv[i * qr + l] * gred[l]
+                    l += 1usize
+                }
+                trial[i] = red[i] - scale * dd
+                i += 1usize
+            }
+            k = 0usize
+            while k < nt {
+                tfull[k] = trial[0usize] + f64(k) * trial[1usize]
+                k += 1usize
+            }
+            j = 0usize
+            while j < p {
+                tfull[nt + j] = trial[2usize + j]
+                j += 1usize
+            }
+            let ll2 = loglik(x, cls, n, p, nk, link, tfull, gr, h, false)
+            if ll2 == ll2 && ll2 >= ll - 1.0e-14f64 {
+                i = 0usize
+                while i < qr {
+                    red[i] = trial[i]
+                    i += 1usize
+                }
+                moved = true
+                if math.abs[f64](ll2 - ll) < 1.0e-13f64 {
+                    ll = ll2
+                    it = 1000usize
+                }
+                break
+            }
+            scale = scale / 2.0f64
+            tries += 1usize
+        }
+        if !moved { break }
+        it += 1usize
+    }
+    k = 0usize
+    while k < nt {
+        par[k] = red[0usize] + f64(k) * red[1usize]
+        k += 1usize
+    }
+    j = 0usize
+    while j < p {
+        par[nt + j] = red[2usize + j]
+        j += 1usize
+    }
+    ret ll
+}
