@@ -3,6 +3,7 @@
 // c+_j d_{j+1} with d = F b, F = B^-1 D (zero first and last rows) and the penalty S = D' B^-1 D, B and D the tridiagonal matrices of the natural spline conditions
 // (Wood, Generalized Additive Models, 5.3.1). Values outside the knot range are extrapolated linearly in mgcv and are not covered here.
 
+use e.algo.linalg.lapack_syevr as sy
 use e.math
 use e.mem
 
@@ -633,3 +634,181 @@ fn gam_gcv_select(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const 
 }
 
 
+
+// ---- REML smoothing-parameter selection (gam's method = "REML") for the Gaussian one-smooth gam: with beta the penalised fit, Dp = rss + beta' S_l beta, the scale profiled out as
+// phi = Dp / (n - Mp) (Mp = 1 for the intercept plus the dimension of the null space of S, here q - rank), the criterion is
+// V(rho) = (Dp / phi + (n - Mp) log(2 pi phi) + log|X'X + S_l| - log|S_l|_+) / 2, log|S_l|_+ = rank rho + the sum of the log of the nonzero eigenvalues of S, l = exp(rho).
+// reml_at evaluates it; gam_reml_select minimises it over rho as gam_gcv_select does the GCV score.
+fn logdet_spd(a: *mem.Arena, m: []const f64, p: usize) -> f64 {
+    let (l, e0) = mem.alloc[f64](a, p * p)
+    if e0 != ok { ret 0.0f64 }
+    var i = 0usize
+    while i < p * p {
+        l[i] = 0.0f64
+        i += 1usize
+    }
+    var ld = 0.0f64
+    var j = 0usize
+    while j < p {
+        var d = m[j * p + j]
+        var k = 0usize
+        while k < j {
+            d -= l[j * p + k] * l[j * p + k]
+            k += 1usize
+        }
+        if d <= 0.0f64 { ret 1.0e300f64 }
+        let dj = math.sqrt[f64](d)
+        l[j * p + j] = dj
+        ld += 2.0f64 * math.log[f64](dj)
+        i = j + 1usize
+        while i < p {
+            var v = m[i * p + j]
+            k = 0usize
+            while k < j {
+                v -= l[i * p + k] * l[j * p + k]
+                k += 1usize
+            }
+            l[i * p + j] = v / dj
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ld
+}
+
+// the log of the nonzero eigenvalues of S (q by q) summed, and their count
+fn pseudo_logdet(a: *mem.Arena, s: []const f64, q: usize) -> (f64, usize, err) {
+    let (w, e0) = mem.alloc[f64](a, q)
+    let (z, e1) = mem.alloc[f64](a, q * q)
+    if e0 != ok || e1 != ok { ret (0.0f64, 0usize, mem.Full) }
+    let es = sy.dsyevr_all(a, s, q, w, z)
+    if es != ok { ret (0.0f64, 0usize, es) }
+    var mx = 0.0f64
+    var i = 0usize
+    while i < q {
+        if w[i] > mx { mx = w[i] }
+        i += 1usize
+    }
+    var sum = 0.0f64
+    var rank = 0usize
+    i = 0usize
+    while i < q {
+        if w[i] > 1.0e-9f64 * mx {
+            sum += math.log[f64](w[i])
+            rank += 1usize
+        }
+        i += 1usize
+    }
+    ret (sum, rank, ok)
+}
+
+fn reml_at(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const f64, y: []const f64, rho: f64, lds: f64, rank: usize, coef: []f64, fitted: []f64) -> f64 {
+    let p = q + 1usize
+    let sp = math.exp[f64](rho)
+    let (edf, rss, e) = gam_gaussian(a, x, n, q, s, sp, y, coef, fitted)
+    if e != ok { ret 1.0e300f64 }
+    let _ = edf
+    // beta' S_l beta over the smooth coefficients
+    var bsb = 0.0f64
+    var i = 0usize
+    while i < q {
+        var j = 0usize
+        while j < q {
+            bsb += coef[1usize + i] * s[i * q + j] * coef[1usize + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let dp = rss + sp * bsb
+    let mp = f64(1usize + (q - rank))
+    let nf = f64(n)
+    let phi = dp / (nf - mp)
+    // the penalised information X'X + S_l (intercept row and column unpenalised)
+    let (am, e1) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret 1.0e300f64 }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var v = 0.0f64
+            var t = 0usize
+            while t < n {
+                var xr = 1.0f64
+                if r >= 1usize { xr = x[t * q + r - 1usize] }
+                var xc = 1.0f64
+                if c >= 1usize { xc = x[t * q + c - 1usize] }
+                v += xr * xc
+                t += 1usize
+            }
+            if r >= 1usize && c >= 1usize { v += sp * s[(r - 1usize) * q + c - 1usize] }
+            am[r * p + c] = v
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let lda = logdet_spd(a, am, p)
+    let ldsl = f64(rank) * rho + lds
+    ret 0.5f64 * (dp / phi + (nf - mp) * math.log[f64](6.283185307179586f64 * phi) + lda - ldsl)
+}
+
+fn gam_reml_select(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const f64, y: []const f64, coef: []f64, fitted: []f64) -> f64 {
+    let (lds, rank, e0) = pseudo_logdet(a, s, q)
+    if e0 != ok { ret 1.0f64 }
+    var best = 1.0e300f64
+    var bi = 0usize
+    let steps = 100usize
+    var i = 0usize
+    while i <= steps {
+        let rho = 0.0f64 - 25.0f64 + 50.0f64 * f64(i) / f64(steps)
+        let m = mem.mark(a)
+        let v = reml_at(a, x, n, q, s, y, rho, lds, rank, coef, fitted)
+        mem.reset(a, m)
+        if v < best {
+            best = v
+            bi = i
+        }
+        i += 1usize
+    }
+    var lo = 0.0f64 - 25.0f64 + 50.0f64 * f64(bi) / f64(steps) - 0.5f64
+    var hi = lo + 1.0f64
+    if bi == 0usize { lo = 0.0f64 - 25.0f64 }
+    if bi == steps { hi = 25.0f64 }
+    let gr = 0.6180339887498949f64
+    var c = hi - gr * (hi - lo)
+    var d = lo + gr * (hi - lo)
+    var m1 = mem.mark(a)
+    var fc = reml_at(a, x, n, q, s, y, c, lds, rank, coef, fitted)
+    mem.reset(a, m1)
+    m1 = mem.mark(a)
+    var fd = reml_at(a, x, n, q, s, y, d, lds, rank, coef, fitted)
+    mem.reset(a, m1)
+    var it = 0usize
+    while hi - lo > 1.0e-10f64 && it < 200usize {
+        if fc < fd {
+            hi = d
+            d = c
+            fd = fc
+            c = hi - gr * (hi - lo)
+            m1 = mem.mark(a)
+            fc = reml_at(a, x, n, q, s, y, c, lds, rank, coef, fitted)
+            mem.reset(a, m1)
+        } else {
+            lo = c
+            c = d
+            fc = fd
+            d = lo + gr * (hi - lo)
+            m1 = mem.mark(a)
+            fd = reml_at(a, x, n, q, s, y, d, lds, rank, coef, fitted)
+            mem.reset(a, m1)
+        }
+        it += 1usize
+    }
+    ret math.exp[f64](0.5f64 * (lo + hi))
+}
+
+// the REML score at a given sp (for the oracle)
+fn gam_reml_score(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const f64, y: []const f64, sp: f64, coef: []f64, fitted: []f64) -> f64 {
+    let (lds, rank, e0) = pseudo_logdet(a, s, q)
+    if e0 != ok { ret 1.0e300f64 }
+    ret reml_at(a, x, n, q, s, y, math.log[f64](sp), lds, rank, coef, fitted)
+}
