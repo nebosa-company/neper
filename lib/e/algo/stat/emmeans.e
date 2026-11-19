@@ -760,10 +760,10 @@ fn contrast_twoway_int(a: *mem.Arena, grp: []const f64, hgrp: []const f64, y: []
     ret m
 }
 
-// contrast(emmeans(glm(y ~ g, binomial), "g"), method, adjust = "none") for a one-way layout with a 0/1 response, on the link scale and on the response scale (contrast(regrid(...))): the group probabilities are logistic(beta_i) from the
-// cell-means fit, a contrast of the logits has variance L' V L, and a contrast of the probabilities the delta-method variance (L' diag(p (1 - p)) V diag(p (1 - p)) L); tests are z (df infinite). For contrast j out[8 j ..] = the link estimate, its
+// contrast(emmeans(glm(y ~ g, family), "g"), method, adjust = "none") for a one-way layout, fam 0 binomial with a 0/1 response (logit) or 1 Poisson (log), on the link scale and on the response scale (contrast(regrid(...))): the group means are logistic(beta_i) or exp(beta_i) from the
+// cell-means fit, a contrast of the logits has variance L' V L, and a contrast of the means the delta-method variance (L' diag(dmu / deta) V diag(dmu / deta) L); tests are z (df infinite). For contrast j out[8 j ..] = the link estimate, its
 // standard error, z, the two-sided p, then the same four on the response scale; returns the number of contrasts, 0 when a fit fails
-fn contrast_logit_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usize, k: usize, kind: usize, out: []f64) -> usize {
+fn contrast_glm_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usize, k: usize, kind: usize, fam: usize, out: []f64) -> usize {
     let (x, e1) = mem.alloc[f64](a, n * k)
     let (cf, e2) = mem.alloc[f64](a, k * k * k)
     let (l, e3) = mem.alloc[f64](a, k)
@@ -779,7 +779,17 @@ fn contrast_logit_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usi
         x[usize(grp[i]) * n + i] = 1.0f64
         i += 1usize
     }
-    let (gm, ge) = logit_glm(a, x, y, n, k)
+    var gm: Lm = zero
+    var ge = ok
+    if fam == 0usize {
+        let (g0, e0) = logit_glm(a, x, y, n, k)
+        gm = g0
+        ge = e0
+    } else {
+        let (g1, e1b) = pois_glm_lm(a, x, y, n, k)
+        gm = g1
+        ge = e1b
+    }
     if ge != ok { ret 0usize }
     let m = contrast_coefs(kind, k, cf)
     if m == 0usize { ret 0usize }
@@ -788,8 +798,14 @@ fn contrast_logit_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usi
         var lv = 0usize
         while lv < k {
             l[lv] = cf[lv * m + j]
-            let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - gm.beta[lv]))
-            l2[lv] = l[lv] * pr * (1.0f64 - pr)
+            var dm = 0.0f64
+            if fam == 0usize {
+                let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - gm.beta[lv]))
+                dm = pr * (1.0f64 - pr)
+            } else {
+                dm = math.exp[f64](gm.beta[lv])
+            }
+            l2[lv] = l[lv] * dm
             lv += 1usize
         }
         let est = estimate(&gm, l)
@@ -797,7 +813,7 @@ fn contrast_logit_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usi
         var pe = 0.0f64
         lv = 0usize
         while lv < k {
-            pe += l[lv] / (1.0f64 + math.exp[f64](0.0f64 - gm.beta[lv]))
+            if fam == 0usize { pe += l[lv] / (1.0f64 + math.exp[f64](0.0f64 - gm.beta[lv])) } else { pe += l[lv] * math.exp[f64](gm.beta[lv]) }
             lv += 1usize
         }
         let se2 = math.sqrt[f64](variance(&gm, l2))
@@ -813,3 +829,5 @@ fn contrast_logit_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usi
     }
     ret m
 }
+
+fn contrast_logit_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, n: usize, k: usize, kind: usize, out: []f64) -> usize { ret contrast_glm_oneway(a, grp, y, n, k, kind, 0usize, out) }

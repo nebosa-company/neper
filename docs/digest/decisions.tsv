@@ -4584,4 +4584,5 @@ D7683	1008	psych: fit statistics of the maximum likelihood fit
 D7684	835	psych: RMSEA, TLI, CFI and the null chi-square
 D7685	1158	psych: rms and crms; scores re-set
 D7686	1240	smooth.spline with a target df
-D7687	1069	emmeans: one-way logistic contrasts on both scales
+D7687	1070	emmeans: one-way logistic contrasts on both scales
+D7688	711	emmeans: Poisson contrasts
