@@ -4453,4 +4453,4 @@ D7595	770	word boundaries equal ICU except for the colon
 D7596	730	simple case mapping equals ICU
 D7597	554	single-byte decoding equals ICU
 D7598	621	single-byte encoding equals ICU
-D7599	615	ICU Any-Hex transliteration
+D7599	730	ICU Any-Hex transliteration
