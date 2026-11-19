@@ -49,4 +49,18 @@ for (rep in 1:30) {
   a <- c(n, k, k, as.vector(t(X)), as.vector(t(X)), y)
   for (j in 1:k) { cases[[length(cases) + 1]] <- case("sls", c(a, j - 1), cf[j], rel = 1e-9, abs = 1e-11); cases[[length(cases) + 1]] <- case("sls", c(a, k + j - 1), sev[j], rel = 1e-9, abs = 1e-11) }
 }
+# W2SLS of a two-equation system (equal to 2SLS equation by equation): the first equation, same layout as "sls"
+for (rep in 1:20) {
+  n <- sample(30:120, 1); k <- sample(2:4, 1); q <- k + sample(1:3, 1)
+  Z <- matrix(rnorm(n * (q - 1)), n, q - 1); X <- matrix(0, n, k - 1)
+  for (j in 1:(k - 1)) X[, j] <- Z %*% rnorm(q - 1, 0, 0.6) + rnorm(n)
+  y <- 1 + X %*% runif(k - 1, -2, 2) + rnorm(n, 0, 1 + rep %% 3); y2 <- 1 + X[, 1] + 2 * rnorm(n)
+  d <- data.frame(y = as.vector(y), y2 = y2, X); names(d)[-(1:2)] <- paste0("x", 1:(k - 1)); zz <- data.frame(Z); names(zz) <- paste0("z", 1:(q - 1)); d <- cbind(d, zz)
+  f <- as.formula(paste("y ~", paste(paste0("x", 1:(k - 1)), collapse = " + "))); fi <- as.formula(paste("~", paste(paste0("z", 1:(q - 1)), collapse = " + ")))
+  r <- tryCatch(systemfit(list(a = f, b = y2 ~ x1), method = "W2SLS", inst = fi, data = d), error = function(e) NULL)
+  if (is.null(r)) next
+  cf <- as.numeric(coef(r))[1:k]; sev <- sqrt(diag(vcov(r)))[1:k]
+  a <- c(n, k, q, as.vector(t(cbind(1, X))), as.vector(t(cbind(1, Z))), as.vector(y))
+  for (j in 1:k) { cases[[length(cases) + 1]] <- case("sls", c(a, j - 1), cf[j], rel = 1e-9, abs = 1e-11); cases[[length(cases) + 1]] <- case("sls", c(a, k + j - 1), sev[j], rel = 1e-9, abs = 1e-11) }
+}
 emit("systemfit_2sls", "systemfit", list(cases))

@@ -4352,4 +4352,5 @@ D7495	751	systemfit 2SLS
 D7496	764	systemfit 3SLS
 D7497	755	systemfit SUR iterated to convergence
 D7498	766	systemfit SUR max and Theil residual covariance divisors
-D7499	655	systemfit OLS and WLS
+D7499	656	systemfit OLS and WLS
+D7500	501	systemfit W2SLS

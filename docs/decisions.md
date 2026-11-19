@@ -50980,3 +50980,6 @@ A preProcess(method = c("center", "scale", "ica")) port (centre and scale, then 
 
 ## D7499 — systemfit OLS and WLS
 systemfit(method = "OLS") is `twosls` with the instruments set to the regressors (sigma^2 = rss / (n - k), covariance sigma^2 (X'X)^-1), and method = "WLS" gives the same numbers: it rescales each equation by its OLS residual variance, which leaves every equation's coefficients and covariance as they were (differences of 1e-15 on a probe), so no new routine is needed. Equal to systemfit on 30 two-equation systems, 15 of each method (186 values added to oracle_systemfit_2sls, 824 in all). Open for L461: unequal observations, per-equation instruments, cross-equation restrictions, W2SLS, WSUR, iterated 3SLS, tests.
+
+## D7500 — systemfit W2SLS
+W2SLS rescales each equation by its 2SLS residual variance before a second two-stage least squares, which leaves every equation's coefficients and covariance unchanged (differences of 1e-15 and 0 on a probe), so `twosls` answers it. Equal to systemfit on 20 two-equation systems, first equation (126 values added to oracle_systemfit_2sls, 950 in all). Open for L461: unequal observations, per-equation instruments, cross-equation restrictions, WSUR, iterated 3SLS, tests.
