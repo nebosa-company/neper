@@ -33,6 +33,16 @@ for (rep in 1:25) {
   v <- c(ds$n, ds$mean, ds$sd, ds$median, ds$trimmed, ds$mad, ds$min, ds$max, ds$range, ds$skew, ds$kurtosis, ds$se)
   for (w in 0:11) cases[[length(cases) + 1]] <- case("desc", c(n, x, w), as.numeric(v[w + 1]), rel = 1e-8, abs = 1e-10)
 }
+# describeBy of one column by a grouping variable: "descby" (n, x[n], g[n] 0-based, group, which) with which as for "desc"
+for (rep in 1:15) {
+  n <- sample(40:120, 1); k <- sample(2:3, 1); g <- sample(0:(k - 1), n, TRUE); x <- round(rexp(n, 0.2) + rnorm(n) + g, 3)
+  db <- suppressWarnings(psych::describeBy(x, g, mat = TRUE))
+  for (gr in 0:(k - 1)) {
+    row <- db[db$group1 == gr, ]
+    v <- c(row$n, row$mean, row$sd, row$median, row$trimmed, row$mad, row$min, row$max, row$range, row$skew, row$kurtosis, row$se)
+    for (w in 0:11) cases[[length(cases) + 1]] <- case("descby", c(n, x, g, gr, w), as.numeric(v[w + 1]), rel = 1e-8, abs = 1e-10)
+  }
+}
 # corr.test: "ctest" args (n, p, X column-major, i, j, which) with i < j 0-based; which 0 r, 1 t, 2 p, 3 lower, 4 upper, 5 Holm-adjusted p
 for (rep in 1:15) {
   n <- sample(20:60, 1); p <- sample(3:5, 1); f <- rnorm(n); X <- sapply(1:p, function(j) round(f * runif(1, 0, 1) + rnorm(n), 3)); colnames(X) <- paste0("v", 1:p)

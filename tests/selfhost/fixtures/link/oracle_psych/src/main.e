@@ -71,6 +71,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let bn = usize(x[0usize])
         ret ps.biserial(x[1usize..1usize + bn], x[1usize + bn..1usize + 2usize * bn])
     }
+    if str.eq(c.name, "descby") {
+        let dn = usize(x[0usize])
+        let grp = usize(x[1usize + 2usize * dn])
+        let (sub, se) = mem.alloc[f64](a, dn)
+        if se != ok { ret 0.0f64 / 0.0f64 }
+        var cnt = 0usize
+        var ii = 0usize
+        while ii < dn {
+            if usize(x[1usize + dn + ii]) == grp {
+                sub[cnt] = x[1usize + ii]
+                cnt += 1usize
+            }
+            ii += 1usize
+        }
+        ret ps.describe(a, sub[0usize..cnt], usize(x[2usize + 2usize * dn]))
+    }
     if str.eq(c.name, "desc") {
         let dn = usize(x[0usize])
         ret ps.describe(a, x[1usize..1usize + dn], usize(x[1usize + dn]))

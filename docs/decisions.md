@@ -50551,3 +50551,9 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 
 ## D7422 — pscl zero links
 `zero_link_fit` generalises the zero part to the probit, cloglog and cauchit links (`link_inv`): for zeroinfl the whole zero-inflated Poisson likelihood is maximised by BFGS (beta from the logit fit, gamma from zero), for the hurdle the truncated Poisson part is link-free (taken from the exact fit) and the zero part is a small BFGS binomial fit of y > 0 on the link. Equal to pscl on twelve simulated sets, three links by both models (log-likelihood within 2e-3, position-weighted zero coefficients within 5e-3, looser because the zero coefficients are the flat directions). A parameter beyond 30 in absolute value returns a 1e300 penalty to keep BFGS in range. L412 at 0.65.
+
+## D7341 — psych: describeBy
+
+**Decision.** `describeBy(x, g, mat = TRUE)` is `describe` applied to the cases of each group, so the fixture selects each group's values and calls `psych.describe`.
+
+**Result.** `oracle_psych` (3999 cases, 444 new: 12 statistics for each group of 15 samples) equals psych on Windows to 1e-8. Linux pending. L312 stays partial: missing data and overlapping keys in scoreItems, minres, ml, wls and gls extraction, oblique rotations, smoothing, omega, fa.parallel, VSS.
