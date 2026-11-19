@@ -4209,4 +4209,6 @@ D7410	495	PMCMRplus frdAllPairsSiegelTest
 D7316	703	psych: Yule, phi, biserial, tetrachoric of a 2 by 2 table
 D7411	745	PMCMRplus frdAllPairsExactTest
 D7317	916	psych: tetrachoric and polychoric of a column pair
-D7318	573	psych: principal components
+D7318	574	psych: principal components
+D7412	713	PMCMRplus normalScoresManyOneTest
+D7319	582	psych: principal with varimax

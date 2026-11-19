@@ -32,6 +32,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let pn = usize(x[0usize])
         ret ps.polychoric_pair(x[2usize..2usize + pn], x[2usize + pn..2usize + 2usize * pn], usize(x[1usize]))
     }
+    if str.eq(c.name, "pcav") {
+        let vp = usize(x[0usize])
+        let vf = usize(x[1usize])
+        let (vo, ve) = mem.alloc[f64](a, vp * vf + vf * vf)
+        if ve != ok { ret 0.0f64 / 0.0f64 }
+        if ps.principal_varimax(a, x[2usize..2usize + vp * vp], vp, vf, vo) != ok { ret 0.0f64 / 0.0f64 }
+        ret vo[usize(x[2usize + vp * vp])]
+    }
     if str.eq(c.name, "pca") {
         let pp = usize(x[0usize])
         let nf = usize(x[1usize])

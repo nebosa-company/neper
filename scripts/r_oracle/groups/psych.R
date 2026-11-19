@@ -87,4 +87,12 @@ for (rep in 1:14) {
   for (k in 1:p) cases[[length(cases) + 1]] <- case("pca", c(p, nf, R, p * nf + k - 1), pc$values[k], rel = 1e-8, abs = 1e-9)
   for (i in 1:p) cases[[length(cases) + 1]] <- case("pca", c(p, nf, R, p * nf + p + i - 1), pc$communality[i], rel = 1e-8, abs = 1e-9)
 }
+# varimax-rotated principal components: "pcav" (p, nf, R, q) q < p*nf the loading q as in "pca"
+for (rep in 1:14) {
+  n <- sample(40:120, 1); p <- sample(4:8, 1); f <- rnorm(n); g <- rnorm(n); X <- sapply(1:p, function(j) f * runif(1, 0, 1) + g * runif(1, 0, 1) + rnorm(n)); R <- cor(X)
+  nf <- sample(2:min(3, p - 1), 1)
+  pc <- suppressMessages(principal(R, nfactors = nf, rotate = "varimax", residuals = FALSE))
+  L <- unclass(pc$loadings)
+  for (q in 0:(p * nf - 1)) cases[[length(cases) + 1]] <- case("pcav", c(p, nf, R, q), L[(q %% p) + 1, (q %/% p) + 1], rel = 1e-6, abs = 1e-7)
+}
 emit("psych", "psych", list(cases))

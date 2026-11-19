@@ -11,6 +11,7 @@ use e.math.nmath_beta as nbt
 use e.math.dist as dst
 use e.algo.stat.desctools as dt
 use e.mem
+use e.algo.stat.gparot as gp
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.stat.fdrtool as fd
 use e.algo.stat.pbivnorm as pbv
@@ -650,6 +651,80 @@ fn principal(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []f64) -> 
             out[i + k * p] = out[i + k * p] * sg
             out[p * nf + p + i] += out[i + k * p] * out[i + k * p]
             i += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// psych::principal(r, nfactors = nf, rotate = "varimax"): the unrotated loadings of `principal` rotated by stats::varimax (normalize, eps 1e-5), the columns ordered by decreasing sum of squares and each
+// signed to a positive sum. out[0 .. p nf] the loadings (item i, component k at i + k p), then the rotation matrix (nf by nf column-major: element (r, c) at p nf + r + c nf)
+fn principal_varimax(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []f64) -> err {
+    let (pc, e1) = mem.alloc[f64](a, p * nf + 2usize * p)
+    if e1 != ok { ret e1 }
+    let e2 = principal(a, r, p, nf, pc)
+    if e2 != ok { ret e2 }
+    let (xr, e3) = mem.alloc[f64](a, p * nf)
+    if e3 != ok { ret e3 }
+    var i = 0usize
+    while i < p {
+        var k = 0usize
+        while k < nf {
+            xr[i * nf + k] = pc[i + k * p]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let (rot, rm, e4) = gp.varimax_stats(a, xr, p, nf, true, 1.0e-5f64)
+    if e4 != ok { ret e4 }
+    // order the rotated columns by sum of squares, then fix signs
+    let (ss, e5) = mem.alloc[f64](a, nf)
+    let (ord, e6) = mem.alloc[usize](a, nf)
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    var k = 0usize
+    while k < nf {
+        ss[k] = 0.0f64
+        i = 0usize
+        while i < p {
+            ss[k] += rot[i * nf + k] * rot[i * nf + k]
+            i += 1usize
+        }
+        ord[k] = k
+        k += 1usize
+    }
+    // insertion sort, decreasing; ties keep their order as R's order() does
+    k = 1usize
+    while k < nf {
+        let cur = ord[k]
+        var j = k
+        while j > 0usize && ss[ord[j - 1usize]] < ss[cur] {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = cur
+        k += 1usize
+    }
+    k = 0usize
+    while k < nf {
+        let src = ord[k]
+        var sum = 0.0f64
+        i = 0usize
+        while i < p {
+            sum += rot[i * nf + src]
+            i += 1usize
+        }
+        var sg = 1.0f64
+        if sum < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+        i = 0usize
+        while i < p {
+            out[i + k * p] = rot[i * nf + src] * sg
+            i += 1usize
+        }
+        var rr = 0usize
+        while rr < nf {
+            out[p * nf + rr + k * nf] = rm[rr * nf + src]
+            rr += 1usize
         }
         k += 1usize
     }
