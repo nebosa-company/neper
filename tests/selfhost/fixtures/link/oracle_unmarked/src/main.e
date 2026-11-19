@@ -18,8 +18,9 @@ fn fit_case(a: *mem.Arena, c: *const oracle.Case, cached: []f64) -> bool {
         let y0 = 4usize
         let x0 = y0 + mm * jj
         let z0 = x0 + mm * p1
-        let out = cached[0usize..p1 + p2 + 1usize]
-        ret um.occu(a, z[x0..x0 + mm * p1], z[z0..z0 + mm * jj * p2], z[y0..y0 + mm * jj], mm, jj, p1, p2, out)
+        let out = cached[0usize..2usize * (p1 + p2) + 1usize]
+        if !um.occu(a, z[x0..x0 + mm * p1], z[z0..z0 + mm * jj * p2], z[y0..y0 + mm * jj], mm, jj, p1, p2, out[0usize..p1 + p2 + 1usize]) { ret false }
+        ret um.occu_se(a, z[x0..x0 + mm * p1], z[z0..z0 + mm * jj * p2], z[y0..y0 + mm * jj], mm, jj, p1, p2, out[0usize..p1 + p2], out[p1 + p2 + 1usize..2usize * (p1 + p2) + 1usize])
     }
     if c.name.len == 6usize {
         let mm = usize(z[0usize])

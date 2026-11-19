@@ -4596,4 +4596,5 @@ D7695	1178	rugarch: sGARCH of higher order
 D7696	987	rugarch: an AR(1) mean tried, the likelihood not reproduced
 D7697	1328	rugarch: AR(1) and AR(2) means; D7696 solved
 D7698	1346	rugarch: MA(1) and ARMA(1,1) means; L398 re-scored
-D7699	935	unmarked: visit-level detection covariates and missing visits
+D7699	936	unmarked: visit-level detection covariates and missing visits
+D7700	684	unmarked: standard errors for the visit-level occupancy fit; L515 re-scored
