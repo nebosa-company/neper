@@ -19,6 +19,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let n = usize(c.args[0usize])
         var got = 0.0f64
+        if str.eq(c.name, "hse") {
+            let hh = c.args[1usize]
+            let pp = c.args[2usize]
+            let (sv, es) = sm.regression_se(a, c.args[3usize..3usize + n], c.args[3usize + n..3usize + 2usize * n], hh, pp)
+            if es != ok { os.exit(4) }
+            if !oracle.agrees(sv, c) { failures += 1usize }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "haicc") { got = sm.hselect_crit(c.args[1usize..1usize + n], c.args[1usize + n..1usize + 2usize * n], 1usize, 0.0f64) } else if str.eq(c.name, "hdf") { got = sm.hselect_crit(c.args[1usize..1usize + n], c.args[1usize + n..1usize + 2usize * n], 0usize, 5.0f64) } else if str.eq(c.name, "hcvreg") { got = sm.hselect_cv_reg(c.args[1usize..1usize + n], c.args[1usize + n..1usize + 2usize * n]) } else { got = sm.hselect_cv(c.args[1usize..1usize + n]) }
         if !oracle.agrees(got, c) {
             failures += 1usize

@@ -4291,4 +4291,5 @@ D7437	436	RSpectra svds with an operator
 D7438	421	RSpectra eigs with a general operator
 D7439	573	sm h.select with the cross-validation criterion
 D7440	325	sm h.select cv for regression
-D7441	423	sm h.select df and aicc criteria
+D7441	424	sm h.select df and aicc criteria
+D7442	438	sm.regression standard errors

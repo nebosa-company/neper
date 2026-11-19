@@ -339,3 +339,73 @@ fn hselect_crit(x: []const f64, y: []const f64, kind: usize, df: f64) -> f64 {
     var c = CritCtx { x: x, y: y, kind: kind, df: df }
     ret math.exp[f64](fd.brent_min[CritCtx](&c, crit_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
 }
+
+// sm.sigma(x, y) with the second-order differences (unit weights, unbinned): the residual scale of sm.regression
+fn sm_sigma(a: *mem.Arena, x: []const f64, y: []const f64) -> (f64, err) {
+    let n = x.len
+    let (idx, e0) = mem.alloc[usize](a, n)
+    if e0 != ok { ret (0.0f64, e0) }
+    var i = 0usize
+    while i < n {
+        idx[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let k = idx[i]
+        var j = i
+        while j > 0usize && x[idx[j - 1usize]] > x[k] {
+            idx[j] = idx[j - 1usize]
+            j -= 1usize
+        }
+        idx[j] = k
+        i += 1usize
+    }
+    var ssq = 0.0f64
+    i = 0usize
+    while i + 2usize < n {
+        let x0 = x[idx[i]]
+        let x1 = x[idx[i + 1usize]]
+        let x2 = x[idx[i + 2usize]]
+        var aa = (x2 - x1) / (x2 - x0)
+        var bb = (x1 - x0) / (x2 - x0)
+        if x2 == x0 {
+            aa = 0.5f64
+            bb = 0.5f64
+        }
+        let cc = aa * aa + bb * bb + 1.0f64
+        let eps = y[idx[i]] * aa + y[idx[i + 2usize]] * bb - y[idx[i + 1usize]]
+        ssq += eps * eps / cc
+        i += 1usize
+    }
+    ret (math.sqrt[f64](ssq / (f64(n) - 2.0f64)), ok)
+}
+
+// the standard error of the local-linear sm.regression estimate at p: sigma * sqrt(sum of squared weights)
+fn regression_se(a: *mem.Arena, x: []const f64, y: []const f64, h: f64, p: f64) -> (f64, err) {
+    let (sg, e) = sm_sigma(a, x, y)
+    if e != ok { ret (0.0f64, e) }
+    let n = x.len
+    var s0 = 0.0f64
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var j = 0usize
+    while j < n {
+        let wd = x[j] - p
+        let w = math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+        s0 += w
+        s1 += w * wd
+        s2 += w * wd * wd
+        j += 1usize
+    }
+    var q = 0.0f64
+    j = 0usize
+    while j < n {
+        let wd = x[j] - p
+        let w = math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+        let swj = w * (s2 - wd * s1) / (s2 * s0 - s1 * s1)
+        q += swj * swj
+        j += 1usize
+    }
+    ret (sg * math.sqrt[f64](q), ok)
+}

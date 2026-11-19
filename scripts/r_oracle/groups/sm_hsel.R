@@ -19,4 +19,10 @@ for (rep in 1:20) {
   r <- tryCatch(h.select(x, y, method = "df", df = 5), error = function(e) NULL)
   if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hdf", c(n, x, y), r, rel = 1e-6, abs = 1e-12)
 }
+# hse (n, h, p, x[n], y[n]): the se of sm.regression at p
+for (rep in 1:20) {
+  n <- sample(20:90, 1); x <- runif(n, 0, 10); y <- sin(x) + rnorm(n, 0, 0.3); h <- runif(1, 0.5, 1.5); p <- runif(1, 1, 9)
+  r <- sm.regression(x, y, h = h, eval.points = p, display = "none")$se
+  cases[[length(cases) + 1]] <- case("hse", c(n, h, p, x, y), r[1], rel = 1e-9, abs = 1e-12)
+}
 emit("sm_hsel", "sm", list(cases))

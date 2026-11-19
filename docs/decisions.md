@@ -50788,3 +50788,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7441 — sm h.select df and aicc criteria
 `hselect_crit` is h.select(x, y, method = "df", df = d) (criterion (tr S - d)^2) and method = "aicc" (log(rss / n) + 1 + 2 (tr S + 1) / (n - tr S - 2)) for one unbinned covariate, the same optimise as the cv forms; equal to sm on 20 samples each added to oracle_sm_hsel. Open for L505: binning above 100 observations, 2-d structures, bands, sm.ancova, sm.survival, sm.options.
+
+## D7442 — sm.regression standard errors
+`regression_se` is the `se` of sm.regression (local linear, unbinned, unit weights) at a point: `sm_sigma` (second-order difference residual scale, as sm.sigma(diff.ord = 2)) times the root of the summed squared smoother weights; equal to sm at rel 1e-9 on 20 cases in oracle_sm_hsel. Open for L505: bands (the reference-band model comparison), binning, 2-d, sm.ancova, sm.survival, sm.options.
