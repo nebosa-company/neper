@@ -25,4 +25,15 @@ for (rep in 1:80) {
   n <- sample(2:16, 1); cp <- sample(wpool, n, TRUE); s <- intToUtf8(cp)
   cases[[length(cases) + 1]] <- case("seg", c(n, cp, 1), stri_count_boundaries(s, type = "word"), rel = 0, abs = 0)
 }
+# simple case mapping: "case" args (scalar, 0 lower 1 upper): the scalar stri_trans_tolower / stri_trans_toupper gives for a one-scalar string, when it is one scalar
+set.seed(20271102)
+ranges <- list(c(0x41, 0x24F), c(0x370, 0x3FF), c(0x400, 0x52F), c(0x531, 0x586), c(0x10A0, 0x10FF), c(0x1E00, 0x1FFF), c(0x2100, 0x218F), c(0x2C00, 0x2D2F), c(0xA640, 0xA7BF), c(0xFF21, 0xFF5A), c(0x10400, 0x1044F), c(0x1E900, 0x1E943))
+for (rep in 1:400) {
+  rg <- ranges[[sample(length(ranges), 1)]]; cp <- sample(rg[1]:rg[2], 1)
+  if (cp >= 0xD800 && cp <= 0xDFFF) next
+  s <- intToUtf8(cp)
+  lo <- utf8ToInt(stri_trans_tolower(s)); up <- utf8ToInt(stri_trans_toupper(s))
+  if (length(lo) == 1) cases[[length(cases) + 1]] <- case("case", c(cp, 0), lo, rel = 0, abs = 0)
+  if (length(up) == 1) cases[[length(cases) + 1]] <- case("case", c(cp, 1), up, rel = 0, abs = 0)
+}
 emit("stringi", "stringi", list(cases))

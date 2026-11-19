@@ -11,6 +11,10 @@ use e.text.unicode as uc
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "case") {
+        if usize(x[1usize]) == 0usize { ret f64(uc.to_lower_simple(u32(x[0usize]))) }
+        ret f64(uc.to_upper_simple(u32(x[0usize])))
+    }
     let n = usize(x[0usize])
     let (b0, e0) = str.builder(a, 64usize)
     if e0 != ok { os.exit(5) }
