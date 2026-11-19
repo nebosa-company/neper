@@ -66,4 +66,15 @@ for (rep in 1:20) {
   cases[[length(cases) + 1]] <- case("p2", c(a, 0), unname(r$statistic), rel = 1e-7, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("p2", c(a, 1), r$p.value, rel = 1e-7, abs = 1e-10)
 }
+# pscore.test for a weighted lm: "pw" args (n, 2, alt, y[n], x[n], w[n]), which 0 the statistic 1 the p value
+for (rep in 1:30) {
+  n <- sample(30:120, 1); x <- sort(round(runif(n, 0, 10), 3)); w <- round(runif(n, 0.5, 3), 3); y <- 1 + 0.3 * x + (x > 4.5) * (x - 4.5) * runif(1, -1.5, 1.5) + rnorm(n, 0, 0.6) / sqrt(w)
+  alt <- (rep - 1) %% 3; alts <- c("two.sided", "less", "greater")
+  d <- data.frame(x = x, y = y, w = w); assign("d", d, envir = globalenv())
+  r <- tryCatch(suppressWarnings(pscore.test(lm(y ~ x, data = d, weights = w), ~x, k = 10, alternative = alts[alt + 1])), error = function(e) NULL)
+  if (is.null(r)) next
+  a <- c(n, 2, alt, y, x, w)
+  cases[[length(cases) + 1]] <- case("pw", c(a, 0), unname(r$statistic), rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("pw", c(a, 1), r$p.value, rel = 1e-7, abs = 1e-10)
+}
 emit("strucchange", "strucchange", list(cases))

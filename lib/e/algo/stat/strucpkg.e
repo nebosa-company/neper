@@ -948,3 +948,119 @@ fn pscore2_lm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, 
     out[1usize] = math.exp[f64](-q / 2.0f64)
     ret ok
 }
+
+// segmented::pscore.test for a weighted lm (one break): the weighted form of test.Sc2, which sets only the DIAGONAL of IA to 1 - h (the off-diagonal keeps the sign of X A X'W), so
+// sc = sum_j w_j (fit_j + pm_j (1 - 2 h_j)) y_j and v = sum_j (w_j u' A x_j + sqrt(w_j) pm_j (1 - 2 h_j)) w_j pm_j, h_j = w_j x_j A x_j, u = X'(sqrt(w) pm); sigma^2 = sum w r^2 / (n - p); out = (stat, p)
+fn pscore_lmw(a: *mem.Arena, y: []const f64, z: []const f64, w: []const f64, xreg: []const f64, n: usize, p: usize, k: usize, alt: usize, out: []f64) -> err {
+    var zmin = z[0usize]
+    var zmax = z[0usize]
+    var i = 0usize
+    while i < n {
+        if z[i] < zmin { zmin = z[i] }
+        if z[i] > zmax { zmax = z[i] }
+        i += 1usize
+    }
+    let (pm, e0) = mem.alloc[f64](a, n)
+    let (xtx, e1) = mem.alloc[f64](a, p * p)
+    if e0 != ok || e1 != ok { ret e0 }
+    i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            var v = z[i] - (zmin + (zmax - zmin) * f64(j) / f64(k - 1usize))
+            if v < 0.0f64 { v = 0.0f64 }
+            s += v
+            j += 1usize
+        }
+        pm[i] = s / f64(k)
+        i += 1usize
+    }
+    var r = 0usize
+    while r < p * p {
+        xtx[r] = 0.0f64
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var c1 = 0usize
+        while c1 < p {
+            var c2 = 0usize
+            while c2 < p {
+                xtx[c1 * p + c2] += w[i] * xreg[i * p + c1] * xreg[i * p + c2]
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        i += 1usize
+    }
+    let (inv, ie) = gp.invert(a, xtx, p)
+    if ie != ok { ret ie }
+    var xwy: [64]f64 = zero
+    var xwp: [64]f64 = zero
+    var u: [64]f64 = zero
+    i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xwy[c] += w[i] * xreg[i * p + c] * y[i]
+            xwp[c] += w[i] * xreg[i * p + c] * pm[i]
+            u[c] += math.sqrt[f64](w[i]) * pm[i] * xreg[i * p + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    var byy: [64]f64 = zero
+    var bp: [64]f64 = zero
+    var ua: [64]f64 = zero
+    var c1 = 0usize
+    while c1 < p {
+        var c2 = 0usize
+        while c2 < p {
+            byy[c1] += inv[c1 * p + c2] * xwy[c2]
+            bp[c1] += inv[c1 * p + c2] * xwp[c2]
+            ua[c1] += u[c2] * inv[c2 * p + c1]
+            c2 += 1usize
+        }
+        c1 += 1usize
+    }
+    var sc = 0.0f64
+    var vs = 0.0f64
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        var fy = 0.0f64
+        var fp = 0.0f64
+        var uax = 0.0f64
+        var c = 0usize
+        while c < p {
+            fy += byy[c] * xreg[i * p + c]
+            fp += bp[c] * xreg[i * p + c]
+            uax += ua[c] * xreg[i * p + c]
+            c += 1usize
+        }
+        var xax = 0.0f64
+        var ca = 0usize
+        while ca < p {
+            var cb = 0usize
+            while cb < p {
+                xax += xreg[i * p + ca] * inv[ca * p + cb] * xreg[i * p + cb]
+                cb += 1usize
+            }
+            ca += 1usize
+        }
+        let h = w[i] * xax
+        sc += w[i] * (fp + pm[i] * (1.0f64 - 2.0f64 * h)) * y[i]
+        vs += (w[i] * uax + math.sqrt[f64](w[i]) * pm[i] * (1.0f64 - 2.0f64 * h)) * w[i] * pm[i]
+        rss += w[i] * (y[i] - fy) * (y[i] - fy)
+        i += 1usize
+    }
+    let df = f64(n) - f64(p)
+    let st = sc / (math.sqrt[f64](rss / df) * math.sqrt[f64](vs))
+    var pv = 2.0f64 * nb.pt(math.abs[f64](st), df, false, false)
+    if alt == 1usize { pv = nb.pt(st, df, true, false) }
+    if alt == 2usize { pv = nb.pt(st, df, false, false) }
+    out[0usize] = st
+    out[1usize] = pv
+    ret ok
+}
