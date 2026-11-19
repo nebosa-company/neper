@@ -6,6 +6,7 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 use e.text.normalize as nz
+use e.text.segment as sg
 use e.text.unicode as uc
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
@@ -27,6 +28,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     let s = str.done(&b)
+    if str.eq(c.name, "seg") && usize(x[1usize + n]) == 1usize {
+        let (cps, ce) = mem.alloc[u32](a, n)
+        let (bd, be) = mem.alloc[usize](a, n + 2usize)
+        if ce != ok || be != ok { os.exit(7) }
+        var q2 = 0usize
+        while q2 < n {
+            cps[q2] = u32(x[1usize + q2])
+            q2 += 1usize
+        }
+        let (nb, we) = sg.words(cps, bd)
+        if we != ok { os.exit(8) }
+        ret f64(nb - 1usize)
+    }
     if str.eq(c.name, "seg") {
         var it = uc.graphemes(s)
         var gc = 0usize

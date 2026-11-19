@@ -20,4 +20,9 @@ for (rep in 1:80) {
   n <- sample(2:14, 1); cp <- sample(gpool, n, TRUE); s <- intToUtf8(cp)
   cases[[length(cases) + 1]] <- case("seg", c(n, cp, 0), stri_count_boundaries(s, type = "character"), rel = 0, abs = 0)
 }
+wpool <- c(0x41, 0x62, 0x63, 0xE9, 0x30, 0x31, 0x32, 0x20, 0x27, 0x2E, 0x2C, 0x2D, 0x5F, 0x21, 0x301, 0x200D, 0x1F600, 0x1F1E6, 0x1F1E7, 0xA, 0x2019)
+for (rep in 1:80) {
+  n <- sample(2:16, 1); cp <- sample(wpool, n, TRUE); s <- intToUtf8(cp)
+  cases[[length(cases) + 1]] <- case("seg", c(n, cp, 1), stri_count_boundaries(s, type = "word"), rel = 0, abs = 0)
+}
 emit("stringi", "stringi", list(cases))
