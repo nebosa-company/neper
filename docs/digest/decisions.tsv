@@ -4131,4 +4131,5 @@ D7335	1294	dagitty: instrumentalVariables is not ported (an unresolved rule)
 D7336	1274	lpSolve: equality rows and integer programs
 D7337	717	lpSolve: lp.transport
 D7313	553	betareg: identity and sqrt precision links
-D7338	1163	clue: the other partition agreements and dissimilarities
+D7338	1164	clue: the other partition agreements and dissimilarities
+D7339	1091	clue: Gordon-Vichi and Boorman-Arabie dissimilarities

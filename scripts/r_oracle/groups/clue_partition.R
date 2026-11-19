@@ -23,4 +23,13 @@ for (rep in 1:24) {
   for (m in c("cRand", "NMI", "KP", "FM", "Jaccard", "purity", "PS")) add("cl", c(base, match(m, c("cRand", "NMI", "KP", "FM", "Jaccard", "purity", "PS")) + 1), as.numeric(cl_agreement(px, py, method = m)))
   for (m in c("VI", "comemberships", "symdiff", "manhattan")) add("cl", c(base, match(m, c("VI", "comemberships", "symdiff", "manhattan")) + 8), as.numeric(cl_dissimilarity(px, py, method = m)))
 }
+# the Gordon-Vichi and Boorman-Arabie dissimilarities: kind 13 GV1, 14 BA/A, 15 BA/C, 16 BA/E (BA/D is 1 - Rand)
+for (rep in 1:24) {
+  n <- sample(10:45, 1); kx <- sample(2:5, 1); ky <- sample(2:5, 1)
+  cx <- c(seq_len(kx), sample(seq_len(kx), n - kx, replace = TRUE))
+  cy <- c(seq_len(ky), sample(seq_len(ky), n - ky, replace = TRUE))
+  px <- as.cl_partition(factor(cx)); py <- as.cl_partition(factor(cy))
+  base <- c(n, kx, ky, cx, cy)
+  for (m in c("GV1", "BA/A", "BA/C", "BA/E")) add("cl", c(base, match(m, c("GV1", "BA/A", "BA/C", "BA/E")) + 12), as.numeric(cl_dissimilarity(px, py, method = m)))
+}
 emit("clue_partition", "clue", list(cases))

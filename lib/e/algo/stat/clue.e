@@ -231,3 +231,115 @@ fn partition_measure(a: *mem.Arena, cx: []const usize, cy: []const usize, n: usi
     if e8 != ok { ret (0.0f64, e8) }
     ret (v, ok)
 }
+
+// the Gordon-Vichi (kind 13), Boorman-Arabie A (14, half the Manhattan distance), C (15, the class counts minus twice the join's classes) and E (16, one minus the mutual
+// information over the joint entropy) dissimilarities of two hard partitions with kx and ky observed classes (labels 1..kx and 1..ky)
+fn partition_measure2(a: *mem.Arena, cx: []const usize, cy: []const usize, n: usize, kx: usize, ky: usize, kind: usize) -> (f64, err) {
+    var k = kx
+    if ky > k { k = ky }
+    if kind == 14usize {
+        let (v, e) = partition_measure(a, cx, cy, n, k, 12usize)
+        ret (v / 2.0f64, e)
+    }
+    let (t, e1) = mem.alloc[usize](a, k * k)
+    let (rs, e2) = mem.alloc[f64](a, k)
+    let (cs, e3) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, Malformed) }
+    var z = 0usize
+    while z < k * k {
+        t[z] = 0usize
+        z += 1usize
+    }
+    table_counts(cx, cy, n, k, k, t)
+    var i = 0usize
+    while i < k {
+        rs[i] = 0.0f64
+        cs[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            rs[i] += f64(t[i * k + j])
+            cs[j] += f64(t[i * k + j])
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let nf = f64(n)
+    if kind == 16usize {
+        var mi = 0.0f64
+        var h = 0.0f64
+        i = 0usize
+        while i < k {
+            var j = 0usize
+            while j < k {
+                let g = f64(t[i * k + j]) / nf
+                if g > 0.0f64 {
+                    h -= g * math.log[f64](g)
+                    mi += g * math.log[f64](g / ((rs[i] / nf) * (cs[j] / nf)))
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        ret (1.0f64 - mi / h, ok)
+    }
+    if kind == 15usize {
+        // the join: the connected components of the classes linked by a non-empty cell
+        let (par, e4) = mem.alloc[usize](a, 2usize * k)
+        if e4 != ok { ret (0.0f64, Malformed) }
+        i = 0usize
+        while i < 2usize * k {
+            par[i] = i
+            i += 1usize
+        }
+        i = 0usize
+        while i < kx {
+            var j = 0usize
+            while j < ky {
+                if t[i * k + j] > 0usize {
+                    var r1 = i
+                    while par[r1] != r1 { r1 = par[r1] }
+                    var r2 = k + j
+                    while par[r2] != r2 { r2 = par[r2] }
+                    if r1 != r2 { par[r2] = r1 }
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var comps = 0usize
+        i = 0usize
+        while i < kx {
+            if par[i] == i { comps += 1usize }
+            i += 1usize
+        }
+        var j2 = 0usize
+        while j2 < ky {
+            if par[k + j2] == k + j2 { comps += 1usize }
+            j2 += 1usize
+        }
+        ret (f64(kx) + f64(ky) - 2.0f64 * f64(comps), ok)
+    }
+    // Gordon-Vichi: C[i, j] = a_i + b_j - 2 n_ij on the kx by ky block, zero padding, minimal assignment, square root
+    let (costs, e5) = mem.alloc[f64](a, k * k)
+    let (asg, e6) = mem.alloc[usize](a, k)
+    let (scratch, e7) = mem.alloc[f64](a, 4usize * (k + 1usize))
+    let (used, e8) = mem.alloc[usize](a, 2usize * (k + 1usize))
+    if e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (0.0f64, Malformed) }
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            costs[i * k + j] = 0.0f64
+            if i < kx && j < ky { costs[i * k + j] = rs[i] + cs[j] - 2.0f64 * f64(t[i * k + j]) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (v, e9) = mt.hungarian(costs, k, asg, scratch, used)
+    if e9 != ok { ret (0.0f64, e9) }
+    ret (math.sqrt[f64](v), ok)
+}
