@@ -34,4 +34,16 @@ for (rep in 1:6) {
   sv <- c(sel, sth, sph)
   for (q in seq_along(sv)) cases[[length(cases) + 1]] <- case("cfmfs", c(n, p, nf, fac, as.vector(t(S)), q - 1), sv[q], rel = 3e-3, abs = 1e-6)
 }
+# the regression f2 ~ f1 between two latent variables: "sem" args (n, p, fac[p], S, q) q 0 beta, 1 variance of f1, 2 residual variance of f2, 3..5 their standard errors
+for (rep in 1:6) {
+  per <- sample(3:4, 2, TRUE); p <- sum(per); fac <- rep(0:1, per); n <- sample(250:500, 1)
+  f1 <- rnorm(n); f2 <- 0.6 * f1 + rnorm(n, 0, 0.8); Fm <- cbind(f1, f2); X <- sapply(1:p, function(j) 0.8 * runif(1, 0.7, 1.2) * Fm[, fac[j] + 1] + rnorm(n, 0, 0.6)); colnames(X) <- paste0("x", 1:p)
+  mod <- paste(paste0("f1 =~ ", paste(colnames(X)[fac == 0], collapse = " + ")), paste0("f2 =~ ", paste(colnames(X)[fac == 1], collapse = " + ")), "f2 ~ f1", sep = "
+")
+  fit <- tryCatch(suppressWarnings(sem(mod, as.data.frame(X))), error = function(e) NULL)
+  if (is.null(fit) || !lavInspect(fit, "converged")) next
+  pe <- parameterEstimates(fit); rg <- pe[pe$op == "~", ]; v1 <- pe[pe$op == "~~" & pe$lhs == "f1" & pe$rhs == "f1", ]; v2 <- pe[pe$op == "~~" & pe$lhs == "f2" & pe$rhs == "f2", ]
+  v <- c(rg$est, v1$est, v2$est, rg$se, v1$se, v2$se); S <- cov(X)
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("sem", c(n, p, fac, as.vector(t(S)), q - 1), v[q], rel = 3e-3, abs = 1e-6)
+}
 emit("lavaan_cfa", "lavaan", list(cases))

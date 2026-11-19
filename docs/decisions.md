@@ -50998,3 +50998,9 @@ W2SLS rescales each equation by its 2SLS residual variance before a second two-s
 
 ## D7505 — systemfit 3SLS with linear restrictions
 `threesls_it` takes restrictions R b = q: each GLS step on the projected regressors ends with `restrict_adjust` (the restricted correction shared in form with SUR's), and the residual-covariance divisors use each equation's free coefficients as for SUR. The first step must itself be restricted: a restricted two-stage fit (restricted OLS on the projected regressors, residuals from the actual regressors) supplies the first residual covariance; with the unrestricted 2SLS residuals instead, 1-step and converged fits agreed on some draws but not on others and 2-step fits never did. Equal to systemfit(method = "3SLS", restrict.matrix, restrict.rhs) on 24 two-equation systems with one or two restrictions at 1, 2 and converged iterations (238 values added to oracle_systemfit_2sls, 1756 in all). Open for L461: unequal observations and restrictions for plain 2SLS.
+
+## D7374 — lavaan: a regression between two latent variables
+
+**Decision.** `lavaanpkg.sem_regression` gives the structural part of `sem("f1 =~ ...; f2 =~ ...; f2 ~ f1")` as a reparametrisation of the correlated two-factor fit (same fit and degrees of freedom): the slope beta = phi21 / phi11, the variance of f1 phi11 and the residual variance of f2 phi22 - phi21^2 / phi11, with delta-method standard errors from the covariance matrix of the factor (co)variance estimates (`cfa_factors_se` now also returns its covariance matrix).
+
+**Result.** `oracle_lavaan_cfa` (732 cases, 36 new estimates and standard errors on 6 models) equals lavaan on Windows to 3e-3 relative. Linux pending. L354 is open at 0.15: paths among three or more latent variables, observed predictors, cross-loadings and other measurement structures, means and intercepts, other estimators, the model syntax.

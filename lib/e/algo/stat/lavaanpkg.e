@@ -561,7 +561,7 @@ fn cfa_factors(a: *mem.Arena, s: []const f64, n: usize, p: usize, nf: usize, fac
 
 // the standard errors of `cfa_factors` from the expected information (n / 2) tr(Sigma^-1 dSigma_i Sigma^-1 dSigma_j) at its estimates est (the same layout): se receives, in order, the free loadings (indicator order, the first of each
 // factor excluded), the residual variances, then the factor variances and covariances (lower triangle, row-major); false when the information is singular
-fn cfa_factors_se(a: *mem.Arena, est: []const f64, n: usize, p: usize, nf: usize, fac: []const usize, se: []f64) -> bool {
+fn cfa_factors_se(a: *mem.Arena, est: []const f64, n: usize, p: usize, nf: usize, fac: []const usize, se: []f64, vc: []f64) -> bool {
     let (first, e0) = mem.alloc[usize](a, nf)
     if e0 != ok { ret false }
     var u = 0usize
@@ -719,7 +719,64 @@ fn cfa_factors_se(a: *mem.Arena, est: []const f64, n: usize, p: usize, nf: usize
         col[c] = 1.0f64
         if !qrb.solve_dense(mat, col, m) { ret false }
         se[c] = math.sqrt[f64](col[c])
+        var vr = 0usize
+        while vr < m {
+            vc[vr * m + c] = col[vr]
+            vr += 1usize
+        }
         c += 1usize
     }
     ret true
+}
+
+// the regression f2 ~ f1 of a two-factor model (sem("f1 =~ ...; f2 =~ ...; f2 ~ f1")), a reparametrisation of the covariance structure of `cfa_factors` (same fit, same degrees of freedom): beta = phi21 / phi11,
+// the variance of f1 phi11 and the residual variance of f2 psi2 = phi22 - phi21^2 / phi11, from the factor covariance matrix at est and the covariance matrix vc (m by m, the parameters of `cfa_factors_se`) of its estimates;
+// nl is the number of free loadings and p the indicators. out[0 .. 3] the estimates (beta, phi11, psi2) and out[3 .. 6] their delta-method standard errors
+fn sem_regression(est: []const f64, vc: []const f64, m: usize, nl: usize, p: usize, out: []f64) {
+    let p11 = est[2usize * p]
+    let p21 = est[2usize * p + 1usize]
+    let p22 = est[2usize * p + 2usize]
+    let k11 = nl + p
+    let k21 = nl + p + 1usize
+    let k22 = nl + p + 2usize
+    out[0usize] = p21 / p11
+    out[1usize] = p11
+    out[2usize] = p22 - p21 * p21 / p11
+    var g: [3]f64 = zero
+    var r = 0usize
+    while r < 3usize {
+        if r == 0usize {
+            g[0usize] = 0.0f64 - p21 / (p11 * p11)
+            g[1usize] = 1.0f64 / p11
+            g[2usize] = 0.0f64
+        }
+        if r == 1usize {
+            g[0usize] = 1.0f64
+            g[1usize] = 0.0f64
+            g[2usize] = 0.0f64
+        }
+        if r == 2usize {
+            g[0usize] = p21 * p21 / (p11 * p11)
+            g[1usize] = 0.0f64 - 2.0f64 * p21 / p11
+            g[2usize] = 1.0f64
+        }
+        var v = 0.0f64
+        var a1 = 0usize
+        while a1 < 3usize {
+            var b1 = 0usize
+            while b1 < 3usize {
+                var ia = k11
+                if a1 == 1usize { ia = k21 }
+                if a1 == 2usize { ia = k22 }
+                var ib = k11
+                if b1 == 1usize { ib = k21 }
+                if b1 == 2usize { ib = k22 }
+                v += g[a1] * vc[ia * m + ib] * g[b1]
+                b1 += 1usize
+            }
+            a1 += 1usize
+        }
+        out[3usize + r] = math.sqrt[f64](v)
+        r += 1usize
+    }
 }

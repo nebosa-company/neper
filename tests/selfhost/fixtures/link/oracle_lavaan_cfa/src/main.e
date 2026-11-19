@@ -9,6 +9,27 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if c.name.len == 3usize && c.name[1usize] == 101u8 {
+        // the regression f2 ~ f1 of two factors: "sem" args (n, p, fac[p], S, q) q 0..2 the estimates (beta, var f1, residual var f2), 3..5 their standard errors
+        let mn = usize(z[0usize])
+        let mp = usize(z[1usize])
+        let (fac, fe) = mem.alloc[usize](a, mp)
+        let mm = 2usize * mp + 1usize
+        let (mo, me) = mem.alloc[f64](a, 2usize * mp + 3usize + 14usize)
+        let (se, se1) = mem.alloc[f64](a, mm)
+        let (vcm, vce) = mem.alloc[f64](a, mm * mm)
+        let (so, soe) = mem.alloc[f64](a, 6usize)
+        if fe != ok || me != ok || se1 != ok || vce != ok || soe != ok { ret 0.0f64 / 0.0f64 }
+        var t = 0usize
+        while t < mp {
+            fac[t] = usize(z[2usize + t])
+            t += 1usize
+        }
+        if !lv.cfa_factors(a, z[2usize + mp..2usize + mp + mp * mp], mn, mp, 2usize, fac, mo) { ret 0.0f64 / 0.0f64 }
+        if !lv.cfa_factors_se(a, mo, mn, mp, 2usize, fac, se, vcm) { ret 0.0f64 / 0.0f64 }
+        lv.sem_regression(mo, vcm, mm - 0usize, mp - 2usize, mp, so)
+        ret so[usize(z[2usize + mp + mp * mp])]
+    }
     if c.name.len == 5usize {
         let mn = usize(z[0usize])
         let mp = usize(z[1usize])
@@ -16,6 +37,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (fac, fe) = mem.alloc[usize](a, mp)
         let (mo, me) = mem.alloc[f64](a, 2usize * mp + mf * (mf + 1usize) / 2usize + 14usize)
         let (se, se1) = mem.alloc[f64](a, 2usize * mp + mf * (mf + 1usize) / 2usize)
+        let (vcm, vce) = mem.alloc[f64](a, (2usize * mp + mf * (mf + 1usize) / 2usize) * (2usize * mp + mf * (mf + 1usize) / 2usize))
+        if vce != ok { ret 0.0f64 / 0.0f64 }
         if fe != ok || me != ok || se1 != ok { ret 0.0f64 / 0.0f64 }
         var t = 0usize
         while t < mp {
@@ -23,7 +46,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             t += 1usize
         }
         if !lv.cfa_factors(a, z[3usize + mp..3usize + mp + mp * mp], mn, mp, mf, fac, mo) { ret 0.0f64 / 0.0f64 }
-        if !lv.cfa_factors_se(a, mo, mn, mp, mf, fac, se) { ret 0.0f64 / 0.0f64 }
+        if !lv.cfa_factors_se(a, mo, mn, mp, mf, fac, se, vcm) { ret 0.0f64 / 0.0f64 }
         ret se[usize(z[3usize + mp + mp * mp])]
     }
     if c.name.len == 4usize {
