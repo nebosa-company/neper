@@ -4619,4 +4619,5 @@ D7719	1438	agent-tooling rows first; T108-T114 and L546 opened
 D7720	1626	harness log analysis; T115-T117 opened and four rows given measured evidence
 D7721	1325	T118-T120 opened for the harness findings with no row; T079, T085 and T115 join the front block
 D7722	792	Handover files folded into the work queue
-D7723	1153	Handover leftovers placed
+D7723	1154	Handover leftovers placed
+D7724	545	Block-ellipsis keeps the clamped-line prefix; ellipsis-alone references are an older encoding

@@ -309,7 +309,7 @@ bootstrap build is therefore not proof, and a pool that is full blames the chang
 filled it; run the self-host build, not only `check-file`.
 
 There is no if-expression: write `var x = a` then `if c { x = b }`. A string literal cannot contain a raw newline (write `
-`). A top-level `f64` const is refused like `f32` and `str`; compute it in a function. An array literal's length must equal the declared length.
+`). A top-level `f64` const is refused like `f32` and `str`; compute it in a function. An array literal's length must equal the declared length. In `src/` code `io.printf` needs `use e.io`, and a slice of a `[]const` is immutable, so copy it into an allocated array.
 
 Silent-corruption shapes in UI code: a function that takes three `Style` values plus
 many `Node`s by value corrupts the widget tree (keep helpers to 8 argument words, pack
