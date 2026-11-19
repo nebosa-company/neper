@@ -532,7 +532,7 @@ fn dunn_many(q: Ranks, rbar: []const f64, rn: []const f64, j: usize) -> (f64, f6
 
 // manyOneUTest's statistic of group j against group 0: the Mann-Whitney U (smaller of the two) standardised with the tie-corrected variance, signed negative when the rank sum
 // of group 0 is the smaller (normal approximation, as PMCMRplus). The two-sided p is 2 pnorm(-|z|).
-fn manyone_u(a: *mem.Arena, x: []const f64, grp: []const usize, j: usize) -> (f64, err) {
+fn manyone_u(a: *mem.Arena, x: []const f64, grp: []const usize, g0: usize, j: usize) -> (f64, err) {
     let n = x.len
     let (sub, e0) = mem.alloc[f64](a, n)
     let (who, e1) = mem.alloc[usize](a, n)
@@ -541,7 +541,7 @@ fn manyone_u(a: *mem.Arena, x: []const f64, grp: []const usize, j: usize) -> (f6
     var m = 0usize
     var t = 0usize
     while t < n {
-        if grp[t] == 0usize || grp[t] == j {
+        if grp[t] == g0 || grp[t] == j {
             sub[m] = x[t]
             who[m] = grp[t]
             m += 1usize
@@ -556,7 +556,7 @@ fn manyone_u(a: *mem.Arena, x: []const f64, grp: []const usize, j: usize) -> (f6
     var n2 = 0.0f64
     t = 0usize
     while t < m {
-        if who[t] == 0usize {
+        if who[t] == g0 {
             r1 += r[t]
             n1 += 1.0f64
         } else {
@@ -595,4 +595,15 @@ fn nemenyi_chisq(q: Ranks, rbar: []const f64, rn: []const f64, i: usize, j: usiz
     if dif < 0.0f64 { dif = 0.0f64 - dif }
     let st = dif * dif / (q.n * (q.n + 1.0f64) / 12.0f64 * (1.0f64 / rn[i] + 1.0f64 / rn[j])) / q.ties_kw
     ret (st, 1.0f64 - nm.pchisq(st, f64(q.k - 1usize), true, false))
+}
+
+// dscfAllPairsTest: the Dwass-Steel-Critchlow-Fligner statistic of the pair (g0, j) is -sqrt(2) |z| of the pairwise Mann-Whitney z (always on the smaller U), and its p is the upper
+// Tukey probability of |statistic| for k means and infinite degrees of freedom; answers (statistic, p)
+fn dscf_pair(a: *mem.Arena, x: []const f64, grp: []const usize, k: usize, g0: usize, j: usize) -> (f64, f64, err) {
+    let (z, e) = manyone_u(a, x, grp, g0, j)
+    if e != ok { ret (0.0f64, 0.0f64, e) }
+    var az = z
+    if az < 0.0f64 { az = 0.0f64 - az }
+    let st = 0.0f64 - math.sqrt[f64](2.0f64) * az
+    ret (st, 1.0f64 - nb.ptukey(math.sqrt[f64](2.0f64) * az, 1.0f64, f64(k), 1.0e300f64, true, false), ok)
 }

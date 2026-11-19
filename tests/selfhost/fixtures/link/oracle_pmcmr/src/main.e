@@ -59,6 +59,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if str.eq(kind, "dz") || str.eq(kind, "dp") || str.eq(kind, "dpholm") {
                 let (z, p) = pm.dunn(q, rbar, rn, row, col)
                 if str.eq(kind, "dz") { vals[pos] = z } else { vals[pos] = p }
+            } else if str.eq(kind, "ds") || str.eq(kind, "dsp") {
+                let (ds1, dp1, ed) = pm.dscf_pair(a, y, grp, k, col + 1usize, row + 1usize)
+                if ed != ok { os.exit(11) }
+                if str.eq(kind, "ds") { vals[pos] = ds1 } else { vals[pos] = dp1 }
             } else if str.eq(kind, "nc") || str.eq(kind, "ncp") {
                 let (cs, cp) = pm.nemenyi_chisq(q, rbar, rn, row, col)
                 if str.eq(kind, "nc") { vals[pos] = cs } else { vals[pos] = cp }

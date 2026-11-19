@@ -25,12 +25,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         grp[t] = usize(z[4usize + n + t]) - 1usize
         t += 1usize
     }
-    let (z0, e4) = pm.manyone_u(a, x, grp, 0usize)
+    let (z0, e4) = pm.manyone_u(a, x, grp, 0usize, 0usize)
     let _ = z0
     if e4 != ok { os.exit(5) }
     t = 1usize
     while t < k {
-        let (zz, e7) = pm.manyone_u(a, x, grp, t)
+        let (zz, e7) = pm.manyone_u(a, x, grp, 0usize, t)
         if e7 != ok { os.exit(7) }
         var az = zz
         if az < 0.0f64 { az = 0.0f64 - az }
@@ -38,7 +38,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         t += 1usize
     }
     if kind == 0usize {
-        let (zv, e8) = pm.manyone_u(a, x, grp, jj)
+        let (zv, e8) = pm.manyone_u(a, x, grp, 0usize, jj)
         let _ = e8
         ret zv
     }

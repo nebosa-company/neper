@@ -50323,3 +50323,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7396 — PMCMRplus Nemenyi all-pairs with the chi-square approximation
 `nemenyi_chisq` is kwAllPairsNemenyiTest(dist = "Chisquare"): dif^2 / (n (n + 1)/12 (1/n_i + 1/n_j)) divided by the Kruskal tie correction C, with the upper chi-square p at k - 1 degrees of freedom. Fourteen data sets (with and without ties) are added to oracle_pmcmr (statistics and p values as position-weighted sums). L487 stays at 0.75.
+
+## D7397 — PMCMRplus dscfAllPairsTest
+`dscf_pair` reuses the pairwise Mann-Whitney z of `manyone_u` (which gained the first-group argument): the Dwass-Steel-Critchlow-Fligner statistic is -sqrt(2) |z| (R takes the smaller U, so it is never positive) and the p is the upper Tukey probability of |statistic| at k means and infinite df. Equal to R on 14 data sets, statistics and p values as position-weighted sums; the existing many-to-one U fixture was updated for the new argument and still passes. L487 stays at 0.75.
