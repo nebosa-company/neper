@@ -61,4 +61,13 @@ for (rep in 1:30) {
   v <- c(ra$rho.c$est, ra$rho.c$lower, ra$rho.c$upper, rz$rho.c$lower, rz$rho.c$upper, ra$s.shift, ra$l.shift, ra$C.b, ra$sblalt$est, ra$sblalt$delta.sd)
   for (w in 0:9) cases[[length(cases) + 1]] <- case("ccc", c(n, x, y, w), v[w + 1], rel = 1e-8, abs = 1e-12)
 }
+# epi.sscohortc: "sc" args (irexp1, irexp0, r, design, N (0 for none), sided, frac, power or n, which 0 n.exp1, 1 n.exp0, 2 n.total, 3 power from n)
+for (rep in 1:40) {
+  i0 <- runif(1, 0.05, 0.3); i1 <- i0 * runif(1, 1.4, 2.5); r <- sample(c(1, 2, 3), 1); des <- sample(c(1, 1.5, 2), 1); NN <- if (rep %% 2 == 0) NA else sample(2000:20000, 1); sd <- sample(1:2, 1); fr <- rep %% 3 == 0; pw <- runif(1, 0.7, 0.95)
+  res <- epi.sscohortc(N = NN, irexp1 = i1, irexp0 = i0, pexp = NA, power = pw, r = r, design = des, sided.test = sd, nfractional = fr, n = NA)
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("sc", c(i1, i0, r, des, if (is.na(NN)) 0 else NN, sd, as.numeric(fr), pw, w), c(res$n.exp1, res$n.exp0, res$n.total)[w + 1], rel = 1e-9, abs = 1e-9)
+  nn <- sample(100:900, 1)
+  rp <- epi.sscohortc(N = NN, irexp1 = i1, irexp0 = i0, pexp = NA, n = nn, power = NA, r = r, design = des, sided.test = sd)
+  cases[[length(cases) + 1]] <- case("sc", c(i1, i0, r, des, if (is.na(NN)) 0 else NN, sd, 0, nn, 3), rp$power, rel = 1e-8, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))

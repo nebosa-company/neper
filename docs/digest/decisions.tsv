@@ -4411,4 +4411,5 @@ D7552	646	epiR score risk-ratio interval and attributable fraction in the expose
 D7553	733	epiR epi.tests with exact intervals
 D7554	484	epiR epi.conf proportion intervals
 D7555	694	epiR case-control score odds ratio and attributable fraction
-D7556	478	epiR epi.ccc
+D7556	479	epiR epi.ccc
+D7557	528	epiR epi.sscohortc sample size and power

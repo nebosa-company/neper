@@ -10,6 +10,14 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "sc") {
+        let ws = usize(x[8usize])
+        if ws == 3usize { ret ep.sscohort_power(x[0usize], x[1usize], x[7usize], x[2usize], x[3usize], x[4usize], x[5usize], 0.95f64) }
+        let (s1, s0, st) = ep.sscohort_n(x[0usize], x[1usize], x[7usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize] > 0.5f64, 0.95f64)
+        if ws == 0usize { ret s1 }
+        if ws == 1usize { ret s0 }
+        ret st
+    }
     if str.eq(c.name, "ccc") {
         let nc = usize(x[0usize])
         var ov: [10]f64 = zero

@@ -51163,3 +51163,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7556 — epiR epi.ccc
 `epi_ccc` is Lin's concordance correlation as epi.ccc computes it (population variances, r from the sample moments): rho_c with the asymptotic and the z-transform intervals, the scale and location shifts, the bias-correction factor and the Bland-Altman mean and standard deviation of the differences. Equal to epiR on 30 data sets (300 values added to oracle_epir, 2610 in all). The repeated-measures variant (rep.measure with subject ids) stays open.
+
+## D7557 — epiR epi.sscohortc sample size and power
+`sscohort_n` gives the exposed, unexposed and total sample sizes for two incidence risks and a power (design effect, finite population, one- or two-sided test, fractional or rounded-up counts) and `sscohort_power` the power a total n reaches, as epi.sscohortc does in its two main modes. Equal to epiR on 40 draws (160 values added to oracle_epir, 2770 in all). The third mode (solving for the exposed risk), the case-control and the simple-estimate sample sizes stay open.

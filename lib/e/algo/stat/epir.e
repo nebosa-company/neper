@@ -377,3 +377,41 @@ fn epi_ccc(x: []const f64, y: []const f64, level: f64, out: []f64) {
     out[8usize] = dm
     out[9usize] = math.sqrt[f64](sdd / (k - 1.0f64))
 }
+
+// epi.sscohortc, sample size from the two incidence risks and the power: (n exposed, n unexposed, n total); finite <= 0 means no finite population, frac keeps fractional counts
+fn sscohort_n(irexp1: f64, irexp0: f64, power: f64, r: f64, design: f64, finite: f64, sided: f64, frac: bool, level: f64) -> (f64, f64, f64) {
+    let za = dist.qnorm(1.0f64 - (1.0f64 - level) / sided, 0.0f64, 1.0f64, true, false)
+    let zb = dist.qnorm(power, 0.0f64, 1.0f64, true, false)
+    let lam = irexp1 / irexp0
+    let pi = irexp0
+    let pc = pi * (r * lam + 1.0f64) / (r + 1.0f64)
+    let p1 = (r + 1.0f64) / (r * (lam - 1.0f64) * (lam - 1.0f64) * pi * pi)
+    let p2 = za * math.sqrt[f64]((r + 1.0f64) * pc * (1.0f64 - pc))
+    let p3 = zb * math.sqrt[f64](lam * pi * (1.0f64 - lam * pi) + r * pi * (1.0f64 - pi))
+    var n = p1 * (p2 + p3) * (p2 + p3) * design
+    if finite > 0.0f64 { n = n / (1.0f64 + n / finite) }
+    if frac {
+        let e1 = n / (r + 1.0f64) * r
+        let e0 = n / (r + 1.0f64)
+        ret (e1, e0, e1 + e0)
+    }
+    let e1c = math.ceil[f64](n / (r + 1.0f64)) * r
+    let e0c = math.ceil[f64](n / (r + 1.0f64))
+    ret (e1c, e0c, e1c + e0c)
+}
+
+// epi.sscohortc, the power reached by a total sample size n
+fn sscohort_power(irexp1: f64, irexp0: f64, n0: f64, r: f64, design: f64, finite: f64, sided: f64, level: f64) -> f64 {
+    let za = dist.qnorm(1.0f64 - (1.0f64 - level) / sided, 0.0f64, 1.0f64, true, false)
+    let lam = irexp1 / irexp0
+    let pi = irexp0
+    let pc = pi * (r * lam + 1.0f64) / (r + 1.0f64)
+    let n = n0 / design
+    var nn = n
+    if finite > 0.0f64 { nn = (n * finite - n) / (finite - n) }
+    var t1 = pi * (1.0f64 - lam) * math.sqrt[f64](nn * r)
+    if lam >= 1.0f64 { t1 = pi * (lam - 1.0f64) * math.sqrt[f64](nn * r) }
+    let t2 = za * (r + 1.0f64) * math.sqrt[f64](pc * (1.0f64 - pc))
+    let t3 = (r + 1.0f64) * (lam * pi * (1.0f64 - lam * pi) + r * pi * (1.0f64 - pi))
+    ret dist.pnorm((t1 - t2) / math.sqrt[f64](t3), 0.0f64, 1.0f64, true, false)
+}
