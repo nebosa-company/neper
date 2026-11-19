@@ -51199,3 +51199,6 @@ The cross-sectional design reports the cohort.count measures under the prevalenc
 
 ## D7568 — epiR Breslow-Day homogeneity statistic
 `breslow_day` computes the Breslow-Day statistic for K tables as epi.2by2 does: the expected exposed-case count A* solves the quadratic built from the Mantel-Haenszel odds ratio (the root inside [0, min(row 1, column 1)]), and the statistic is the sum of (a - A*)^2 over the inverse of the summed reciprocals of the four expected cells. Equal to epiR bOR.homog on 30 stacks (30 values added to oracle_epir, 5245 in all). The crude-table estimates, the boundary tables and the MLE and Cornfield odds-ratio intervals stay open.
+
+## D7569 — epiR crude estimates of a stratified table
+epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude) table; the existing cohort functions (risk_ratio, odds_ratio, risk_difference, rr_score, chi2 without correction) equal RR.crude.wald, OR.crude.wald, ARisk.crude.wald, RR.crude.score and chi2.crude.uncor on 20 stacks summed over strata (280 values added to oracle_epir, 5525 in all), with no new code. The crude Yates statistic differs from the single-table one (epiR corrects it differently on a stack) and is not ported.

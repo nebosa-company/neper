@@ -169,4 +169,16 @@ for (rep in 1:30) {
   r <- suppressWarnings(epi.2by2(as.table(arr), method = "cohort.count", interpret = FALSE, outcome = "as.columns"))$massoc.detail
   cases[[length(cases) + 1]] <- case("bd", c(K, a, b, cc, d), r$bOR.homog$test.statistic, rel = 1e-8, abs = 1e-10)
 }
+# crude tables of stacked strata: the collapsed table through the "m" measures
+for (rep in 1:20) {
+  K <- sample(2:5, 1); a <- sample(8:120, K, TRUE); b <- sample(40:600, K, TRUE); cc <- sample(5:100, K, TRUE); d <- sample(40:700, K, TRUE); un <- c(100, 1000, 1)[rep %% 3 + 1]
+  arr <- array(0, dim = c(2, 2, K)); for (s in 1:K) arr[, , s] <- matrix(c(a[s], b[s], cc[s], d[s]), 2, byrow = TRUE)
+  r <- suppressWarnings(epi.2by2(as.table(arr), method = "cohort.count", interpret = FALSE, outcome = "as.columns", units = un))$massoc.detail
+  base <- c(sum(a), sum(b), sum(cc), sum(d), un)
+  for (i in 1:3) add(i - 1, base, unlist(r$RR.crude.wald[1, ])[i])
+  for (i in 1:3) add(2 + i, base, unlist(r$OR.crude.wald[1, ])[i])
+  for (i in 1:3) add(5 + i, base, unlist(r$ARisk.crude.wald[1, ])[i])
+  for (i in 1:3) add(20 + i, base, unlist(r$RR.crude.score[1, ])[i])
+  add(17, base, r$chi2.crude.uncor$test.statistic); add(18, base, r$chi2.crude.uncor$p.value.2s)
+}
 emit("epir", "epiR", list(cases))
