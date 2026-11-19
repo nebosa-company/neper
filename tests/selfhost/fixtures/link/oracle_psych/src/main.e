@@ -32,6 +32,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let pn = usize(x[0usize])
         ret ps.polychoric_pair(x[2usize..2usize + pn], x[2usize + pn..2usize + 2usize * pn], usize(x[1usize]))
     }
+    if str.eq(c.name, "pca") {
+        let pp = usize(x[0usize])
+        let nf = usize(x[1usize])
+        let (po, pe) = mem.alloc[f64](a, pp * nf + 2usize * pp)
+        if pe != ok { ret 0.0f64 / 0.0f64 }
+        if ps.principal(a, x[2usize..2usize + pp * pp], pp, nf, po) != ok { ret 0.0f64 / 0.0f64 }
+        ret po[usize(x[2usize + pp * pp])]
+    }
     if str.eq(c.name, "bis") {
         let bn = usize(x[0usize])
         ret ps.biserial(x[1usize..1usize + bn], x[1usize + bn..1usize + 2usize * bn])

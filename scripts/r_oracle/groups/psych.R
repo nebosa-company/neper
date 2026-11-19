@@ -77,4 +77,14 @@ for (rep in 1:16) {
   pc <- suppressMessages(suppressWarnings(polychoric(X, smooth = FALSE, progress = FALSE)))$rho
   for (u in 1:2) for (v in (u + 1):3) cases[[length(cases) + 1]] <- case("polyp", c(n, k, X[, u], X[, v], 0), pc[u, v], rel = 1e-4, abs = 1e-5)
 }
+# principal components, unrotated: "pca" (p, nf, R[p*p column-major], q) q < p*nf loading q (item q %% p, component q %/% p), then p*nf + k eigenvalue k, then p*nf + p + i communality i
+for (rep in 1:14) {
+  n <- sample(40:120, 1); p <- sample(3:7, 1); f <- rnorm(n); X <- sapply(1:p, function(j) f * runif(1, 0.3, 1.2) + rnorm(n)); R <- cor(X)
+  nf <- sample(1:min(3, p - 1), 1)
+  pc <- suppressMessages(principal(R, nfactors = nf, rotate = "none", residuals = FALSE))
+  L <- unclass(pc$loadings)
+  for (q in 0:(p * nf - 1)) cases[[length(cases) + 1]] <- case("pca", c(p, nf, R, q), L[(q %% p) + 1, (q %/% p) + 1], rel = 1e-8, abs = 1e-9)
+  for (k in 1:p) cases[[length(cases) + 1]] <- case("pca", c(p, nf, R, p * nf + k - 1), pc$values[k], rel = 1e-8, abs = 1e-9)
+  for (i in 1:p) cases[[length(cases) + 1]] <- case("pca", c(p, nf, R, p * nf + p + i - 1), pc$communality[i], rel = 1e-8, abs = 1e-9)
+}
 emit("psych", "psych", list(cases))

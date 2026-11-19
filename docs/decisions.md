@@ -50380,3 +50380,9 @@ vanWaerdenManyOneTest(p.adjust.method = "single-step") takes its p from the same
 **Decision.** `psych.tetrachoric_pair` (0/1 columns, thresholds -qnorm of the column means, zero cells replaced by 0.5, psych's cell order in which the first threshold belongs to the second variable) and `polychoric_pair` (categories 1 to k <= 8, thresholds from cumulative proportions, rho by `optimize` of the multinomial log-likelihood with bivariate normal cell probabilities from `pbivnorm`). Both minimise with R's Brent `optimize`, as psych does.
 
 **Result.** `oracle_psych` (1477 cases, 81 new) equals psych on Windows: tetrachoric to 1e-6, polychoric to 1e-4 (psych's `sadmvn` is itself only accurate to about 1e-6, and every category must be observed so no threshold is infinite). Linux pending. L312 stays partial: smoothing of non-positive-definite matrices, omega, fa with rotations, principal, fa.parallel, VSS, scoreItems, describeBy.
+
+## D7318 — psych: principal components
+
+**Decision.** `psych.principal` takes the sign-exact `dsyevr` eigen decomposition of a correlation matrix, forms the loadings eigenvector times sqrt(eigenvalue) (eigenvalues floored at machine epsilon), flips each column so its sum is positive, and returns the eigenvalues and the communalities (`rotate = "none"`).
+
+**Result.** `oracle_psych` (1750 cases, 273 new) equals psych on Windows to 1e-8. Linux pending. L312 stays partial: rotations (varimax and oblique), smoothing, omega, fa, fa.parallel, VSS, scoreItems, describeBy.

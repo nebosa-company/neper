@@ -94,7 +94,7 @@ L490	library	0.15	657	timereg: Aalen additive and Cox-Aalen hazard models	Partia
 L491	library	0.15	673	riskRegression: risk prediction scoring	Partial (D6642).
 L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
 L440	library	0.15	855	flexsurv and rstpm2: flexible parametric survival models	Partial (D6640).
-L312	library	0.15	1126	psych: reliability, factor analysis and correlation tools	D7317: tetrachoric and polychoric correlations of a pair of columns (global thresholds) equal to psych.
+L312	library	0.15	1220	psych: reliability, factor analysis and correlation tools	D7318: principal (unrotated components, loadings, eigenvalues, communalities) equal to psych.
 L313	library	0.12	1071	emmeans: estimated marginal means and contrasts	Partly done (D6058): e.algo.stat.emmeans gives lm EMMs, SEs, pairwise contrasts and Tukey, Holm, Bonferroni, Sidak adjustments equal to emmeans on 8 models on Windows (oracle_emmeans);
 L341	library	0.15	785	multcomp: general linear hypotheses	Partial (D6631).
 L318	library	0.05	735	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partly done (D6063): e.algo.stat.fcast has BoxCox, InvBoxCox and BoxCox.lambda by loglik, equal to forecast on 171 cases on Windows (oracle_fcast);

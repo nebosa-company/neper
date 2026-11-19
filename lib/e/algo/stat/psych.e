@@ -11,6 +11,7 @@ use e.math.nmath_beta as nbt
 use e.math.dist as dst
 use e.algo.stat.desctools as dt
 use e.mem
+use e.algo.linalg.lapack_syevr as sy
 use e.algo.stat.fdrtool as fd
 use e.algo.stat.pbivnorm as pbv
 
@@ -516,11 +517,11 @@ fn tetrachoric(t: []const f64, correct: f64, out: []f64) {
 fn tetrachoric_pair(x: []const f64, y: []const f64, correct: f64) -> f64 {
     var c = TetCtx { tab: zero, rc: 0.0f64, cc: 0.0f64 }
     var sx = 0.0f64
-    var sy = 0.0f64
+    var sq0 = 0.0f64
     var i = 0usize
     while i < x.len {
         sx += x[i]
-        sy += y[i]
+        sq0 += y[i]
         var cell = 0usize
         if x[i] > 0.5f64 { cell += 1usize }
         if y[i] > 0.5f64 { cell += 2usize }
@@ -542,7 +543,7 @@ fn tetrachoric_pair(x: []const f64, y: []const f64, correct: f64) -> f64 {
         }
     }
     c.cc = 0.0f64 - dst.qnorm(sx / nn, 0.0f64, 1.0f64, true, false)
-    c.rc = 0.0f64 - dst.qnorm(sy / nn, 0.0f64, 1.0f64, true, false)
+    c.rc = 0.0f64 - dst.qnorm(sq0 / nn, 0.0f64, 1.0f64, true, false)
     ret fd.brent_min[TetCtx](&c, tetra_f, 0.0f64 - 1.0f64, 1.0f64)
 }
 
@@ -608,4 +609,49 @@ fn polychoric_pair(x: []const f64, y: []const f64, k: usize) -> f64 {
         i += 1usize
     }
     ret fd.brent_min[PolyCtx](&c, poly_f, 0.0f64 - 1.0f64, 1.0f64)
+}
+
+// psych::principal(r, nfactors = nf, rotate = "none") of a correlation matrix r (p by p, column-major): out[0 .. p nf] the loadings (item i, component k at i + k p) with each column signed so its sum is
+// positive, then the p eigenvalues (descending), then the p communalities
+fn principal(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []f64) -> err {
+    let (w, e1) = mem.alloc[f64](a, p)
+    let (z, e2) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    let e3 = sy.dsyevr_all(a, r, p, w, z)
+    if e3 != ok { ret e3 }
+    var k = 0usize
+    while k < p {
+        out[p * nf + k] = w[p - 1usize - k]
+        k += 1usize
+    }
+    var h = 0usize
+    while h < p {
+        out[p * nf + p + h] = 0.0f64
+        h += 1usize
+    }
+    k = 0usize
+    while k < nf {
+        var ev = w[p - 1usize - k]
+        if ev < 2.220446049250313e-16f64 { ev = 2.220446049250313e-16f64 }
+        let sq = math.sqrt[f64](ev)
+        let col = p - 1usize - k
+        var sum = 0.0f64
+        var i = 0usize
+        while i < p {
+            out[i + k * p] = z[col * p + i] * sq
+            sum += out[i + k * p]
+            i += 1usize
+        }
+        var sg = 1.0f64
+        if sum < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+        i = 0usize
+        while i < p {
+            out[i + k * p] = out[i + k * p] * sg
+            out[p * nf + p + i] += out[i + k * p] * out[i + k * p]
+            i += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
 }
