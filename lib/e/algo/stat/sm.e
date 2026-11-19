@@ -7,6 +7,7 @@ use e.math
 use e.mem
 use e.math.nmath as nm
 use e.algo.stat.fdrtool as fd
+use e.algo.stat.rnm
 
 fn sd_of(x: []const f64) -> f64 {
     var m = 0.0f64
@@ -1268,4 +1269,26 @@ fn hselect_cv_2d_common(x1: []const f64, x2: []const f64) -> f64 {
     var c = Cv2cCtx { x1: x1, x2: x2 }
     let start = (sd_of(x1) / 2.0f64 + sd_of(x2) / 2.0f64) / 2.0f64
     ret math.exp[f64](fd.brent_min[Cv2cCtx](&c, cv2c_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+}
+
+type Cv2sCtx = struct { x1: []const f64, x2: []const f64 }
+
+fn cv2s_obj(c: *Cv2sCtx, lh: []const f64) -> f64 {
+    let v = cv_density_2d(c.x1, c.x2, math.exp[f64](lh[0usize]), math.exp[f64](lh[1usize]))
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+// the separate structure (structure.2d = "separate"): R's optim (Nelder-Mead, reltol 1e-6) on the two log bandwidths from log(sd / 2); which 0 or 1
+fn hselect_cv_2d_separate(a: *mem.Arena, x1: []const f64, x2: []const f64, which: usize) -> f64 {
+    var c = Cv2sCtx { x1: x1, x2: x2 }
+    var st: [2]f64 = zero
+    st[0usize] = math.log[f64](sd_of(x1) / 2.0f64)
+    st[1usize] = math.log[f64](sd_of(x2) / 2.0f64)
+    var xo: [2]f64 = zero
+    let (fv, cnt, fail) = rnm.nmmin[Cv2sCtx](a, &c, cv2s_obj, st[0usize..2usize], 0.0f64 - 1.0e308f64, 1.0e-6f64, 1.0f64, 0.5f64, 2.0f64, 500usize, 1.0f64, xo[0usize..2usize])
+    let _ = fv
+    let _ = cnt
+    let _ = fail
+    ret math.exp[f64](xo[which])
 }

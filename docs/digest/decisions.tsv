@@ -4313,4 +4313,5 @@ D7459	756	sm.ancova parallel model, with R's indicator-matrix quirk
 D7460	553	sm.survival
 D7461	618	sm.regression reference-band tests
 D7462	574	sm h.select cv for two variables
-D7463	413	sm h.select cv, common 2-d structure
+D7463	414	sm h.select cv, common 2-d structure
+D7464	432	sm h.select cv, separate 2-d structure

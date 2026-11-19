@@ -50854,3 +50854,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7463 — sm h.select cv, common 2-d structure
 `hselect_cv_2d_common` is h.select(cbind(x, y), method = "cv", structure.2d = "common"): one bandwidth for both variables, start mean(sd / 2), the same optimise; equal to sm on 20 samples in oracle_sm_hsel. Open for L505: the separate structure (R optim Nelder-Mead on two log bandwidths), 2-d regression criteria, 2-d and binned ancova, band curves, sm.options.
+
+## D7464 — sm h.select cv, separate 2-d structure
+`hselect_cv_2d_separate` is h.select(cbind(x, y), method = "cv", structure.2d = "separate"): R's optim Nelder-Mead (`rnm.nmmin`, reltol 1e-6) on the two log bandwidths from log(sd / 2), no scaling by the standard deviations; equal to sm on 20 samples, both bandwidths, in oracle_sm_hsel. Open for L505: the 2-d regression criteria, 2-d and binned ancova, band curves, sm.options.

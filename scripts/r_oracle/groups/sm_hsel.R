@@ -105,4 +105,10 @@ for (rep in 1:20) {
   r <- tryCatch(h.select(cbind(x, y), method = "cv", structure.2d = "common"), error = function(e) NULL)
   if (!is.null(r) && all(is.finite(r))) cases[[length(cases) + 1]] <- case("hc2c", c(n, 0, x, y), r[1], rel = 1e-6, abs = 1e-10)
 }
+# hc2s (n, which, x[n], y[n]): the separate structure
+for (rep in 1:20) {
+  n <- sample(30:90, 1); x <- rnorm(n); y <- 0.5 * x + rnorm(n, 0, 0.8)
+  r <- tryCatch(h.select(cbind(x, y), method = "cv", structure.2d = "separate"), error = function(e) NULL)
+  if (!is.null(r) && all(is.finite(r))) for (w in 1:2) cases[[length(cases) + 1]] <- case("hc2s", c(n, w - 1, x, y), r[w], rel = 1e-6, abs = 1e-10)
+}
 emit("sm_hsel", "sm", list(cases))
