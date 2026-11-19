@@ -485,3 +485,199 @@ fn entropy(a: *mem.Arena, ncat: []const usize, nr: usize, probs: []const f64, pr
     }
     ret h
 }
+
+fn reg_prior(x: []const f64, n: usize, q: usize, nr: usize, coef: []const f64, i: usize, pr: []f64) {
+    let ns = q + 1usize
+    var tot = 1.0f64
+    pr[0usize] = 1.0f64
+    var r = 1usize
+    while r < nr {
+        var eta = coef[(r - 1usize) * ns]
+        var t = 0usize
+        while t < q {
+            eta += x[t * n + i] * coef[(r - 1usize) * ns + 1usize + t]
+            t += 1usize
+        }
+        pr[r] = math.exp[f64](eta)
+        tot += pr[r]
+        r += 1usize
+    }
+    r = 0usize
+    while r < nr {
+        pr[r] = pr[r] / tot
+        r += 1usize
+    }
+}
+
+// poLCA(cbind(...) ~ x1 + ... + xq): latent class regression, the class prior of a case the multinomial logit exp(x' b_r) / (1 + sum exp(x' b)) with class 1 as the reference. EM from the given response
+// probabilities and b = 0, the response probabilities updated by posterior weights and b by one Newton step per round on the expected complete-data likelihood, until the log-likelihood (after the update) moves by less
+// than tol. x is n by q column-major without the intercept; coef (q + 1) by (nr - 1), column r - 1 holding class r's intercept then slopes; probs as `em`. Returns the log-likelihood
+fn em_reg(a: *mem.Arena, data: []const f64, x: []const f64, n: usize, q: usize, nj: usize, ncat: []const usize, nr: usize, probs: []f64, coef: []f64, tol: f64, maxiter: usize) -> f64 {
+    let ns = q + 1usize
+    let np = ns * (nr - 1usize)
+    var tc = 0usize
+    var v = 0usize
+    while v < nj {
+        tc += ncat[v]
+        v += 1usize
+    }
+    let (off, e1) = mem.alloc[usize](a, nj)
+    let (pri, e2) = mem.alloc[f64](a, n * nr)
+    let (pst, e3) = mem.alloc[f64](a, n * nr)
+    let (acc, e4) = mem.alloc[f64](a, nr * tc)
+    let (cls, e5) = mem.alloc[f64](a, nr)
+    let (hs, e6) = mem.alloc[f64](a, np * np)
+    let (gr, e7) = mem.alloc[f64](a, np)
+    let (xi, e8) = mem.alloc[f64](a, ns)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret 0.0f64 / 0.0f64 }
+    var o = 0usize
+    v = 0usize
+    while v < nj {
+        off[v] = o
+        o += ncat[v]
+        v += 1usize
+    }
+    var i = 0usize
+    while i < np {
+        coef[i] = 0.0f64
+        i += 1usize
+    }
+    var last = 0.0f64 - 1.0e300f64
+    var ll = last
+    var it = 0usize
+    while it < maxiter {
+        // E step with the current prior and probabilities
+        i = 0usize
+        while i < n {
+            reg_prior(x, n, q, nr, coef, i, pri[i * nr..(i + 1usize) * nr])
+            var tot = 0.0f64
+            var r = 0usize
+            while r < nr {
+                var pr = pri[i * nr + r]
+                v = 0usize
+                while v < nj {
+                    pr *= probs[r * tc + off[v] + usize(data[i * nj + v])]
+                    v += 1usize
+                }
+                pst[i * nr + r] = pr
+                tot += pr
+                r += 1usize
+            }
+            r = 0usize
+            while r < nr {
+                pst[i * nr + r] = pst[i * nr + r] / tot
+                r += 1usize
+            }
+            i += 1usize
+        }
+        // M step for the responses
+        var r = 0usize
+        while r < nr {
+            cls[r] = 0.0f64
+            var c = 0usize
+            while c < tc {
+                acc[r * tc + c] = 0.0f64
+                c += 1usize
+            }
+            r += 1usize
+        }
+        i = 0usize
+        while i < n {
+            r = 0usize
+            while r < nr {
+                cls[r] += pst[i * nr + r]
+                v = 0usize
+                while v < nj {
+                    acc[r * tc + off[v] + usize(data[i * nj + v])] += pst[i * nr + r]
+                    v += 1usize
+                }
+                r += 1usize
+            }
+            i += 1usize
+        }
+        r = 0usize
+        while r < nr {
+            v = 0usize
+            while v < nj {
+                var c = 0usize
+                while c < ncat[v] {
+                    probs[r * tc + off[v] + c] = acc[r * tc + off[v] + c] / cls[r]
+                    c += 1usize
+                }
+                v += 1usize
+            }
+            r += 1usize
+        }
+        // one Newton step for the class logits
+        var z = 0usize
+        while z < np * np {
+            hs[z] = 0.0f64
+            z += 1usize
+        }
+        z = 0usize
+        while z < np {
+            gr[z] = 0.0f64
+            z += 1usize
+        }
+        i = 0usize
+        while i < n {
+            xi[0usize] = 1.0f64
+            var t = 0usize
+            while t < q {
+                xi[1usize + t] = x[t * n + i]
+                t += 1usize
+            }
+            var r1 = 1usize
+            while r1 < nr {
+                var s1 = 0usize
+                while s1 < ns {
+                    gr[(r1 - 1usize) * ns + s1] += xi[s1] * (pst[i * nr + r1] - pri[i * nr + r1])
+                    var r2 = 1usize
+                    while r2 < nr {
+                        var dl = 0.0f64
+                        if r1 == r2 { dl = 1.0f64 }
+                        var s2 = 0usize
+                        while s2 < ns {
+                            hs[((r1 - 1usize) * ns + s1) * np + (r2 - 1usize) * ns + s2] += xi[s1] * xi[s2] * pri[i * nr + r1] * (dl - pri[i * nr + r2])
+                            s2 += 1usize
+                        }
+                        r2 += 1usize
+                    }
+                    s1 += 1usize
+                }
+                r1 += 1usize
+            }
+            i += 1usize
+        }
+        if !qrb.solve_dense(hs, gr, np) { ret 0.0f64 / 0.0f64 }
+        z = 0usize
+        while z < np {
+            coef[z] += gr[z]
+            z += 1usize
+        }
+        // log-likelihood after the update
+        ll = 0.0f64
+        i = 0usize
+        while i < n {
+            reg_prior(x, n, q, nr, coef, i, pri[i * nr..(i + 1usize) * nr])
+            var tot2 = 0.0f64
+            r = 0usize
+            while r < nr {
+                var pr2 = pri[i * nr + r]
+                v = 0usize
+                while v < nj {
+                    pr2 *= probs[r * tc + off[v] + usize(data[i * nj + v])]
+                    v += 1usize
+                }
+                tot2 += pr2
+                r += 1usize
+            }
+            ll += math.log[f64](tot2)
+            i += 1usize
+        }
+        it += 1usize
+        if math.abs[f64](ll - last) < tol { break }
+        last = ll
+    }
+    ret ll
+}

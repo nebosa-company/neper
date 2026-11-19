@@ -50584,3 +50584,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7425 — pscl pR2 for the hurdle
 `pr2_hurdle` is `pr2_zeroinfl` with the null model hurdle(y ~ 1 | 1); the same six numbers equal pR2 to 1e-4 on twelve Poisson hurdle fits (24 pR2 sets in all with D7424). L412 at 0.78.
+
+## D7345 — poLCA: latent class regression
+
+**Decision.** `polcapkg.em_reg` fits `poLCA(cbind(...) ~ x1 + ... + xq)`: the class prior of a case is the multinomial logit exp(x' b_r) / (1 + sum exp(x' b)) with class 1 as the reference, as `poLCA.updatePrior` codes it; each EM round updates the response probabilities by the posterior weights and the coefficients by one Newton step with the expected score and information, and the log-likelihood is taken after the update.
+
+**Result.** `oracle_polca` (354 cases, 38 new on 14 data sets with one or two covariates and two classes) equals poLCA on Windows: log-likelihood to 1e-6, the sum of squares of the response probabilities to 1e-4 and of the coefficients to 1e-3. The signs of the coefficients are not compared: in my runs the printed `coeff` of poLCA came out with the opposite sign to this coding on the same fits (equal log-likelihoods and probabilities) and I did not find the reason, so the check is the sum of squares. Linux pending. L512 stays partial: the sign convention of the coefficients, three or more classes with covariates, standard errors of the regression, the generalised inverse for singular information.

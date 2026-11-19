@@ -4246,4 +4246,8 @@ D7422	708	pscl zero links
 D7341	501	psych: describeBy
 D7342	1157	psych: fa.parallel
 D7343	528	poLCA: entropy
-D7344	765	poLCA: missing responses
+D7344	766	poLCA: missing responses
+D7423	560	pscl zeroinfl weights and offsets
+D7424	548	pscl pR2 for zeroinfl
+D7425	224	pscl pR2 for the hurdle
+D7345	1180	poLCA: latent class regression

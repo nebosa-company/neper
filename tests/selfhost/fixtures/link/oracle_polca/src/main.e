@@ -69,6 +69,77 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret sq
     }
+    if str.starts_with(c.name, "rg") {
+        let gn = usize(z[0usize])
+        let gj = usize(z[1usize])
+        let gr = usize(z[2usize])
+        let gq = usize(z[3usize])
+        let (gc, ge1) = mem.alloc[usize](a, gj)
+        if ge1 != ok { ret nan }
+        var gtc = 0usize
+        var gi = 0usize
+        while gi < gj {
+            gc[gi] = usize(z[4usize + gi])
+            gtc += gc[gi]
+            gi += 1usize
+        }
+        let (gp, ge2) = mem.alloc[f64](a, gr * gtc)
+        let (gd, ge3) = mem.alloc[f64](a, gn * gj)
+        let (gcf, ge4) = mem.alloc[f64](a, (gq + 1usize) * (gr - 1usize))
+        if ge2 != ok || ge3 != ok || ge4 != ok { ret nan }
+        var go = 4usize + gj
+        var goff = 0usize
+        var gv = 0usize
+        while gv < gj {
+            var grr = 0usize
+            while grr < gr {
+                var gk = 0usize
+                while gk < gc[gv] {
+                    gp[grr * gtc + goff + gk] = z[go]
+                    go += 1usize
+                    gk += 1usize
+                }
+                grr += 1usize
+            }
+            goff += gc[gv]
+            gv += 1usize
+        }
+        gi = 0usize
+        while gi < gn * gj {
+            gd[gi] = z[go + gi] - 1.0f64
+            gi += 1usize
+        }
+        let gx = z[go + gn * gj..go + gn * gj + gn * gq]
+        let gll = pl.em_reg(a, gd, gx, gn, gq, gj, gc, gr, gp, gcf, 1.0e-13f64, 20000usize)
+        if str.eq(c.name, "rgll") { ret gll }
+        var gs = 0.0f64
+        if str.eq(c.name, "rgcoef") {
+            gi = 0usize
+            while gi < (gq + 1usize) * (gr - 1usize) {
+                gs += gcf[gi] * gcf[gi]
+                gi += 1usize
+            }
+            ret gs
+        }
+        var gpos = 1usize
+        goff = 0usize
+        gv = 0usize
+        while gv < gj {
+            var grr = 0usize
+            while grr < gr {
+                var gk = 0usize
+                while gk < gc[gv] {
+                    gs += gp[grr * gtc + goff + gk] * gp[grr * gtc + goff + gk]
+                    gpos += 1usize
+                    gk += 1usize
+                }
+                grr += 1usize
+            }
+            goff += gc[gv]
+            gv += 1usize
+        }
+        ret gs
+    }
     let n = usize(z[0usize])
     let nj = usize(z[1usize])
     let nr = usize(z[2usize])

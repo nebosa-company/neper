@@ -44,6 +44,22 @@ for (rep in 1:14) {
   cases[[length(cases) + 1]] <- case("msprior", a, sum(f$P^2), rel = 1e-4, abs = 1e-6)
   cases[[length(cases) + 1]] <- case("msprobs", a, sum(pr^2), rel = 1e-4, abs = 1e-6)
 }
+# latent class regression (the coefficient check is the sum of squares, which does not depend on which of the two classes is called first): "rgll" "rgcoef" "rgprobs" args (n, J, R, q, ncat[J], start probs, data[n*J] row-major 1-based, X[n*q] column-major); the weighted sums of the coefficients (intercept first, by class) and of the probabilities
+for (rep in 1:14) {
+  n <- sample(300:600, 1); J <- sample(4:5, 1); R <- 2; q <- sample(1:2, 1); ncat <- sample(2:3, J, TRUE)
+  X <- matrix(round(rnorm(n * q), 3), n, q); pc <- plogis(0.2 + 0.9 * X[, 1]); cl <- 1 + rbinom(n, 1, pc)
+  th <- lapply(seq_len(J), function(j) t(sapply(seq_len(R), function(r) { p <- runif(ncat[j], 0.25, 1); if (r == 2) p <- rev(p); p / sum(p) })))
+  d <- as.data.frame(sapply(seq_len(J), function(j) sapply(cl, function(c) sample(ncat[j], 1, prob = th[[j]][c, ])))); names(d) <- paste0("y", seq_len(J))
+  xd <- as.data.frame(X); names(xd) <- paste0("x", 1:q); dd <- cbind(d, xd)
+  st <- lapply(seq_len(J), function(j) { m <- t(sapply(seq_len(R), function(r) { p <- runif(ncat[j], 0.2, 1); p / sum(p) })); m })
+  f <- tryCatch(suppressMessages(poLCA(as.formula(paste("cbind(", paste(names(d), collapse = ","), ") ~", paste(names(xd), collapse = " + "))), dd, nclass = R, probs.start = st, tol = 1e-13, maxiter = 20000, verbose = FALSE)), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, J, R, q, ncat, unlist(lapply(st, function(m) as.vector(t(m)))), as.vector(t(as.matrix(d))), as.vector(X))
+  pr <- unlist(lapply(f$probs, function(m) as.vector(t(m))))
+  cases[[length(cases) + 1]] <- case("rgll", a, f$llik, rel = 1e-6, abs = 1e-6)
+  cases[[length(cases) + 1]] <- case("rgcoef", a, sum(as.vector(f$coeff)^2), rel = 1e-3, abs = 1e-3)
+  cases[[length(cases) + 1]] <- case("rgprobs", a, sum(pr^2), rel = 1e-4, abs = 1e-6)
+}
 # standard errors of well-identified two-class fits away from the boundary: "se_probs" "se_prior" with the same arguments as "ll"
 for (rep in 1:40) {
   n <- sample(250:500, 1); J <- sample(4:6, 1); R <- 2; ncat <- sample(2:3, J, TRUE)

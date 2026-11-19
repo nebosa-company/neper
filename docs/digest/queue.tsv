@@ -42,7 +42,7 @@ L376	library	0	240	gam: backfitting generalized additive models	Open (CRAN rank 
 L378	library	0	318	uwot and Rtsne: embeddings equal to R	Open (CRAN ranks 311, 315).
 L393	library	0.3	744	ordinal: cumulative link models	Partial (D6616).
 L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
-L412	library	0.65	1510	pscl: zero-inflated and hurdle count models	Partial (D6617).
+L412	library	0.78	1710	pscl: zero-inflated and hurdle count models	Partial (D6617).
 L413	library	0.55	760	flexmix: finite mixture regression	Partial (D7197, D7198 (the random start under set.seed), D7199 (the Poisson family), D7200 (stepFlexmix for the Gaussian family), D7201 (AIC, BIC, ICL), D7202 (the binomial family), D7203 (the Gamma f
 L415	library	0.3	900	marginaleffects: predictions, slopes and comparisons	Partial (D6942, D6943): e.algo.stat.margeff.glm_avg, avg_slopes, avg_predictions and the avg_comparisons of a 0 / 1 variable for gaussian, logistic and Poisson (identity, logit, log link) glms from th
 L416	library	0.15	609	polspline: polynomial spline models	D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 va
@@ -64,7 +64,7 @@ L508	library	0.99	2162	sampling: survey sampling designs	Partial (D6191).
 L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
 L510	library	0.35	545	gmm: generalized method of moments	Partial (D6479 linear two-step gmm with iid, MDS and D6480 HAC weighting with five kernels at fixed bandwidth, covariance and J agree with gmm on Windows;
 L511	library	0.4	717	QCA: qualitative comparative analysis	Partial (D6482 pof inclusion, PRI, coverage, RoN, D6481 complex and parsimonious minimal models of minimize() on a crisp truth table, as prime-implicant counts, minimum size and model count, equal QCA
-L512	library	0.15	1120	poLCA: latent class analysis	D7344: missing responses in the latent class EM equal to poLCA (na.rm = FALSE).
+L512	library	0.15	1248	poLCA: latent class analysis	D7345: latent class regression with covariates (log-likelihood, response probabilities, coefficient magnitudes) equal to poLCA.
 L513	library	0.15	704	Epi: epidemiology tools	Partial (D6412, D7253, D7254, D7255 the conditional MLE odds ratio and its exact interval, D7256 clogistic on matched sets).
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
 L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).
