@@ -508,3 +508,35 @@ fn threesls(a: *mem.Arena, xs: []const f64, ks: []const usize, z: []const f64, q
     }
     ret ok
 }
+
+// systemfit SUR iterated to convergence (control maxiter, tol): GLS passes are repeated while sqrt(sum((b - b_old)^2) / sum(b_old^2)) exceeds tol, the first pass being compared with the OLS coefficients; answers the number of passes made, and coef, se, sig are those of the last pass
+fn sur_iter(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usize, m: usize, df_cor: bool, maxiter: usize, tol: f64, coef: []f64, se: []f64, sig: []f64) -> (usize, err) {
+    var kt = 0usize
+    var e = 0usize
+    while e < m {
+        kt += ks[e]
+        e += 1usize
+    }
+    let (old, e0) = mem.alloc[f64](a, kt)
+    let (s0, e1) = mem.alloc[f64](a, kt)
+    if e0 != ok || e1 != ok { ret (0usize, mem.Full) }
+    let e2 = sur(a, xs, ks, y, n, m, df_cor, 0usize, old, s0, sig)
+    if e2 != ok { ret (0usize, e2) }
+    var it = 1usize
+    while it <= maxiter {
+        let e3 = sur(a, xs, ks, y, n, m, df_cor, it, coef, se, sig)
+        if e3 != ok { ret (0usize, e3) }
+        var num = 0.0f64
+        var den = 0.0f64
+        var j = 0usize
+        while j < kt {
+            num += (coef[j] - old[j]) * (coef[j] - old[j])
+            den += old[j] * old[j]
+            old[j] = coef[j]
+            j += 1usize
+        }
+        if math.sqrt[f64](num / den) <= tol { ret (it, ok) }
+        it += 1usize
+    }
+    ret (maxiter, ok)
+}

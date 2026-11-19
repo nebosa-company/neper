@@ -30,12 +30,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e2 != ok || e3 != ok || e4 != ok { ret nan }
     let y = z[4usize + m..4usize + m + m * n]
     let xs = z[4usize + m + m * n..4usize + m + m * n + n * kt]
-    if sf.sur(a, xs, ks, y, n, m, dfc, passes, coef, se, sig) != ok { ret nan }
+    if c.name.len > 2usize && c.name[0usize] == 105u8 && c.name[1usize] == 116u8 {
+        let (itn, eit) = sf.sur_iter(a, xs, ks, y, n, m, dfc, passes, 1.0e-5f64, coef, se, sig)
+        if eit != ok { ret nan }
+        if str.eq(c.name, "itn") { ret f64(itn) }
+    } else {
+        if sf.sur(a, xs, ks, y, n, m, dfc, passes, coef, se, sig) != ok { ret nan }
+    }
     var s = 0.0f64
     var cnt = kt
     var src = coef
-    if str.eq(c.name, "se") { src = se }
-    if str.eq(c.name, "sig") {
+    if str.eq(c.name, "se") || str.eq(c.name, "itse") { src = se }
+    if str.eq(c.name, "sig") || str.eq(c.name, "itsig") {
         src = sig
         cnt = m * m
     }

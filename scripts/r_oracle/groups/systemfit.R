@@ -22,4 +22,21 @@ for (rep in 1:24) {
   s <- summary(f)$coefficients
   add("coef", a, ws(coef(f))); add("se", a, ws(s[, 2])); add("sig", a, ws(as.vector(t(f$residCov))))
 }
+# SUR iterated to convergence (maxiter 500, tol 1e-5): "itcoef" "itse" "itsig" as above and "itn" the iteration count; the passes slot holds 500
+for (rep in 1:20) {
+  n <- sample(25:80, 1); M <- sample(2:3, 1); dfc <- rep %% 2
+  ks <- sample(2:4, M, TRUE); rho <- runif(1, 0.2, 0.8)
+  e <- matrix(rnorm(n * M), n) %*% chol(matrix(rho, M, M) + diag(1 - rho, M))
+  X <- lapply(ks, function(k) cbind(1, matrix(rnorm(n * (k - 1)), n)))
+  Y <- sapply(seq_len(M), function(m) as.vector(X[[m]] %*% rnorm(ks[m])) + e[, m])
+  d <- list(); eqs <- list()
+  for (m in seq_len(M)) { for (j in seq_len(ks[m] - 1)) d[[paste0("x", m, "_", j)]] <- X[[m]][, j + 1]; d[[paste0("y", m)]] <- Y[, m] }
+  d <- as.data.frame(d)
+  for (m in seq_len(M)) eqs[[paste0("e", m)]] <- as.formula(paste0("y", m, " ~ ", paste(c("1", if (ks[m] > 1) paste0("x", m, "_", seq_len(ks[m] - 1))), collapse = " + ")))
+  f <- tryCatch(suppressWarnings(systemfit(eqs, "SUR", data = d, control = systemfit.control(methodResidCov = if (dfc) "geomean" else "noDfCor", maxiter = 500, tol = 1e-5))), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, M, 500, dfc, ks, as.vector(Y), unlist(lapply(X, function(x) as.vector(t(x)))))
+  s <- summary(f)$coefficients
+  add("itcoef", a, ws(coef(f))); add("itse", a, ws(s[, 2])); add("itsig", a, ws(as.vector(t(f$residCov)))); add("itn", a, f$iter)
+}
 emit("systemfit", "systemfit", list(cases))
