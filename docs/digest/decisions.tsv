@@ -4462,4 +4462,5 @@ D7604	1085	sampling samplecube and landingcube, closing L508
 D7605	950	dagitty localTests (type cis) on data
 D7606	1475	dagitty instrumentalVariables from the JavaScript source, closing L478
 D7607	767	arm standardize for glm
-D7608	796	epiR Koopman risk-ratio interval
+D7608	797	epiR Koopman risk-ratio interval
+D7609	1035	epiR conditional MLE, Cornfield and exact odds-ratio intervals

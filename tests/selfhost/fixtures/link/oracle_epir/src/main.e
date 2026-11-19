@@ -8,7 +8,7 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
-fn answer(c: *const oracle.Case) -> f64 {
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "sb") { ret ep.sssimpleestb(x[0usize], x[1usize], x[2usize], x[3usize] > 0.5f64, x[4usize], x[5usize], x[6usize] > 0.5f64, 0.95f64) }
     if str.eq(c.name, "ms") {
@@ -68,6 +68,24 @@ fn answer(c: *const oracle.Case) -> f64 {
         var ov: [10]f64 = zero
         ep.epi_ccc(x[1usize..1usize + nc], x[1usize + nc..1usize + 2usize * nc], 0.95f64, ov[0usize..10usize])
         ret ov[usize(x[1usize + 2usize * nc])]
+    }
+    if str.eq(c.name, "cf") {
+        let tc2 = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
+        let (ce, cl2, ch2, cer) = ep.or_cfield(a, tc2, 0.95f64)
+        if cer != ok { os.exit(15) }
+        let wc2 = usize(x[4usize])
+        if wc2 == 0usize { ret ce }
+        if wc2 == 1usize { ret cl2 }
+        ret ch2
+    }
+    if str.eq(c.name, "mle") {
+        let tf = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
+        let (fe, fl, fh, fer) = ep.fisher_or(a, tf, 0.95f64)
+        if fer != ok { os.exit(14) }
+        let wf = usize(x[4usize])
+        if wf == 0usize { ret fe }
+        if wf == 1usize { ret fl }
+        ret fh
     }
     if str.eq(c.name, "cc") {
         let tc = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
@@ -212,7 +230,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
-        let got = answer(c)
+        let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

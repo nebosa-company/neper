@@ -6,6 +6,7 @@
 // other study designs of epi.2by2.
 
 use e.math
+use e.mem
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
@@ -833,4 +834,169 @@ fn rr_koopman(t: Table2, level: f64) -> (f64, f64, f64) {
     let lo = pw.zeroin[KoopCtx](&c, koop_u, la, est, tol, 1000i64)
     let hi = pw.zeroin[KoopCtx](&c, koop_u, est, hb, tol, 1000i64)
     ret (est, lo, hi)
+}
+
+// ---- fisher.test's conditional MLE of the odds ratio and its exact confidence interval for a 2 by 2 table (epiR zORml): the non-central hypergeometric law of a on the support lo .. hi,
+// and R's uniroot (the existing `pwr.zeroin`, tolerance eps^0.25) on the brackets (0, 1) and (eps, 1) with the inverted argument, exactly as fisher.test sets them up.
+type FiCtx = struct { lo: f64, hi: f64, x: f64, alpha: f64, mode: usize, logdc: []f64, buf: []f64, len: usize }
+
+fn fi_dn(c: *FiCtx, ncp: f64) {
+    var mx = -1.0e300f64
+    var i = 0usize
+    while i < c.len {
+        let v = c.logdc[i] + math.log[f64](ncp) * (c.lo + f64(i))
+        c.buf[i] = v
+        if v > mx { mx = v }
+        i += 1usize
+    }
+    var s = 0.0f64
+    i = 0usize
+    while i < c.len {
+        c.buf[i] = math.exp[f64](c.buf[i] - mx)
+        s += c.buf[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < c.len {
+        c.buf[i] = c.buf[i] / s
+        i += 1usize
+    }
+}
+
+fn fi_mn(c: *FiCtx, ncp: f64) -> f64 {
+    if ncp == 0.0f64 { ret c.lo }
+    if ncp > 1.0e300f64 { ret c.hi }
+    fi_dn(c, ncp)
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.len {
+        s += (c.lo + f64(i)) * c.buf[i]
+        i += 1usize
+    }
+    ret s
+}
+
+fn fi_pn(c: *FiCtx, ncp: f64, upper: bool) -> f64 {
+    if ncp == 0.0f64 {
+        if upper { if c.x <= c.lo { ret 1.0f64 } else { ret 0.0f64 } }
+        if c.x >= c.lo { ret 1.0f64 } else { ret 0.0f64 }
+    }
+    if ncp > 1.0e300f64 {
+        if upper { if c.x <= c.hi { ret 1.0f64 } else { ret 0.0f64 } }
+        if c.x >= c.hi { ret 1.0f64 } else { ret 0.0f64 }
+    }
+    fi_dn(c, ncp)
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.len {
+        let sv = c.lo + f64(i)
+        if upper { if sv >= c.x { s += c.buf[i] } } else { if sv <= c.x { s += c.buf[i] } }
+        i += 1usize
+    }
+    ret s
+}
+
+fn fi_f(c: *FiCtx, t: f64) -> f64 {
+    if c.mode == 0usize { ret fi_mn(c, t) - c.x }
+    if c.mode == 1usize { ret fi_mn(c, 1.0f64 / t) - c.x }
+    if c.mode == 2usize { ret fi_pn(c, t, false) - c.alpha }
+    if c.mode == 3usize { ret fi_pn(c, 1.0f64 / t, false) - c.alpha }
+    if c.mode == 4usize { ret fi_pn(c, t, true) - c.alpha }
+    if c.mode == 5usize { ret fi_pn(c, 1.0f64 / t, true) - c.alpha }
+    // modes 6 and 7: the mid-p functions of the Cornfield interval, sum of the law above (6) or below (7) the observed count minus half its mass minus alpha
+    fi_dn(c, t)
+    var sm = 0.0f64
+    var i = 0usize
+    while i < c.len {
+        let sv = c.lo + f64(i)
+        if c.mode == 6usize { if sv >= c.x { sm += c.buf[i] } } else { if sv <= c.x { sm += c.buf[i] } }
+        i += 1usize
+    }
+    ret sm - c.buf[usize(c.x - c.lo)] / 2.0f64 - c.alpha
+}
+
+// (conditional MLE, lower, upper) of the odds ratio of the table a b / c d at the confidence level
+fn fisher_or(a: *mem.Arena, t: Table2, level: f64) -> (f64, f64, f64, err) {
+    let m = t.a + t.c
+    let nn = t.b + t.d
+    let k = t.a + t.b
+    var lo = 0.0f64
+    if k - nn > 0.0f64 { lo = k - nn }
+    var hi = k
+    if m < hi { hi = m }
+    let len = usize(hi - lo) + 1usize
+    let (lg, e1) = mem.alloc[f64](a, len)
+    let (bf, e2) = mem.alloc[f64](a, len)
+    if e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, 0.0f64, e1) }
+    var i = 0usize
+    while i < len {
+        let s = lo + f64(i)
+        lg[i] = nm.lgammafn(m + 1.0f64) - nm.lgammafn(s + 1.0f64) - nm.lgammafn(m - s + 1.0f64) + nm.lgammafn(nn + 1.0f64) - nm.lgammafn(k - s + 1.0f64) - nm.lgammafn(nn - k + s + 1.0f64) - (nm.lgammafn(m + nn + 1.0f64) - nm.lgammafn(k + 1.0f64) - nm.lgammafn(m + nn - k + 1.0f64))
+        i += 1usize
+    }
+    var c = FiCtx { lo: lo, hi: hi, x: t.a, alpha: (1.0f64 - level) / 2.0f64, mode: 0usize, logdc: lg, buf: bf, len: len }
+    let tol = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    let eps = 2.220446049250313e-16f64
+    var mle = 1.0f64
+    if t.a == lo { mle = 0.0f64 } else if t.a == hi { mle = 1.0f64 / 0.0f64 } else {
+        let mu = fi_mn(&c, 1.0f64)
+        if mu > t.a {
+            c.mode = 0usize
+            mle = pw.zeroin[FiCtx](&c, fi_f, 0.0f64, 1.0f64, tol, 1000i64)
+        } else if mu < t.a {
+            c.mode = 1usize
+            mle = 1.0f64 / pw.zeroin[FiCtx](&c, fi_f, eps, 1.0f64, tol, 1000i64)
+        }
+    }
+    var upper = 1.0f64
+    if t.a == hi { upper = 1.0f64 / 0.0f64 } else {
+        let p = fi_pn(&c, 1.0f64, false)
+        if p < c.alpha {
+            c.mode = 2usize
+            upper = pw.zeroin[FiCtx](&c, fi_f, 0.0f64, 1.0f64, tol, 1000i64)
+        } else if p > c.alpha {
+            c.mode = 3usize
+            upper = 1.0f64 / pw.zeroin[FiCtx](&c, fi_f, eps, 1.0f64, tol, 1000i64)
+        }
+    }
+    var lower = 1.0f64
+    if t.a == lo { lower = 0.0f64 } else {
+        let p2 = fi_pn(&c, 1.0f64, true)
+        if p2 > c.alpha {
+            c.mode = 4usize
+            lower = pw.zeroin[FiCtx](&c, fi_f, 0.0f64, 1.0f64, tol, 1000i64)
+        } else if p2 < c.alpha {
+            c.mode = 5usize
+            lower = 1.0f64 / pw.zeroin[FiCtx](&c, fi_f, eps, 1.0f64, tol, 1000i64)
+        }
+    }
+    ret (mle, lower, upper, ok)
+}
+
+// epiR zORcfield for an interior table: Cornfield's exact mid-p odds-ratio interval, each end the uniroot (tolerance eps^0.25) on (1e-8, 1e8) of the mid-p tail probability minus
+// (1 - level) / 2 under Fisher's non-central hypergeometric law; (est, lower, upper)
+fn or_cfield(a: *mem.Arena, t: Table2, level: f64) -> (f64, f64, f64, err) {
+    let m = t.a + t.c
+    let nn = t.b + t.d
+    let k = t.a + t.b
+    var lo = 0.0f64
+    if k - nn > 0.0f64 { lo = k - nn }
+    var hi = k
+    if m < hi { hi = m }
+    let len = usize(hi - lo) + 1usize
+    let (lg, e1) = mem.alloc[f64](a, len)
+    let (bf, e2) = mem.alloc[f64](a, len)
+    if e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, 0.0f64, e1) }
+    var i = 0usize
+    while i < len {
+        let s = lo + f64(i)
+        lg[i] = nm.lgammafn(m + 1.0f64) - nm.lgammafn(s + 1.0f64) - nm.lgammafn(m - s + 1.0f64) + nm.lgammafn(nn + 1.0f64) - nm.lgammafn(k - s + 1.0f64) - nm.lgammafn(nn - k + s + 1.0f64) - (nm.lgammafn(m + nn + 1.0f64) - nm.lgammafn(k + 1.0f64) - nm.lgammafn(m + nn - k + 1.0f64))
+        i += 1usize
+    }
+    var c = FiCtx { lo: lo, hi: hi, x: t.a, alpha: (1.0f64 - level) / 2.0f64, mode: 6usize, logdc: lg, buf: bf, len: len }
+    let tol = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    let ll = pw.zeroin[FiCtx](&c, fi_f, 1.0e-8f64, 1.0e8f64, tol, 1000i64)
+    c.mode = 7usize
+    let ul = pw.zeroin[FiCtx](&c, fi_f, 1.0e-8f64, 1.0e8f64, tol, 1000i64)
+    ret ((t.a / t.b) / (t.c / t.d), ll, ul, ok)
 }

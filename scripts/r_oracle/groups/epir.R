@@ -182,4 +182,19 @@ for (rep in 1:20) {
   for (i in 1:3) add(20 + i, base, unlist(r$RR.crude.score[1, ])[i])
   add(17, base, r$chi2.crude.uncor$test.statistic); add(18, base, r$chi2.crude.uncor$p.value.2s)
 }
+# fisher.test's conditional MLE and exact interval (epiR OR.strata.mle): "mle" args (a, b, c, d, which 0 est 1 lower 2 upper)
+for (rep in 1:30) {
+  a <- sample(3:60, 1); b <- sample(3:80, 1); cc <- sample(3:50, 1); d <- sample(3:90, 1)
+  fi <- suppressWarnings(fisher.test(matrix(c(a, cc, b, d), 2), conf.int = TRUE, conf.level = 0.95))
+  v <- c(as.numeric(fi$estimate), as.numeric(fi$conf.int))
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("mle", c(a, b, cc, d, w), v[w + 1], rel = 1e-9, abs = 1e-12)
+}
+# Cornfield (epiR OR.strata.cfield, zORcfield): "cf" args (a, b, c, d, which 0 est 1 lower 2 upper); this needs BiasedUrn
+for (rep in 1:25) {
+  a <- sample(4:60, 1); b <- sample(4:80, 1); cc <- sample(4:50, 1); d <- sample(4:90, 1)
+  dat <- as.table(matrix(c(a, b, cc, d), 2, byrow = TRUE))
+  r <- tryCatch(epi.2by2(dat, method = "case.control", interpret = FALSE, outcome = "as.columns")$massoc.detail$OR.strata.cfield, error = function(e) NULL)
+  if (is.null(r) || any(is.na(unlist(r[1, ])))) next
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("cf", c(a, b, cc, d, w), unlist(r[1, ])[w + 1], rel = 1e-7, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))
