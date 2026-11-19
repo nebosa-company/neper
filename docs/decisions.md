@@ -50308,3 +50308,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7391 — EnvStats enorm, eexp and epois with intervals
 `e_norm` gives the mean and sd with the t interval of the mean or the chi-square interval of the variance, `e_exp` the rate 1 / mean with qchisq(., 2 n) / (2 n mean) limits and `e_pois` lambda = mean with the exact Garwood limits qchisq(alpha / 2, 2 sum) / (2 n) and qchisq(1 - alpha / 2, 2 (sum + 1)) / (2 n); lower and upper one-sided types put the open limit at Inf (or 0 / -Inf as R does). Equal to EnvStats to 1e-9 on 60 samples with confidence 0.9, 0.95 and 0.99. The fixture initially mapped the exponential and Poisson limits to the wrong output slots (they have three outputs, enorm four); that was the fixture, not the library.
+
+## D7392 — EnvStats egamma
+`e_gamma` reuses the gamma maximum likelihood shape (Newton on log s - digamma(s) = log(mean) - mean(log y)); the bias-corrected estimate is shape ((n - 3) shape + 2 n / 3) / n ... in the form (n - 3) shape / n + 2 / (3 n), recovered from R's numbers, with scale mean / shape; the method of moments uses the divisor-n variance (shape mean^2 / v, scale v / mean). Equal to EnvStats to 1e-5 on 30 samples (the maximum likelihood fit is iterative on both sides). L466 stays at 0.3.

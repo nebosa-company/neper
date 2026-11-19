@@ -1555,3 +1555,32 @@ fn e_pois(x: []const f64, conf: f64, ci_type: usize, out: []f64) {
         out[2usize] = nm.qchisq(1.0f64 - alpha, 2.0f64 * (s + 1.0f64), true, false) / (2.0f64 * n)
     }
 }
+
+// egamma(x, method): shape and scale by maximum likelihood (0), the bias-corrected maximum likelihood (1: shape (n - 3) shape / n + 2 / (3 n), scale mean / shape) or the method of
+// moments (2, with the divisor n variance); out = (shape, scale)
+fn e_gamma(y: []const f64, method: usize, out: []f64) {
+    let n = f64(y.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        m += y[i]
+        i += 1usize
+    }
+    m = m / n
+    if method == 2usize {
+        var v = 0.0f64
+        i = 0usize
+        while i < y.len {
+            v += (y[i] - m) * (y[i] - m)
+            i += 1usize
+        }
+        v = v / n
+        out[0usize] = m * m / v
+        out[1usize] = v / m
+        ret
+    }
+    var shape = gamma_mle_shape(y)
+    if method == 1usize { shape = (n - 3.0f64) / n * shape + 2.0f64 / (3.0f64 * n) }
+    out[0usize] = shape
+    out[1usize] = m / shape
+}
