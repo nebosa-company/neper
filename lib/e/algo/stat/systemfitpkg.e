@@ -332,3 +332,179 @@ fn twosls(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usiz
     }
     ret (s2v, ok)
 }
+
+// systemfit method "3SLS" with one instrument set z (n by q) for every equation: equation-wise 2SLS residuals give the residual covariance (the geometric-mean divisor sqrt((n - k_i)(n - k_j))), then the GLS
+// estimator on the projected regressors, beta = [X_hat'(S^-1 x I)X_hat]^-1 X_hat'(S^-1 x I) y; xs and y are laid out as for `sur` (equation after equation); coef and se hold sum(ks) values
+fn threesls(a: *mem.Arena, xs: []const f64, ks: []const usize, z: []const f64, q: usize, y: []const f64, n: usize, m: usize, coef: []f64, se: []f64) -> err {
+    var kt = 0usize
+    var e = 0usize
+    while e < m {
+        kt += ks[e]
+        e += 1usize
+    }
+    let (off, e0) = mem.alloc[usize](a, m + 1usize)
+    let (xh, e1) = mem.alloc[f64](a, n * kt)
+    let (res, e2) = mem.alloc[f64](a, m * n)
+    let (sg, e3) = mem.alloc[f64](a, m * m)
+    let (sgi, e4) = mem.alloc[f64](a, m * m)
+    let (g, e5) = mem.alloc[f64](a, kt * kt)
+    let (gi, e6) = mem.alloc[f64](a, kt * kt)
+    let (r, e7) = mem.alloc[f64](a, kt)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
+    off[0usize] = 0usize
+    e = 0usize
+    while e < m {
+        off[e + 1usize] = off[e] + ks[e]
+        e += 1usize
+    }
+    var xoff = 0usize
+    e = 0usize
+    while e < m {
+        let k = ks[e]
+        let xe = xs[xoff..xoff + n * k]
+        let (cf, ec) = mem.alloc[f64](a, k)
+        let (sf, es) = mem.alloc[f64](a, k)
+        if ec != ok || es != ok { ret mem.Full }
+        let (v, et) = twosls(a, xe, z, y[e * n..(e + 1usize) * n], n, k, q, cf, sf)
+        let _ = v
+        if et != ok { ret et }
+        var i = 0usize
+        while i < n {
+            var f = 0.0f64
+            var j = 0usize
+            while j < k {
+                f += xe[i * k + j] * cf[j]
+                j += 1usize
+            }
+            res[e * n + i] = y[e * n + i] - f
+            i += 1usize
+        }
+        let (zz, ez) = mem.alloc[f64](a, q * q)
+        let (zx, ex) = mem.alloc[f64](a, q * k)
+        if ez != ok || ex != ok { ret mem.Full }
+        var u = 0usize
+        while u < q {
+            var w = 0usize
+            while w < q {
+                var s = 0.0f64
+                i = 0usize
+                while i < n {
+                    s += z[i * q + u] * z[i * q + w]
+                    i += 1usize
+                }
+                zz[u * q + w] = s
+                w += 1usize
+            }
+            w = 0usize
+            while w < k {
+                var s = 0.0f64
+                i = 0usize
+                while i < n {
+                    s += z[i * q + u] * xe[i * k + w]
+                    i += 1usize
+                }
+                zx[u * k + w] = s
+                w += 1usize
+            }
+            u += 1usize
+        }
+        gj_solve(zz, q, zx, k)
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < k {
+                var s = 0.0f64
+                var l = 0usize
+                while l < q {
+                    s += z[i * q + l] * zx[l * k + j]
+                    l += 1usize
+                }
+                xh[i * kt + off[e] + j] = s
+                j += 1usize
+            }
+            i += 1usize
+        }
+        xoff += n * k
+        e += 1usize
+    }
+    var p1 = 0usize
+    while p1 < m {
+        var p2 = 0usize
+        while p2 < m {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += res[p1 * n + i] * res[p2 * n + i]
+                i += 1usize
+            }
+            sg[p1 * m + p2] = s / math.sqrt[f64](f64(n - ks[p1]) * f64(n - ks[p2]))
+            sgi[p1 * m + p2] = 0.0f64
+            p2 += 1usize
+        }
+        sgi[p1 * m + p1] = 1.0f64
+        p1 += 1usize
+    }
+    gj_solve(sg, m, sgi, m)
+    var i1 = 0usize
+    while i1 < m {
+        var j1 = 0usize
+        while j1 < m {
+            var a1 = 0usize
+            while a1 < ks[i1] {
+                var b1 = 0usize
+                while b1 < ks[j1] {
+                    var s = 0.0f64
+                    var i = 0usize
+                    while i < n {
+                        s += xh[i * kt + off[i1] + a1] * xh[i * kt + off[j1] + b1]
+                        i += 1usize
+                    }
+                    g[(off[i1] + a1) * kt + off[j1] + b1] = sgi[i1 * m + j1] * s
+                    b1 += 1usize
+                }
+                a1 += 1usize
+            }
+            j1 += 1usize
+        }
+        var a2 = 0usize
+        while a2 < ks[i1] {
+            var s = 0.0f64
+            var j2 = 0usize
+            while j2 < m {
+                var i = 0usize
+                while i < n {
+                    s += sgi[i1 * m + j2] * xh[i * kt + off[i1] + a2] * y[j2 * n + i]
+                    i += 1usize
+                }
+                j2 += 1usize
+            }
+            r[off[i1] + a2] = s
+            a2 += 1usize
+        }
+        i1 += 1usize
+    }
+    var q2 = 0usize
+    while q2 < kt {
+        var w2 = 0usize
+        while w2 < kt {
+            gi[q2 * kt + w2] = 0.0f64
+            w2 += 1usize
+        }
+        gi[q2 * kt + q2] = 1.0f64
+        q2 += 1usize
+    }
+    gj_solve(g, kt, gi, kt)
+    q2 = 0usize
+    while q2 < kt {
+        var s = 0.0f64
+        var w3 = 0usize
+        while w3 < kt {
+            s += gi[q2 * kt + w3] * r[w3]
+            w3 += 1usize
+        }
+        coef[q2] = s
+        se[q2] = math.sqrt[f64](gi[q2 * kt + q2])
+        q2 += 1usize
+    }
+    ret ok
+}

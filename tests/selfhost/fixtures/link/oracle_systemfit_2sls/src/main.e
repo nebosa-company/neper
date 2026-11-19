@@ -5,11 +5,36 @@ use e.algo.stat.systemfitpkg as sf
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "s3") {
+        let n3 = usize(z[0usize])
+        let m3 = usize(z[1usize])
+        let q3 = usize(z[2usize])
+        let (ks, ek) = mem.alloc[usize](a, m3)
+        if ek != ok { ret nan }
+        var kt = 0usize
+        var e = 0usize
+        while e < m3 {
+            ks[e] = usize(z[3usize + e])
+            kt += ks[e]
+            e += 1usize
+        }
+        let xo = 3usize + m3
+        let zo = xo + n3 * kt
+        let yo = zo + n3 * q3
+        let (cf3, e1) = mem.alloc[f64](a, kt)
+        let (se3, e2) = mem.alloc[f64](a, kt)
+        if e1 != ok || e2 != ok { ret nan }
+        if sf.threesls(a, z[xo..zo], ks, z[zo..yo], q3, z[yo..yo + n3 * m3], n3, m3, cf3, se3) != ok { ret nan }
+        let w3 = usize(z[yo + n3 * m3])
+        if w3 < kt { ret cf3[w3] }
+        ret se3[w3 - kt]
+    }
     let n = usize(z[0usize])
     let k = usize(z[1usize])
     let q = usize(z[2usize])

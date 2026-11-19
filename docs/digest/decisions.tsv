@@ -4348,4 +4348,5 @@ D7492	699	gamlss.dist SI
 D7493	432	gamlss.dist qSI
 D7494	1088	caret preProcess ica not landed
 D7373	771	lavaan: standard errors for several factors
-D7495	750	systemfit 2SLS
+D7495	751	systemfit 2SLS
+D7496	763	systemfit 3SLS
