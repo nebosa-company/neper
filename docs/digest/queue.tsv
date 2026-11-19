@@ -14,24 +14,24 @@ T111	tooling	0	1029	Claude Code integration: a project skill and hooks that enfo
 T115	tooling	0	801	lang-stats reads compressed Codex sessions and counts forked history once	Opened 2026-11-19 from the harness log analysis (D7720).
 T112	tooling	0	900	Agent-route adoption is scored on the measured numbers, not on what the docs mention	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
 T062	tooling	0	875	Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools	Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit;
-L332	library	0.55	881	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
+L332	library	0.55	3487	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
 L358	library	0.2	536	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
 L380	library	0.35	1159	tm and tidytext: text mining	Partial (D6618).
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
-L407	library	0.93	1406	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
-L409	library	0.55	1356	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
+L407	library	0.93	4207	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
+L409	library	0.55	3715	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
 L448	library	0.25	676	mcmc: Metropolis and tempering samplers	D7337: morph and morph.metrop (subexponential and exponential maps, centre) equal to mcmc under set.seed.
 L450	library	0.2	722	mediation: causal mediation analysis	Partial (D7376): e.algo.stat.mediationpkg.mediate_lm (quasi-Bayesian mediate for linear mediator and outcome models without interaction: ACME, ADE, total effect and proportion mediated with percentile
 L452	library	0.35	775	TSA: time-series analysis toolkit	Partial (D6190, D6406 McLeod.Li.test).
 L453	library	0.1	1118	cubature: adaptive multidimensional integration	Partial (D6475 box integrals of four fixed integrands agree with hcubature and pcubature to 1e-8 on Windows through a tensor Gauss-Legendre rule, not the package's adaptive algorithms;
 L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).
-L468	library	0.58	1016	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
+L468	library	0.58	4255	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
 L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L505	library	0.35	1173	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
-L306	library	0.5	1566	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
+L306	library	0.5	4263	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
 L307	library	0.25	658	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);
 L309	library	0.1	702	nloptr: gradient-based and constrained optimizers	Partly done (D6054): e.algo.stat.dfree.auglag (augmented Lagrangian over the box minimiser, no gradients) equals nloptr on HS071 and two more constrained problems on Windows (oracle_auglag);
 L314	library	0.15	1107	lubridate and timeDate: date-time parsing, periods, business calendars	Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the month-end rules, quarter, semester, decimal_date, epiweek, isoweek, floor_date and ceiling_date for dates, equal to lubridat
@@ -40,7 +40,7 @@ L275	library	0.08	825	Unicode collation, transliteration and encoding detection 
 L274	library	0.1	688	General linear mixed models (lme4)	Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and ML, equal to lme4 on deviance, sigma, sigma_b, fixed effects and conditional modes at optimiser tolerance;
 L342	library	0.42	1013	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lme
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
-L334	library	0.75	1455	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
+L334	library	0.75	4719	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
 L394	library	0.05	448	ipred: bagging and error estimation	Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred;
 L338	library	0.2	756	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
 L339	library	0.24	1899	bayestestR, performance and parameters: model summary indices	D7705: performance check_outliers by the iqr method (the row flags) equal to performance.
@@ -49,13 +49,13 @@ L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and lik
 L361	library	0.2	1406	segmented and strucchange: breakpoints and structural change	Partial (D6613).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
-L367	library	0.65	1556	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
+L367	library	0.65	5009	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
 L376	library	0.03	613	gam: backfitting generalized additive models	Started (D7686: smooth.spline with a target df, the smoother s() of gam rests on: the trace of the smoother and R's Brent search for spar equal to smooth.spline(x, y, df) to about 1e-4 in the fit and 
 L378	library	0.2	651	uwot and Rtsne: embeddings equal to R	Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases;
 L393	library	0.3	926	ordinal: cumulative link models	Partial (D6616).
 L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
-L413	library	0.55	760	flexmix: finite mixture regression	Partial (D7197, D7198 (the random start under set.seed), D7199 (the Poisson family), D7200 (stepFlexmix for the Gaussian family), D7201 (AIC, BIC, ICL), D7202 (the binomial family), D7203 (the Gamma f
+L413	library	0.55	3615	flexmix: finite mixture regression	Partial (D7197, D7198 (the random start under set.seed), D7199 (the Poisson family), D7200 (stepFlexmix for the Gaussian family), D7201 (AIC, BIC, ICL), D7202 (the binomial family), D7203 (the Gamma f
 L415	library	0.3	1063	marginaleffects: predictions, slopes and comparisons	Partial (D6942, D6943): e.algo.stat.margeff.glm_avg, avg_slopes, avg_predictions and the avg_comparisons of a 0 / 1 variable for gaussian, logistic and Poisson (identity, logit, log link) glms from th
 L416	library	0.15	609	polspline: polynomial spline models	D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 va
 L434	library	0.1	735	qgraph: network estimation	Partial (D6646).
@@ -86,7 +86,7 @@ L368	library	0.2	684	fixest: high-dimensional fixed-effects estimation	Partial (
 L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (D6620).
 L372	library	0.15	729	spdep: spatial autocorrelation and spatial regression	Partial (D6624).
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
-L417	library	0.86	1439	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
+L417	library	0.86	4379	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
 L435	library	0.15	840	sna: social network analysis	Partial (D6636).
 L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
 L439	library	0.05	714	MCMCpack: Bayesian MCMC for common models	Partial (D6648).
@@ -141,7 +141,7 @@ C188	library	0.7	964	macOS print dialogs: NSPrintPanel and the page setup panel 
 C189	library	0.4	1303	macOS notices through UNUserNotificationCenter: removal, replacement and actions	Built 2026-10-25 (D5221), the center path unverified: for a program with a bundle identifier (shell.bundled()), notice_publish and notice_update ask UNUserNotificationCenter for alert and sound author
 C190	library	0.75	2401	macOS window system: accessibility, input methods, close veto, live resize, Retina	a real input method composing Japanese, Chinese or Korean and its candidate window's place (C192); preedit display; focus, set-value and selection requests, tables, relations and live regions in the a
 C191	tooling	0.75	1209	macOS application bundles and distribution: a bundle command, icon, code signing, notarization	running a Developer ID signature and notarization, which need an Apple developer identity this repository does not have; a neper command that calls the script; Info.plist entitlements. Done when a not
-C192	library	0.2	1333	macOS verification on real hardware: what the CI runners cannot do	The checklist is a program, written 2026-10-25 (D5228) and compiled for both architectures but never run: tests/macos/manual/main.e.
+C192	library	0.2	1509	macOS verification on real hardware: what the CI runners cannot do	The checklist is a program, written 2026-10-25 (D5228) and compiled for both architectures but never run: tests/macos/manual/main.e.
 C193	compiler	0.95	1531	macOS GPU: a Metal backend for e.gpu (the Vulkan fixtures cannot run on a Mac)	Phase 1 done 2026-10-25 (D5231): e.gpu.metal, the runtime alone.
 C194	library	0.7	1037	macOS corpus: the fixtures that are only reported (extern_many, freestanding, os_syscall, x_tds_integrated, gpu_*)	Done 2026-10-25 (D5225): the Mac corpus asserts every fixture that can run on a Mac (1108 pass, 0 fail, 0 info) and skips seven with the reason a Mac has by nature, as SKIP lines counted apart in the 
 C195	library	0.7	1071	macOS shell polish: drag files and images out, session restore, Dock overlay image	session restore (restart_register) stays Unsupported, because a launchd job with KeepAlive starts at once and a Mac restores a program's windows through the system's own saved state, which is not a co
@@ -226,17 +226,17 @@ G008	library	0.7	563	custom painters + row style + conditional formatting rules	
 G009	library	0	270	layout + filter persistence, customization panel, quick customization	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G010	library	0	286	export + clipboard (+ print hand-off)	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G011	library	0	298	MTG Studio reference app: card-pool/deck/collection views over a 150k fixture	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
-G012	library	0.85	3700	pixel-perfect parity with the v3 grid: reference recordings, state catalogue, metric tokens, visual and behavioural diff ledger	Requirement added by the owner 2026-10-13 (docs/grid.md section 1.1): the grid UI and behaviour must be a pixel-perfect equivalent of MTG Studio v3 (many visual inconsistencies in v5/cardgrid).
-L165	library	0.4	1714	UI looks: one widget set in a Windows (MTG Studio v3) look, then macOS/iOS and Android	any control at matched or ready, dark and high-contrast sheets beyond the button, Cupertino and Material.
-L166	library	0.5	2371	Browser M1: e.ui.browser shows a static page (no JS)	everything except 0.1, most of 0.3, 0.6a, 1.1 to 1.3, 1.7 and 1.13a to 1.13d. PART (2026-10-16): 0.6a html5lib runner done (tests/browser/html5lib/run.sh) 1.1 to 1.3 done (D5124) 1.7 done (D5125, e.fm
-L167	library	0.35	669	Browser M2: modern CSS layout	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P2+P3): 4 done, 21 partial, 16 todo of 41; score is the mean with partial counted as half.
+G012	library	0.85	4304	pixel-perfect parity with the v3 grid: reference recordings, state catalogue, metric tokens, visual and behavioural diff ledger	Requirement added by the owner 2026-10-13 (docs/grid.md section 1.1): the grid UI and behaviour must be a pixel-perfect equivalent of MTG Studio v3 (many visual inconsistencies in v5/cardgrid).
+L165	library	0.4	2247	UI looks: one widget set in a Windows (MTG Studio v3) look, then macOS/iOS and Android	any control at matched or ready, dark and high-contrast sheets beyond the button, Cupertino and Material. Handover fold 2026-11-19: the evidence above is audit 2; docs/ui/looks-progress.html is the tr
+L166	library	0.5	2717	Browser M1: e.ui.browser shows a static page (no JS)	everything except 0.1, most of 0.3, 0.6a, 1.1 to 1.3, 1.7 and 1.13a to 1.13d. PART (2026-10-16): 0.6a html5lib runner done (tests/browser/html5lib/run.sh) 1.1 to 1.3 done (D5124) 1.7 done (D5125, e.fm
+L167	library	0.35	1276	Browser M2: modern CSS layout	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P2+P3): 4 done, 21 partial, 16 todo of 41; score is the mean with partial counted as half. Handover fold 2026-11-19: the uncom
 L168	library	0.25	753	Browser M3: the real web without JavaScript	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P4): 1 done, 8 partial, 10 todo of 19; score is the mean with partial counted as half.
-L169	library	0.3	794	Browser M4: JavaScript engine and DOM bindings	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P5+P6): 0 done, 26 partial, 15 todo of 41; score is the mean with partial counted as half.
+L169	library	0.3	1169	Browser M4: JavaScript engine and DOM bindings	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P5+P6): 0 done, 26 partial, 15 todo of 41; score is the mean with partial counted as half. Handover fold 2026-11-19: script si
 L170	library	0.15	694	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P7+P9): 1 done, 4 partial, 19 todo of 24; score is the mean with partial counted as half.
 L171	library	0	771	Browser M6: beyond Vaper (gap items)	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P8): 0 done, 0 partial, 7 todo of 7; score is the mean with partial counted as half.
 C213	library	0	1648	e.ui in a browser: a real phone's virtual keyboard and IME	Android Chrome checked by hand (D5890, D5891: suggestion replacement, touch hold, drag selection, toolbar);
 L176	library	0	237	OpenGL 5: CGL context on macOS (GL 4.1 core, presentation only)	Design docs/opengl-plan.md, D5879, D5880.
-T048	tooling	0	122	OpenGL verify 4 (verify-only): full suites for the shared compiler change	Verify-only turn, no edits.
+T048	tooling	0	234	OpenGL verify 4 (verify-only): full suites for the shared compiler change	Verify-only turn, no edits.
 C219	compiler	0.9	1380	OpenGL 16: the Android target, executable form	Done 2026-10-27 (D5896, D5900): emit-executable ...
 T050	tooling	0	458	Regression test for the heap-backed device-lost path (D5949)	D5949 keeps a device lost after a failed Metal or OpenGL command, but no fixture makes dispatch_wait fail, so nothing fails if the sticky flag or the state_of check is removed.
 C224	compiler	0	488	x86-32 emitter: x86-windows and x86-linux targets	Opened 2026-11-03 from docs/roadmap.md:179 by the single-list audit;
@@ -275,7 +275,7 @@ L198	library	0	524	Motion framework: implicit animations and explicit transition
 L199	library	0	553	Motion framework: choreography, animated list changes, shared-element and route transitions (P6-07, P6-08)	Opened 2026-11-03 from docs/animation-controls.md:389 by the single-list audit;
 L200	library	0	557	Motion framework: fake-clock testing, reduced-motion policy, migration of hand-rolled motion (P6-09)	Opened 2026-11-03 from docs/animation-spec.md:722 by the single-list audit;
 L201	library	0	563	Screen-reader bridge: value/name/live-region events, RangeValue and Selection/Table patterns, AT-SPI extents	Opened 2026-11-03 from docs/ux/accessibility-bridge.md:251 by the single-list audit;
-L202	library	0	601	Build the unbuilt TcxGrid parity grids on e.ui.datagrid (prices, editions, messages, shortcuts, statistics, import)	Opened 2026-11-03 from docs/grid-parity/tcxgrid-plan.md:7 by the single-list audit;
+L202	library	0	1089	Build the unbuilt TcxGrid parity grids on e.ui.datagrid (prices, editions, messages, shortcuts, statistics, import)	Opened 2026-11-03 from docs/grid-parity/tcxgrid-plan.md:7 by the single-list audit;
 T061	tooling	0	530	Promote e.ui/e.gfx from experimental: multi-window keyboard-accessible app workload on three desktops	Opened 2026-11-03 from docs/ui-framework.md:283 by the single-list audit;
 C232	compiler	0	669	GP-09: lower simd.shuffle/interleave to punpck/pshufb so the Base16 codec stops using scalar lane loops	Opened 2026-11-03 from docs/gp-performance.md:29 by the single-list audit;
 C233	compiler	0	674	Direct argument-to-register call lowering in codegen_x64 (finish db-perf item 1 acceptance)	Opened 2026-11-03 from docs/db-perf-plan.md:60 by the single-list audit;
@@ -335,9 +335,9 @@ C254	compiler	0	899	capacity limits name themselves: every fixed pool, arena and
 C255	compiler	0	738	generic deferral probe matrix: instances over instances at every site that can hold a deferred value	Opened from the weakness review: three generic-deferral bugs in a row (data.map, e.bytes, e.data.iter) and the D163 instance-over-instance case, each found by a module hitting it.
 C256	compiler	0	634	miscompile net: narrow-width and constant edge values through every call, return and store path, run against two back ends	Opened from the weakness review: unwidened narrow extern returns, negative narrow constants (lower_constant), uncleared mem.alloc under neper-self and a local shadowing a module-scope function each sh
 C257	compiler	0	618	extern call path: register arguments and caller-saved-only spills instead of stack slots and spill-all	Opened from the weakness review: extern calls cost about 15 ns over C (D1597) because arguments pass through stack slots and every live value is spilled.
-L228	library	0	549	WASI e.os surface so the WASM target runs e.fs, e.io, e.time and e.proc-free programs	Opened from the weakness review: the WASM design (D5213) and the browser engine are blocked on a missing WASI e.os;
+L228	library	0	687	WASI e.os surface so the WASM target runs e.fs, e.io, e.time and e.proc-free programs	Opened from the weakness review: the WASM design (D5213) and the browser engine are blocked on a missing WASI e.os;
 L229	library	0	613	operating-system accessibility preferences: reduced motion, high contrast, text scale, screen reader presence	Opened from the 2026-09-27 accessibility audit: the AT bridge (D1602-D1604) exists but OS preferences are unread.
-T076	tooling	0	852	suite runner that finishes: bounded workers by free memory, per-fixture timeout, resumable, stderr tolerant	Opened from the weakness review: Windows suites hit the stderr trip and WSL crashes, WSL is short of RAM, and the Linux suite needs GitHub (linux-suite.yml).
+T076	tooling	0	1005	suite runner that finishes: bounded workers by free memory, per-fixture timeout, resumable, stderr tolerant	Opened from the weakness review: Windows suites hit the stderr trip and WSL crashes, WSL is short of RAM, and the Linux suite needs GitHub (linux-suite.yml).
 T077	tooling	0	658	land script for the shared tree: stage listed paths only, merge queue and decision rows by id, allocate D-numbers under a lock	Opened from the weakness review: peers' uncommitted decision rows and queue edits live in the same files, a peer commit swept hunks and a D-number, and landing needs foreign-commit checks before push.
 C258	compiler	0	1815	language: a local may shadow a module-scope function and a builtin type name (reopen D66's reserved set)	fixtures that shadow a module fn, a const, `i8`, `Vec` and `str` as a value name accept and format; a call through the shadowed name rejects E-NAME-0004; the card re-renders without those two traps; l
 C259	compiler	0	1558	language: cross-module pointer facts come from the declaration, never from the callee's body	D1677's warm and clean builds agree by a fixture; the alias-chain fixtures the walk alone accepted are annotated or moved to @unsafe; both suites pass.
@@ -469,3 +469,8 @@ T117	tooling	0	794	The agent routes bound tool output and rule out polling loops
 T118	tooling	0	881	DeepSeek harness route: the skill in its form, commands in PowerShell, and a route check	Opened 2026-11-19 from the harness log analysis (D7721).
 T119	tooling	0	632	Routed commands end with a status line, so a harness that logs no exit code still records a failure	Opened 2026-11-19 from the harness log analysis (D7721).
 T120	tooling	0	687	A time budget for agent-run commands: a foreground limit, background runs with a deadline, timeouts named	Opened 2026-11-19 from the harness log analysis (D7721).
+T121	tooling	0	558	Push local master to origin: after both suites pass, with foreign commits excluded	Opened 2026-11-19 from the handover fold.
+T122	tooling	0	383	CRAN-parity fixtures run on Linux in one bulk batch	Opened 2026-11-19 from the handover fold.
+T123	tooling	0	316	Oracle JSON size: loo.json 34 MB and mclust.json 9 MB against the 1.5 MB guideline; slow fixtures decided	Opened 2026-11-19 from the handover fold.
+T124	tooling	0	281	Re-verify master on the macOS corpus and both full suites since the last all-green at 097158768	Opened 2026-11-19 from the handover fold.
+T125	tooling	0	409	Looks status overlays consolidated into status.json; overlay names under the 260-character path limit	Opened 2026-11-19 from the handover fold.
