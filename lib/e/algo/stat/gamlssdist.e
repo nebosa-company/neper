@@ -2627,6 +2627,31 @@ fn family_moment2(fam: usize, which: usize, mu: f64, sigma: f64, nu: f64, tau: f
         if which == 0usize { ret mu + sigma * nu * math.sqrt[f64](2.0f64 / ((1.0f64 + nu * nu) * pv)) }
         ret s2 * (1.0f64 - 2.0f64 * nu * nu / ((1.0f64 + nu * nu) * pv))
     }
+    if fam == 26usize {
+        if which == 0usize { ret mu }
+        ret mu + mu * mu * sigma * (1.0f64 - nu) * (1.0f64 - nu)
+    }
+    if fam == 27usize {
+        let c = (1.0f64 - sigma) / (1.0f64 - math.exp[f64](0.0f64 - mu))
+        if which == 0usize { ret c * mu }
+        ret c * mu + c * mu * mu - c * c * mu * mu
+    }
+    if fam == 28usize {
+        let d = 1.0f64 - math.pow[f64](1.0f64 - mu, nu)
+        let m1 = (1.0f64 - sigma) * nu * mu / d
+        if which == 0usize { ret m1 }
+        ret nu * mu * (1.0f64 - sigma) * (1.0f64 - mu + nu * mu) / d - m1 * m1
+    }
+    if fam == 29usize {
+        let c = (1.0f64 - nu) / (1.0f64 - math.pow[f64](1.0f64 + mu * sigma, 0.0f64 - 1.0f64 / sigma))
+        if which == 0usize { ret mu * c }
+        ret mu * c + c * mu * mu * (1.0f64 + sigma - c)
+    }
+    if fam == 30usize {
+        let al = 0.0f64 - 1.0f64 / math.log[f64](1.0f64 - mu)
+        if which == 0usize { ret (1.0f64 - sigma) * al * mu / (1.0f64 - mu) }
+        ret (1.0f64 - sigma) * al * mu * (1.0f64 - (1.0f64 - sigma) * al * mu) / ((1.0f64 - mu) * (1.0f64 - mu))
+    }
     if which == 0usize { ret mu }
     ret mu + mu * mu * sigma * (1.0f64 - nu) * (1.0f64 - nu)
 }
