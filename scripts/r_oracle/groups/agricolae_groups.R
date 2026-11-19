@@ -67,4 +67,17 @@ for (rep in 1:8) {
   b <- design.rcbd(trt, nbk, serie = 2, seed = seed, kinds = "Mersenne-Twister", first = fst)$book
   for (i in seq_len(nrow(b))) cases[[length(cases) + 1]] <- case("bt", c(9, seed, tn, nbk, as.numeric(fst), i - 1), match(as.character(b[[3]][i]), trt) - 1, rel = 0, abs = 0)
 }
+# the package's default Super-Duper generator: kind 10 design.crd args (10, seed, t, idx, reps[t]) fn "dst" and "dsr"; kind 11 design.rcbd args (11, seed, t, blocks, first, idx) fn "bst"
+for (rep in 1:6) {
+  tn <- sample(3:7, 1); reps <- sample(2:5, tn, replace = TRUE); seed <- 700 + rep
+  trt <- letters[1:tn]
+  d <- design.crd(trt, reps, serie = 2, seed = seed)$book
+  for (i in seq_len(nrow(d))) {
+    cases[[length(cases) + 1]] <- case("dst", c(10, seed, tn, i - 1, reps), match(as.character(d[[3]][i]), trt) - 1, rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("dsr", c(10, seed, tn, i - 1, reps), d$r[i], rel = 0, abs = 0)
+  }
+  nbk <- sample(2:5, 1); fst <- rep %% 2 == 0
+  b <- design.rcbd(trt, nbk, serie = 2, seed = seed, first = fst)$book
+  for (i in seq_len(nrow(b))) cases[[length(cases) + 1]] <- case("bst", c(11, seed, tn, nbk, as.numeric(fst), i - 1), match(as.character(b[[3]][i]), trt) - 1, rel = 0, abs = 0)
+}
 emit("agricolae_groups", "agricolae", list(cases))

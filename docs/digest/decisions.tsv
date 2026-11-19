@@ -4111,4 +4111,5 @@ D7317	961	agricolae: grouping letters and the Kruskal post-hoc
 D7311	574	betareg: variable dispersion
 D7318	767	agricolae: friedman
 D7319	1009	agricolae: waller.test
-D7320	980	agricolae: design.crd and design.rcbd
+D7320	981	agricolae: design.crd and design.rcbd
+D7321	1268	R's Super-Duper generator; agricolae designs under their default kind

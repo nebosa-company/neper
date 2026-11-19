@@ -49976,3 +49976,11 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.agricolae` gains `design_crd` and `design_rcbd`, the randomised designs under `set.seed(seed, kinds = "Mersenne-Twister")`: `design.crd` shuffles the treatments (repeated r[i] times, in sorted order) with `sample(y, length(y))` and numbers the replicates of each treatment in plot order; `design.rcbd` draws one `sample(trt, ntr)` per block, and with first = FALSE its first block is the treatments in order (the draw is still consumed). The package's default generator, Super-Duper, is not available in `e.algo.rand.r`, so only the Mersenne-Twister kind is reproduced; the draws go through `sample_int` with R's rejection sampling.
 
 **Result.** `oracle_agricolae_groups` has 1299 values (adding eight design.crd and eight design.rcbd draws) and equals agricolae on Windows. Linux pending. L396 stays partial: the Super-Duper generator, the other design functions (lsd, bib, split, alpha, lattice) and AMMI remain.
+
+## D7321 — R's Super-Duper generator; agricolae designs under their default kind
+
+`e.algo.rand.r` gains Marsaglia's Super-Duper (`seed_super`): `Rng` carries a `kind` and the two state words, and `genrand` branches on it (a plain `seed` resets the kind to the Mersenne-Twister, so every existing user is unchanged). R's `set.seed(seed, kind = "Super-Duper")` scrambles the seed fifty times and takes two words: I1, the shift-register word, made non-zero, and I2, the congruential word, made odd; each step multiplies I2 by 69069, applies x ^= x >> 15, x ^= x << 17 to I1, and answers (I1 ^ I2) / (2^32 - 1). The first version had the two words the wrong way round; four seeds against R's stream pinned the layout, and the oddness fix only shows for seeds whose second word is even.
+
+`design_crd` and `design_rcbd` now reproduce agricolae under its default `kinds = "Super-Duper"` as well as the Mersenne-Twister kind.
+
+**Result.** `oracle_agricolae_groups` has 1621 values (adding six design.crd and six design.rcbd draws under the default generator) and equals agricolae on Windows; `oracle_wrs2_boot` and `oracle_sampling_brewer`, which share the generator, still pass. Linux pending. L396 stays partial: design.lsd, bib, split, alpha and lattice and AMMI remain.

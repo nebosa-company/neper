@@ -3,7 +3,7 @@
 // (R >= 3.6). A stream seeded with the same integer gives the numbers R gives, so a fixture
 // can compare Neper's draws with R's directly.
 //
-// Not here: R's other generators and normal kinds, `sample` with `prob` or with n past
+// Not here: R's other generators (Super-Duper aside) and normal kinds, `sample` with `prob` or with n past
 // 2^32 (R reads more than two 16-bit chunks there), and the hash path R takes for
 // n > 1e7. `rbits` does not wrap in 64 bits as R's does, which is why n stays below 2^32.
 
@@ -11,7 +11,8 @@ use e.math
 use e.math.special as special
 use e.mem
 
-type Rng = struct { mt: [624]u64, mti: i64 }
+// kind 0 is the Mersenne-Twister, 1 Marsaglia's Super-Duper (set.seed(seed, kind = "Super-Duper")), whose two-word state is i1 and i2
+type Rng = struct { mt: [624]u64, mti: i64, kind: i64, i1: u64, i2: u64 }
 
 error TooLarge
 
@@ -34,9 +35,34 @@ fn seed(r: *Rng, value: i64) {
         i += 1usize
     }
     r.mti = 624i64
+    r.kind = 0i64
+}
+
+// set.seed(seed, kind = "Super-Duper"): the seed scrambled fifty times, then two words: I1 (the shift-register word, made non-zero) and I2 (the congruential
+// word, made odd)
+fn seed_super(r: *Rng, value: i64) {
+    var s = u64(value & 4294967295i64)
+    var j = 0usize
+    while j < 50usize {
+        s = (69069u64 * s + 1u64) & MASK32
+        j += 1usize
+    }
+    s = (69069u64 * s + 1u64) & MASK32
+    r.i1 = s
+    s = (69069u64 * s + 1u64) & MASK32
+    r.i2 = s
+    if r.i1 == 0u64 { r.i1 = 1u64 }
+    r.i2 = r.i2 | 1u64
+    r.kind = 1i64
 }
 
 fn genrand(r: *Rng) -> f64 {
+    if r.kind == 1i64 {
+        r.i2 = (r.i2 * 69069u64) & MASK32
+        r.i1 = r.i1 ^ (r.i1 >> 15u64)
+        r.i1 = r.i1 ^ ((r.i1 << 17u64) & MASK32)
+        ret f64(r.i1 ^ r.i2) * 2.328306437080797e-10f64
+    }
     if r.mti >= 624i64 {
         var kk = 0usize
         while kk < 227usize {

@@ -41,10 +41,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tot
     }
-    if kind == 8usize || kind == 9usize {
+    if kind >= 8usize && kind <= 11usize {
         var rng: rr.Rng = zero
-        rr.seed(&rng, i64(x[1usize]))
-        if kind == 8usize {
+        if kind >= 10usize { rr.seed_super(&rng, i64(x[1usize])) } else { rr.seed(&rng, i64(x[1usize])) }
+        if kind == 8usize || kind == 10usize {
             // (8, seed, t, idx, reps...)
             let tn = k
             let didx = usize(x[3usize])
@@ -62,7 +62,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if g2 != ok || g3 != ok { os.exit(11) }
             let ed = ag.design_crd(a, &rng, reps, tr, rp)
             if ed != ok { os.exit(12) }
-            if str.eq(c.name, "dt") { ret f64(tr[didx]) }
+            if str.eq(c.name, "dt") || str.eq(c.name, "dst") { ret f64(tr[didx]) }
             ret f64(rp[didx])
         }
         // (9, seed, t, blocks, first, idx)
