@@ -11562,7 +11562,7 @@ if ($wasmNode) {
     $wasmBuild = Join-Path $testBuild 'wasm'
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $wasmBuild
     New-Item -ItemType Directory -Force -Path $wasmBuild | Out-Null
-    $wasmRunner = Join-Path $repo 'lib\wasm\run-wasm.mjs'
+    $wasmRunner = Join-Path $repo 'toolswasm\run-wasm.mjs'
     # A trap writes to standard error, which -ErrorAction Stop would turn into a terminating error.
     function Invoke-Wasm([string]$module, [string[]]$arguments, [string]$runner = $wasmRunner) {
         Push-Location $repo
@@ -11579,7 +11579,7 @@ if ($wasmNode) {
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
         # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
         if ($wasmFixture -in 'os_socket', 'os_resolve', 'macos_poller_loss', 'net', 'wasm_net', 'proc_sys_wasm') { continue }
-        $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
+        $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'toolswasm\neper-host.js')
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through tools/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
     # (D5671, D5672, C201) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
@@ -11675,7 +11675,7 @@ if ($wasmNode) {
     }
     $wasmRun = Invoke-Wasm $wasmReleasePath @('address')
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the 32-bit address row was not left out of the wasm32-wasi release build: exit $($wasmRun.Status) $($wasmRun.Output)" }
-    # (C209, D5681) `neper run --target wasm32-wasi` from a toolchain with lib\wasm beside it runs the module under node and
+    # (C209, D5681) `neper run --target wasm32-wasi` from a toolchain with toolswasm beside it runs the module under node and
     # reports as a native run does; with no node it says what to install.
     $env:NEPER_NODE = ''
     $wasmRunPath = Join-Path $wasmBuild 'run_release.wasm'
@@ -11725,7 +11725,7 @@ if ($wasmNode) {
         & wasm-tools validate $wasmNullPath
         if ($LASTEXITCODE -ne 0) { throw 'the module with a source map does not validate' }
     }
-    foreach ($wasmNullRunner in $wasmRunner, (Join-Path $repo 'lib\wasm\neper-host.js')) {
+    foreach ($wasmNullRunner in $wasmRunner, (Join-Path $repo 'toolswasm\neper-host.js')) {
         $wasmRun = Invoke-Wasm $wasmNullPath @() $wasmNullRunner
         $wasmFirst = ($wasmRun.Output -split "`n" | Where-Object { $_ -match '^\s*at ' } | Select-Object -First 1)
         if ($wasmFirst -notmatch 'main\.fire.*\[src/main\.e:13\]') { throw "$wasmNullRunner did not name the null call's line: $($wasmRun.Output)" }
