@@ -4181,4 +4181,26 @@ D7383	536	sampling regest
 D7384	381	sampling postest (post-strata only)
 D7385	780	sampling srswr and R's rbinom inversion
 D7386	551	sampling strata and cluster with srswr
-D7315	711	betareg: bias-corrected estimates; L451 closed
+D7315	728	betareg: bias-corrected estimates; L451 closed
+D7387	965	sampling UPmultinomial and bit-exact inclusionprobabilities
+D7388	633	sampling UPmaxentropy
+D7389	687	sampling UPmaxentropypi2 and the two-way postest
+D7390	710	QCA truthTable with cut-offs
+D7391	698	EnvStats enorm, eexp and epois with intervals
+D7392	509	EnvStats egamma
+D7393	445	EnvStats eweibull and elnorm
+D7394	438	EnvStats eqnorm and eqlnorm
+D7395	372	EnvStats tolIntNorm and predIntNorm on data
+D7396	417	PMCMRplus Nemenyi all-pairs with the chi-square approximation
+D7397	522	PMCMRplus dscfAllPairsTest
+D7398	485	PMCMRplus tukeyTest and scheffeTest
+D7399	348	PMCMRplus welchManyOneTTest
+D7400	450	PMCMRplus siegelTukeyTest (no ties)
+D7401	592	PMCMRplus siegelTukeyTest with ties
+D7402	854	an exact equicorrelated pmvnorm, and frdManyOneNemenyiTest
+D7403	668	a one-factor normal integral and kwManyOneDunnTest single-step
+D7404	400	PMCMRplus kwManyOneNdwTest
+D7405	599	PMCMRplus steelTest and its critical-value table
+D7406	675	a one-factor multivariate-t integral and PMCMRplus dunnettTest
+D7407	557	PMCMRplus kwManyOneConoverTest single-step
+D7408	755	PMCMRplus vanWaerdenManyOneTest single-step and one-sided dunnettTest

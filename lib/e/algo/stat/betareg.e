@@ -596,23 +596,20 @@ fn mu_eta2(t: f64, link: usize, o: []f64) {
     }
 }
 
-// betareg(..., type = "BC") with the identity precision link of a constant-precision fit: the one-step bias-corrected (beta, phi) = par + K^-1 a, with the adjustment a_t = tr(K^-1 P_t) / 2 of
-// Kosmidis and Zeileis (K the Fisher information, P_t the matrix of its third-order terms). out[0..p] the mean coefficients, out[p] phi; false when singular
-fn fit_bc(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, link: usize, f: *const Fit, out: []f64) -> bool {
+// the inverse Fisher information inv (q by q, q = p + 1) and the adjustment a_t = tr(K^-1 P_t) / 2 of Kosmidis and Zeileis at th = (beta, phi), identity precision link
+fn info_adj(a: *mem.Arena, x: []const f64, n: usize, p: usize, link: usize, th: []const f64, inv: []f64, adj: []f64) -> bool {
     let q = p + 1usize
     let (kk, e1) = mem.alloc[f64](a, q * q)
-    let (inv, e2) = mem.alloc[f64](a, q * q)
     let (mat, e3) = mem.alloc[f64](a, q * q)
     let (col, e4) = mem.alloc[f64](a, q)
     let (pq, e5) = mem.alloc[f64](a, q * q)
-    let (adj, e6) = mem.alloc[f64](a, q)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret false }
+    if e1 != ok || e3 != ok || e4 != ok || e5 != ok { ret false }
     var i = 0usize
     while i < q * q {
         kk[i] = 0.0f64
         i += 1usize
     }
-    let phi = f.phi
+    let phi = th[p]
     let psi3 = gsl.psi_n(1usize, phi)
     let dpsi3 = gsl.psi_n(2usize, phi)
     i = 0usize
@@ -620,7 +617,7 @@ fn fit_bc(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lin
         var t = 0.0f64
         var j = 0usize
         while j < p {
-            t += x[i * p + j] * f.par[j]
+            t += x[i * p + j] * th[j]
             j += 1usize
         }
         let mu = linkinv(t, link)
@@ -687,7 +684,7 @@ fn fit_bc(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lin
             var et = 0.0f64
             var j = 0usize
             while j < p {
-                et += x[i * p + j] * f.par[j]
+                et += x[i * p + j] * th[j]
                 j += 1usize
             }
             let mu = linkinv(et, link)
@@ -747,7 +744,23 @@ fn fit_bc(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lin
         adj[tt] = s / 2.0f64
         tt += 1usize
     }
+    ret true
+}
+
+fn fit_bc(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, link: usize, f: *const Fit, out: []f64) -> bool {
+    let q = p + 1usize
+    let (inv, e1) = mem.alloc[f64](a, q * q)
+    let (adj, e2) = mem.alloc[f64](a, q)
+    let (th, e3) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
     var r = 0usize
+    while r < p {
+        th[r] = f.par[r]
+        r += 1usize
+    }
+    th[p] = f.phi
+    if !info_adj(a, x, n, p, link, th, inv, adj) { ret false }
+    r = 0usize
     while r < q {
         var b = 0.0f64
         var k = 0usize
@@ -755,10 +768,76 @@ fn fit_bc(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lin
             b += inv[r * q + k] * adj[k]
             k += 1usize
         }
-        var base = f.phi
-        if r < p { base = f.par[r] }
-        out[r] = base + b
+        out[r] = th[r] + b
         r += 1usize
+    }
+    ret true
+}
+
+// betareg(..., type = "BR"): Fisher scoring on the bias-reducing adjusted score, th <- th + K^-1 (score + a), from the ML fit until the step is below 1e-8; out the (beta, phi) reached
+fn fit_br(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, link: usize, f: *const Fit, out: []f64) -> bool {
+    let q = p + 1usize
+    let (inv, e1) = mem.alloc[f64](a, q * q)
+    let (adj, e2) = mem.alloc[f64](a, q)
+    let (sc, e3) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    var r = 0usize
+    while r < p {
+        out[r] = f.par[r]
+        r += 1usize
+    }
+    out[p] = f.phi
+    var iter = 0usize
+    while iter < 50usize {
+        if !info_adj(a, x, n, p, link, out, inv, adj) { ret false }
+        let phi = out[p]
+        r = 0usize
+        while r < q {
+            sc[r] = 0.0f64
+            r += 1usize
+        }
+        var i = 0usize
+        while i < n {
+            var t = 0.0f64
+            var j = 0usize
+            while j < p {
+                t += x[i * p + j] * out[j]
+                j += 1usize
+            }
+            let mu = linkinv(t, link)
+            var omu = 1.0f64 - mu
+            if link == 2usize { omu = math.exp[f64](0.0f64 - math.exp[f64](t)) }
+            if link == 3usize {
+                let xx = math.exp[f64](0.0f64 - t)
+                if xx < 0.00001f64 { omu = xx - xx * xx / 2.0f64 + xx * xx * xx / 6.0f64 }
+            }
+            var dm: [2]f64 = zero
+            mu_eta2(t, link, dm[0usize..2usize])
+            let ys = math.log[f64](y[i] / (1.0f64 - y[i]))
+            let ms = gsl.psi(mu * phi) - gsl.psi(omu * phi)
+            j = 0usize
+            while j < p {
+                sc[j] += phi * (ys - ms) * dm[0usize] * x[i * p + j]
+                j += 1usize
+            }
+            sc[p] += mu * (ys - ms) + math.log[f64](1.0f64 - y[i]) - gsl.psi(omu * phi) + gsl.psi(phi)
+            i += 1usize
+        }
+        var step = 0.0f64
+        r = 0usize
+        while r < q {
+            var b = 0.0f64
+            var k = 0usize
+            while k < q {
+                b += inv[r * q + k] * (sc[k] + adj[k])
+                k += 1usize
+            }
+            out[r] += b
+            if math.abs[f64](b) > step { step = math.abs[f64](b) }
+            r += 1usize
+        }
+        if step < 1.0e-8f64 { break }
+        iter += 1usize
     }
     ret true
 }

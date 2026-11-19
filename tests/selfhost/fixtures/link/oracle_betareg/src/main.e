@@ -33,6 +33,13 @@ fn fitl_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let which = usize(x[3usize])
     let (f, e) = br.fit_link(a, x[4usize + n..4usize + n + n * p], x[4usize..4usize + n], n, p, link)
     if e != ok { os.exit(6) }
+    if which >= 100usize {
+        let (ro, re) = mem.alloc[f64](a, p + 1usize)
+        if re != ok { os.exit(16) }
+        if !br.fit_br(a, x[4usize + n..4usize + n + n * p], x[4usize..4usize + n], n, p, link, &f, ro) { os.exit(17) }
+        if which == 110usize { ret ro[p] }
+        ret ro[which - 100usize]
+    }
     if which >= 80usize {
         let (bo, be) = mem.alloc[f64](a, p + 1usize)
         if be != ok { os.exit(14) }

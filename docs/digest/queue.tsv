@@ -56,15 +56,15 @@ L460	library	0.25	621	epiR: epidemiology	Partial (D6187).
 L461	library	0.25	671	systemfit: equation systems	Partial (D6622).
 L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L486	library	0.25	473	mixtools: mixture models by EM	Partial (D6194).
-L487	library	0.75	1654	PMCMRplus: nonparametric post-hoc tests	Partial (D6407), p.adjust six methods (D6193).
+L487	library	0.95	2869	PMCMRplus: nonparametric post-hoc tests	Partial (D6407), p.adjust six methods (D6193).
 L488	library	0.2	475	drc: dose-response models	Partial (D6411).
 L489	library	0.15	799	osqp and clarabel: quadratic and conic solvers	Partial (D6643).
 L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
 L507	library	0.2	514	gsDesign: group sequential designs	Partial (D6405).
-L508	library	0.97	1999	sampling: survey sampling designs	Partial (D6191).
+L508	library	0.99	2162	sampling: survey sampling designs	Partial (D6191).
 L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
 L510	library	0.35	545	gmm: generalized method of moments	Partial (D6479 linear two-step gmm with iid, MDS and D6480 HAC weighting with five kernels at fixed bandwidth, covariance and J agree with gmm on Windows;
-L511	library	0.3	570	QCA: qualitative comparative analysis	Partial (D6482 pof inclusion, PRI, coverage, RoN, D6481 complex and parsimonious minimal models of minimize() on a crisp truth table, as prime-implicant counts, minimum size and model count, equal QCA
+L511	library	0.4	717	QCA: qualitative comparative analysis	Partial (D6482 pof inclusion, PRI, coverage, RoN, D6481 complex and parsimonious minimal models of minimize() on a crisp truth table, as prime-implicant counts, minimum size and model count, equal QCA
 L512	library	0.15	799	poLCA: latent class analysis	Partial (D6644, D7284 npar, AIC, Gsq, Chisq, the residual degrees of freedom and the modal posterior classes).
 L513	library	0.15	704	Epi: epidemiology tools	Partial (D6412, D7253, D7254, D7255 the conditional MLE odds ratio and its exact interval, D7256 clogistic on matched sets).
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
@@ -113,7 +113,7 @@ L377	library	0.15	912	xgboost: gradient-boosted trees	Partial (D6632).
 L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).
 L441	library	0.35	1116	msm and mstate: multi-state models	Partial (D7352).
 L442	library	0	264	phangorn: phylogenetic inference	Open (CRAN rank 666).
-L466	library	0.3	2405	EnvStats: environmental statistics	D6723: e.algo.stat.envstats has rosnerTest, tolIntNormK (one-sided content, Wald-Wolfowitz, expectation) and predIntNormK (one future mean, Bonferroni), equal to EnvStats on 1852 values on Windows (or
+L466	library	0.3	2928	EnvStats: environmental statistics	D6723: e.algo.stat.envstats has rosnerTest, tolIntNormK (one-sided content, Wald-Wolfowitz, expectation) and predIntNormK (one future mean, Bonferroni), equal to EnvStats on 1852 values on Windows (or
 L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
 L496	library	0.42	838	fda: functional data analysis	Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda;
 L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
