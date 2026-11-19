@@ -50830,3 +50830,6 @@ strata(data, c("a", "b"), size, "srswor") draws within the (a, b) combinations i
 
 ## D7455 — sampling cluster takes one variable
 R's cluster(data, c("a", "b"), ...) stops with "there are too many specified variables as clusters", so cluster with several variables is not an R behaviour to match; the one-variable cluster is the whole of it. Open for L508: the cube method only.
+
+## D7456 — lpSolve sensitivity output
+`lp_sens` returns lp(compute.sens = 1): duals (constraint prices, then the reduced costs c_j - sum y_i a_ij), the right-hand-side ranges of the binding constraints and the value ranges of the nonbasic variables (+-1e30 where lpSolve reports none), and the objective coefficient ranges (basic variables by the ratio test over the nonbasic reduced costs, nonbasic ones from the reduced cost, one-sided). It reads the final tableau of the maximisation form of `opt.simplex` (min negates c, a >= row is negated) and maps the signs back. Equal to lpSolve on 60 bounded random programs, max with <= rows and min with >= rows (1487 values in oracle_lpsolve_sens); equality and mixed rows and degenerate ties are not covered. Open for L367: lpSolveAPI, the other clue methods and consensus.

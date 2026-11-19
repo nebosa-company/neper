@@ -4305,4 +4305,5 @@ D7451	680	isotone gpava list response with secondary and tertiary ties; L520 clo
 D7452	633	sampling Hajekstrata and rhg
 D7453	349	sampling rhg_strata
 D7454	458	sampling strata with several variables
-D7455	298	sampling cluster takes one variable
+D7455	299	sampling cluster takes one variable
+D7456	823	lpSolve sensitivity output

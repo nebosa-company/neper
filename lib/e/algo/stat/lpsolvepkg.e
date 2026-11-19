@@ -208,3 +208,159 @@ fn transport(a: *mem.Arena, cost: []const f64, m: usize, n: usize, maximise: boo
     if maximise { ret (v, ok) }
     ret (0.0f64 - v, ok)
 }
+
+// lp(direction, c, A, dir, b, compute.sens = 1) for <= and >= rows over x >= 0: the sensitivity output of lpSolve from the final simplex tableau of the maximisation form (min is c -> -c, a >= row is negated).
+// duals receive the m constraint prices then the n reduced costs; dfrom / dto the right-hand-side ranges (+-1e30 where lpSolve reports none), the variable entries ranging the variable's value;
+// cfrom / cto the objective coefficient ranges. The answer is the optimum value. Non-degenerate problems only: ties in the ratio tests are decided as lpSolve's basis does.
+fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, m: usize, n: usize, geq: []const bool, maximise: bool, x: []f64, duals: []f64, dfrom: []f64, dto: []f64, cfrom: []f64, cto: []f64) -> (f64, err) {
+    let big = 1.0e30f64
+    var sc = 1.0f64
+    if !maximise { sc = 0.0f64 - 1.0f64 }
+    let width = n + m + 2usize
+    let (c2, e0) = mem.alloc[f64](a, n)
+    let (a2, e1) = mem.alloc[f64](a, m * n)
+    let (b2, e2) = mem.alloc[f64](a, m)
+    let (tab, e3) = mem.alloc[f64](a, (m + 2usize) * width)
+    let (basis, e4) = mem.alloc[usize](a, m)
+    let (sg, e5) = mem.alloc[f64](a, m)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (0.0f64, mem.Full) }
+    var j = 0usize
+    while j < n {
+        c2[j] = sc * c[j]
+        j += 1usize
+    }
+    var i = 0usize
+    while i < m {
+        sg[i] = 1.0f64
+        if geq[i] { sg[i] = 0.0f64 - 1.0f64 }
+        j = 0usize
+        while j < n {
+            a2[i * n + j] = sg[i] * am[i * n + j]
+            j += 1usize
+        }
+        b2[i] = sg[i] * b[i]
+        i += 1usize
+    }
+    let (v, es) = opt.simplex(c2, a2, b2, m, n, x, tab, basis)
+    let _ = v
+    if es != ok { ret (0.0f64, es) }
+    let rhs = width - 1usize
+    var obj = 0.0f64
+    j = 0usize
+    while j < n {
+        obj += c[j] * x[j]
+        j += 1usize
+    }
+    i = 0usize
+    while i < m {
+        duals[i] = sc * sg[i] * tab[m * width + n + i]
+        i += 1usize
+    }
+    j = 0usize
+    while j < n {
+        var z = 0.0f64
+        i = 0usize
+        while i < m {
+            z += duals[i] * am[i * n + j]
+            i += 1usize
+        }
+        duals[m + j] = c[j] - z
+        j += 1usize
+    }
+    // which column is basic in which row
+    let (rowof, e6) = mem.alloc[usize](a, n + m)
+    if e6 != ok { ret (0.0f64, mem.Full) }
+    j = 0usize
+    while j < n + m {
+        rowof[j] = m
+        j += 1usize
+    }
+    i = 0usize
+    while i < m {
+        rowof[basis[i]] = i
+        i += 1usize
+    }
+    // objective coefficient ranges
+    j = 0usize
+    while j < n {
+        if rowof[j] == m {
+            // nonbasic: the coefficient may move away from the optimum by its reduced cost only
+            let zj = c[j] - duals[m + j]
+            if maximise {
+                cfrom[j] = 0.0f64 - big
+                cto[j] = zj
+            } else {
+                cfrom[j] = zj
+                cto[j] = big
+            }
+        } else {
+            let r = rowof[j]
+            var lo = 0.0f64 - big
+            var hi = big
+            var q = 0usize
+            while q < n + m {
+                if rowof[q] == m {
+                    let tq = tab[r * width + q]
+                    let dq = tab[m * width + q]
+                    if tq > 1.0e-12f64 && 0.0f64 - dq / tq > lo { lo = 0.0f64 - dq / tq }
+                    if tq < 0.0f64 - 1.0e-12f64 && 0.0f64 - dq / tq < hi { hi = 0.0f64 - dq / tq }
+                }
+                q += 1usize
+            }
+            if sc > 0.0f64 {
+                cfrom[j] = c[j] + lo
+                cto[j] = c[j] + hi
+                if lo <= 0.0f64 - big { cfrom[j] = 0.0f64 - big }
+                if hi >= big { cto[j] = big }
+            } else {
+                cfrom[j] = c[j] - hi
+                cto[j] = c[j] - lo
+                if hi >= big { cfrom[j] = 0.0f64 - big }
+                if lo <= 0.0f64 - big { cto[j] = big }
+            }
+        }
+        j += 1usize
+    }
+    // right-hand-side ranges of the constraints and value ranges of the nonbasic variables
+    var k = 0usize
+    while k < m + n {
+        dfrom[k] = 0.0f64 - big
+        dto[k] = big
+        let col = k
+        var cl = n + k
+        if k >= m { cl = k - m }
+        if rowof[cl] == m {
+            var lo = 0.0f64 - big
+            var hi = big
+            var r = 0usize
+            while r < m {
+                let tv = tab[r * width + cl]
+                let xb = tab[r * width + rhs]
+                if k < m {
+                    // x_B + delta' * column >= 0
+                    if tv > 1.0e-12f64 && 0.0f64 - xb / tv > lo { lo = 0.0f64 - xb / tv }
+                    if tv < 0.0f64 - 1.0e-12f64 && xb / (0.0f64 - tv) < hi { hi = xb / (0.0f64 - tv) }
+                } else {
+                    // x_B - delta * column >= 0
+                    if tv < 0.0f64 - 1.0e-12f64 && xb / tv > lo { lo = xb / tv }
+                    if tv > 1.0e-12f64 && xb / tv < hi { hi = xb / tv }
+                }
+                r += 1usize
+            }
+            if k < m {
+                if sg[col] > 0.0f64 {
+                    if lo > 0.0f64 - big { dfrom[k] = b[k] + lo }
+                    if hi < big { dto[k] = b[k] + hi }
+                } else {
+                    if hi < big { dfrom[k] = b[k] - hi }
+                    if lo > 0.0f64 - big { dto[k] = b[k] - lo }
+                }
+            } else {
+                if lo > 0.0f64 - big { dfrom[k] = lo }
+                if hi < big { dto[k] = hi }
+            }
+        }
+        k += 1usize
+    }
+    ret (obj, ok)
+}
