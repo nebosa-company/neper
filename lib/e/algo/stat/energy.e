@@ -11,6 +11,7 @@ use e.math
 use e.math.dist as dist
 use e.math.special as sp
 use e.algo.rand.rdist as rd
+use e.algo.stat.hclust as hc
 use e.math.nmath as nm
 use e.mem
 
@@ -769,3 +770,29 @@ fn disco_between(a: *mem.Arena, r: *rg.Rng, dst: []const f64, n: usize, grp: []c
     out[1usize] = f64(cnt + 1usize) / f64(reps + 1usize)
     ret ok
 }
+
+// energy.hclust(dist(x), alpha): R's hclust(d^alpha, method = "ward.D") on the Euclidean distances of the n by d row-major points x
+fn energy_hclust(a: *mem.Arena, x: []const f64, n: usize, d: usize, alpha: f64) -> (hc.Tree, err) {
+    let (dm, e) = mem.alloc[f64](a, n * n)
+    if e != ok { ret (zero, e) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var s = 0.0f64
+            var k = 0usize
+            while k < d {
+                let t = x[i * d + k] - x[j * d + k]
+                s += t * t
+                k += 1usize
+            }
+            dm[i * n + j] = math.sqrt[f64](s)
+            if alpha != 1.0f64 { dm[i * n + j] = math.pow[f64](dm[i * n + j], alpha) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (tr, eh) = hc.hclust(a, dm, n, 1usize)
+    ret (tr, eh)
+}
+

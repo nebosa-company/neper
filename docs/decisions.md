@@ -50863,3 +50863,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7466 — sm h.select for two covariates, common and separate structures
 `hselect_reg_2d_other` covers structure.2d = "common" (one bandwidth, start mean(sd / 2), the same optimise) and "separate" (R optim Nelder-Mead on the two log bandwidths from log(sd / 2), no standard-deviation scaling) for the cv, df and aicc criteria (df is refused by sm for separate, so not tested); the criterion is factored into `crit2_val` over the two bandwidths. Equal to sm on 20 samples each in oracle_sm_hsel (917 cases in all). Open for L505: 2-d and binned ancova, band curves, sm.options.
+
+## D7467 — energy.hclust
+The Poisson test already exists (poisson_e, poisson_etest). Open for L459: kgroups. A k-groups pass written from the paper (visit each point in order, move it to the cluster that lowers sum_j (1 / (2 n_j)) sum d, update at once) reached a different local optimum from energy's on most random starts (W 40.21 against 40.90 on one, different iteration counts), so energy's compiled kgroups_start orders or batches its moves differently; without its source the port was dropped rather than committed unverified.
