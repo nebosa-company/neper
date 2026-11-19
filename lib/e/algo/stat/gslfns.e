@@ -1197,3 +1197,43 @@ fn cx_dilog(zr: f64, zi: f64, out: []f64, t1: []f64, t2: []f64) {
 }
 
 fn complex_dilog(r: f64, th: f64, out: []f64, t1: []f64, t2: []f64) { cx_dilog(r * math.cos[f64](th), r * math.sin[f64](th), out, t1, t2) }
+
+// bessel_zero_Jnu(nu, s): the s-th positive zero of J_nu (nu >= 0; integer orders any s, other orders while the power series of bessel_jnu keeps its digits, x up to about 15) found by scanning the sign changes of bessel_jnu from just above 0 in steps of 0.05 (the zeros are at least pi apart) and bisecting the bracket of the s-th to the last bit
+fn bjz(nu: f64, x: f64) -> f64 {
+    if nu == math.floor[f64](nu) { ret bessel_jn(i64(nu), x) }
+    ret bessel_jnu(nu, x)
+}
+
+fn bessel_zero_jnu(nu: f64, s: usize) -> f64 {
+    var x = 0.05f64
+    var f = bjz(nu, x)
+    var found = 0usize
+    while found < s && x < 1.0e6f64 {
+        let xn = x + 0.05f64
+        let fn1 = bjz(nu, xn)
+        if (f < 0.0f64 && fn1 >= 0.0f64) || (f > 0.0f64 && fn1 <= 0.0f64) {
+            found += 1usize
+            if found == s {
+                var lo = x
+                var hi = xn
+                var flo = f
+                var it = 0usize
+                while it < 200usize {
+                    let mid = 0.5f64 * (lo + hi)
+                    let fm = bjz(nu, mid)
+                    if (flo < 0.0f64 && fm >= 0.0f64) || (flo > 0.0f64 && fm <= 0.0f64) {
+                        hi = mid
+                    } else {
+                        lo = mid
+                        flo = fm
+                    }
+                    it += 1usize
+                }
+                ret 0.5f64 * (lo + hi)
+            }
+        }
+        x = xn
+        f = fn1
+    }
+    ret 0.0f64 / 0.0f64
+}

@@ -50929,3 +50929,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7484 — gamlss.dist qexGAUS verified
 `qexgaus` (the bracket grown from mu in steps of sigma, then Brent zeroin at tolerance eps^0.25 from `e.algo.stat.pwr`) already existed without an oracle; 60 random (mu, sigma, nu, p) draws added to oracle_gamlss_exgaus equal gamlss.dist qexGAUS at rel 1e-9 (120 cases in all), so the queue's exGAUS quantile gap is closed. Open for L464: the other families, r, moments, links.
+
+## D7485 — gsl bessel_zero_Jnu
+`bessel_zero_jnu(nu, s)` is the s-th positive zero of J_nu: a scan of the sign changes of J_nu in steps of 0.05 (consecutive zeros are at least pi apart) and bisection of the s-th bracket to the last bit. J_nu comes from `bessel_jn` (the trapezoid rule on the integral representation, accurate for any x) for integer orders and from the power series `bessel_jnu` otherwise, which keeps its digits only to x of about 15, so non-integer orders are limited to the first zeros. Equal to gsl bessel_zero_Jnu at rel 1e-10 on 60 draws (orders 0, 1 and random in 0 to 8; up to the 20th zero for integer orders). Open for L417: the Airy zeros (Ai and Bi derivatives are not yet in gslfns), Coulomb, hazard, legendre_H3d, the error estimates.
