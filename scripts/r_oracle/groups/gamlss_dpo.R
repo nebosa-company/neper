@@ -18,4 +18,14 @@ for (rep in 1:40) {
   pr <- runif(1, 0.02, 0.98)
   add("dp", c(5, mu, sg, pr, bd), qDBI(pr, mu = mu, sigma = sg, bd = bd), 0, 0)
 }
+# GAF (fn 6 d, 7 p, 8 q; mu, sigma, nu, x) and ZISICHEL (fn 9; mu, sigma, nu, tau, x)
+for (rep in 1:40) {
+  mu <- runif(1, 0.5, 6); sg <- runif(1, 0.3, 1.5); nu <- runif(1, -1, 3); x <- rgamma(1, 2, 1)
+  add("dp", c(6, mu, sg, x, nu), dGAF(x, mu = mu, sigma = sg, nu = nu), 1e-9, 1e-14)
+  add("dp", c(7, mu, sg, x, nu), pGAF(x, mu = mu, sigma = sg, nu = nu), 1e-9, 1e-14)
+  pr <- runif(1, 0.02, 0.98)
+  add("dp", c(8, mu, sg, pr, nu), qGAF(pr, mu = mu, sigma = sg, nu = nu), 1e-7, 1e-12)
+  tau <- runif(1, 0.05, 0.6); nu2 <- runif(1, -1.5, 1); xi <- rpois(1, mu)
+  add("dp", c(9, mu, sg, xi, nu2, tau), dZISICHEL(xi, mu = mu, sigma = sg, nu = nu2, tau = tau), 1e-7, 1e-12)
+}
 emit("gamlss_dpo", "gamlss.dist", list(cases))

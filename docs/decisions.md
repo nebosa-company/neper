@@ -50443,3 +50443,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `gamlssdist.ddpo`, `pdpo`, `qdpo` give the double Poisson mass as Efron's unnormalised form divided by its sum over the support, and `ddbi`, `pdbi`, `qdbi` the double binomial. The package normalises both in compiled code; the sums reproduce its constants. dDBI carries a quirk that the port copies: its R expression has (bd - x) where the proper form has (bd - x) log(bd - x), while the constant is the proper one, so the masses of dDBI do not add up to one (the quantile and distribution follow them as written).
 
 **Result.** `oracle_gamlss_dpo` (240 cases) equals gamlss.dist on Windows: DPO to 1e-7, DBI to 1e-9, quantiles exactly. Linux pending. L464 stays partial: GAF, MN3-5, SEP, SI, ST3C, ZASICHEL, ZISICHEL, DEL, the remaining random-number generators, moments.
+
+## D7325 — gamlss.dist: GAF and the ZISICHEL density
+
+**Decision.** `gamlssdist.dgaf`, `pgaf`, `qgaf` are the gamma with sigma1 = sigma mu^(nu/2 - 1). `dzisichel` follows the package, whose x > 0 branch is a comparison (`logfy[x != 0] < ...`) and not an assignment, so dZISICHEL returns 1 for every positive x; the port returns the same.
+
+**Result.** `oracle_gamlss_dpo` (400 cases, 160 new) equals gamlss.dist on Windows. Linux pending. L464 stays partial: SI, SEP, MN3-5, ST3C, ZASICHEL, ZISICHEL p and q, DEL, the remaining random-number generators, moments.

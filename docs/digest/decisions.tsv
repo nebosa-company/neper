@@ -4222,4 +4222,5 @@ D7417	817	L487 closed: hsAllPairsTest statistic, and the acceptance list is met
 D7322	850	poLCA: random restarts
 D7418	1284	R's rgamma (a >= 1) and rchisq in e.algo.rand.r, and what blocked arm sim
 D7323	881	poLCA: standard errors
-D7324	825	gamlss.dist: DPO and DBI
+D7324	826	gamlss.dist: DPO and DBI
+D7325	564	gamlss.dist: GAF and the ZISICHEL density

@@ -16,7 +16,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 2usize { ret gd.qdpo(z[3usize], z[1usize], z[2usize]) }
     if which == 3usize { ret gd.ddbi(z[3usize], z[1usize], z[2usize], z[4usize]) }
     if which == 4usize { ret gd.pdbi(z[3usize], z[1usize], z[2usize], z[4usize]) }
-    ret gd.qdbi(z[3usize], z[1usize], z[2usize], z[4usize])
+    if which == 5usize { ret gd.qdbi(z[3usize], z[1usize], z[2usize], z[4usize]) }
+    if which == 6usize { ret gd.dgaf(z[3usize], z[1usize], z[2usize], z[4usize]) }
+    if which == 7usize { ret gd.pgaf(z[3usize], z[1usize], z[2usize], z[4usize]) }
+    if which == 8usize { ret gd.qgaf(z[3usize], z[1usize], z[2usize], z[4usize]) }
+    ret gd.dzisichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize])
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

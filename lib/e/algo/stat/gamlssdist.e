@@ -2256,3 +2256,17 @@ fn qdbi(p: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
     }
     ret res
 }
+
+// GAF: the gamma with sigma scaled by mu^(nu / 2 - 1), i.e. GA with sigma1 = sigma mu^(nu / 2 - 1)
+fn gaf_s(mu: f64, sigma: f64, nu: f64) -> f64 { ret sigma * math.pow[f64](mu, nu / 2.0f64 - 1.0f64) }
+fn dgaf(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret dga(x, mu, gaf_s(mu, sigma, nu)) }
+fn pgaf(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret pga(x, mu, gaf_s(mu, sigma, nu)) }
+fn qgaf(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret qga(p, mu, gaf_s(mu, sigma, nu)) }
+
+// ZISICHEL density as gamlss.dist writes it: at x = 0 the inflated mass tau + (1 - tau) dSICHEL(0); the line for x > 0 in the package is a comparison, not an assignment (`logfy[x != 0] < ...`),
+// so the package returns exp(0) = 1 there, and so does this port
+fn dzisichel(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret tau + (1.0f64 - tau) * dsichel(0.0f64, mu, sigma, nu) }
+    ret 1.0f64
+}
