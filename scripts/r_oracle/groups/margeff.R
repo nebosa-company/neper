@@ -51,4 +51,17 @@ for (rep in 1:30) {
   if (is.null(pr)) next
   for (r in 1:4) { xr <- c(1, as.numeric(nd[r, ])); for (w in 0:1) { v <- if (w == 0) pr$estimate[r] else if ("std.error" %in% names(pr)) pr$std.error[r] else NA_real_; if (length(v) == 1 && is.finite(v)) cases[[length(cases) + 1]] <- case("mpred", c(p, link, b, V, xr, w), v, rel = 1e-5, abs = 1e-8) } }
 }
+# hypotheses with equality constraints: "mhyp" args (p, q, beta[p], vcov[p p], r[p], which 0 estimate 1 se 2 z 3 p)
+options(marginaleffects_safe = FALSE)
+set.seed(20262495)
+for (rep in 1:30) {
+  n <- sample(60:150, 1); k <- sample(2:4, 1); X <- matrix(round(rnorm(n * k), 3), n, k); d <- data.frame(y = X %*% c(0.5, -0.3, 0.2, 0.1)[1:k] + rnorm(n), X); names(d) <- c("y", paste0("v", 1:k))
+  m <- glm(as.formula(paste("y ~", paste0("v", 1:k, collapse = " + "))), gaussian, d); b <- coef(m); V <- vcov(m); p <- length(b)
+  rv <- sample(c(-2, -1, 0, 1, 2), p, TRUE); if (all(rv == 0)) rv[1] <- 1; qv <- sample(c(0, 0.5, -1), 1)
+  hyp <- paste0(paste0(ifelse(rv < 0, "-", "+"), abs(rv), "*b", seq_len(p), collapse = ""), "=", qv)
+  h <- tryCatch(as.data.frame(hypotheses(m, hypothesis = hyp)), error = function(e) NULL)
+  if (is.null(h)) next
+  vals <- c(h$estimate[1], h$std.error[1], h$statistic[1], h$p.value[1])
+  for (w in 0:3) if (is.finite(vals[w + 1])) cases[[length(cases) + 1]] <- case("mhyp", c(p, qv, b, V, rv, w), vals[w + 1], rel = 1e-6, abs = 1e-9)
+}
 emit("margeff", "marginaleffects", list(cases))

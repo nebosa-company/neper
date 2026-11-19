@@ -11,6 +11,12 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "mhyp") {
+        let ph = usize(z[0usize])
+        var oh: [4]f64 = zero
+        mf.lin_hypothesis(z[2usize..2usize + ph], z[2usize + ph..2usize + ph + ph * ph], z[2usize + ph + ph * ph..2usize + ph + ph * ph + ph], z[1usize], ph, oh[0usize..4usize])
+        ret oh[usize(z[2usize + ph + ph * ph + ph])]
+    }
     if str.eq(c.name, "mpred") {
         let pp = usize(z[0usize])
         let (op, ep) = mem.alloc[f64](a, 2usize)

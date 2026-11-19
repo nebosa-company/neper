@@ -147,3 +147,24 @@ fn glm_pred(link: usize, x: []const f64, beta: []const f64, vcov: []const f64, p
     out[0usize] = d[0usize]
     out[1usize] = math.abs[f64](d[1usize]) * math.sqrt[f64](q)
 }
+
+// hypotheses(model, "r'b = q") of a glm: the estimate r'b - q, its standard error sqrt(r' V r), the z statistic and the two-sided normal p-value; beta and vcov (p by p, column-major) from the fit, out = (estimate, se, z, p)
+fn lin_hypothesis(beta: []const f64, vcov: []const f64, r: []const f64, q: f64, p: usize, out: []f64) {
+    var e = 0.0f64 - q
+    var v = 0.0f64
+    var i = 0usize
+    while i < p {
+        e += r[i] * beta[i]
+        var j = 0usize
+        while j < p {
+            v += r[i] * vcov[j * p + i] * r[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let se = math.sqrt[f64](v)
+    out[0usize] = e
+    out[1usize] = se
+    out[2usize] = e / se
+    out[3usize] = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](e / se), 0.0f64, 1.0f64, true, false)
+}

@@ -51061,3 +51061,6 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7522 — marginaleffects predictions at new rows
 `glm_pred` is predictions(model, newdata) of a glm at one new row: mu(x'b) and the delta-method standard error |mu'(eta)| sqrt(x' V x), for the seven inverse links of `mu_d` (identity, logit, log, probit, cloglog, inverse, sqrt); equal to marginaleffects at 1e-5 on four random rows of each of 30 glms (120 values added to oracle_margeff, 384 in all). Open for L415: other links, comparisons for factors and other contrasts, conditional effects, hypotheses.
+
+## D7523 — marginaleffects hypotheses with equality constraints
+`lin_hypothesis` is hypotheses(model, "r'b = q") of a glm for a linear combination of the coefficients: the estimate r'b - q (marginaleffects reports the left side minus the right side), the standard error sqrt(r' V r), the z statistic and the two-sided normal p-value; equal to marginaleffects on 30 gaussian glms with random integer combinations and right-hand sides (120 values added to oracle_margeff, 504 in all). Open for L415: hypotheses on predictions and comparisons rather than coefficients, comparisons for factors and other contrasts, conditional effects, other links.
