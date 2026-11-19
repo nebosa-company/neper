@@ -12,7 +12,7 @@ use e.mem
 use e.algo.stat.olsfit as of
 use e.math.nmath_beta as nbq
 
-// the index `which` of the lm of y on x (n by p, intercept column included): 0 r2, 1 r2_adjusted, 2 rmse, 3 mae, 4 mse, 5 sigma, 6 loglik, 7 aic, 8 aicc, 9 bic
+// the index `which` of the lm of y on x (n by p, intercept column included): 0 r2, 1 r2_adjusted, 2 rmse, 3 mae, 4 mse, 5 sigma, 6 loglik, 7 aic, 8 aicc, 9 bic, 10 r2_xu (1 - var(resid) / var(y))
 fn lm_index(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, which: usize) -> f64 {
     let (f, e) = ols.ols(a, x, y, n, p)
     if e != ok { ret 0.0f64 / 0.0f64 }
@@ -47,6 +47,22 @@ fn lm_index(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, w
     if which == 6usize { ret ll }
     if which == 7usize { ret aic }
     if which == 8usize { ret aic + 2.0f64 * kf * (kf + 1.0f64) / (nf - kf - 1.0f64) }
+    if which == 10usize {
+        var mr = 0.0f64
+        i = 0usize
+        while i < n {
+            mr += f.resid[i]
+            i += 1usize
+        }
+        mr = mr / nf
+        var vr = 0.0f64
+        i = 0usize
+        while i < n {
+            vr += (f.resid[i] - mr) * (f.resid[i] - mr)
+            i += 1usize
+        }
+        ret 1.0f64 - vr / tss
+    }
     ret 0.0f64 - 2.0f64 * ll + math.log[f64](nf) * kf
 }
 

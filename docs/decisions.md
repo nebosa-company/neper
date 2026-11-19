@@ -51409,3 +51409,6 @@ e.ml.cluster.density.jp_cluster is jpclust(x, k, kt): the links of sNNclust (eac
 
 ## D7704 — dbscan extractXi
 e.ml.cluster.density.optics_xi is extractXi(optics(x, eps, minPts), xi, minimum, correctPredecessors) ported line for line from the R code: the steep-down and steep-up areas on the reachability plot (R's NA beyond the plot is NaN, Inf a real infinity), the filtered steep-down set, the predecessor correction, clusters sorted by start and end, then painted by decreasing size (increasing and only onto unpainted rows with minimum). Equal to dbscan::extractXi on 60 random problems (60 to 200 rows over three blobs, minPts 3 to 7, xi 0.02 to 0.4, both minimum and correctPredecessors on and off): the sum of position times cluster id per row, exactly, 45 of them with clusters, on the first run (oracle_dbscan_ext 140 cases). Only hdbscan stays open in L358.
+
+## D7629 — performance: r2_xu of an lm
+`performancepkg.lm_index` index 10 is Xu's R2, 1 - var(resid) / var(y), equal to performance::r2_xu on 25 random linear models (25 values added to oracle_performancepkg, 1568 in all) to 1e-9.
