@@ -35,7 +35,7 @@ fn link3(link: usize, a: f64) -> (f64, f64, f64) {
 }
 
 // the log-likelihood at par = (theta[K - 1], beta[p]); when gr and h are given they receive the gradient and Hessian (q by q)
-fn loglik(x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link: usize, par: []const f64, gr: []f64, h: []f64, want: bool) -> f64 {
+fn loglik(x: []const f64, cls: []const f64, wts: []const f64, n: usize, p: usize, nk: usize, link: usize, par: []const f64, gr: []f64, h: []f64, want: bool) -> f64 {
     let q = nk - 1usize + p
     var i = 0usize
     if want {
@@ -79,7 +79,8 @@ fn loglik(x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link:
         }
         let dd = fa - fb
         if !(dd > 0.0f64) { ret 0.0f64 / 0.0f64 }
-        ll += math.log[f64](dd)
+        let wt = wts[t]
+        ll += wt * math.log[f64](dd)
         if want {
             // dl = (da * da_vec - db * db_vec) / dd with da_vec = e_theta_y - x, db_vec = e_theta_(y-1) - x
             var r = 0usize
@@ -95,7 +96,7 @@ fn loglik(x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link:
                 }
                 if y == nk - 1usize { va = 0.0f64 }
                 if y == 0usize { vb = 0.0f64 }
-                gr[r] += (da * va - db * vb) / dd
+                gr[r] += wt * (da * va - db * vb) / dd
                 var s = 0usize
                 while s < q {
                     var wa = 0.0f64
@@ -111,7 +112,7 @@ fn loglik(x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link:
                     if y == 0usize { wb = 0.0f64 }
                     let ga2 = da * va - db * vb
                     let gb2 = da * wa - db * wb
-                    h[r * q + s] += (dda * va * wa - ddb * vb * wb) / dd - ga2 * gb2 / (dd * dd)
+                    h[r * q + s] += wt * ((dda * va * wa - ddb * vb * wb) / dd - ga2 * gb2 / (dd * dd))
                     s += 1usize
                 }
                 r += 1usize
@@ -123,7 +124,7 @@ fn loglik(x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link:
 }
 
 // fits the model: par receives theta (K - 1 values) then beta (p); returns the log-likelihood
-fn clm(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link: usize, par: []f64) -> f64 {
+fn clm(a: *mem.Arena, x: []const f64, cls: []const f64, wts: []const f64, n: usize, p: usize, nk: usize, link: usize, par: []f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let q = nk - 1usize + p
     let (gr, e1) = mem.alloc[f64](a, q)
@@ -138,15 +139,21 @@ fn clm(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: 
     }
     var t = 0usize
     while t < n {
-        cum[usize(cls[t])] += 1.0f64
+        cum[usize(cls[t])] += wts[t]
         t += 1usize
+    }
+    var wsum = 0.0f64
+    var kk0 = 0usize
+    while kk0 < nk {
+        wsum += cum[kk0]
+        kk0 += 1usize
     }
     var run = 0.0f64
     k = 0usize
     while k < nk - 1usize {
         run += cum[k]
         // a start below the median ordering keeps every cell positive: the cumulative link of the observed proportion
-        var pq = run / f64(n)
+        var pq = run / wsum
         if link == 0usize { par[k] = math.log[f64](pq / (1.0f64 - pq)) }
         if link == 1usize { par[k] = dist.qnorm(pq, 0.0f64, 1.0f64, true, false) }
         if link == 2usize { par[k] = math.log[f64](0.0f64 - math.log[f64](1.0f64 - pq)) }
@@ -159,7 +166,7 @@ fn clm(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: 
         par[nk - 1usize + j] = 0.0f64
         j += 1usize
     }
-    var ll = loglik(x, cls, n, p, nk, link, par, gr, h, true)
+    var ll = loglik(x, cls, wts, n, p, nk, link, par, gr, h, true)
     var it = 0usize
     while it < 200usize {
         let (inv, ie) = gp.invert(a, h, q)
@@ -180,7 +187,7 @@ fn clm(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: 
                 trial[i] = par[i] - scale * d
                 i += 1usize
             }
-            let ll2 = loglik(x, cls, n, p, nk, link, trial, gr, h, false)
+            let ll2 = loglik(x, cls, wts, n, p, nk, link, trial, gr, h, false)
             if ll2 == ll2 && ll2 >= ll - 1.0e-14f64 {
                 i = 0usize
                 while i < q {
@@ -188,7 +195,7 @@ fn clm(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: 
                     i += 1usize
                 }
                 let step = math.abs[f64](ll2 - ll)
-                ll = loglik(x, cls, n, p, nk, link, par, gr, h, true)
+                ll = loglik(x, cls, wts, n, p, nk, link, par, gr, h, true)
                 moved = true
                 if step < 1.0e-13f64 { ret ll }
                 break
@@ -214,7 +221,7 @@ fn eq_tcol(c: usize, r: usize, nt: usize) -> f64 {
     ret 0.0f64
 }
 
-fn clm_equi(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link: usize, par: []f64) -> f64 {
+fn clm_equi(a: *mem.Arena, x: []const f64, cls: []const f64, wts: []const f64, n: usize, p: usize, nk: usize, link: usize, par: []f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let q = nk - 1usize + p
     let qr = 2usize + p
@@ -235,8 +242,14 @@ fn clm_equi(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
     }
     var t = 0usize
     while t < n {
-        cum[usize(cls[t])] += 1.0f64
+        cum[usize(cls[t])] += wts[t]
         t += 1usize
+    }
+    var wsum = 0.0f64
+    var kk0 = 0usize
+    while kk0 < nk {
+        wsum += cum[kk0]
+        kk0 += 1usize
     }
     var run = 0.0f64
     var first = 0.0f64
@@ -244,7 +257,7 @@ fn clm_equi(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
     k = 0usize
     while k < nt {
         run += cum[k]
-        let pq = run / f64(n)
+        let pq = run / wsum
         var v = 0.0f64
         if link == 0usize { v = math.log[f64](pq / (1.0f64 - pq)) }
         if link == 1usize { v = dist.qnorm(pq, 0.0f64, 1.0f64, true, false) }
@@ -274,7 +287,7 @@ fn clm_equi(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
             tfull[nt + j] = red[2usize + j]
             j += 1usize
         }
-        ll = loglik(x, cls, n, p, nk, link, tfull, gr, h, true)
+        ll = loglik(x, cls, wts, n, p, nk, link, tfull, gr, h, true)
         if ll != ll { ret nan }
         var c = 0usize
         while c < qr {
@@ -332,7 +345,7 @@ fn clm_equi(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
                 tfull[nt + j] = trial[2usize + j]
                 j += 1usize
             }
-            let ll2 = loglik(x, cls, n, p, nk, link, tfull, gr, h, false)
+            let ll2 = loglik(x, cls, wts, n, p, nk, link, tfull, gr, h, false)
             if ll2 == ll2 && ll2 >= ll - 1.0e-14f64 {
                 i = 0usize
                 while i < qr {
@@ -366,7 +379,7 @@ fn clm_equi(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
 }
 
 // clm with the thresholds a linear function of fewer parameters, theta = T alpha (T is nt by na, row-major, nt = K - 1): Newton with step halving on the full gradient and Hessian reduced by the chain rule; par receives the full (theta, beta), the answer is the log-likelihood
-fn clm_lin(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, link: usize, tm: []const f64, na: usize, par: []f64) -> f64 {
+fn clm_lin(a: *mem.Arena, x: []const f64, cls: []const f64, wts: []const f64, n: usize, p: usize, nk: usize, link: usize, tm: []const f64, na: usize, par: []f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let nt = nk - 1usize
     let q = nt + p
@@ -389,14 +402,20 @@ fn clm_lin(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, 
     }
     var t = 0usize
     while t < n {
-        cum[usize(cls[t])] += 1.0f64
+        cum[usize(cls[t])] += wts[t]
         t += 1usize
+    }
+    var wsum = 0.0f64
+    var kk0 = 0usize
+    while kk0 < nk {
+        wsum += cum[kk0]
+        kk0 += 1usize
     }
     var run = 0.0f64
     k = 0usize
     while k < nt {
         run += cum[k]
-        let pq = run / f64(n)
+        let pq = run / wsum
         var v = 0.0f64
         if link == 0usize { v = math.log[f64](pq / (1.0f64 - pq)) }
         if link == 1usize { v = dist.qnorm(pq, 0.0f64, 1.0f64, true, false) }
@@ -470,7 +489,7 @@ fn clm_lin(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, 
             tfull[nt + j] = red[na + j]
             j += 1usize
         }
-        ll = loglik(x, cls, n, p, nk, link, tfull, gr, h, true)
+        ll = loglik(x, cls, wts, n, p, nk, link, tfull, gr, h, true)
         if ll != ll { ret nan }
         var c = 0usize
         while c < qr {
@@ -534,7 +553,7 @@ fn clm_lin(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, 
                 tfull[nt + j] = trial[na + j]
                 j += 1usize
             }
-            let ll2 = loglik(x, cls, n, p, nk, link, tfull, gr, h, false)
+            let ll2 = loglik(x, cls, wts, n, p, nk, link, tfull, gr, h, false)
             if ll2 == ll2 && ll2 >= ll - 1.0e-14f64 {
                 i = 0usize
                 while i < qr {

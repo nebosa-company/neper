@@ -60,4 +60,18 @@ for (rep in 1:24) {
   a <- c(n, p, K, lk, y, as.vector(t(x)))
   add("syll", a, as.numeric(logLik(f))); add("syth", a, sum(as.numeric(f$Theta) * seq_along(f$Theta))); add("sybeta", a, sum(f$beta * seq_along(f$beta)))
 }
+# case weights: "wll", "wtheta", "wbeta" with args (n, p, K, link, y, x, w[n])
+set.seed(20262483)
+for (rep in 1:18) {
+  n <- sample(150:300, 1); p <- sample(1:3, 1); K <- sample(3:5, 1); lk <- (rep - 1) %% 3
+  x <- matrix(rnorm(n * p), n); b <- rnorm(p) * 0.7; th <- sort(rnorm(K - 1)) * 1.2
+  eta <- as.vector(x %*% b); u <- if (lk == 0) rlogis(n) else if (lk == 1) rnorm(n) else log(-log(runif(n)))
+  y <- findInterval(eta + u, th); w <- round(runif(n, 0.3, 3), 2)
+  if (length(unique(y)) < K) next
+  d <- as.data.frame(x); names(d) <- paste0("v", seq_len(p)); d$y <- factor(y, ordered = TRUE); d$w <- w
+  f <- tryCatch(clm(y ~ . - w, data = d, weights = w, link = links[lk + 1], control = clm.control(gradTol = 1e-10, maxIter = 500)), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, p, K, lk, y, as.vector(t(x)), w)
+  add("wll", a, as.numeric(logLik(f))); add("wtheta", a, sum(f$alpha * seq_along(f$alpha))); add("wbeta", a, sum(f$beta * seq_along(f$beta)))
+}
 emit("ordinal", "ordinal", list(cases))

@@ -4364,4 +4364,5 @@ D7506	960	systemfit 2SLS with linear restrictions
 D7507	787	L461 closed
 D7508	848	ordinal clm with the loglog link; cauchit left
 D7509	711	ordinal clm with equidistant thresholds
-D7510	879	ordinal clm with symmetric thresholds
+D7510	880	ordinal clm with symmetric thresholds
+D7511	578	ordinal clm case weights
