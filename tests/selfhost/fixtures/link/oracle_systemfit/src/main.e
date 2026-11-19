@@ -35,13 +35,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if eit != ok { ret nan }
         if str.eq(c.name, "itn") { ret f64(itn) }
     } else {
-        if sf.sur(a, xs, ks, y, n, m, dfc, passes, coef, se, sig) != ok { ret nan }
+        var dvm = 0usize
+        if dfc { dvm = 1usize }
+        if z[3usize] > 1.5f64 { dvm = usize(z[3usize]) }
+        if sf.surm(a, xs, ks, y, n, m, dvm, passes, coef, se, sig) != ok { ret nan }
     }
     var s = 0.0f64
     var cnt = kt
     var src = coef
-    if str.eq(c.name, "se") || str.eq(c.name, "itse") { src = se }
-    if str.eq(c.name, "sig") || str.eq(c.name, "itsig") {
+    if str.eq(c.name, "se") || str.eq(c.name, "itse") || str.eq(c.name, "mxse") || str.eq(c.name, "thse") { src = se }
+    if str.eq(c.name, "sig") || str.eq(c.name, "itsig") || str.eq(c.name, "mxsig") || str.eq(c.name, "thsig") {
         src = sig
         cnt = m * m
     }

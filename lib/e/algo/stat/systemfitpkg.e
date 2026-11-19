@@ -9,6 +9,13 @@ use e.mem
 // xs holds the M design matrices one after the other (equation m is n by ks[m], row-major, constant included); y is M columns of n values equation after equation; passes is the number of GLS passes.
 // coef and se (sum of ks values each) and the final residual covariance (M by M) are filled
 fn sur(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usize, m: usize, df_cor: bool, passes: usize, coef: []f64, se: []f64, sig: []f64) -> err {
+    var dv0 = 0usize
+    if df_cor { dv0 = 1usize }
+    ret surm(a, xs, ks, y, n, m, dv0, passes, coef, se, sig)
+}
+
+// sur with the residual covariance divisor chosen by div: 0 noDfCor (n), 1 geomean (sqrt((n - k_i)(n - k_j))), 2 max (n - max(k_i, k_j)), 3 Theil (n - k_i - k_j + tr(P_i P_j) with P_i = X_i (X_i'X_i)^-1 X_i')
+fn surm(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usize, m: usize, div: usize, passes: usize, coef: []f64, se: []f64, sig: []f64) -> err {
     var kt = 0usize
     var e = 0usize
     while e < m {
@@ -58,7 +65,12 @@ fn sur(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usi
                         t += 1usize
                     }
                     var dv = f64(n)
-                    if df_cor { dv = math.sqrt[f64](f64(n - ks[i]) * f64(n - ks[j])) }
+                    if div == 1usize { dv = math.sqrt[f64](f64(n - ks[i]) * f64(n - ks[j])) }
+                    if div == 2usize {
+                        dv = f64(n - ks[i])
+                        if ks[j] > ks[i] { dv = f64(n - ks[j]) }
+                    }
+                    if div == 3usize { dv = f64(n) - f64(ks[i]) - f64(ks[j]) + tr_pp(a, xs[n * off[i]..n * off[i] + n * ks[i]], xs[n * off[j]..n * off[j] + n * ks[j]], n, ks[i], ks[j]) }
                     sig[i * m + j] = s / dv
                     j += 1usize
                 }
@@ -158,7 +170,12 @@ fn sur(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usi
                 t += 1usize
             }
             var dv = f64(n)
-            if df_cor { dv = math.sqrt[f64](f64(n - ks[i]) * f64(n - ks[j])) }
+            if div == 1usize { dv = math.sqrt[f64](f64(n - ks[i]) * f64(n - ks[j])) }
+            if div == 2usize {
+                dv = f64(n - ks[i])
+                if ks[j] > ks[i] { dv = f64(n - ks[j]) }
+            }
+            if div == 3usize { dv = f64(n) - f64(ks[i]) - f64(ks[j]) + tr_pp(a, xs[n * off[i]..n * off[i] + n * ks[i]], xs[n * off[j]..n * off[j] + n * ks[j]], n, ks[i], ks[j]) }
             sig[i * m + j] = s / dv
             j += 1usize
         }
@@ -539,4 +556,78 @@ fn sur_iter(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n
         it += 1usize
     }
     ret (maxiter, ok)
+}
+
+// tr(P_i P_j) for the projections P = X (X'X)^-1 X' of two row-major designs (n by ki and n by kj): the sum of the elementwise products of (X_i'X_i)^-1 X_i'X_j (X_j'X_j)^-1 and X_j'X_i
+fn tr_pp(a: *mem.Arena, xi: []const f64, xj: []const f64, n: usize, ki: usize, kj: usize) -> f64 {
+    let (gi, e0) = mem.alloc[f64](a, ki * ki)
+    let (gj, e1) = mem.alloc[f64](a, kj * kj)
+    let (cij, e2) = mem.alloc[f64](a, ki * kj)
+    if e0 != ok || e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var p = 0usize
+    while p < ki {
+        var q = 0usize
+        while q < ki {
+            var v = 0.0f64
+            var t = 0usize
+            while t < n {
+                v += xi[t * ki + p] * xi[t * ki + q]
+                t += 1usize
+            }
+            gi[p * ki + q] = v
+            q += 1usize
+        }
+        q = 0usize
+        while q < kj {
+            var v = 0.0f64
+            var t = 0usize
+            while t < n {
+                v += xi[t * ki + p] * xj[t * kj + q]
+                t += 1usize
+            }
+            cij[p * kj + q] = v
+            q += 1usize
+        }
+        p += 1usize
+    }
+    p = 0usize
+    while p < kj {
+        var q = 0usize
+        while q < kj {
+            var v = 0.0f64
+            var t = 0usize
+            while t < n {
+                v += xj[t * kj + p] * xj[t * kj + q]
+                t += 1usize
+            }
+            gj[p * kj + q] = v
+            q += 1usize
+        }
+        p += 1usize
+    }
+    // A = (Xi'Xi)^-1 Xi'Xj (ki by kj), B = (Xj'Xj)^-1 Xj'Xi (kj by ki) = ... tr(A B) with Xj'Xi = cij'
+    let (ct, e3) = mem.alloc[f64](a, kj * ki)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    p = 0usize
+    while p < ki {
+        var q = 0usize
+        while q < kj {
+            ct[q * ki + p] = cij[p * kj + q]
+            q += 1usize
+        }
+        p += 1usize
+    }
+    gj_solve(gi, ki, cij, kj)
+    gj_solve(gj, kj, ct, ki)
+    var tr = 0.0f64
+    p = 0usize
+    while p < ki {
+        var q = 0usize
+        while q < kj {
+            tr += cij[p * kj + q] * ct[q * ki + p]
+            q += 1usize
+        }
+        p += 1usize
+    }
+    ret tr
 }

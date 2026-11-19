@@ -595,7 +595,7 @@
       "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6622). e.algo.stat.systemfitpkg.sur (seemingly unrelated regressions, equal observation counts, own regressors per equation, geomean or noDfCor residual covariance, 1 to 3 GLS passes) equals systemfit SUR on Windows: coefficients, standard errors and final residual covariance (oracle_systemfit, 72 values; Linux pending). D7495-D7497: equation-by-equation 2SLS, 3SLS (one instrument set) and iterated SUR equal systemfit. Open: unequal observations, per-equation instruments, restrictions, W2SLS, WSUR, iterated 3SLS, max and Theil divisors, tests. Was: Open (CRAN rank 794). Mid. Acceptance, equal to systemfit: OLS, WLS, SUR, 2SLS, W2SLS, 3SLS and iterated variants with cross-equation restrictions, residual covariance estimators, summary and linear hypothesis tests."
+      "evidence": "Partial (D6622). e.algo.stat.systemfitpkg.sur (seemingly unrelated regressions, equal observation counts, own regressors per equation, geomean or noDfCor residual covariance, 1 to 3 GLS passes) equals systemfit SUR on Windows: coefficients, standard errors and final residual covariance (oracle_systemfit, 72 values; Linux pending). D7495-D7497: equation-by-equation 2SLS, 3SLS (one instrument set) and iterated SUR equal systemfit. D7498: the max and Theil residual covariance divisors equal systemfit. Open: unequal observations, per-equation instruments, restrictions, W2SLS, WSUR, iterated 3SLS, tests. Was: Open (CRAN rank 794). Mid. Acceptance, equal to systemfit: OLS, WLS, SUR, 2SLS, W2SLS, 3SLS and iterated variants with cross-equation restrictions, residual covariance estimators, summary and linear hypothesis tests."
     },
     {
       "id": "L465",
