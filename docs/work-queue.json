@@ -23,7 +23,7 @@
       "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows; oracle_dbscanpkg; Linux pending). D7526: extractDBSCAN equals dbscan. D7702: sNNclust equals dbscan. D7703: jpclust equals dbscan. Open: hdbscan, extractXi. Was: Open (CRAN rank 368). Small to mid. e.ml.cluster.density has dbscan and optics. Acceptance, equal to dbscan: hdbscan with its condensed tree, membership probabilities and outlier scores, lof, sNN and sNNclust, kNN and frNN, kNNdist, extractXi and extractDBSCAN, jpclust."
+      "evidence": "Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows; oracle_dbscanpkg; Linux pending). D7526: extractDBSCAN equals dbscan. D7702: sNNclust equals dbscan. D7703: jpclust equals dbscan. D7704: extractXi equals dbscan. Open: hdbscan. Was: Open (CRAN rank 368). Small to mid. e.ml.cluster.density has dbscan and optics. Acceptance, equal to dbscan: hdbscan with its condensed tree, membership probabilities and outlier scores, lof, sNN and sNNclust, kNN and frNN, kNNdist, extractXi and extractDBSCAN, jpclust."
     },
     {
       "id": "L380",

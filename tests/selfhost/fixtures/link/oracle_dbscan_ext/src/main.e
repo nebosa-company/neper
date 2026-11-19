@@ -12,6 +12,30 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
     let n = usize(z[0usize])
+    if c.name.len == 2usize && c.name[0usize] == 120u8 {
+        let mp = usize(z[1usize])
+        let (ord, f1) = mem.alloc[usize](a, n)
+        let (pr, f2) = mem.alloc[usize](a, n)
+        let (lb, f3) = mem.alloc[usize](a, n)
+        if f1 != ok || f2 != ok || f3 != ok { ret nan }
+        var t = 0usize
+        while t < n {
+            ord[t] = usize(z[5usize + t]) - 1usize
+            let pv = usize(z[5usize + 2usize * n + t])
+            pr[t] = dn.NOISE
+            if pv > 0usize { pr[t] = pv - 1usize }
+            t += 1usize
+        }
+        let (nc, xe) = dn.optics_xi(a, ord, z[5usize + n..5usize + 2usize * n], pr, n, mp, z[2usize], z[3usize] == 1.0f64, z[4usize] == 1.0f64, lb)
+        if xe != ok { ret nan }
+        var tot = 0.0f64
+        t = 0usize
+        while t < n {
+            tot += f64(t + 1usize) * f64(lb[ord[t]])
+            t += 1usize
+        }
+        ret tot
+    }
     let (order, e1) = mem.alloc[usize](a, n)
     let (labels, e2) = mem.alloc[usize](a, n)
     if e1 != ok || e2 != ok { ret nan }

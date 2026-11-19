@@ -4491,4 +4491,5 @@ D7702	660	dbscan sNNclust
 D7703	728	dbscan jpclust
 D7682	840	nnet class.ind and predict, closing L336
 D7628	689	VGAM: non-parallel cumulative model
-D7683	647	strucchange BIC of the segmented model
+D7683	648	strucchange BIC of the segmented model
+D7704	788	dbscan extractXi

@@ -6,6 +6,7 @@
 // found by a full scan, so both are quadratic.
 
 use e.math
+use e.mem
 
 error TooSmall
 error Invalid
@@ -430,4 +431,239 @@ fn jp_cluster(x: []const f64, n: usize, d: usize, k: usize, kt: usize, labels: [
         i += 1usize
     }
     ret clusters
+}
+
+// ---- extractXi of dbscan: the OPTICS xi method on the reachability plot ----
+
+fn xi_rd(rd: []const f64, n: i64, i: i64) -> f64 {
+    if i < 1i64 || i > n { ret 0.0f64 / 0.0f64 }
+    ret rd[usize(i)]
+}
+
+fn xi_inf(v: f64) -> bool { ret v > 1.0e308f64 }
+
+fn xi_valid(rd: []const f64, n: i64, i: i64) -> bool {
+    let v = xi_rd(rd, n, i)
+    ret v == v
+}
+
+fn xi_down(rd: []const f64, n: i64, i: i64, ixi: f64) -> bool {
+    if !xi_valid(rd, n, i + 1i64) { ret false }
+    if xi_inf(xi_rd(rd, n, i + 1i64)) { ret false }
+    ret xi_rd(rd, n, i) * ixi >= xi_rd(rd, n, i + 1i64)
+}
+
+fn xi_up(rd: []const f64, n: i64, i: i64, ixi: f64) -> bool {
+    if xi_inf(xi_rd(rd, n, i)) { ret false }
+    if !xi_valid(rd, n, i + 1i64) { ret true }
+    ret xi_rd(rd, n, i) <= xi_rd(rd, n, i + 1i64) * ixi
+}
+
+// the steep-down areas still able to start a cluster once mib is the largest value seen since them (updateFilterSDASet)
+fn xi_filter(ss: []i64, se: []i64, smax: []f64, smib: []f64, ns: usize, mib: f64, ixi: f64) -> usize {
+    var out = 0usize
+    var i = 0usize
+    while i < ns {
+        if smax[i] * ixi > mib {
+            ss[out] = ss[i]
+            se[out] = se[i]
+            smax[out] = smax[i]
+            smib[out] = smib[i]
+            if mib > smib[out] { smib[out] = mib }
+            out += 1usize
+        }
+        i += 1usize
+    }
+    ret out
+}
+
+// extractXi(optics(x, eps, minPts), xi, minimum, correctPredecessors): order holds 0-based row indexes, reach the reachability per row (1e300 or more for Inf) and pred the predecessor
+// per row (NOISE when there is none). labels receives 0 for noise and the 1-based cluster id otherwise (ids follow the clusters sorted by start and end); the cluster count is answered.
+fn optics_xi(a: *mem.Arena, order: []const usize, reach: []const f64, pred: []const usize, n: usize, min_pts: usize, xi: f64, minimum: bool, correct: bool, labels: []usize) -> (usize, err) {
+    if xi <= 0.0f64 || xi >= 1.0f64 || n == 0usize { ret (0usize, Invalid) }
+    let nn = i64(n)
+    let ixi = 1.0f64 - xi
+    let inf = 1.0e308f64 * 10.0f64
+    let mp = i64(min_pts)
+    let (rd, e1) = mem.alloc[f64](a, n + 2usize)
+    let (ss, e2) = mem.alloc[i64](a, n + 1usize)
+    let (se, e3) = mem.alloc[i64](a, n + 1usize)
+    let (smax, e4) = mem.alloc[f64](a, n + 1usize)
+    let (smib, e5) = mem.alloc[f64](a, n + 1usize)
+    let cap = 16usize * n + 16usize
+    let (cs, e6) = mem.alloc[i64](a, cap)
+    let (ce, e7) = mem.alloc[i64](a, cap)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret (0usize, TooSmall) }
+    var i = 0usize
+    while i < n {
+        var v = reach[order[i]]
+        if v >= 1.0e299f64 { v = inf }
+        rd[i + 1usize] = v
+        i += 1usize
+    }
+    var ns = 0usize
+    var nc = 0usize
+    var index = 1i64
+    var mib = 0.0f64
+    while index <= nn {
+        let cur = xi_rd(rd, nn, index)
+        if cur > mib { mib = cur }
+        if !xi_valid(rd, nn, index + 1i64) { break }
+        if xi_down(rd, nn, index, ixi) {
+            ns = xi_filter(ss, se, smax, smib, ns, mib, ixi)
+            let startval = xi_rd(rd, nn, index)
+            mib = 0.0f64
+            let startsteep = index
+            var endsteep = index + 1i64
+            while index + 1i64 <= nn {
+                index += 1i64
+                if xi_down(rd, nn, index, ixi) {
+                    endsteep = index + 1i64
+                    continue
+                }
+                if !xi_down(rd, nn, index, 1.0f64) || index - endsteep > mp { break }
+            }
+            ss[ns] = startsteep
+            se[ns] = endsteep
+            smax[ns] = startval
+            smib[ns] = 0.0f64
+            ns += 1usize
+            continue
+        }
+        if xi_up(rd, nn, index, ixi) {
+            ns = xi_filter(ss, se, smax, smib, ns, mib, ixi)
+            let startsteep = index
+            var endsteep = index + 1i64
+            mib = xi_rd(rd, nn, index)
+            var esuccr = inf
+            if xi_valid(rd, nn, index + 1i64) { esuccr = xi_rd(rd, nn, index + 1i64) }
+            if !xi_inf(esuccr) {
+                while index + 1i64 <= nn {
+                    index += 1i64
+                    if xi_up(rd, nn, index, ixi) {
+                        endsteep = index + 1i64
+                        mib = xi_rd(rd, nn, index)
+                        esuccr = inf
+                        if xi_valid(rd, nn, index + 1i64) { esuccr = xi_rd(rd, nn, index + 1i64) }
+                        if xi_inf(esuccr) {
+                            endsteep -= 1i64
+                            break
+                        }
+                        continue
+                    }
+                    if !xi_up(rd, nn, index, 1.0f64) || index - endsteep > mp { break }
+                }
+            } else {
+                endsteep -= 1i64
+                index += 1i64
+            }
+            var q = ns
+            while q > 0usize {
+                q -= 1usize
+                if mib * ixi < smib[q] { continue }
+                var cstart = ss[q]
+                var cend = endsteep
+                if correct {
+                    while cend > cstart && xi_inf(xi_rd(rd, nn, cend)) { cend -= 1i64 }
+                }
+                if smax[q] * ixi >= esuccr {
+                    while cstart < cend && xi_rd(rd, nn, cstart + 1i64) > esuccr { cstart += 1i64 }
+                } else if esuccr * ixi >= smax[q] {
+                    while cend > cstart && xi_rd(rd, nn, cend - 1i64) > smax[q] { cend -= 1i64 }
+                }
+                if correct {
+                    while cend > cstart {
+                        let t2 = pred[order[usize(cend - 1i64)]]
+                        var found = false
+                        if t2 != NOISE {
+                            var p = cstart
+                            while p <= cend - 1i64 {
+                                if order[usize(p - 1i64)] == t2 { found = true }
+                                p += 1i64
+                            }
+                        }
+                        if found { break }
+                        cend -= 1i64
+                    }
+                }
+                if xi_up(rd, nn, index - 1i64, ixi) { cend -= 1i64 }
+                if cend - cstart + 1i64 < mp { continue }
+                if nc >= cap { ret (0usize, TooSmall) }
+                cs[nc] = cstart
+                ce[nc] = cend
+                nc += 1usize
+            }
+        } else {
+            index += 1i64
+        }
+    }
+    i = 0usize
+    while i < n {
+        labels[i] = 0usize
+        i += 1usize
+    }
+    if nc == 0usize { ret (0usize, ok) }
+    // sort the clusters by start and end (stable), the id is the rank
+    var k = 1usize
+    while k < nc {
+        let s0 = cs[k]
+        let e0 = ce[k]
+        var j = k
+        while j > 0usize && (cs[j - 1usize] > s0 || (cs[j - 1usize] == s0 && ce[j - 1usize] > e0)) {
+            cs[j] = cs[j - 1usize]
+            ce[j] = ce[j - 1usize]
+            j -= 1usize
+        }
+        cs[j] = s0
+        ce[j] = e0
+        k += 1usize
+    }
+    // paint them by decreasing size (increasing with minimum, painting only unpainted rows), ties by id
+    let (perm, e8) = mem.alloc[usize](a, nc)
+    let (pos, e9) = mem.alloc[usize](a, n + 2usize)
+    if e8 != ok || e9 != ok { ret (0usize, TooSmall) }
+    k = 0usize
+    while k < nc {
+        var j = k
+        while j > 0usize {
+            let sa = ce[perm[j - 1usize]] - cs[perm[j - 1usize]]
+            let sb = ce[k] - cs[k]
+            var swap = sa < sb
+            if minimum { swap = sa > sb }
+            if !swap { break }
+            perm[j] = perm[j - 1usize]
+            j -= 1usize
+        }
+        perm[j] = k
+        k += 1usize
+    }
+    i = 0usize
+    while i < n + 2usize {
+        pos[i] = 0usize
+        i += 1usize
+    }
+    k = 0usize
+    while k < nc {
+        let c = perm[k]
+        var allzero = true
+        var p = cs[c]
+        while p <= ce[c] {
+            if p >= 1i64 && p <= nn && pos[usize(p)] != 0usize { allzero = false }
+            p += 1i64
+        }
+        if !minimum || allzero {
+            p = cs[c]
+            while p <= ce[c] {
+                if p >= 1i64 && p <= nn { pos[usize(p)] = c + 1usize }
+                p += 1i64
+            }
+        }
+        k += 1usize
+    }
+    i = 0usize
+    while i < n {
+        labels[order[i]] = pos[i + 1usize]
+        i += 1usize
+    }
+    ret (nc, ok)
 }
