@@ -1,6 +1,7 @@
 // e.algo.stat.tsne against Rtsne with theta = 0. tests/oracle/tsne.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R tsne`; the layout is at the top of scripts/r_oracle/groups/tsne.R.
 
+use e.algo.rand.r as rng
 use e.algo.stat.tsne as ts
 use e.io
 use e.mem
@@ -9,6 +10,20 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name.len == 2usize && c.name[1usize] == 114u8 {
+        let tn = usize(x[1usize])
+        let td = usize(x[2usize])
+        let tdims = usize(x[3usize])
+        let (ty, te) = mem.alloc[f64](a, tn * tdims)
+        if te != ok { os.exit(5) }
+        var g: rng.Rng = zero
+        rng.seed(&g, i64(x[0usize]))
+        ts.tsne_start(&g, tn, tdims, ty)
+        var tmode = 0usize
+        if x[6usize] != 0.0f64 { tmode = 1usize }
+        if ts.tsne_exact(a, x[7usize..7usize + tn * td], tn, td, tdims, x[4usize], ty, usize(x[5usize]), 250usize, 250usize, 0.5f64, 0.8f64, 200.0f64, 12.0f64, tmode) != ok { os.exit(6) }
+        ret ty[usize(x[7usize + tn * td])]
+    }
     let n = usize(x[0usize])
     let d = usize(x[1usize])
     let dims = usize(x[2usize])

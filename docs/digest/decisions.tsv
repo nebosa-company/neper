@@ -4517,4 +4517,5 @@ D7694	1342	hcubature's adaptive Genz-Malik recursion
 D7695	850	hcubature in one dimension
 D7696	1229	robustbase adjOutlyingness
 D7697	1479	segmented davies.test for a binomial or poisson glm
-D7698	936	segmented pscore.test for a binomial or poisson glm
+D7698	937	segmented pscore.test for a binomial or poisson glm
+D7699	999	Rtsne random start

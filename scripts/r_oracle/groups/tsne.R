@@ -26,4 +26,11 @@ for (rep in 1:5) {
   r <- Rtsne(X, dims = dims, perplexity = perp, theta = 0, pca = TRUE, initial_dims = k, max_iter = 40, Y_init = Y0, check_duplicates = FALSE)
   for (j in seq_len(n * dims)) add(c(n, d, dims, perp, 40, 0, 0, 0.5, 0.8, 200, 12, as.vector(t(X)), as.vector(t(Y0)), j - 1, 3, k), as.vector(t(r$Y))[j])
 }
+# the random start (Y_init = NULL, so stop_lying_iter = mom_switch_iter = 250) under set.seed: "tr" args (seed, n, d, dims, perplexity, max_iter, normalize, x[n*d], index)
+for (rep in 1:8) {
+  n <- sample(15:35, 1); d <- sample(2:5, 1); dims <- 2; perp <- sample(3:min(8, floor((n - 1) / 3)), 1); mi <- c(5, 10)[1 + rep %% 2]
+  X <- matrix(round(rnorm(n * d) * 3, 3), n, d); sd0 <- sample(1:100000, 1); norm <- rep %% 2 == 0
+  set.seed(sd0); r <- Rtsne(X, dims = dims, perplexity = perp, theta = 0, pca = FALSE, normalize = norm, max_iter = mi, check_duplicates = FALSE)
+  for (j in seq_len(n * dims)) cases[[length(cases) + 1]] <- case("tr", c(sd0, n, d, dims, perp, mi, as.numeric(norm), as.vector(t(X)), j - 1), as.vector(t(r$Y))[j], rel = 1e-5, abs = 1e-7)
+}
 emit("tsne", "Rtsne", list(cases))

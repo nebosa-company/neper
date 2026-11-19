@@ -5,6 +5,7 @@
 // Not here: the Barnes-Hut tree (theta > 0), the random start from R's generator and the PCA step.
 
 use e.algo.linalg.lapack_syevr as sy
+use e.algo.rand.r as rng
 use e.math
 use e.mem
 
@@ -281,4 +282,23 @@ fn pca_scores(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, out: 
         i += 1usize
     }
     ret ok
+}
+
+// Rtsne's start when no Y_init is given: n * dims values of 1e-4 times the polar Box-Muller normal of bhtsne's randn, built from R's uniform stream (x = 2 u - 1, y = 2 u - 1, kept
+// when 0 < x^2 + y^2 < 1, x sqrt(-2 log r / r)), row-major
+fn tsne_start(g: *rng.Rng, n: usize, dims: usize, out: []f64) {
+    var i = 0usize
+    while i < n * dims {
+        var x = 0.0f64
+        var r = 0.0f64
+        var ok_ = false
+        while !ok_ {
+            x = 2.0f64 * rng.unif(g) - 1.0f64
+            let y = 2.0f64 * rng.unif(g) - 1.0f64
+            r = x * x + y * y
+            if r < 1.0f64 && r != 0.0f64 { ok_ = true }
+        }
+        out[i] = x * math.sqrt[f64](-2.0f64 * math.log[f64](r) / r) * 0.0001f64
+        i += 1usize
+    }
 }
