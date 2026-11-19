@@ -51124,3 +51124,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7543 — actuar generalised beta
 `gb_d`, `gb_p`, `gb_q`, `gb_m`: X = scale B^(1/t) with B ~ Beta(shape1, shape2), density t u / x dbeta(u), u = (x / scale)^t, cdf pbeta(u), raw moment scale^k G(a + b) G(a + k / t) / (G(a) G(a + b + k / t)). Equal to actuar dgenbeta, pgenbeta, qgenbeta and mgenbeta on 40 draws (157 values added to oracle_actuar, 4599 in all). Limited moments and the generator stay open.
+
+## D7544 — actuar loggamma limited moments and inverse Gaussian moments
+`lg_lev` is levlgamma (r / (r - k))^a pgamma(log x, a, r - k) + x^k (1 - pgamma(log x, a, r)); actuar answers 0 for a limit at or below 1 (the support starts at 1, so the true value would be x^k), and the port follows actuar. `ig_m` gives the inverse Gaussian raw moments of order 1 to 3. Equal to actuar on 40 draws each (77 values added to oracle_actuar, 4676 in all).

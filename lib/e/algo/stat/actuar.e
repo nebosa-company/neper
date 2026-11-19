@@ -605,3 +605,17 @@ fn gb_q(p: f64, a: f64, b: f64, t: f64, th: f64) -> f64 { ret th * math.pow[f64]
 fn gb_m(k: f64, a: f64, b: f64, t: f64, th: f64) -> f64 {
     ret math.pow[f64](th, k) * math.exp[f64](lgam(a + b) + lgam(a + k / t) - lgam(a) - lgam(a + b + k / t))
 }
+
+// loggamma limited moment E[min(X, x)^k], k < r
+fn lg_lev(x: f64, k: f64, a: f64, r: f64) -> f64 {
+    if x <= 1.0f64 { ret 0.0f64 }
+    let lx = math.log[f64](x)
+    ret math.pow[f64](r / (r - k), a) * nm.pgamma(lx, a, 1.0f64 / (r - k), true, false) + math.pow[f64](x, k) * nm.pgamma(lx, a, 1.0f64 / r, false, false)
+}
+
+// inverse Gaussian raw moment of order 1, 2 or 3
+fn ig_m(k: usize, mu: f64, s: f64) -> f64 {
+    if k == 1usize { ret mu }
+    if k == 2usize { ret mu * mu + mu * mu * mu / s }
+    ret mu * mu * mu + 3.0f64 * mu * mu * mu * mu / s + 3.0f64 * mu * mu * mu * mu * mu / (s * s)
+}

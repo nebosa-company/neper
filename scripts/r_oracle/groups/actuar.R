@@ -153,6 +153,13 @@ for (rep in 1:40) {
   args <- c(xx, xx, pp, k)
   for (st in 0:3) cases[[length(cases) + 1]] <- case("gb", c(a, b, tt, sc, args[st + 1], st), vals[st + 1], rel = 1e-8, abs = 1e-13)
 }
+# loggamma limited moments and inverse Gaussian moments: "lm" args (kind 0 levlgamma 1 minvgauss, p1, p2, x or limit, order)
+for (rep in 1:40) {
+  a <- runif(1, 0.8, 4); r <- runif(1, 3, 7); xx <- exp(runif(1, -0.3, 1.5)); k <- runif(1, 0.1, 0.9) * r
+  cases[[length(cases) + 1]] <- case("lm", c(0, a, r, xx, k), levlgamma(xx, a, r, order = k), rel = 1e-8, abs = 1e-13)
+  mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); kk <- sample(1:3, 1)
+  cases[[length(cases) + 1]] <- case("lm", c(1, mu, s, 0, kk), minvgauss(kk, mu, s), rel = 1e-9, abs = 1e-13)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)
