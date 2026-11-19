@@ -30,6 +30,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         lv.sem_regression(mo, vcm, mm - 0usize, mp - 2usize, mp, so)
         ret so[usize(z[2usize + mp + mp * mp])]
     }
+    if c.name.len == 3usize && c.name[1usize] == 116u8 {
+        let pn = usize(z[0usize])
+        let pq = usize(z[1usize])
+        let (po, pe1) = mem.alloc[f64](a, 2usize * pq + 2usize)
+        if pe1 != ok { ret 0.0f64 / 0.0f64 }
+        if !lv.sem_path(a, z[2usize..2usize + (pq + 1usize) * (pq + 1usize)], pn, pq, po) { ret 0.0f64 / 0.0f64 }
+        ret po[usize(z[2usize + (pq + 1usize) * (pq + 1usize)])]
+    }
     if c.name.len == 5usize {
         let mn = usize(z[0usize])
         let mp = usize(z[1usize])

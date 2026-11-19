@@ -51049,3 +51049,9 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7520 — stemming equals SnowballC
 `e.text.stem`'s `porter` (the 1980 rules) and `snowball` (Porter2, what tm stemDocument calls through SnowballC's "english") already existed without an oracle against R; 655 words from R's COPYING text, each stemmed in both languages, give identical stems to SnowballC wordStem (1310 answers, the stem length and position-weighted byte sum, in oracle_snowball). No library change. Open for L380: non-ASCII text and the sentence and regex tokenisers, corpora, topic models.
+
+## D7375 — lavaan: path analysis of observed variables
+
+**Decision.** `lavaanpkg.sem_path` is `sem("y ~ x1 + ... + xq")` for observed variables: the saturated regression of the last variable on the others from the covariance matrix with divisor n (lavaan's ML), slopes Sxx^-1 Sxy, residual variance Syy - Sxy' Sxx^-1 Sxy, standard errors sqrt(residual variance (Sxx^-1)_jj / n) for the slopes and residual variance sqrt(2 / n) for the variance.
+
+**Result.** `oracle_lavaan_cfa` (850 cases, 118 new on 15 data sets of one to four predictors, one of them correlated with another) equals lavaan on Windows to 1e-6 relative. Linux pending. L354 is open at 0.15: several outcomes and mediation structures, cross-loadings and other measurement structures, means and intercepts, other estimators, the model syntax.

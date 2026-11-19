@@ -780,3 +780,47 @@ fn sem_regression(est: []const f64, vc: []const f64, m: usize, nl: usize, p: usi
         r += 1usize
     }
 }
+
+// sem("y ~ x1 + ... + xq") of observed variables: the saturated regression of the last variable of the covariance matrix s ((q + 1) by (q + 1) row-major, divisor n - 1) on the first q. out: the q slopes, the residual variance
+// (divisor n, as lavaan's ML), then the standard errors of the slopes sqrt(sigma^2 (Sxx^-1)_jj / n) and of the residual variance sigma^2 sqrt(2 / n); false when the predictors are collinear
+fn sem_path(a: *mem.Arena, s: []const f64, n: usize, q: usize, out: []f64) -> bool {
+    let nn = f64(n)
+    let (sxx, e1) = mem.alloc[f64](a, q * q)
+    let (inv, e2) = mem.alloc[f64](a, q * q)
+    if e1 != ok || e2 != ok { ret false }
+    var i = 0usize
+    while i < q {
+        var j = 0usize
+        while j < q {
+            sxx[i * q + j] = s[i * (q + 1usize) + j] * (nn - 1.0f64) / nn
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !ps.invert(a, sxx, q, inv) { ret false }
+    var rv = s[q * (q + 1usize) + q] * (nn - 1.0f64) / nn
+    i = 0usize
+    while i < q {
+        var b = 0.0f64
+        var j = 0usize
+        while j < q {
+            b += inv[i * q + j] * s[j * (q + 1usize) + q] * (nn - 1.0f64) / nn
+            j += 1usize
+        }
+        out[i] = b
+        i += 1usize
+    }
+    i = 0usize
+    while i < q {
+        rv -= out[i] * s[i * (q + 1usize) + q] * (nn - 1.0f64) / nn
+        i += 1usize
+    }
+    out[q] = rv
+    i = 0usize
+    while i < q {
+        out[q + 1usize + i] = math.sqrt[f64](rv * inv[i * q + i] / nn)
+        i += 1usize
+    }
+    out[2usize * q + 1usize] = rv * math.sqrt[f64](2.0f64 / nn)
+    ret true
+}

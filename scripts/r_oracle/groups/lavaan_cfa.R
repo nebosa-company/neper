@@ -46,4 +46,13 @@ for (rep in 1:6) {
   v <- c(rg$est, v1$est, v2$est, rg$se, v1$se, v2$se); S <- cov(X)
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("sem", c(n, p, fac, as.vector(t(S)), q - 1), v[q], rel = 3e-3, abs = 1e-6)
 }
+# path analysis y ~ x1 + ... + xq of observed variables: "pth" args (n, q, S[(q+1)^2] row-major with y last, k) k 0..q-1 slope, q residual variance, q+1..2q slope standard errors, 2q+1 residual variance SE
+for (rep in 1:15) {
+  n <- sample(80:300, 1); q <- sample(1:4, 1); X <- matrix(rnorm(n * q), n, q); X[, q] <- X[, q] + 0.5 * X[, 1]; y <- X %*% runif(q, -1, 1) + rnorm(n)
+  d <- as.data.frame(cbind(X, y)); names(d) <- c(paste0("x", 1:q), "y")
+  fit <- sem(paste("y ~", paste0("x", 1:q, collapse = " + ")), d); pe <- parameterEstimates(fit)
+  rg <- pe[pe$op == "~", ]; rv <- pe[pe$op == "~~" & pe$lhs == "y" & pe$rhs == "y", ]
+  v <- c(rg$est, rv$est, rg$se, rv$se); S <- cov(as.matrix(d))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("pth", c(n, q, as.vector(t(S)), k - 1), v[k], rel = 1e-6, abs = 1e-8)
+}
 emit("lavaan_cfa", "lavaan", list(cases))
