@@ -166,3 +166,169 @@ fn sur(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usi
     }
     ret ok
 }
+
+// solve the k by k system m (row-major, destroyed) with the right-hand sides in the k by nr block rhs (row-major, overwritten by the solution) by Gauss-Jordan with partial pivoting
+fn gj_solve(m: []f64, k: usize, rhs: []f64, nr: usize) {
+    var col = 0usize
+    while col < k {
+        var piv = col
+        var r = col + 1usize
+        while r < k {
+            if math.abs[f64](m[r * k + col]) > math.abs[f64](m[piv * k + col]) { piv = r }
+            r += 1usize
+        }
+        var c = 0usize
+        while c < k {
+            let t = m[col * k + c]
+            m[col * k + c] = m[piv * k + c]
+            m[piv * k + c] = t
+            c += 1usize
+        }
+        c = 0usize
+        while c < nr {
+            let t = rhs[col * nr + c]
+            rhs[col * nr + c] = rhs[piv * nr + c]
+            rhs[piv * nr + c] = t
+            c += 1usize
+        }
+        let pv = m[col * k + col]
+        c = 0usize
+        while c < k {
+            m[col * k + c] = m[col * k + c] / pv
+            c += 1usize
+        }
+        c = 0usize
+        while c < nr {
+            rhs[col * nr + c] = rhs[col * nr + c] / pv
+            c += 1usize
+        }
+        r = 0usize
+        while r < k {
+            if r != col {
+                let f = m[r * k + col]
+                c = 0usize
+                while c < k {
+                    m[r * k + c] -= f * m[col * k + c]
+                    c += 1usize
+                }
+                c = 0usize
+                while c < nr {
+                    rhs[r * nr + c] -= f * rhs[col * nr + c]
+                    c += 1usize
+                }
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+}
+
+// systemfit method "2SLS" for one equation: x (n by k) the regressors, z (n by q) the instruments (both row-major, constants included), y the response. The fitted regressors are x_hat = z (z'z)^-1 z' x, the coefficients (x_hat'x_hat)^-1 x_hat'y,
+// the residuals use the actual x, sigma^2 = rss / (n - k), and the standard errors come from sigma^2 (x_hat'x_hat)^-1; coef and se hold k values, the answer is sigma^2
+fn twosls(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, k: usize, q: usize, coef: []f64, se: []f64) -> (f64, err) {
+    let (zz, e0) = mem.alloc[f64](a, q * q)
+    let (zx, e1) = mem.alloc[f64](a, q * k)
+    let (xh, e2) = mem.alloc[f64](a, n * k)
+    let (g, e3) = mem.alloc[f64](a, k * k)
+    let (gi, e4) = mem.alloc[f64](a, k * k)
+    let (xy, e5) = mem.alloc[f64](a, k)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (0.0f64, mem.Full) }
+    var i = 0usize
+    while i < q {
+        var j = 0usize
+        while j < q {
+            var s = 0.0f64
+            var r = 0usize
+            while r < n {
+                s += z[r * q + i] * z[r * q + j]
+                r += 1usize
+            }
+            zz[i * q + j] = s
+            j += 1usize
+        }
+        j = 0usize
+        while j < k {
+            var s = 0.0f64
+            var r = 0usize
+            while r < n {
+                s += z[r * q + i] * x[r * k + j]
+                r += 1usize
+            }
+            zx[i * k + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // zx <- (z'z)^-1 z'x, then x_hat = z * that
+    gj_solve(zz, q, zx, k)
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < k {
+            var s = 0.0f64
+            var l = 0usize
+            while l < q {
+                s += z[i * q + l] * zx[l * k + j]
+                l += 1usize
+            }
+            xh[i * k + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            var s = 0.0f64
+            var r = 0usize
+            while r < n {
+                s += xh[r * k + i] * xh[r * k + j]
+                r += 1usize
+            }
+            g[i * k + j] = s
+            gi[i * k + j] = 0.0f64
+            j += 1usize
+        }
+        gi[i * k + i] = 1.0f64
+        var s2 = 0.0f64
+        var r2 = 0usize
+        while r2 < n {
+            s2 += xh[r2 * k + i] * y[r2]
+            r2 += 1usize
+        }
+        xy[i] = s2
+        i += 1usize
+    }
+    gj_solve(g, k, gi, k)
+    i = 0usize
+    while i < k {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += gi[i * k + j] * xy[j]
+            j += 1usize
+        }
+        coef[i] = s
+        i += 1usize
+    }
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        var f = 0.0f64
+        var j = 0usize
+        while j < k {
+            f += x[i * k + j] * coef[j]
+            j += 1usize
+        }
+        rss += (y[i] - f) * (y[i] - f)
+        i += 1usize
+    }
+    let s2v = rss / f64(n - k)
+    i = 0usize
+    while i < k {
+        se[i] = math.sqrt[f64](s2v * gi[i * k + i])
+        i += 1usize
+    }
+    ret (s2v, ok)
+}

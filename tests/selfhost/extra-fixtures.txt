@@ -574,3 +574,4 @@ oracle_carets_cfn
 oracle_clue_hier
 oracle_gsl_bzero
 oracle_gamlss_bccgo
+oracle_systemfit_2sls
