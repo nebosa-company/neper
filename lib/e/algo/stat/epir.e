@@ -1300,3 +1300,29 @@ fn rr_score_all(t: Table2, level: f64) -> (f64, f64, f64) {
     }
     ret (est, fl, fu)
 }
+
+// epiR zORscore for every table (x1 = a, n1 = a + b, x2 = c, n2 = c + d): the interior walk of `or_score` and the boundary rules (a zero count or a full row): both ends 0 and Inf for a
+// pair of empty or full rows, lower 0 and a search from 0.01 / n2 when x1 = 0 or x2 = n2, upper Inf and a search from 100 n1 when x1 = n1 or x2 = 0; (est, lower, upper)
+fn or_score_all(t: Table2, level: f64) -> (f64, f64, f64) {
+    let inf = 1.0f64 / 0.0f64
+    let x1 = t.a
+    let n1 = t.a + t.b
+    let x2 = t.c
+    let n2 = t.c + t.d
+    let est = (t.a / t.b) / (t.c / t.d)
+    if (x1 == 0.0f64 && x2 == 0.0f64) || (x1 == n1 && x2 == n2) { ret (est, 0.0f64, inf) }
+    if x1 == 0.0f64 || x2 == n2 {
+        let ul = or_zlimit(x1, n1, x2, n2, level, 0.01f64 / n2, true)
+        ret (est, 0.0f64, ul)
+    }
+    if x1 == n1 || x2 == 0.0f64 {
+        let ll = or_zlimit(x1, n1, x2, n2, level, 100.0f64 * n1, false)
+        ret (est, ll, inf)
+    }
+    let px = x1 / n1
+    let py = x2 / n2
+    let base = px / (1.0f64 - px) / (py / (1.0f64 - py))
+    let lo = or_zlimit(x1, n1, x2, n2, level, base / 1.1f64, false)
+    let hi = or_zlimit(x1, n1, x2, n2, level, base * 1.1f64, true)
+    ret (est, lo, hi)
+}

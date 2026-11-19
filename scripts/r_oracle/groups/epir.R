@@ -253,4 +253,11 @@ for (v in bt) {
   if (is.null(r) || any(is.nan(r))) next
   for (w in 0:2) cases[[length(cases) + 1]] <- case("rb", c(v, w), r[w + 1], rel = 1e-8, abs = 1e-11)
 }
+# the score odds-ratio interval on boundary tables: "ob" args (a, b, c, d, which 0 est 1 lower 2 upper); the table is passed to zORscore as c(a, c, b, d)
+bt2 <- list(c(0, 40, 12, 100), c(5, 40, 0, 100), c(0, 30, 0, 50), c(20, 0, 8, 60), c(10, 30, 15, 0), c(25, 0, 12, 0), c(0, 35, 14, 0), c(9, 0, 3, 17), c(0, 12, 9, 60), c(7, 33, 10, 0))
+for (v in bt2) {
+  r <- tryCatch(suppressWarnings(epiR:::zORscore(c(v[1], v[3], v[2], v[4]), 0.95)), error = function(e) NULL)
+  if (is.null(r) || any(is.nan(r)) || !is.finite(r[1])) next
+  for (w in 0:2) if (is.finite(r[w + 1])) cases[[length(cases) + 1]] <- case("ob", c(v, w), r[w + 1], rel = 1e-8, abs = 1e-11)
+}
 emit("epir", "epiR", list(cases))

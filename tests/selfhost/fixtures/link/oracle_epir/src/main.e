@@ -69,6 +69,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ep.epi_ccc(x[1usize..1usize + nc], x[1usize + nc..1usize + 2usize * nc], 0.95f64, ov[0usize..10usize])
         ret ov[usize(x[1usize + 2usize * nc])]
     }
+    if str.eq(c.name, "ob") {
+        let tbo = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
+        let (oe2, ol2, oh2) = ep.or_score_all(tbo, 0.95f64)
+        let wob = usize(x[4usize])
+        if wob == 0usize { ret oe2 }
+        if wob == 1usize { ret ol2 }
+        ret oh2
+    }
     if str.eq(c.name, "rb") {
         let tb = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
         let (be, bl, bh) = ep.rr_score_all(tb, 0.95f64)
