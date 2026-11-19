@@ -584,3 +584,189 @@ fn cox_resid(a: *mem.Arena, time: []const f64, status: []const f64, strat: []con
     if m < 0.0f64 { sg = 0.0f64 - 1.0f64 }
     ret sg * math.sqrt[f64](inner)
 }
+
+// survival::coxph(Surv(start, stop, status) ~ x + strata) with counting-process data: the risk set at an event time t of a stratum is {i : start_i < t <= stop_i}; Breslow or Efron ties. Newton-Raphson on the exact
+// partial likelihood from beta = 0 until the log-likelihood moves by less than 1e-13 relatively; coef and se (the inverse information) of length p; ll receives the log-likelihoods at beta = 0 and at the fit
+fn coxph_cp(a: *mem.Arena, start: []const f64, stop: []const f64, status: []const f64, strat: []const usize, x: []const f64, n: usize, p: usize, efron: bool, coef: []f64, se: []f64, ll: []f64) -> err {
+    let (u, e1) = mem.alloc[f64](a, p)
+    let (info, e2) = mem.alloc[f64](a, p * p)
+    let (s1, e3) = mem.alloc[f64](a, p)
+    let (t1, e4) = mem.alloc[f64](a, p)
+    let (s2, e5) = mem.alloc[f64](a, p * p)
+    let (t2, e6) = mem.alloc[f64](a, p * p)
+    let (w, e7) = mem.alloc[f64](a, n)
+    let (mat, e8) = mem.alloc[f64](a, p * p)
+    let (col, e9) = mem.alloc[f64](a, p)
+    let (seen, e10) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    if e7 != ok { ret e7 }
+    if e8 != ok { ret e8 }
+    if e9 != ok { ret e9 }
+    if e10 != ok { ret e10 }
+    var j = 0usize
+    while j < p {
+        coef[j] = 0.0f64
+        j += 1usize
+    }
+    var iter = 0usize
+    var last = 0.0f64
+    var first = 0.0f64
+    while iter < 60usize {
+        var i = 0usize
+        while i < n {
+            var eta = 0.0f64
+            j = 0usize
+            while j < p {
+                eta += x[j * n + i] * coef[j]
+                j += 1usize
+            }
+            w[i] = math.exp[f64](eta)
+            seen[i] = 0.0f64
+            i += 1usize
+        }
+        var llv = 0.0f64
+        j = 0usize
+        while j < p {
+            u[j] = 0.0f64
+            j += 1usize
+        }
+        j = 0usize
+        while j < p * p {
+            info[j] = 0.0f64
+            j += 1usize
+        }
+        // every event time of every stratum once
+        i = 0usize
+        while i < n {
+            if status[i] > 0.5f64 && seen[i] == 0.0f64 {
+                let t = stop[i]
+                let sg = strat[i]
+                var d = 0.0f64
+                var t0 = 0.0f64
+                var s0 = 0.0f64
+                j = 0usize
+                while j < p {
+                    s1[j] = 0.0f64
+                    t1[j] = 0.0f64
+                    j += 1usize
+                }
+                j = 0usize
+                while j < p * p {
+                    s2[j] = 0.0f64
+                    t2[j] = 0.0f64
+                    j += 1usize
+                }
+                var k = 0usize
+                while k < n {
+                    if strat[k] == sg && start[k] < t && stop[k] >= t {
+                        s0 += w[k]
+                        var a1 = 0usize
+                        while a1 < p {
+                            s1[a1] += w[k] * x[a1 * n + k]
+                            var b1 = 0usize
+                            while b1 < p {
+                                s2[a1 * p + b1] += w[k] * x[a1 * n + k] * x[b1 * n + k]
+                                b1 += 1usize
+                            }
+                            a1 += 1usize
+                        }
+                        if stop[k] == t && status[k] > 0.5f64 {
+                            seen[k] = 1.0f64
+                            d += 1.0f64
+                            t0 += w[k]
+                            var eta = 0.0f64
+                            a1 = 0usize
+                            while a1 < p {
+                                eta += x[a1 * n + k] * coef[a1]
+                                u[a1] += x[a1 * n + k]
+                                t1[a1] += w[k] * x[a1 * n + k]
+                                var b2 = 0usize
+                                while b2 < p {
+                                    t2[a1 * p + b2] += w[k] * x[a1 * n + k] * x[b2 * n + k]
+                                    b2 += 1usize
+                                }
+                                a1 += 1usize
+                            }
+                            llv += eta
+                        }
+                    }
+                    k += 1usize
+                }
+                var m = 0usize
+                while m < usize(d) {
+                    var frac = 0.0f64
+                    if efron { frac = f64(m) / d }
+                    var den = s0
+                    if efron { den = s0 - frac * t0 }
+                    if !efron { frac = 0.0f64 }
+                    var mult = 1.0f64
+                    if !efron { mult = d }
+                    llv -= mult * math.log[f64](den)
+                    var a2 = 0usize
+                    while a2 < p {
+                        let m1 = s1[a2] - frac * t1[a2]
+                        u[a2] -= mult * m1 / den
+                        var b3 = 0usize
+                        while b3 < p {
+                            let m1b = s1[b3] - frac * t1[b3]
+                            info[a2 * p + b3] += mult * ((s2[a2 * p + b3] - frac * t2[a2 * p + b3]) / den - m1 * m1b / (den * den))
+                            b3 += 1usize
+                        }
+                        a2 += 1usize
+                    }
+                    if !efron { break }
+                    m += 1usize
+                }
+            }
+            i += 1usize
+        }
+        if iter == 0usize { first = llv }
+        if iter > 0usize && math.abs[f64](llv - last) < 1.0e-13f64 * (1.0f64 + math.abs[f64](llv)) {
+            ll[0usize] = first
+            ll[1usize] = llv
+            // standard errors from the information at the final beta
+            var c = 0usize
+            while c < p {
+                var r = 0usize
+                while r < p * p {
+                    mat[r] = info[r]
+                    r += 1usize
+                }
+                r = 0usize
+                while r < p {
+                    col[r] = 0.0f64
+                    r += 1usize
+                }
+                col[c] = 1.0f64
+                if !qr.solve_dense(mat, col, p) { ret Singular }
+                se[c] = math.sqrt[f64](col[c])
+                c += 1usize
+            }
+            ret ok
+        }
+        last = llv
+        var c2 = 0usize
+        while c2 < p * p {
+            mat[c2] = info[c2]
+            c2 += 1usize
+        }
+        c2 = 0usize
+        while c2 < p {
+            col[c2] = u[c2]
+            c2 += 1usize
+        }
+        if !qr.solve_dense(mat, col, p) { ret Singular }
+        c2 = 0usize
+        while c2 < p {
+            coef[c2] += col[c2]
+            c2 += 1usize
+        }
+        iter += 1usize
+    }
+    ret Singular
+}

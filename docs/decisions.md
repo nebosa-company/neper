@@ -50455,3 +50455,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `gamlssdist.dsep` (mu, sigma, nu, tau with w = sign(z) |z|^(tau/2) nu sqrt(2/tau)) and `dzasichel` (point mass tau at 0, the zero-truncated Sichel elsewhere).
 
 **Result.** `oracle_gamlss_dpo` (480 cases, 80 new) equals gamlss.dist on Windows. Linux pending. L464 stays partial: SEP and ZASICHEL p and q, SI, MN3-5, ST3C, ZISICHEL p and q, DEL, the remaining random-number generators, moments.
+
+## D7327 — survival: coxph with counting-process data
+
+**Decision.** `coxext.coxph_cp` fits `coxph(Surv(start, stop, status) ~ x + strata(s))`: the risk set at an event time t of a stratum is {start < t <= stop}, Breslow or Efron ties, Newton-Raphson from zero on the exact partial likelihood, standard errors from the inverse information. A row whose stop is not after its start never enters a risk set (R sets such rows to NA).
+
+**Result.** `oracle_coxph` (986 cases, 148 new) equals survival on Windows to 1e-6: coefficients, standard errors and both log-likelihoods. Linux pending. L311 stays partial: exact ties, robust and cluster variance for counting-process and Efron fits, frailty, tmerge, Schoenfeld and score residuals for counting-process data, survdiff strata, interval and left censoring.

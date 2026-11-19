@@ -4224,4 +4224,5 @@ D7418	1284	R's rgamma (a >= 1) and rchisq in e.algo.rand.r, and what blocked arm
 D7323	881	poLCA: standard errors
 D7324	826	gamlss.dist: DPO and DBI
 D7325	565	gamlss.dist: GAF and the ZISICHEL density
-D7326	461	gamlss.dist: SEP and ZASICHEL densities
+D7326	462	gamlss.dist: SEP and ZASICHEL densities
+D7327	806	survival: coxph with counting-process data

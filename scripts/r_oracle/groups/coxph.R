@@ -55,4 +55,18 @@ for (rep in 1:14) {
     cases[[length(cases) + 1]] <- case("cres", c(n, p, 1, tm, st, sg, off, X, r - 1), dr[r], rel = 1e-6, abs = 1e-8)
   }
 }
+# counting-process data: "coxcp" args (n, p, efron, start, stop, status, strata (0-based), X column-major, q) q in 0..p-1 coefficient, p..2p-1 se, 2p loglik at 0, 2p+1 loglik at the fit
+for (rep in 1:16) {
+  n <- sample(30:70, 1); p <- sample(1:2, 1); X <- matrix(round(rnorm(n * p), 2), n, p)
+  st0 <- ceiling(runif(n, 0, 6)); if (rep %% 2 == 0) st0 <- st0 + round(runif(n), 2)
+  stp <- st0 + 1 + ceiling(rexp(n, exp(0.4 * X[, 1])) * 4) + (if (rep %% 3 == 0) round(runif(n), 2) else 0)
+  ev <- rbinom(n, 1, 0.75); if (sum(ev) < 6) ev[1:8] <- 1; sg <- sample(0:1, n, TRUE)
+  for (ef in c(1, 0)) {
+    f <- tryCatch(coxph(Surv(st0, stp, ev) ~ X + strata(sg), ties = if (ef) "efron" else "breslow", control = coxph.control(eps = 1e-12, iter.max = 50)), error = function(e) NULL)
+    if (is.null(f)) next
+    a <- c(n, p, ef, st0, stp, ev, sg, X)
+    out <- c(coef(f), sqrt(diag(vcov(f))), f$loglik)
+    for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("coxcp", c(a, q - 1), out[q], rel = 1e-6, abs = 1e-8)
+  }
+}
 emit("coxph", "survival", list(cases))
