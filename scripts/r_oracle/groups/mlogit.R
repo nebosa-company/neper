@@ -26,6 +26,11 @@ for (rep in 1:20) {
     f0 <- tryCatch(mlogit(fm0, m, reltol = 1e-14, tol = 1e-14, iterlim = 500), error = function(e) NULL)
     if (!is.null(f0)) { lr <- lmtest::lrtest(f0, f); cases[[length(cases) + 1]] <- case("lrt", a, lr$Chisq[2], rel = 1e-5, abs = 1e-7); cases[[length(cases) + 1]] <- case("lrt_p", a, lr$`Pr(>Chisq)`[2], rel = 1e-4, abs = 1e-9) }
   }
+  vc <- vcov(f); nms <- if (asc) c(names(cf)[grep("Intercept", names(cf))], paste0("x", 1:k)) else paste0("x", 1:k)
+  sel <- if (k >= 2) c(length(nms) - 1, length(nms)) else length(nms)
+  bs <- cf[nms[sel]]; Vs <- vc[nms[sel], nms[sel], drop = FALSE]; wv <- as.numeric(t(bs) %*% solve(Vs) %*% bs)
+  cases[[length(cases) + 1]] <- case("wald", a, wv, rel = 1e-4, abs = 1e-6)
+  cases[[length(cases) + 1]] <- case("wald_p", a, pchisq(wv, length(sel), lower.tail = FALSE), rel = 1e-4, abs = 1e-9)
   sh <- colMeans(fitted(f, outcome = FALSE)); cases[[length(cases) + 1]] <- case("shares", a, ws(sh), rel = 1e-5, abs = 1e-7)
   ef <- effects(f, covariate = "x1"); cases[[length(cases) + 1]] <- case("effects", a, ws(as.vector(t(ef))), rel = 1e-4, abs = 1e-6)
 }

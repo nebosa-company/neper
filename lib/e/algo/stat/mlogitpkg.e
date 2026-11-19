@@ -5,6 +5,7 @@
 use e.algo.stat.gparot as gp
 use e.math
 use e.mem
+use e.math.nmath as nmz
 use e.math.opt as opt
 use e.algo.stat.quantreg as qrb
 
@@ -505,5 +506,122 @@ fn nested_se(a: *mem.Arena, x: []const f64, ch: []const f64, n: usize, j: usize,
         se[cc] = math.sqrt[f64](col[cc])
         cc += 1usize
     }
+    ret true
+}
+
+// the covariance matrix of the conditional logit coefficients (the inverse of the information at coef, q by q row-major into v) for the Wald tests of mlogit; q = (asc ? j - 1 : 0) + k; false when singular
+fn clogit_vcov(a: *mem.Arena, x: []const f64, n: usize, j: usize, k: usize, asc: bool, coef: []const f64, v: []f64) -> bool {
+    var na = 0usize
+    if asc { na = j - 1usize }
+    let q = na + k
+    let (h, e1) = mem.alloc[f64](a, q * q)
+    let (z, e2) = mem.alloc[f64](a, j * q)
+    let (pr, e3) = mem.alloc[f64](a, j)
+    let (zb, e4) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret false }
+    var i = 0usize
+    while i < q * q {
+        h[i] = 0.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < n {
+        var mx = 0.0f64 - 1.0e300f64
+        var a2 = 0usize
+        while a2 < j {
+            var q2 = 0usize
+            var vv = 0.0f64
+            while q2 < q {
+                var zv = 0.0f64
+                if q2 < na {
+                    if a2 > 0usize && q2 == a2 - 1usize { zv = 1.0f64 }
+                } else {
+                    zv = x[(c * j + a2) * k + q2 - na]
+                }
+                z[a2 * q + q2] = zv
+                vv += coef[q2] * zv
+                q2 += 1usize
+            }
+            pr[a2] = vv
+            if vv > mx { mx = vv }
+            a2 += 1usize
+        }
+        var sm = 0.0f64
+        a2 = 0usize
+        while a2 < j {
+            pr[a2] = math.exp[f64](pr[a2] - mx)
+            sm += pr[a2]
+            a2 += 1usize
+        }
+        a2 = 0usize
+        while a2 < j {
+            pr[a2] = pr[a2] / sm
+            a2 += 1usize
+        }
+        var q2 = 0usize
+        while q2 < q {
+            var m = 0.0f64
+            a2 = 0usize
+            while a2 < j {
+                m += pr[a2] * z[a2 * q + q2]
+                a2 += 1usize
+            }
+            zb[q2] = m
+            q2 += 1usize
+        }
+        a2 = 0usize
+        while a2 < j {
+            q2 = 0usize
+            while q2 < q {
+                var q3 = 0usize
+                while q3 < q {
+                    h[q2 * q + q3] += pr[a2] * (z[a2 * q + q2] - zb[q2]) * (z[a2 * q + q3] - zb[q3])
+                    q3 += 1usize
+                }
+                q2 += 1usize
+            }
+            a2 += 1usize
+        }
+        c += 1usize
+    }
+    let (hi, ie) = gp.invert(a, h, q)
+    if ie != ok { ret false }
+    i = 0usize
+    while i < q * q {
+        v[i] = hi[i]
+        i += 1usize
+    }
+    ret true
+}
+
+// the Wald statistic b_S' (V_SS)^-1 b_S of the coefficients whose indices (0-based into the q coefficients) are listed in sel, from the covariance v (q by q row-major); out[0] the statistic, out[1] its
+// chi-square p value on len(sel) degrees of freedom; false when the sub-matrix is singular
+fn wald_test(a: *mem.Arena, coef: []const f64, v: []const f64, q: usize, sel: []const usize, out: []f64) -> bool {
+    let r = sel.len
+    let (vs, e1) = mem.alloc[f64](a, r * r)
+    if e1 != ok { ret false }
+    var i = 0usize
+    while i < r {
+        var j2 = 0usize
+        while j2 < r {
+            vs[i * r + j2] = v[sel[i] * q + sel[j2]]
+            j2 += 1usize
+        }
+        i += 1usize
+    }
+    let (vi, ie) = gp.invert(a, vs, r)
+    if ie != ok { ret false }
+    var w = 0.0f64
+    i = 0usize
+    while i < r {
+        var j2 = 0usize
+        while j2 < r {
+            w += coef[sel[i]] * vi[i * r + j2] * coef[sel[j2]]
+            j2 += 1usize
+        }
+        i += 1usize
+    }
+    out[0usize] = w
+    out[1usize] = nmz.pchisq(w, f64(r), false, false)
     ret true
 }

@@ -50722,3 +50722,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7427 — pscl standard errors for the geometric and link fits
 `num_hessian_se` generalises the Hessian-inverse standard errors of D7426 to any negative log-likelihood through a function argument; `zeroinfl_geom_se` and `zeroinfl_link_se` apply it to the geometric zeroinfl (beta, gamma) and to the Poisson zeroinfl under the probit, cloglog and cauchit links (with the weights and offsets of D7423). Position-weighted standard errors equal pscl within 1e-2 (geometric) and 2e-2 (link fits, looser because R's own Hessian is numeric and the probit and cauchit surfaces are flatter) on six sets each. L412 at 0.86; the hurdle standard errors and the hurdle with weights and offsets remain.
+
+## D7367 — mlogit: covariance matrix and Wald tests
+
+**Decision.** `mlogitpkg.clogit_vcov` returns the inverse of the information at the fitted coefficients (the full covariance matrix, off-diagonals included) and `wald_test` the statistic b_S' (V_SS)^-1 b_S of a subset of the coefficients with its chi-square p value on the subset's size.
+
+**Result.** `oracle_mlogit` (253 cases, 40 new) equals the same statistic computed from mlogit's `vcov` and `coef` on Windows: statistic to 1e-4, p value to 1e-4 relative (mlogit's coefficients are only about 1e-5 from the optimum, which a quadratic form amplifies). The oracle forms the Wald statistic itself from `vcov(f)` because `waldtest` and `linearHypothesis` are not part of mlogit. Linux pending. L456 stays partial: mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, predictions on new data, an analytic Hessian for nested-logit standard errors.

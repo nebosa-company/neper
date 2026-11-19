@@ -119,6 +119,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (out, e1) = mem.alloc[f64](a, 2usize * q + 1usize)
     if e1 != ok { ret nan }
     if ml.clogit(a, z[4usize + n..4usize + n + n * j * k], z[4usize..4usize + n], n, j, k, asc, out) != ok { ret nan }
+    if str.eq(c.name, "wald") || str.eq(c.name, "wald_p") {
+        // the Wald test of the last covariate (k = 1) or of the last two (k >= 2)
+        let wx = z[4usize + n..4usize + n + n * j * k]
+        let (wv, wve) = mem.alloc[f64](a, q * q)
+        if wve != ok { ret nan }
+        if !ml.clogit_vcov(a, wx, n, j, k, asc, out[0usize..q], wv) { ret nan }
+        var sel: [2]usize = zero
+        var ns = 1usize
+        sel[0usize] = q - 1usize
+        if k >= 2usize {
+            sel[0usize] = q - 2usize
+            sel[1usize] = q - 1usize
+            ns = 2usize
+        }
+        var wo: [2]f64 = zero
+        if !ml.wald_test(a, out[0usize..q], wv, q, sel[0usize..ns], wo[0usize..2usize]) { ret nan }
+        if str.eq(c.name, "wald") { ret wo[0usize] }
+        ret wo[1usize]
+    }
     if str.eq(c.name, "lrt") || str.eq(c.name, "lrt_p") {
         // drop the last covariate: the model on the first k - 1 columns of x
         let (xr, xe) = mem.alloc[f64](a, n * j * (k - 1usize))

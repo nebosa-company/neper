@@ -4271,4 +4271,7 @@ D7362	705	emmeans: Poisson regression
 D7363	758	emmeans: odds ratios
 D7364	796	emmeans: Tukey-adjusted odds ratios and rate ratios
 D7365	1097	survival: tmerge (tdc and cumevent)
-D7366	790	survival: tmerge event()
+D7366	791	survival: tmerge event()
+D7426	653	pscl standard errors of the negative binomial zeroinfl
+D7427	693	pscl standard errors for the geometric and link fits
+D7367	921	mlogit: covariance matrix and Wald tests
