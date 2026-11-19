@@ -503,3 +503,4 @@ oracle_lpsolve_int
 oracle_mgcv_cr
 oracle_mgcv_ps
 oracle_mgcv_gam
+oracle_mgcv_gcv

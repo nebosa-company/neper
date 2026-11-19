@@ -1329,10 +1329,10 @@
       "group": "CRAN parity",
       "order": 822,
       "title": "mgcv: generalized additive models",
-      "score": 0.14,
+      "score": 0.17,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D7340). The cubic regression spline smooth (bs = cr): mgcv's place.knots, the basis matrix and the scaled penalty equal smoothCon on Windows (oracle_mgcv_cr, 4605 values; Linux pending). The sum-to-zero constraint absorbed as gam does (Householder, R's signs) equals smoothCon too (9383 values in all). The P-spline smooth (bs = ps: knots, B-spline basis of any order, difference penalty, scaled) equals smoothCon (oracle_mgcv_ps, 5944 values). Gaussian gam with one cr or ps smooth and a given smoothing parameter: coefficients, fitted values, edf, scale and GCV score equal gam (oracle_mgcv_gam, 850 values). Open: the other smooths (tp, te), penalised IRLS fitting, GCV and REML smoothing-parameter selection, gam, predict, summary and anova. Was: Open (CRAN rank 239). Very large (about 90k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to mgcv: gam with tp, cr, ps, cc and te and ti smooths, REML, ML and GCV smoothing selection, families, predict, summary tests, gam.check and gamm."
+      "evidence": "Partial (D7340). The cubic regression spline smooth (bs = cr): mgcv's place.knots, the basis matrix and the scaled penalty equal smoothCon on Windows (oracle_mgcv_cr, 4605 values; Linux pending). The sum-to-zero constraint absorbed as gam does (Householder, R's signs) equals smoothCon too (9383 values in all). The P-spline smooth (bs = ps: knots, B-spline basis of any order, difference penalty, scaled) equals smoothCon (oracle_mgcv_ps, 5944 values). Gaussian gam with one cr or ps smooth and a given smoothing parameter: coefficients, fitted values, edf, scale and GCV score equal gam (oracle_mgcv_gam, 850 values). GCV selection of the smoothing parameter (score to 1e-7, fits to 1e-3, the optimiser tolerance of gam; oracle_mgcv_gcv, 154 values). Open: REML and ML selection, the other smooths (tp, te), penalised IRLS fitting, GCV and REML smoothing-parameter selection, gam, predict, summary and anova. Was: Open (CRAN rank 239). Very large (about 90k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to mgcv: gam with tp, cr, ps, cc and te and ti smooths, REML, ML and GCV smoothing selection, families, predict, summary tests, gam.check and gamm."
     },
     {
       "id": "L354",

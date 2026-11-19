@@ -4136,4 +4136,5 @@ D7339	1092	clue: Gordon-Vichi and Boorman-Arabie dissimilarities
 D7340	1101	mgcv: the cubic regression spline basis and its penalty
 D7341	914	mgcv: sum-to-zero constraint absorption
 D7342	963	mgcv: the P-spline smooth
-D7343	1124	mgcv: penalised least squares for a Gaussian gam (fixed smoothing parameter)
+D7343	1125	mgcv: penalised least squares for a Gaussian gam (fixed smoothing parameter)
+D7344	1054	mgcv: GCV smoothing-parameter selection

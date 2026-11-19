@@ -568,3 +568,68 @@ fn gam_gaussian(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const f6
     }
     ret (edf, rss, ok)
 }
+
+// ---- GCV smoothing-parameter selection for the Gaussian gam of one smooth (gam's default method = "GCV.Cp" for a known-scale-free family): the minimiser over log(sp) of
+// n rss / (n - edf)^2, found by a coarse grid over log(sp) in [-25, 25] followed by golden-section refinement of the best bracket to a relative width of 1e-10. Returns the
+// selected sp; the fit at it is gam_gaussian's. mgcv stops its Newton iteration at a score tolerance, so the selected sp agrees to that tolerance, not to the last digit.
+fn gcv_at(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const f64, y: []const f64, rho: f64, coef: []f64, fitted: []f64) -> f64 {
+    let (edf, rss, e) = gam_gaussian(a, x, n, q, s, math.exp[f64](rho), y, coef, fitted)
+    if e != ok { ret 1.0e300f64 }
+    let nf = f64(n)
+    ret nf * rss / ((nf - edf) * (nf - edf))
+}
+
+fn gam_gcv_select(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const f64, y: []const f64, coef: []f64, fitted: []f64) -> f64 {
+    var best = 1.0e300f64
+    var bi = 0usize
+    let steps = 100usize
+    var i = 0usize
+    while i <= steps {
+        let rho = 0.0f64 - 25.0f64 + 50.0f64 * f64(i) / f64(steps)
+        let m = mem.mark(a)
+        let v = gcv_at(a, x, n, q, s, y, rho, coef, fitted)
+        mem.reset(a, m)
+        if v < best {
+            best = v
+            bi = i
+        }
+        i += 1usize
+    }
+    var lo = 0.0f64 - 25.0f64 + 50.0f64 * f64(bi) / f64(steps) - 0.5f64
+    var hi = lo + 1.0f64
+    if bi == 0usize { lo = 0.0f64 - 25.0f64 }
+    if bi == steps { hi = 25.0f64 }
+    let gr = 0.6180339887498949f64
+    var c = hi - gr * (hi - lo)
+    var d = lo + gr * (hi - lo)
+    var m1 = mem.mark(a)
+    var fc = gcv_at(a, x, n, q, s, y, c, coef, fitted)
+    mem.reset(a, m1)
+    m1 = mem.mark(a)
+    var fd = gcv_at(a, x, n, q, s, y, d, coef, fitted)
+    mem.reset(a, m1)
+    var it = 0usize
+    while hi - lo > 1.0e-10f64 && it < 200usize {
+        if fc < fd {
+            hi = d
+            d = c
+            fd = fc
+            c = hi - gr * (hi - lo)
+            m1 = mem.mark(a)
+            fc = gcv_at(a, x, n, q, s, y, c, coef, fitted)
+            mem.reset(a, m1)
+        } else {
+            lo = c
+            c = d
+            fc = fd
+            d = lo + gr * (hi - lo)
+            m1 = mem.mark(a)
+            fd = gcv_at(a, x, n, q, s, y, d, coef, fitted)
+            mem.reset(a, m1)
+        }
+        it += 1usize
+    }
+    ret math.exp[f64](0.5f64 * (lo + hi))
+}
+
+
