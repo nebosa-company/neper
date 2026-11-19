@@ -1222,7 +1222,7 @@
       "score": 0.06,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Started (D7651: occu, the single-season occupancy model with covariates on occupancy and on detection (site-level), coefficients to 0.3 percent and the log-likelihood to 1e-6 of unmarked on Windows; oracle_unmarked, 50 values; Linux pending). Open: visit-level detection covariates and missing visits, standard errors, colext, pcount, distsamp, occuRN, predict, goodness of fit. Was: Open (CRAN rank 905). Large. Acceptance, equal to unmarked: occu, occuRN, pcount, distsamp, colext, gmultmix, multinomPois with detection and abundance submodels, standard errors, predict, parboot under set.seed, fitList and model selection."
+      "evidence": "Started (D7651, D7652: occu, the single-season occupancy model, and pcount, the Poisson N-mixture model, with covariates on occupancy and on detection (site-level), coefficients to 0.3 percent and the log-likelihood to 1e-6 of unmarked on Windows; oracle_unmarked, 75 values; Linux pending). Open: visit-level detection covariates and missing visits, standard errors, colext, distsamp, occuRN, predict, goodness of fit. Was: Open (CRAN rank 905). Large. Acceptance, equal to unmarked: occu, occuRN, pcount, distsamp, colext, gmultmix, multinomPois with detection and abundance submodels, standard errors, predict, parboot under set.seed, fitList and model selection."
     },
     {
       "id": "L353",

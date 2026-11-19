@@ -9,6 +9,20 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if c.name.len == 6usize {
+        let mm = usize(z[0usize])
+        let jj = usize(z[1usize])
+        let p1 = usize(z[2usize])
+        let p2 = usize(z[3usize])
+        let kk = usize(z[4usize])
+        let y0 = 5usize
+        let x0 = y0 + mm * jj
+        let z0 = x0 + mm * p1
+        let (out, e1) = mem.alloc[f64](a, p1 + p2 + 1usize)
+        if e1 != ok { ret 0.0f64 / 0.0f64 }
+        if !um.pcount(a, z[x0..x0 + mm * p1], z[z0..z0 + mm * p2], z[y0..y0 + mm * jj], mm, jj, p1, p2, kk, out) { ret 0.0f64 / 0.0f64 }
+        ret out[usize(z[z0 + mm * p2])]
+    }
     let mm = usize(z[0usize])
     let jj = usize(z[1usize])
     let p1 = usize(z[2usize])
