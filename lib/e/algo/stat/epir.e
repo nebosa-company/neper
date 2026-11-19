@@ -415,3 +415,45 @@ fn sscohort_power(irexp1: f64, irexp0: f64, n0: f64, r: f64, design: f64, finite
     let t3 = (r + 1.0f64) * (lam * pi * (1.0f64 - lam * pi) + r * pi * (1.0f64 - pi))
     ret dist.pnorm((t1 - t2) / math.sqrt[f64](t3), 0.0f64, 1.0f64, true, false)
 }
+
+// epi.sscc, unmatched case-control sample size for an odds ratio and a power: (cases, controls, total); finite <= 0 means no finite population
+fn sscc_n(orr: f64, p0: f64, power: f64, r: f64, design: f64, finite: f64, sided: f64, frac: bool, level: f64) -> (f64, f64, f64) {
+    let za = dist.qnorm(1.0f64 - (1.0f64 - level) / sided, 0.0f64, 1.0f64, true, false)
+    let zb = dist.qnorm(1.0f64 - power, 0.0f64, 1.0f64, false, false)
+    let pc = p0 / (r + 1.0f64) * (r * orr / (1.0f64 + (orr - 1.0f64) * p0) + 1.0f64)
+    let t1 = (r + 1.0f64) * (1.0f64 + (orr - 1.0f64) * p0) * (1.0f64 + (orr - 1.0f64) * p0)
+    let t2 = r * p0 * p0 * (p0 - 1.0f64) * (p0 - 1.0f64) * (orr - 1.0f64) * (orr - 1.0f64)
+    let t3 = za * math.sqrt[f64]((r + 1.0f64) * pc * (1.0f64 - pc))
+    let t5 = 1.0f64 + (orr - 1.0f64) * p0
+    let t6 = orr * p0 * (1.0f64 - p0) / (t5 * t5)
+    let t7 = r * p0 * (1.0f64 - p0)
+    let t8 = zb * math.sqrt[f64](t6 + t7)
+    let n = t1 / t2 * (t3 + t8) * (t3 + t8)
+    let n1c = n / (1.0f64 + r) * design
+    let n0c = r * n1c
+    let ntc = n0c + n1c
+    var n1 = n1c
+    var n0 = n0c
+    if finite > 0.0f64 {
+        let nta = ntc / (1.0f64 + ntc / finite)
+        n1 = n1c / ntc * nta
+        n0 = n0c / ntc * nta
+    }
+    if !frac {
+        n1 = math.ceil[f64](n1)
+        n0 = math.ceil[f64](n0)
+    }
+    ret (n1, n0, n1 + n0)
+}
+
+// epi.sscc, the power reached by a total n (unmatched)
+fn sscc_power(orr: f64, p0: f64, n: f64, r: f64, sided: f64, level: f64) -> f64 {
+    let za = dist.qnorm(1.0f64 - (1.0f64 - level) / sided, 0.0f64, 1.0f64, true, false)
+    let pc = p0 / (r + 1.0f64) * (r * orr / (1.0f64 + (orr - 1.0f64) * p0) + 1.0f64)
+    let m = math.abs[f64]((orr - 1.0f64) * (p0 - 1.0f64) / (1.0f64 + (orr - 1.0f64) * p0))
+    let tn1 = m * p0 * math.sqrt[f64](n * r) / math.sqrt[f64](r + 1.0f64)
+    let tn2 = za * math.sqrt[f64]((r + 1.0f64) * pc * (1.0f64 - pc))
+    let td1 = orr * p0 * (1.0f64 - p0) / ((1.0f64 + (orr - 1.0f64) * p0) * (1.0f64 + (orr - 1.0f64) * p0))
+    let td2 = r * p0 * (1.0f64 - p0)
+    ret dist.pnorm((tn1 - tn2) / math.sqrt[f64](td1 + td2), 0.0f64, 1.0f64, true, false)
+}

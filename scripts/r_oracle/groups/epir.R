@@ -70,4 +70,13 @@ for (rep in 1:40) {
   rp <- epi.sscohortc(N = NN, irexp1 = i1, irexp0 = i0, pexp = NA, n = nn, power = NA, r = r, design = des, sided.test = sd)
   cases[[length(cases) + 1]] <- case("sc", c(i1, i0, r, des, if (is.na(NN)) 0 else NN, sd, 0, nn, 3), rp$power, rel = 1e-8, abs = 1e-10)
 }
+# epi.sscc unmatched: "ss" args (OR, p0, r, design, N (0 none), sided, frac, power or n, which 0 cases 1 controls 2 total 3 power from n)
+for (rep in 1:40) {
+  orr <- runif(1, 1.5, 4); p0 <- runif(1, 0.1, 0.5); r <- sample(1:3, 1); des <- sample(c(1, 1.5), 1); NN <- if (rep %% 2 == 0) NA else sample(2000:20000, 1); sd <- sample(1:2, 1); fr <- rep %% 3 == 0; pw <- runif(1, 0.7, 0.95)
+  res <- epi.sscc(N = NN, OR = orr, p1 = NA, p0 = p0, power = pw, n = NA, r = r, design = des, sided.test = sd, nfractional = fr)
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("ss", c(orr, p0, r, des, if (is.na(NN)) 0 else NN, sd, as.numeric(fr), pw, w), c(res$n.case, res$n.control, res$n.total)[w + 1], rel = 1e-9, abs = 1e-9)
+  nn <- sample(100:900, 1)
+  rp <- epi.sscc(N = NA, OR = orr, p1 = NA, p0 = p0, n = nn, power = NA, r = r, design = 1, sided.test = sd)
+  cases[[length(cases) + 1]] <- case("ss", c(orr, p0, r, 1, 0, sd, 0, nn, 3), rp$power, rel = 1e-8, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))

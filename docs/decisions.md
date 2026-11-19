@@ -51166,3 +51166,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7557 — epiR epi.sscohortc sample size and power
 `sscohort_n` gives the exposed, unexposed and total sample sizes for two incidence risks and a power (design effect, finite population, one- or two-sided test, fractional or rounded-up counts) and `sscohort_power` the power a total n reaches, as epi.sscohortc does in its two main modes. Equal to epiR on 40 draws (160 values added to oracle_epir, 2770 in all). The third mode (solving for the exposed risk), the case-control and the simple-estimate sample sizes stay open.
+
+## D7558 — epiR epi.sscc unmatched sample size and power
+`sscc_n` gives the case, control and total sample sizes of an unmatched case-control study for an odds ratio, the control exposure and a power (ratio r, design effect, finite population, sided test, fractional or rounded-up counts) and `sscc_power` the power a total n reaches, as epi.sscc does for method "unmatched". Equal to epiR on 40 draws (160 values added to oracle_epir, 2930 in all). The Fleiss correction, the matched method and the mode that solves for the odds ratio stay open.
