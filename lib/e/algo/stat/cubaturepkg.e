@@ -490,3 +490,269 @@ fn pcubature_1d(id: usize, lo: f64, hi: f64, tol: f64, max_eval: usize, out: []f
     out[1usize] = er
     out[2usize] = f64(n)
 }
+
+// a vector integrand of nc components: id 0 (exp(-sum x^2), prod cos x), id 1 (1 / (1 + sum x), (sum x)^2 exp(-prod x), exp(-sum x^2)); answers the number of components
+fn integrand_vec(id: usize, d: usize, p: []const f64, out: []f64) -> usize {
+    if id == 0usize {
+        out[0usize] = integrand(0usize, d, p)
+        out[1usize] = integrand(1usize, d, p)
+        ret 2usize
+    }
+    out[0usize] = integrand(2usize, d, p)
+    out[1usize] = integrand(3usize, d, p)
+    out[2usize] = integrand(0usize, d, p)
+    ret 3usize
+}
+
+// gm_rule for a vector integrand: val and err of the nc components into out (2 nc entries), the split dimension (the largest sum over the components of the fourth differences) into split
+fn gm_rule_v(id: usize, nc: usize, d: usize, c: []const f64, hw: []const f64, out: []f64) {
+    let l2 = 0.3585685828003180919906451539079374954541f64
+    let l4 = 0.9486832980505137995996680633298155601160f64
+    let l5 = 0.6882472016116852977216287342936235251269f64
+    let nf = f64(d)
+    var twopn = 1.0f64
+    var q = 0usize
+    while q < d {
+        twopn *= 2.0f64
+        q += 1usize
+    }
+    let w1 = (12824.0f64 - 9120.0f64 * nf + 400.0f64 * nf * nf) / 19683.0f64
+    let w2 = 980.0f64 / 6561.0f64
+    let w3 = (1820.0f64 - 400.0f64 * nf) / 19683.0f64
+    let w4 = 200.0f64 / 19683.0f64
+    let w5 = 6859.0f64 / 19683.0f64 / twopn
+    let we1 = (729.0f64 - 950.0f64 * nf + 50.0f64 * nf * nf) / 729.0f64
+    let we2 = 245.0f64 / 486.0f64
+    let we3 = (265.0f64 - 100.0f64 * nf) / 1458.0f64
+    let we4 = 25.0f64 / 729.0f64
+    let ratio = (l4 / l2) * (l4 / l2)
+    var p: [8]f64 = zero
+    var f0: [4]f64 = zero
+    var u2: [4]f64 = zero
+    var v2: [4]f64 = zero
+    var u3: [4]f64 = zero
+    var v3: [4]f64 = zero
+    var s2: [4]f64 = zero
+    var s3: [4]f64 = zero
+    var s4: [4]f64 = zero
+    var s5: [4]f64 = zero
+    var tmp: [4]f64 = zero
+    var i = 0usize
+    while i < d {
+        p[i] = c[i]
+        i += 1usize
+    }
+    let _n0 = integrand_vec(id, d, p[0usize..d], f0[0usize..4usize])
+    var best = 0.0f64 - 1.0f64
+    var bi = 0usize
+    i = 0usize
+    while i < d {
+        p[i] = c[i] + l2 * hw[i]
+        let _a = integrand_vec(id, d, p[0usize..d], u2[0usize..4usize])
+        p[i] = c[i] - l2 * hw[i]
+        let _b = integrand_vec(id, d, p[0usize..d], v2[0usize..4usize])
+        p[i] = c[i] + l4 * hw[i]
+        let _c = integrand_vec(id, d, p[0usize..d], u3[0usize..4usize])
+        p[i] = c[i] - l4 * hw[i]
+        let _e = integrand_vec(id, d, p[0usize..d], v3[0usize..4usize])
+        p[i] = c[i]
+        var df = 0.0f64
+        var k = 0usize
+        while k < nc {
+            s2[k] += u2[k] + v2[k]
+            s3[k] += u3[k] + v3[k]
+            df += math.abs[f64](u3[k] + v3[k] - 2.0f64 * f0[k] - ratio * (u2[k] + v2[k] - 2.0f64 * f0[k]))
+            k += 1usize
+        }
+        if df > best {
+            best = df
+            bi = i
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i + 1usize < d {
+        var j = i + 1usize
+        while j < d {
+            var si = 0usize
+            while si < 2usize {
+                var sj = 0usize
+                while sj < 2usize {
+                    if si == 0usize { p[i] = c[i] - l4 * hw[i] } else { p[i] = c[i] + l4 * hw[i] }
+                    if sj == 0usize { p[j] = c[j] - l4 * hw[j] } else { p[j] = c[j] + l4 * hw[j] }
+                    let _f = integrand_vec(id, d, p[0usize..d], tmp[0usize..4usize])
+                    var k = 0usize
+                    while k < nc {
+                        s4[k] += tmp[k]
+                        k += 1usize
+                    }
+                    sj += 1usize
+                }
+                si += 1usize
+            }
+            p[i] = c[i]
+            p[j] = c[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var kk = 0usize
+    while f64(kk) < twopn {
+        i = 0usize
+        while i < d {
+            if (kk / (1usize << i)) % 2usize == 1usize { p[i] = c[i] + l5 * hw[i] } else { p[i] = c[i] - l5 * hw[i] }
+            i += 1usize
+        }
+        let _g = integrand_vec(id, d, p[0usize..d], tmp[0usize..4usize])
+        var k = 0usize
+        while k < nc {
+            s5[k] += tmp[k]
+            k += 1usize
+        }
+        kk += 1usize
+    }
+    var vol = 1.0f64
+    i = 0usize
+    while i < d {
+        vol *= 2.0f64 * hw[i]
+        i += 1usize
+    }
+    var k = 0usize
+    while k < nc {
+        let res = vol * (w1 * f0[k] + w2 * s2[k] + w3 * s3[k] + w4 * s4[k] + w5 * s5[k])
+        let res5 = vol * (we1 * f0[k] + we2 * s2[k] + we3 * s3[k] + we4 * s4[k])
+        out[k] = res
+        out[nc + k] = math.abs[f64](res5 - res)
+        k += 1usize
+    }
+    out[2usize * nc] = f64(bi)
+}
+
+// hcubature for the vector integrand id (2 to 7 dimensions): a region is ranked by its largest component error and the run stops when every component is within tol * |its integral|;
+// out = (the nc integrals, the nc errors, the evaluations)
+fn hcubature_gm_v(a: *mem.Arena, id: usize, d: usize, lo: []const f64, hi: []const f64, tol: f64, max_eval: usize, out: []f64) -> err {
+    var pp: [8]f64 = zero
+    var probe: [4]f64 = zero
+    let nc = integrand_vec(id, d, pp[0usize..d], probe[0usize..4usize])
+    var npts = 1usize + 4usize * d + 2usize * d * (d - 1usize)
+    npts += 1usize << d
+    let cap = 2usize + max_eval / npts
+    let (cc, e1) = mem.alloc[f64](a, cap * d)
+    let (hh, e2) = mem.alloc[f64](a, cap * d)
+    let (vv, e3) = mem.alloc[f64](a, cap * nc)
+    let (er, e4) = mem.alloc[f64](a, cap * nc)
+    let (sd, e5) = mem.alloc[usize](a, cap)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
+    var r: [8]f64 = zero
+    var i = 0usize
+    while i < d {
+        cc[i] = (lo[i] + hi[i]) / 2.0f64
+        hh[i] = (hi[i] - lo[i]) / 2.0f64
+        i += 1usize
+    }
+    gm_rule_v(id, nc, d, cc[0usize..d], hh[0usize..d], r[0usize..8usize])
+    var k = 0usize
+    while k < nc {
+        vv[k] = r[k]
+        er[k] = r[nc + k]
+        k += 1usize
+    }
+    sd[0usize] = usize(r[2usize * nc])
+    var n = 1usize
+    var neval = npts
+    while true {
+        var tv: [4]f64 = zero
+        var te: [4]f64 = zero
+        i = 0usize
+        while i < n {
+            k = 0usize
+            while k < nc {
+                tv[k] += vv[i * nc + k]
+                te[k] += er[i * nc + k]
+                k += 1usize
+            }
+            i += 1usize
+        }
+        var conv = true
+        k = 0usize
+        while k < nc {
+            if !(te[k] <= tol * math.abs[f64](tv[k])) { conv = false }
+            k += 1usize
+        }
+        if conv || neval >= max_eval || n + 1usize >= cap { break }
+        var kb = 0usize
+        var kmax = 0.0f64 - 1.0f64
+        i = 0usize
+        while i < n {
+            var m = 0.0f64
+            k = 0usize
+            while k < nc {
+                if er[i * nc + k] > m { m = er[i * nc + k] }
+                k += 1usize
+            }
+            if m > kmax {
+                kmax = m
+                kb = i
+            }
+            i += 1usize
+        }
+        let dim = sd[kb]
+        var ch: [8]f64 = zero
+        var hw2: [8]f64 = zero
+        i = 0usize
+        while i < d {
+            hw2[i] = hh[kb * d + i]
+            ch[i] = cc[kb * d + i]
+            i += 1usize
+        }
+        hw2[dim] = hw2[dim] / 2.0f64
+        i = 0usize
+        while i < d {
+            cc[kb * d + i] = ch[i]
+            hh[kb * d + i] = hw2[i]
+            cc[n * d + i] = ch[i]
+            hh[n * d + i] = hw2[i]
+            i += 1usize
+        }
+        cc[kb * d + dim] = ch[dim] - hw2[dim]
+        cc[n * d + dim] = ch[dim] + hw2[dim]
+        gm_rule_v(id, nc, d, cc[kb * d..kb * d + d], hh[kb * d..kb * d + d], r[0usize..8usize])
+        k = 0usize
+        while k < nc {
+            vv[kb * nc + k] = r[k]
+            er[kb * nc + k] = r[nc + k]
+            k += 1usize
+        }
+        sd[kb] = usize(r[2usize * nc])
+        gm_rule_v(id, nc, d, cc[n * d..n * d + d], hh[n * d..n * d + d], r[0usize..8usize])
+        k = 0usize
+        while k < nc {
+            vv[n * nc + k] = r[k]
+            er[n * nc + k] = r[nc + k]
+            k += 1usize
+        }
+        sd[n] = usize(r[2usize * nc])
+        n += 1usize
+        neval += 2usize * npts
+    }
+    var tv: [4]f64 = zero
+    var te: [4]f64 = zero
+    i = 0usize
+    while i < n {
+        k = 0usize
+        while k < nc {
+            tv[k] += vv[i * nc + k]
+            te[k] += er[i * nc + k]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    k = 0usize
+    while k < nc {
+        out[k] = tv[k]
+        out[nc + k] = te[k]
+        k += 1usize
+    }
+    out[2usize * nc] = f64(neval)
+    ret ok
+}

@@ -18,6 +18,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let x = c.args
         let d = usize(x[1usize])
+        if c.name.len == 2usize && c.name[0usize] == 104u8 && c.name[1usize] == 118u8 {
+            var vo: [8]f64 = zero
+            let ve = cb.hcubature_gm_v(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], x[2usize + 2usize * d], usize(x[3usize + 2usize * d]), vo[0usize..8usize])
+            if ve != ok { os.exit(10) }
+            let g4 = vo[usize(x[4usize + 2usize * d])]
+            if !oracle.agrees(g4, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, g4))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if c.name.len == 2usize && c.name[0usize] == 112u8 {
             var po: [3]f64 = zero
             cb.pcubature_1d(usize(x[0usize]), x[2usize], x[3usize], x[4usize], usize(x[5usize]), po[0usize..3usize])
@@ -33,7 +49,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
-        if c.name.len == 2usize && c.name[0usize] == 104u8 {
+        if c.name.len == 2usize && c.name[0usize] == 104u8 && c.name[1usize] == 103u8 {
             var o: [3]f64 = zero
             let he = cb.hcubature_gm(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], x[2usize + 2usize * d], usize(x[3usize + 2usize * d]), o[0usize..3usize])
             if he != ok { os.exit(9) }
