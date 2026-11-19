@@ -24,6 +24,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nt = usize(z[0usize])
     let ns = usize(z[1usize])
     let ne = usize(z[2usize])
+    if c.name.len == 7usize {
+        ret pg.sankoff(a, z[3usize..3usize + ne], z[3usize + ne..3usize + 2usize * ne], ne, nt, z[3usize + 2usize * ne + 16usize..3usize + 2usize * ne + 16usize + nt * ns], ns, z[3usize + 2usize * ne..3usize + 2usize * ne + 16usize])
+    }
     ret pg.fitch(a, z[3usize..3usize + ne], z[3usize + ne..3usize + 2usize * ne], ne, nt, z[3usize + 2usize * ne..3usize + 2usize * ne + nt * ns], ns)
 }
 

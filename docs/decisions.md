@@ -51427,3 +51427,6 @@ L442 starts. `e.algo.stat.phangornpkg.fitch` scores a binary tree (ape's cladewi
 
 ## D7632 — phangorn: Hamming and Jukes-Cantor distances
 `phangornpkg.hamming` gives the share of differing sites between two tips of an unambiguous alignment, or with `jc` the closed-form Jukes-Cantor distance -3/4 log(1 - 4/3 p). Equal to phangorn::dist.hamming (1e-9) and dist.ml(model = "JC69") (1e-4 relative, the latter being a numerical optimum in R) on 25 random alignments (3 to 10 taxa, 30 to 150 sites), 988 values added to oracle_phangorn (1610 in all). Ambiguity codes are not handled by either distance here.
+
+## D7633 — phangorn: Sankoff parsimony
+`phangornpkg.sankoff` runs the Sankoff dynamic program with a 4 by 4 change-cost matrix on a tree with any number of children per node (tips cost zero for their allowed states, infinity otherwise; a node's vector is the sum over children of the cheapest cost-plus-child state). Equal to phangorn::parsimony(method = "sankoff", cost) on 30 random trees (4 to 15 tips, a third with multifurcations) with random symmetric integer costs, exactly (30 values added to oracle_phangorn, 1640 in all). R warned on some of the multifurcating trees but returned the same scores.

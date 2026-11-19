@@ -33,4 +33,13 @@ for (rep in 1:25) {
     cases[[length(cases) + 1]] <- case("hamd", c(1, nt, ns, i - 1, j - 1, Bm), dj[i, j], rel = 1e-4, abs = 1e-6)
   }
 }
+# Sankoff parsimony with a random symmetric cost matrix ("sank": nt, ns, ne, parent, child, cost[16] row-major, data row-major bit masks); the trees may have multifurcations
+for (rep in 1:30) {
+  nt <- sample(4:15, 1); ns <- sample(5:50, 1)
+  tr <- reorder(multi2di(rtree(nt), random = FALSE), "cladewise"); if (rep %% 3 == 0) { tr <- rtree(nt); tr <- di2multi(tr, tol = 0); tr <- reorder(tr, "cladewise") }
+  Cm <- matrix(0, 4, 4); Cm[upper.tri(Cm)] <- sample(1:4, 6, TRUE); Cm <- Cm + t(Cm)
+  M <- matrix(sample(codes, nt * ns, TRUE), nt, ns, dimnames = list(tr$tip.label, NULL)); d <- phyDat(M, type = "DNA")
+  sc <- as.numeric(parsimony(tr, d, method = "sankoff", cost = Cm))
+  cases[[length(cases) + 1]] <- case("sankoff", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, as.vector(Cm), as.vector(t(matrix(bits[M], nt, ns)))), sc, rel = 0, abs = 1e-9)
+}
 emit("phangorn", "phangorn", list(cases))

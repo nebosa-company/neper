@@ -130,3 +130,54 @@ fn hamming(data: []const f64, ns: usize, i: usize, j: usize, jc: bool) -> f64 {
     if !jc { ret p }
     ret 0.0f64 - 0.75f64 * math.log[f64](1.0f64 - 4.0f64 / 3.0f64 * p)
 }
+
+// phangorn::parsimony(method = "sankoff", cost) of a tree (any number of children per node) on a DNA alignment: cost is the 4 by 4 row-major matrix of the price of a change from the row state to the column state
+fn sankoff(a: *mem.Arena, par: []const f64, chd: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, cost: []const f64) -> f64 {
+    let nn = ne + 1usize
+    let (cv, e1) = mem.alloc[f64](a, nn * 4usize)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var total = 0.0f64
+    var s = 0usize
+    while s < ns {
+        var i = 0usize
+        while i < nn {
+            var st = 0usize
+            while st < 4usize {
+                cv[i * 4usize + st] = 0.0f64
+                if i < nt {
+                    let m = u32(data[i * ns + s])
+                    if (m & (1u32 << u32(st))) == 0u32 { cv[i * 4usize + st] = 1.0e300f64 }
+                }
+                st += 1usize
+            }
+            i += 1usize
+        }
+        var k = ne
+        while k > 0usize {
+            k -= 1usize
+            let p = usize(par[k])
+            let c = usize(chd[k])
+            var st = 0usize
+            while st < 4usize {
+                var best = 1.0e300f64
+                var t = 0usize
+                while t < 4usize {
+                    let v = cost[st * 4usize + t] + cv[c * 4usize + t]
+                    if v < best { best = v }
+                    t += 1usize
+                }
+                cv[p * 4usize + st] += best
+                st += 1usize
+            }
+        }
+        var best = cv[nt * 4usize]
+        var st = 1usize
+        while st < 4usize {
+            if cv[nt * 4usize + st] < best { best = cv[nt * 4usize + st] }
+            st += 1usize
+        }
+        total += best
+        s += 1usize
+    }
+    ret total
+}
