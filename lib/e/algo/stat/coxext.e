@@ -1007,3 +1007,83 @@ fn coxph_cp_schoenfeld(a: *mem.Arena, start: []const f64, stop: []const f64, sta
     }
     ret nd
 }
+
+// survival::tmerge for a time-dependent covariate (kind 0, tdc(time, value)) or a running event count (kind 1, cumevent(time)) merged into follow-up (0, futime[i]] of each subject: the intervals are cut at the distinct
+// observation times strictly inside (0, futime[i]); a tdc row carries the value of the last observation at or before its start (NaN before the first), a cumevent row the number of observations in (start, stop], the
+// first interval also taking those at or before 0 and the last the one at futime, observations after futime being ignored. Rows come subject by subject in time order into rstart, rstop and rval (at most cap);
+// returns the number of rows
+fn tmerge_rows(a: *mem.Arena, futime: []const f64, sid: []const usize, tm: []const f64, val: []const f64, kind: usize, rstart: []f64, rstop: []f64, rval: []f64) -> usize {
+    let (cuts, e1) = mem.alloc[f64](a, tm.len + 2usize)
+    if e1 != ok { ret 0usize }
+    var nr = 0usize
+    var sub = 0usize
+    while sub < futime.len {
+        let ft = futime[sub]
+        // the distinct cut times inside (0, ft), sorted
+        var nc = 0usize
+        var k = 0usize
+        while k < tm.len {
+            if sid[k] == sub && tm[k] > 0.0f64 && tm[k] < ft {
+                var seen = false
+                var q = 0usize
+                while q < nc {
+                    if cuts[q] == tm[k] { seen = true }
+                    q += 1usize
+                }
+                if !seen {
+                    cuts[nc] = tm[k]
+                    nc += 1usize
+                }
+            }
+            k += 1usize
+        }
+        var i = 1usize
+        while i < nc {
+            let cur = cuts[i]
+            var j = i
+            while j > 0usize && cuts[j - 1usize] > cur {
+                cuts[j] = cuts[j - 1usize]
+                j -= 1usize
+            }
+            cuts[j] = cur
+            i += 1usize
+        }
+        var r = 0usize
+        while r <= nc {
+            var st = 0.0f64
+            if r > 0usize { st = cuts[r - 1usize] }
+            var sp = ft
+            if r < nc { sp = cuts[r] }
+            var v = 0.0f64 / 0.0f64
+            if kind == 1usize { v = 0.0f64 }
+            var bt = 0.0f64
+            var have = false
+            var hit = false
+            var cntle = 0.0f64
+            k = 0usize
+            while k < tm.len {
+                if sid[k] == sub {
+                    if kind == 0usize {
+                        if tm[k] <= st && (!have || tm[k] >= bt) {
+                            bt = tm[k]
+                            have = true
+                            v = val[k]
+                        }
+                    } else {
+                        if tm[k] <= sp { cntle += 1.0f64 }
+                        if tm[k] == sp { hit = true }
+                    }
+                }
+                k += 1usize
+            }
+            if kind == 1usize && hit { v = cntle }
+            rstart[nr] = st
+            rstop[nr] = sp
+            rval[nr] = v
+            nr += 1usize
+            r += 1usize
+        }
+        sub += 1usize
+    }
+    ret nr
+}

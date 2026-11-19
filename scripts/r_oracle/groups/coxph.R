@@ -78,4 +78,16 @@ for (rep in 1:16) {
     }
   }
 }
+# tmerge: "tmg" args (kind 0 tdc 1 cumevent, nsub, m, futime[nsub], status[nsub], sid[m] 0-based, tm[m], val[m], stat) stat 0 rows, 1 sum(i tstart), 2 sum(i tstop), 3 sum(i x) with NA as -1, 4 sum(i death)
+for (rep in 1:24) {
+  ns <- sample(4:9, 1); ft <- sample(5:15, ns, TRUE); stt <- rbinom(ns, 1, 0.6); m <- sample(6:18, 1); sid <- sample(ns, m, TRUE)
+  tmv <- sample(c(0:(max(ft) + 2)), m, TRUE); vv <- round(rnorm(m), 2); kind <- rep %% 2
+  d1 <- data.frame(id = 1:ns, futime = ft, status = stt); d2 <- data.frame(id = sid, time = tmv, value = vv)
+  t1 <- tmerge(d1, d1, id = id, death = event(futime, status))
+  t2 <- if (kind == 0) tmerge(t1, d2, id = id, x = tdc(time, value)) else tmerge(t1, d2, id = id, x = cumevent(time))
+  xv <- t2$x; xv[is.na(xv)] <- -1; ii <- seq_len(nrow(t2))
+  st <- c(nrow(t2), sum(ii * t2$tstart), sum(ii * t2$tstop), sum(ii * xv), sum(ii * t2$death))
+  a <- c(kind, ns, m, ft, stt, sid - 1, tmv, vv)
+  for (q in 0:3) cases[[length(cases) + 1]] <- case("tmg", c(a, q), st[q + 1], rel = 1e-9, abs = 1e-9)
+}
 emit("coxph", "survival", list(cases))

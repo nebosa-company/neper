@@ -39,6 +39,38 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ix == zp { df = f64(zp) }
         ret 1.0f64 - spx.chi_squared_cdf(zo[ix], df)
     }
+    if str.eq(c.name, "tmg") {
+        let kind = usize(x[0usize])
+        let ns = usize(x[1usize])
+        let m = usize(x[2usize])
+        let (sid, se1) = mem.alloc[usize](a, m)
+        let (rs, re1) = mem.alloc[f64](a, ns * (m + 2usize))
+        let (rp, re2) = mem.alloc[f64](a, ns * (m + 2usize))
+        let (rv, re3) = mem.alloc[f64](a, ns * (m + 2usize))
+        if se1 != ok || re1 != ok || re2 != ok || re3 != ok { ret 0.0f64 / 0.0f64 }
+        var q = 0usize
+        while q < m {
+            sid[q] = usize(x[3usize + 2usize * ns + q])
+            q += 1usize
+        }
+        let nr = cs.tmerge_rows(a, x[3usize..3usize + ns], sid, x[3usize + 2usize * ns + m..3usize + 2usize * ns + 2usize * m], x[3usize + 2usize * ns + 2usize * m..3usize + 2usize * ns + 3usize * m], kind, rs, rp, rv)
+        let stat = usize(x[3usize + 2usize * ns + 3usize * m])
+        if stat == 0usize { ret f64(nr) }
+        var tot = 0.0f64
+        q = 0usize
+        while q < nr {
+            let w = f64(q + 1usize)
+            if stat == 1usize { tot += w * rs[q] }
+            if stat == 2usize { tot += w * rp[q] }
+            if stat == 3usize {
+                var v = rv[q]
+                if v != v { v = 0.0f64 - 1.0f64 }
+                tot += w * v
+            }
+            q += 1usize
+        }
+        ret tot
+    }
     if str.eq(c.name, "coxcp") {
         let cn = usize(x[0usize])
         let cpp = usize(x[1usize])

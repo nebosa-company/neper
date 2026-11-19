@@ -50704,3 +50704,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** The Tukey p value of a response-scale pair of a glm is the studentised-range probability of the z ratio with infinite degrees of freedom (`p_tukey` with df = 1e300); the pairwise comparisons of a Poisson regression on the response scale are rate ratios exp(difference) with delta-method standard error and z ratio, as for the odds ratios of D7363.
 
 **Result.** `oracle_emmeans` (1846 cases, 150 new: Tukey p values of the odds ratios and the ratio, SE and z ratio of the Poisson rate ratios on 8 models) equals emmeans on Windows to 1e-4 relative (p values to 1e-3). Linux pending. L313 stays partial: model-frame grid, mixed models, mvt and dunnett adjustments, other links, regrid, joint_tests with interactions.
+
+## D7365 — survival: tmerge (tdc and cumevent)
+
+**Decision.** `coxext.tmerge_rows` builds the counting-process rows that `tmerge` makes from follow-up (0, futime]: cuts at the distinct observation times strictly inside (0, futime). `tdc(time, value)` gives each row the value of the latest observation (by time, ties by data order) at or before its start, NaN before the first; `cumevent(time)` gives a row the number of observations at or before its stop, but only when one falls exactly on the stop (otherwise 0), so the last interval counts only observations at futime; observations after futime are ignored.
+
+**Result.** `oracle_coxph` (1218 cases, 96 new: row counts and position-weighted sums of tstart, tstop and the covariate over 24 data sets with ties, time-0 and out-of-follow-up observations) equals `tmerge` on Windows. Linux pending. L311 stays partial: tmerge with event() and the other tmerge verbs (cumtdc, the options), Schoenfeld residuals for Efron ties and scaled residuals, robust variance for Efron and exact fits and by shared ids, frailty, interval and left censoring.
