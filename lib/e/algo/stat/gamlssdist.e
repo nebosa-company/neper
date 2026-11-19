@@ -2514,3 +2514,31 @@ fn qsi(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     }
     ret 10000.0f64
 }
+
+// the mean and variance functions gamlss.dist keeps in each family object (family()$mean, family()$variance), with the constants as the package writes them (0.5772157 and 1.64493 for the
+// Gumbel, not the exact Euler and pi^2 / 6). fam: 0 NO, 1 EXP, 2 PO, 3 GU, 4 LO, 5 IG, 6 LOGNO, 7 NBI, 8 ZIP, 9 WEI, 10 BE, 11 GA; which 0 mean, 1 variance
+fn family_moment(fam: usize, which: usize, mu: f64, sigma: f64) -> f64 {
+    if fam == 0usize { if which == 0usize { ret mu } else { ret sigma * sigma } }
+    if fam == 1usize { if which == 0usize { ret mu } else { ret mu * mu } }
+    if fam == 2usize { ret mu }
+    if fam == 3usize { if which == 0usize { ret mu - 0.5772157f64 * sigma } else { ret 1.64493f64 * sigma * sigma } }
+    if fam == 4usize { if which == 0usize { ret mu } else { ret 3.141592653589793f64 * 3.141592653589793f64 * sigma * sigma / 3.0f64 } }
+    if fam == 5usize { if which == 0usize { ret mu } else { ret sigma * sigma * mu * mu * mu } }
+    if fam == 6usize {
+        if which == 0usize { ret math.exp[f64](mu + sigma * sigma / 2.0f64) }
+        ret math.exp[f64](2.0f64 * mu + sigma * sigma) * (math.exp[f64](sigma * sigma) - 1.0f64)
+    }
+    if fam == 7usize { if which == 0usize { ret mu } else { ret mu + sigma * mu * mu } }
+    if fam == 8usize {
+        if which == 0usize { ret (1.0f64 - sigma) * mu }
+        ret mu * (1.0f64 - sigma) * (1.0f64 + mu * sigma)
+    }
+    if fam == 9usize {
+        let g1 = nm.gammafn(1.0f64 / sigma + 1.0f64)
+        if which == 0usize { ret mu * g1 }
+        ret mu * mu * (nm.gammafn(2.0f64 / sigma + 1.0f64) - g1 * g1)
+    }
+    if fam == 10usize { if which == 0usize { ret mu } else { ret sigma * sigma * mu * (1.0f64 - mu) } }
+    if which == 0usize { ret mu }
+    ret sigma * sigma * mu * mu
+}
