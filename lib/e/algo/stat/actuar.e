@@ -703,3 +703,14 @@ fn rand_tb(g: *rr.Rng, kind: u8, s1: f64, s2: f64, sc: f64) -> f64 {
     if kind == 1u8 || kind == 3u8 || kind == 6u8 { ret tb_q(u, a, ga, t, sc) }
     ret tb_q(1.0f64 - u, a, ga, t, sc)
 }
+
+// one actuar random count under the R streams by inversion of the uniform: kinds 0 to 3 are the zero-truncated Poisson, negative binomial, binomial and geometric
+// (the base kinds of cnt_d), kind 4 the logarithmic law with prob a
+fn rand_count(g: *rr.Rng, kind: usize, a: f64, b: f64) -> f64 {
+    let u = rr.unif(g)
+    if kind < 4usize { ret zt_q(kind, u, a, b) }
+    let goal = u * (1.0f64 - 64.0f64 * 2.220446049250313e-16f64)
+    var x = 1.0f64
+    while logd_p(x, a) < goal && x < 1.0e6f64 { x += 1.0f64 }
+    ret x
+}

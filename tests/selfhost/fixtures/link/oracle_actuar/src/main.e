@@ -164,6 +164,21 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tr
     }
+    if str.eq(c.name, "rc") {
+        var gc: rr.Rng = zero
+        rr.seed(&gc, i64(x[0usize]))
+        let nc = usize(x[4usize])
+        var tc = 0.0f64
+        var ic = 0usize
+        while ic < nc {
+            var pa = x[2usize]
+            var pb = x[3usize]
+            if usize(x[1usize]) == 4usize { pa = x[3usize] }
+            tc += ac.rand_count(&gc, usize(x[1usize]), pa, pb) * f64(ic + 1usize)
+            ic += 1usize
+        }
+        ret tc
+    }
     if str.eq(c.name, "rt") {
         var gt: rr.Rng = zero
         rr.seed(&gt, i64(x[0usize]))

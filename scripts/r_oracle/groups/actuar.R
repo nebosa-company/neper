@@ -202,6 +202,13 @@ for (rep in 1:70) {
   v <- switch(kd + 1, rburr(n, s1, s2, scale = sc), rinvburr(n, s1, s2, scale = sc), rpareto(n, s1, scale = sc), rinvpareto(n, s1, scale = sc), rllogis(n, s1, scale = sc), rparalogis(n, s1, scale = sc), rinvparalogis(n, s1, scale = sc))
   cases[[length(cases) + 1]] <- case("rt", c(sd, kd, s1, s2, sc, n), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
 }
+# zero-truncated and logarithmic generators under set.seed: "rc" args (seed, kind 0 ztpois 1 ztnbinom 2 ztbinom 4 logarithmic, a, b, n); rztgeom is not an inversion and is not compared
+for (rep in 1:50) {
+  kd <- c(0, 1, 2, 4)[rep %% 4 + 1]; sd <- sample(1:100000, 1); n <- sample(3:15, 1); a <- if (kd == 2) sample(2:12, 1) else runif(1, 0.5, 5); b <- runif(1, 0.2, 0.9)
+  set.seed(sd)
+  v <- switch(kd + 1, rztpois(n, a), rztnbinom(n, a, b), rztbinom(n, a, b), rztgeom(n, b), rlogarithmic(n, b))
+  cases[[length(cases) + 1]] <- case("rc", c(sd, kd, a, b, n), sum(v * seq_along(v)), rel = 0, abs = 0)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

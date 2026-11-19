@@ -51214,3 +51214,6 @@ epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude
 
 ## D7573 — actuar rtrbeta and rgenpareto under set.seed
 `rand_draw` kinds 10 and 11 draw one beta each: rtrbeta is scale (b / (1 - b))^(1/shape2) with b ~ Beta(shape3, shape1), rgenpareto is scale b / (1 - b) with b ~ Beta(shape2, shape1). A single-draw probe had suggested Beta(shape1, shape3) for rtrbeta, which only agreed at the probe parameters; the random-parameter oracle caught it. Equal to actuar on 120 seeded runs over the twelve kinds (5252 cases in all). This completes the generators of the transformed beta, transformed gamma and inverse families; the other distribution generators, rphtype and the aggregate generators stay open.
+
+## D7574 — actuar zero-truncated and logarithmic generators
+`rand_count` draws one count from a uniform by inversion: the zero-truncated Poisson, negative binomial and binomial through `zt_q`, and the logarithmic law through a search on `logd_p`. Probed first: actuar's rztpois, rztnbinom and rlogarithmic equal the quantile at the uniform stream, rzmpois does not, and rztgeom does not either (it is not an inversion of that stream, so it and the zero-modified generators stay open). Equal to actuar on 50 seeded runs over the four kinds (5308 cases in all, exact).
