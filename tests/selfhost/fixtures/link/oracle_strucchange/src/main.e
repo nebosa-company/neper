@@ -88,6 +88,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e2 != ok { ret nan }
     let rss = sc.breakpoints(a, y, x, n, p, from, m, bp)
     if str.eq(c.name, "rss") { ret rss }
+    if str.eq(c.name, "bic") { ret sc.breakpoints_bic(rss, n, p, m) }
     var s = 0.0f64
     var i = 0usize
     while i < m {

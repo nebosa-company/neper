@@ -563,3 +563,9 @@ fn rec_mosum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize, 
     }
     ret (peak, approx_rule2(grid[0usize..7usize], tp[0usize..7usize], peak))
 }
+
+// strucchange's BIC of the model with m breaks (summary.breakpointsfull): n (log RSS + 1 - log n + log 2 pi) + log n ((m + 1) p + m + 1), the (m + 1) p coefficients, the m break points and the variance
+fn breakpoints_bic(rss: f64, n: usize, p: usize, m: usize) -> f64 {
+    let nf = f64(n)
+    ret nf * (math.log[f64](rss) + 1.0f64 - math.log[f64](nf) + math.log[f64](2.0f64 * 3.141592653589793f64)) + math.log[f64](nf) * (f64((m + 1usize) * p + m + 1usize))
+}
