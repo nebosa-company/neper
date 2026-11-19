@@ -1266,7 +1266,7 @@
       "score": 0.05,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Started (D7625 to D7627: cumulative logit, probit and cloglog links with parallel slopes, and the multinomial logit, coefficients, log-likelihood and standard errors equal to vglm on Windows; oracle_vgam_cum and oracle_vgam_multinom; Linux pending). Open: the other families and links, non-parallel odds, factors, weights, vgam smoothers. Very large (about 150k lines upstream). Acceptance, equal to VGAM: vglm and vgam for the multinomial, cumulative, acat, sratio, zero-inflated, beta-binomial, Tobit and extreme-value families with their link functions."
+      "evidence": "Started (D7625 to D7628: cumulative logit, probit and cloglog links with parallel slopes, the multinomial logit, and the non-parallel cumulative model (log-likelihood only), coefficients, log-likelihood and standard errors equal to vglm on Windows; oracle_vgam_cum, oracle_vgam_multinom and oracle_vgam_cum_np; Linux pending). Open: the other families and links, non-parallel odds, factors, weights, vgam smoothers. Very large (about 150k lines upstream). Acceptance, equal to VGAM: vglm and vgam for the multinomial, cumulative, acat, sratio, zero-inflated, beta-binomial, Tobit and extreme-value families with their link functions."
     },
     {
       "id": "L383",

@@ -362,3 +362,214 @@ fn multinom(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, j
     out[q] = ll
     ret true
 }
+
+// the outcome cls of one case under the non-parallel cumulative model (class k has its own intercept and p slopes at k * (p + 1)): its probability, and the score of log p written to sc (length (jn - 1)(p + 1))
+fn cum_np_obs(par: []const f64, x: []const f64, p: usize, jn: usize, cls: usize, lk: usize, sc: []f64) -> f64 {
+    let na = jn - 1usize
+    let p1 = p + 1usize
+    var t = 0usize
+    while t < na * p1 {
+        sc[t] = 0.0f64
+        t += 1usize
+    }
+    var fu = 1.0f64
+    var fl = 0.0f64
+    var gu = 0.0f64
+    var gl = 0.0f64
+    var eu = 0.0f64
+    var el = 0.0f64
+    if cls < na {
+        eu = par[cls * p1]
+        t = 0usize
+        while t < p {
+            eu += x[t] * par[cls * p1 + 1usize + t]
+            t += 1usize
+        }
+        fu = lg(eu, lk)
+        gu = lgd(eu, fu, lk)
+    }
+    if cls > 0usize {
+        let k = cls - 1usize
+        el = par[k * p1]
+        t = 0usize
+        while t < p {
+            el += x[t] * par[k * p1 + 1usize + t]
+            t += 1usize
+        }
+        fl = lg(el, lk)
+        gl = lgd(el, fl, lk)
+    }
+    let pr = fu - fl
+    if cls < na {
+        sc[cls * p1] = gu / pr
+        t = 0usize
+        while t < p {
+            sc[cls * p1 + 1usize + t] = gu * x[t] / pr
+            t += 1usize
+        }
+    }
+    if cls > 0usize {
+        let k = cls - 1usize
+        sc[k * p1] = 0.0f64 - gl / pr
+        t = 0usize
+        while t < p {
+            sc[k * p1 + 1usize + t] = 0.0f64 - gl * x[t] / pr
+            t += 1usize
+        }
+    }
+    ret pr
+}
+
+// vglm(y ~ x, cumulative(parallel = FALSE)): every cumulative split has its own intercept and slopes. Fisher scoring as cum_logit, started at the marginal links with zero slopes; out: the q = (jn - 1)(p + 1) coefficients
+// class by class, the log-likelihood, then the q standard errors; false when it fails
+fn cum_np(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, jn: usize, lk: usize, out: []f64) -> bool {
+    let na = jn - 1usize
+    let p1 = p + 1usize
+    let q = na * p1
+    let (par, e1) = mem.alloc[f64](a, q)
+    let (gr, e2) = mem.alloc[f64](a, q)
+    let (info, e3) = mem.alloc[f64](a, q * q)
+    let (mat, e4) = mem.alloc[f64](a, q * q)
+    let (step, e5) = mem.alloc[f64](a, q)
+    let (trial, e6) = mem.alloc[f64](a, q)
+    let (sc, e7) = mem.alloc[f64](a, q)
+    let (sc2, e8) = mem.alloc[f64](a, q)
+    let (cnt, e9) = mem.alloc[f64](a, jn)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret false }
+    var k = 0usize
+    while k < jn {
+        cnt[k] = 0.0f64
+        k += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        cnt[usize(y[i])] += 1.0f64
+        i += 1usize
+    }
+    var cum = 0.0f64
+    k = 0usize
+    while k < q {
+        par[k] = 0.0f64
+        k += 1usize
+    }
+    k = 0usize
+    while k < na {
+        cum += cnt[k]
+        let pk = cum / f64(n)
+        // marginal start on the logit scale, rescaled for the other links by a crude monotone map
+        var v = math.log[f64](pk / (1.0f64 - pk))
+        if lk == 1usize { v = v * 0.6f64 }
+        if lk == 2usize { v = math.log[f64](0.0f64 - math.log[f64](1.0f64 - pk)) }
+        par[k * p1] = v
+        k += 1usize
+    }
+    var ll = 0.0f64 - 1.0e300f64
+    var it = 0usize
+    while it < 200usize {
+        var z = 0usize
+        while z < q * q {
+            info[z] = 0.0f64
+            z += 1usize
+        }
+        z = 0usize
+        while z < q {
+            gr[z] = 0.0f64
+            z += 1usize
+        }
+        var cur = 0.0f64
+        i = 0usize
+        while i < n {
+            let xi = x[i * p..(i + 1usize) * p]
+            let pr = cum_np_obs(par, xi, p, jn, usize(y[i]), lk, sc)
+            if pr <= 0.0f64 { ret false }
+            cur += math.log[f64](pr)
+            var u = 0usize
+            while u < q {
+                gr[u] += sc[u]
+                u += 1usize
+            }
+            var oc = 0usize
+            while oc < jn {
+                let po = cum_np_obs(par, xi, p, jn, oc, lk, sc2)
+                var u1 = 0usize
+                while u1 < q {
+                    var u2 = 0usize
+                    while u2 < q {
+                        info[u1 * q + u2] += po * sc2[u1] * sc2[u2]
+                        u2 += 1usize
+                    }
+                    u1 += 1usize
+                }
+                oc += 1usize
+            }
+            i += 1usize
+        }
+        if it > 0usize && math.abs[f64](cur - ll) < 1.0e-13f64 * (1.0f64 + math.abs[f64](cur)) {
+            ll = cur
+            break
+        }
+        ll = cur
+        z = 0usize
+        while z < q * q {
+            mat[z] = info[z]
+            z += 1usize
+        }
+        z = 0usize
+        while z < q {
+            step[z] = gr[z]
+            z += 1usize
+        }
+        if !qrb.solve_dense(mat, step, q) { ret false }
+        var h = 1.0f64
+        var tries = 0usize
+        while tries < 40usize {
+            z = 0usize
+            while z < q {
+                trial[z] = par[z] + h * step[z]
+                z += 1usize
+            }
+            var ok2 = true
+            var tl = 0.0f64
+            i = 0usize
+            while i < n && ok2 {
+                let pr = cum_np_obs(trial, x[i * p..(i + 1usize) * p], p, jn, usize(y[i]), lk, sc)
+                if pr <= 0.0f64 { ok2 = false }
+                if ok2 { tl += math.log[f64](pr) }
+                i += 1usize
+            }
+            if ok2 && tl >= ll - 1.0e-12f64 { break }
+            h = h / 2.0f64
+            tries += 1usize
+        }
+        z = 0usize
+        while z < q {
+            par[z] += h * step[z]
+            z += 1usize
+        }
+        it += 1usize
+    }
+    var c = 0usize
+    while c < q {
+        var r = 0usize
+        while r < q * q {
+            mat[r] = info[r]
+            r += 1usize
+        }
+        r = 0usize
+        while r < q {
+            step[r] = 0.0f64
+            r += 1usize
+        }
+        step[c] = 1.0f64
+        if !qrb.solve_dense(mat, step, q) { ret false }
+        out[q + 1usize + c] = math.sqrt[f64](step[c])
+        c += 1usize
+    }
+    c = 0usize
+    while c < q {
+        out[c] = par[c]
+        c += 1usize
+    }
+    out[q] = ll
+    ret true
+}

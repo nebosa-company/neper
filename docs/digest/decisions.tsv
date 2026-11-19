@@ -4489,4 +4489,5 @@ D7627	458	VGAM: multinomial logit
 D7681	883	nnet multinom standard errors (summary.multinom)
 D7702	660	dbscan sNNclust
 D7703	728	dbscan jpclust
-D7682	839	nnet class.ind and predict, closing L336
+D7682	840	nnet class.ind and predict, closing L336
+D7628	688	VGAM: non-parallel cumulative model
