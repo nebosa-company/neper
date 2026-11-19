@@ -4479,4 +4479,5 @@ D7621	592	sm.density variability band
 D7622	1379	nnet hidden-layer regression network
 D7376	1269	mediation: quasi-Bayesian mediate for linear models
 D7623	698	nnet skip-layer connections
-D7624	1187	nnet with several outputs, logistic, entropy and softmax
+D7624	1188	nnet with several outputs, logistic, entropy and softmax
+D7625	549	read.octave N-d arrays and string arrays

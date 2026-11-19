@@ -1,0 +1,28 @@
+# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>
+# name: nd
+# type: matrix
+# ndims: 3
+ 2 4 2
+ 0.826
+ -12.8989
+ 2.4079
+ -3.6436
+ -4.0869
+ -8.641
+ -0.9156
+ 1.5821
+ 2.7914
+ 0.6924
+ 4.0155
+ -4.0233
+ -3.8462
+ 0.2378
+ 7.9101
+ -1.8326
+# name: sa
+# type: string
+# elements: 2
+# length: 1
+o
+# length: 6
+rmieco

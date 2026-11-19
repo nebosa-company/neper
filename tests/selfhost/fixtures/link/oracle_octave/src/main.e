@@ -17,7 +17,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e != ok { os.exit(5) }
     var bb = b
     let _ = str.push(&bb, "tests/oracle/data/octave_")
-    let _ = str.push_byte(&bb, u8(48usize + idx))
+    if idx >= 10usize { let _ = str.push_byte(&bb, u8(48usize + idx / 10usize)) }
+    let _ = str.push_byte(&bb, u8(48usize + idx % 10usize))
     let _ = str.push(&bb, ".txt")
     let path = str.done(&bb)
     let (text, re) = fs.read_file(a, path, 1048576usize)

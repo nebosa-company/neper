@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L332	library	0.55	840	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
+L332	library	0.55	882	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
 L358	library	0.2	473	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
 L380	library	0.35	1159	tm and tidytext: text mining	Partial (D6618).
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).

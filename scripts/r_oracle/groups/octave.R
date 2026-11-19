@@ -19,7 +19,7 @@ for (i in 1:6) {
   add("nvars", c(i, 0), length(d))
   for (j in seq_along(d)) {
     v <- d[[j]]
-    add("count", c(i, j - 1), if (is.character(v)) 1 else length(v)); add("sum", c(i, j - 1), if (is.character(v)) sum(utf8ToInt(v)) else sum(as.numeric(v))); add("isum", c(i, j - 1), 0)
+    add("count", c(i, j - 1), length(v)); add("sum", c(i, j - 1), if (is.character(v)) sum(sapply(v, function(z) sum(utf8ToInt(z)))) else sum(as.numeric(v))); add("isum", c(i, j - 1), 0)
   }
 }
 # bool, complex, range and integer-type variables (7 and 8 are fixed, 9 random); "isum" is the sum of the imaginary parts, 0 for a real value
@@ -51,9 +51,21 @@ for (i in 7:9) {
   add("nvars", c(i, 0), length(d))
   for (j in seq_along(d)) {
     v <- d[[j]]
-    add("count", c(i, j - 1), if (is.character(v)) 1 else length(v))
-    add("sum", c(i, j - 1), if (is.character(v)) sum(utf8ToInt(v)) else sum(as.numeric(suppressWarnings(v))))
+    add("count", c(i, j - 1), length(v))
+    add("sum", c(i, j - 1), if (is.character(v)) sum(sapply(v, function(z) sum(utf8ToInt(z)))) else sum(as.numeric(suppressWarnings(v))))
     add("isum", c(i, j - 1), if (is.complex(v)) sum(Im(v)) else 0)
   }
+}
+# N-d arrays and string arrays (files 10 and 11)
+for (i in 10:11) {
+  d3 <- sample(2:4, 3, replace = TRUE); x <- round(rnorm(prod(d3)) * 4, 4); words <- replicate(sample(2:4, 1), paste(sample(letters, sample(1:6, 1), replace = TRUE), collapse = ""))
+  lines <- c("# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>",
+             "# name: nd", "# type: matrix", "# ndims: 3", paste0(" ", paste(d3, collapse = " ")), paste0(" ", sprintf("%.15g", x)),
+             "# name: sa", "# type: string", sprintf("# elements: %d", length(words)),
+             as.vector(rbind(sprintf("# length: %d", nchar(words)), words)))
+  writeLines(lines, file.path(root, sprintf("tests/oracle/data/octave_%d.txt", i)))
+  d <- read.octave(file.path(root, sprintf("tests/oracle/data/octave_%d.txt", i)))
+  add("nvars", c(i, 0), length(d))
+  for (j in seq_along(d)) { v <- d[[j]]; add("count", c(i, j - 1), length(v)); add("sum", c(i, j - 1), if (is.character(v)) sum(sapply(v, function(z) sum(utf8ToInt(z)))) else sum(as.numeric(v))); add("isum", c(i, j - 1), 0) }
 }
 emit("octave", "foreign", list(cases))

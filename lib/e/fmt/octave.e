@@ -4,7 +4,9 @@
 // Bool values and bool matrices are 0 or 1. A complex value keeps its real parts in sum and its imaginary parts in isum. A range (base, limit, increment)
 // has the elements read.octave's seq.int gives. An integer type is unknown to read.octave, which returns NULL for it: here it is a variable with no elements.
 //
-// Not here: cells, structs, lists, string arrays and N-d arrays (read.octave reads them; this reader does not).
+// An N-d array ("# ndims: d", the dimensions, then the numbers one per line) and a string array (several "# elements") are read as well.
+//
+// Not here: cells, structs and lists (read.octave reads them; this reader does not).
 
 use e.mem
 use e.str
@@ -124,6 +126,43 @@ fn parse(a: *mem.Arena, t: str) -> (Octave, err) {
                 v.count = 1usize
                 v.sum = number(t, s, e)
                 cur = l2 + 1usize
+            } else if is_line(t, ts, le, "matrix") && starts(t, cur, "# ndims:") {
+                // an N-d array: the dimensions on one line, then prod(dims) numbers, one per line (read.octave scans them across lines)
+                v.kind = 1u8
+                var l2 = line_end(t, cur)
+                cur = l2 + 1usize
+                l2 = line_end(t, cur)
+                var total = 1usize
+                var p = cur
+                while p < l2 {
+                    while p < l2 && is_space(t[p]) { p += 1usize }
+                    var q = p
+                    while q < l2 && !is_space(t[q]) { q += 1usize }
+                    if q > p { total = total * usize(number(t, p, q)) }
+                    p = q
+                }
+                cur = l2 + 1usize
+                var got = 0usize
+                var s = 0.0f64
+                while got < total && cur < t.len {
+                    l2 = line_end(t, cur)
+                    p = cur
+                    while p < l2 && got < total {
+                        while p < l2 && is_space(t[p]) { p += 1usize }
+                        var q = p
+                        while q < l2 && !is_space(t[q]) { q += 1usize }
+                        if q > p {
+                            s += number(t, p, q)
+                            got += 1usize
+                        }
+                        p = q
+                    }
+                    cur = l2 + 1usize
+                }
+                v.rows = total
+                v.cols = 1usize
+                v.count = total
+                v.sum = s
             } else if is_line(t, ts, le, "matrix") || is_line(t, ts, le, "bool matrix") {
                 v.kind = 1u8
                 var l2 = line_end(t, cur)
@@ -218,25 +257,31 @@ fn parse(a: *mem.Arena, t: str) -> (Octave, err) {
                 v.count = k
                 v.sum = s
                 cur = l2 + 1usize
-            } else if is_line(t, ts, le, "string") {
+            } else if is_line(t, ts, le, "string") || is_line(t, ts, le, "string array") {
+                // "# elements: k", then for each element a "# length: n" line and its text line; the sum counts the code units of all of them
                 v.kind = 2u8
                 var l2 = line_end(t, cur)
+                let k = read_uint(t, cur + 12usize, l2)
                 cur = l2 + 1usize
-                l2 = line_end(t, cur)
-                let len = read_uint(t, cur + 9usize, l2)
-                cur = l2 + 1usize
-                l2 = line_end(t, cur)
                 var s = 0.0f64
-                var k = 0usize
-                while k < len && cur + k < l2 {
-                    s += f64(t[cur + k])
-                    k += 1usize
+                var e = 0usize
+                while e < k {
+                    l2 = line_end(t, cur)
+                    let len = read_uint(t, cur + 9usize, l2)
+                    cur = l2 + 1usize
+                    l2 = line_end(t, cur)
+                    var c = 0usize
+                    while c < len && cur + c < l2 {
+                        s += f64(t[cur + c])
+                        c += 1usize
+                    }
+                    cur = l2 + 1usize
+                    e += 1usize
                 }
                 v.rows = 1usize
                 v.cols = 1usize
-                v.count = 1usize
+                v.count = k
                 v.sum = s
-                cur = l2 + 1usize
             } else {
                 v.kind = 3u8
             }
