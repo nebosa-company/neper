@@ -5,6 +5,7 @@
 
 use e.math
 use e.math.opt as opt
+use e.math.nmath as nm
 use e.mem
 
 type GCtx = struct { y: []const f64, n: usize, q: []f64 }
@@ -208,5 +209,96 @@ fn gjrgarch11(a: *mem.Arena, y: []const f64, n: usize, out: []f64) -> bool {
     out[3usize] = math.exp[f64](x[3usize])
     out[4usize] = x[4usize]
     out[5usize] = gjr_ll(y, n, x[0usize], out[1usize], out[2usize], out[3usize], out[4usize])
+    ret true
+}
+
+// the sGARCH(1,1) log-likelihood with standardised Student t innovations of shape nu > 2 (rugarch's "std"), h_1 = mean(e^2)
+fn garch_t_ll(y: []const f64, n: usize, mu: f64, om: f64, al: f64, be: f64, nu: f64) -> f64 {
+    var m2 = 0.0f64
+    var i = 0usize
+    while i < n {
+        m2 += (y[i] - mu) * (y[i] - mu)
+        i += 1usize
+    }
+    var h = m2 / f64(n)
+    let k = nm.lgammafn((nu + 1.0f64) / 2.0f64) - nm.lgammafn(nu / 2.0f64) - 0.5f64 * math.log[f64](3.141592653589793238462643383279f64 * (nu - 2.0f64))
+    var ll = 0.0f64
+    i = 0usize
+    while i < n {
+        let e = y[i] - mu
+        ll += k - 0.5f64 * math.log[f64](h) - (nu + 1.0f64) / 2.0f64 * math.log[f64](1.0f64 + e * e / (h * (nu - 2.0f64)))
+        h = om + al * e * e + be * h
+        i += 1usize
+    }
+    ret ll
+}
+
+fn garch_t_f(c: *GCtx, x: []const f64) -> f64 {
+    var nat: [4]f64 = zero
+    garch_nat(x[0usize..4usize], nat[0usize..4usize])
+    ret 0.0f64 - garch_t_ll(c.y, c.n, nat[0usize], nat[1usize], nat[2usize], nat[3usize], 2.0f64 + math.exp[f64](x[4usize]))
+}
+
+fn garch_t_g(c: *GCtx, x: []const f64, g: []f64) {
+    var i = 0usize
+    while i < 5usize {
+        c.q[i] = x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < 5usize {
+        let h = 1.0e-6f64
+        c.q[i] = x[i] + h
+        let fp = garch_t_f(c, c.q[0usize..5usize])
+        c.q[i] = x[i] - h
+        let fm = garch_t_f(c, c.q[0usize..5usize])
+        c.q[i] = x[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// the sGARCH(1,1) fit with t innovations: out = mu, omega, alpha1, beta1, shape, the log-likelihood
+fn garch11_t(a: *mem.Arena, y: []const f64, n: usize, out: []f64) -> bool {
+    let (qq, e1) = mem.alloc[f64](a, 5usize)
+    let (scr, e2) = mem.alloc[f64](a, 160usize)
+    if e1 != ok || e2 != ok { ret false }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += y[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    var v = 0.0f64
+    i = 0usize
+    while i < n {
+        v += (y[i] - mean) * (y[i] - mean)
+        i += 1usize
+    }
+    v = v / f64(n)
+    var x: [5]f64 = zero
+    x[0usize] = mean
+    x[1usize] = math.log[f64](v * 0.05f64)
+    x[2usize] = math.log[f64](0.9f64 / 0.1f64)
+    x[3usize] = math.log[f64](0.1f64 / 0.8f64)
+    x[4usize] = math.log[f64](4.0f64)
+    var c = GCtx { y: y, n: n, q: qq }
+    var round = 0usize
+    while round < 3usize {
+        let (r2, e4) = opt.nelder_mead[GCtx](&c, garch_t_f, x[0usize..5usize], 0.05f64, 1.0e-16f64, 3000u32, scr)
+        if e4 != ok { ret false }
+        let (r3, e5) = opt.bfgs[GCtx](&c, garch_t_f, garch_t_g, x[0usize..5usize], 1.0e-12f64, 400u32, scr)
+        if e5 != ok { ret false }
+        round += 1usize
+    }
+    var nat: [4]f64 = zero
+    garch_nat(x[0usize..5usize], nat[0usize..4usize])
+    out[0usize] = nat[0usize]
+    out[1usize] = nat[1usize]
+    out[2usize] = nat[2usize]
+    out[3usize] = nat[3usize]
+    out[4usize] = 2.0f64 + math.exp[f64](x[4usize])
+    out[5usize] = garch_t_ll(y, n, nat[0usize], nat[1usize], nat[2usize], nat[3usize], out[4usize])
     ret true
 }
