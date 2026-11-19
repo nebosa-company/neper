@@ -6,6 +6,7 @@ use e.algo.stat.carlmtest as ols
 use e.algo.stat.desctools as dt
 use e.algo.stat.gparot as gp
 use e.math
+use e.math.dist as dist
 use e.mem
 
 fn logit(p: f64) -> f64 { ret math.log[f64](p / (1.0f64 - p)) }
@@ -202,7 +203,7 @@ fn standardize_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: us
 // the deviance residual of one observation (gaussian, binomial or poisson)
 fn dev_resid(family: usize, y: f64, mu: f64) -> f64 {
     if family == 0usize { ret (y - mu) * (y - mu) }
-    if family == 1usize {
+    if family == 1usize || family == 3usize {
         var d = 0.0f64
         if y > 0.0f64 { d += y * math.log[f64](y / mu) }
         if y < 1.0f64 { d += (1.0f64 - y) * math.log[f64]((1.0f64 - y) / (1.0f64 - mu)) }
@@ -248,7 +249,10 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
     var j = 0usize
     while j < k {
         ps[j] = prior_scale
-        if j == 0usize { ps[j] = 10.0f64 }
+        if j == 0usize {
+            ps[j] = 10.0f64
+            if family == 3usize { ps[j] = 16.0f64 }
+        }
         if family == 0usize { ps[j] = ps[j] * 2.0f64 * ysd }
         ps0[j] = ps[j]
         j += 1usize
@@ -299,11 +303,12 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
     i = 0usize
     while i < n {
         var m0 = y[i]
-        if family == 1usize { m0 = (y[i] + 0.5f64) / 2.0f64 }
+        if family == 1usize || family == 3usize { m0 = (y[i] + 0.5f64) / 2.0f64 }
         if family == 2usize { m0 = y[i] + 0.1f64 }
         mu[i] = m0
         eta[i] = m0
         if family == 1usize { eta[i] = math.log[f64](m0 / (1.0f64 - m0)) }
+        if family == 3usize { eta[i] = dist.qnorm(m0, 0.0f64, 1.0f64, true, false) }
         if family == 2usize { eta[i] = math.log[f64](m0) }
         i += 1usize
     }
@@ -325,6 +330,11 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
             if family == 1usize {
                 me = mu[i] * (1.0f64 - mu[i])
                 vr = me
+            }
+            if family == 3usize {
+                me = dist.dnorm(eta[i], 0.0f64, 1.0f64, false)
+                if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
+                vr = mu[i] * (1.0f64 - mu[i])
             }
             if family == 2usize {
                 me = mu[i]
@@ -415,6 +425,12 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
             if family == 0usize { mu[i] = e }
             if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) }
             if family == 2usize { mu[i] = math.exp[f64](e) }
+            if family == 3usize {
+                var ec = e
+                if ec < -8.125890664701906f64 { ec = -8.125890664701906f64 }
+                if ec > 8.125890664701906f64 { ec = 8.125890664701906f64 }
+                mu[i] = dist.pnorm(ec, 0.0f64, 1.0f64, true, false)
+            }
             dev += dev_resid(family, y[i], mu[i])
             i += 1usize
         }

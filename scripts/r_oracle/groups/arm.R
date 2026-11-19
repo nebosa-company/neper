@@ -60,4 +60,13 @@ for (rep in 1:18) {
   if (is.null(f)) next
   for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, fam, as.vector(t(X)), y, j, pdf, psc), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
 }
+# bayesglm2 with the probit link (family code 3): the default prior scales are 4 and 16 (2.5 and 10 times 1.6); the arguments carry prior.df and 4.
+for (rep in 1:9) {
+  n <- sample(80:160, 1); k <- sample(2:4, 1); pdf <- c(1, Inf, 5)[rep %% 3 + 1]
+  X <- cbind(1, matrix(round(rnorm(n * (k - 1)), 4), n)); b <- c(0.2, runif(k - 1, -0.8, 0.8)); y <- rbinom(n, 1, pnorm(as.vector(X %*% b)))
+  d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
+  f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = binomial(link = "probit"), prior.df = pdf)), error = function(e) NULL)
+  if (is.null(f)) next
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, 3, as.vector(t(X)), y, j, pdf, 4), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
+}
 emit("arm", "arm", list(cases))

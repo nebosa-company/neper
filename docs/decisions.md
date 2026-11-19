@@ -50239,3 +50239,6 @@ kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and una
 
 ## D7370 — arm bayesglm prior df and scale
 `bayesglm` takes the non-intercept prior df and scale: the prior sd update is sqrt((beta^2 + V dispersion + df scale^2) / (1 + df)), or the prior scale itself when df is Inf (normal prior); the intercept keeps scale 10 and df 1. Equal to arm to 1e-6 on 18 fits over df Inf, 4 and 7 and scales 1 and 2.5 (the earlier default-prior cases still pass). L409 at 0.45.
+
+## D7371 — arm bayesglm probit
+Family code 3 is the binomial probit: the default prior scales are 1.6 times larger (4, and 16 for the intercept, which the function sets itself while the caller passes 4), mustart as for the logit, eta = qnorm(mu), mu.eta = max(dnorm(eta), eps) and mu = pnorm(eta clamped to +-8.1259), which is what glm's probit link does. Equal to arm to 1e-6 on nine fits over prior df 1, Inf and 5. L409 at 0.5.
