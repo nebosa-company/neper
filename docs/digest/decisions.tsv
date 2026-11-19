@@ -4295,4 +4295,5 @@ D7441	424	sm h.select df and aicc criteria
 D7442	439	sm.regression standard errors
 D7443	488	sm binning
 D7444	358	sm.regression on binned data
-D7445	321	sm.density on binned data
+D7445	322	sm.density on binned data
+D7446	440	sm h.select cv on binned data

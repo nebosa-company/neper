@@ -503,3 +503,50 @@ fn density_w(x: []const f64, f: []const f64, h: f64, p: f64) -> f64 {
     }
     ret s / (tot * h)
 }
+
+// cv.crit.dens of sm over binned data (midpoints x, counts f): n is the number of bins, as in sm
+fn cv_density_w(x: []const f64, f: []const f64, h: f64) -> f64 {
+    let m = x.len
+    let nn = f64(m)
+    let pi2 = 6.283185307179586f64
+    let s2 = math.sqrt[f64](2.0f64)
+    var hc = 0.0f64
+    var i = 0usize
+    while i < m {
+        hc += f[i] / (math.sqrt[f64](pi2) * s2 * h)
+        i += 1usize
+    }
+    hc = hc / (nn * (nn - 1.0f64))
+    var a = 0.0f64
+    var b = 0.0f64
+    i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            if i != j {
+                let d = x[i] - x[j]
+                a += f[i] * f[j] * math.exp[f64](0.0f64 - 0.5f64 * (d / (h * s2)) * (d / (h * s2))) / (math.sqrt[f64](pi2) * h * s2)
+                b += f[i] * f[j] * math.exp[f64](0.0f64 - 0.5f64 * (d / h) * (d / h)) / (math.sqrt[f64](pi2) * h)
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    hc += a * (nn - 2.0f64) / (nn * (nn - 1.0f64) * (nn - 1.0f64))
+    hc -= b * 2.0f64 / (nn * (nn - 1.0f64))
+    ret hc
+}
+
+type CvWCtx = struct { x: []const f64, f: []const f64 }
+
+fn cv_w_log(c: *CvWCtx, lh: f64) -> f64 {
+    let v = cv_density_w(c.x, c.f, math.exp[f64](lh))
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+// h.select(x, method = "cv") on binned data: start = sd / 2 of the raw sample
+fn hselect_cv_binned(x: []const f64, f: []const f64, start: f64) -> f64 {
+    var c = CvWCtx { x: x, f: f }
+    ret math.exp[f64](fd.brent_min[CvWCtx](&c, cv_w_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+}

@@ -50800,3 +50800,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7445 — sm.density on binned data
 `density_w` is the Gaussian kernel estimate over bin midpoints weighted by counts; with `binning1d` it equals sm.density(x, h, nbins = k) at rel 1e-9 on 15 cases in oracle_sm_hsel. Open for L505: binned bandwidth selection, reference bands, 2-d, sm.ancova, sm.survival, sm.options.
+
+## D7446 — sm h.select cv on binned data
+`cv_density_w` is cv.crit.dens over bin midpoints and counts, with n the number of bins as in sm; `hselect_cv_binned` minimises it over log(start / 8) to log(start * 4), start = sd / 2 of the raw sample, and equals h.select(x, method = "cv", nbins = k) at rel 1e-6 on 15 cases in oracle_sm_hsel. Open for L505: binned regression criteria, reference bands, 2-d, sm.ancova, sm.survival, sm.options.

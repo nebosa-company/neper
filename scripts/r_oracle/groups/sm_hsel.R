@@ -48,4 +48,10 @@ for (rep in 1:15) {
   r <- sm.density(x, h = h, eval.points = p, display = "none", nbins = nb)$estimate
   cases[[length(cases) + 1]] <- case("hbden", c(n, nb, h, p, x), r[1], rel = 1e-9, abs = 1e-12)
 }
+# hbsel (n, nbins, x[n]): h.select(x, method = "cv", nbins = nbins)
+for (rep in 1:15) {
+  n <- sample(100:300, 1); nb <- sample(8:25, 1); x <- rnorm(n)
+  r <- tryCatch(h.select(x, method = "cv", nbins = nb), error = function(e) NULL)
+  if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hbsel", c(n, nb, x), r, rel = 1e-6, abs = 1e-12)
+}
 emit("sm_hsel", "sm", list(cases))

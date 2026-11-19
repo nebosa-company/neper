@@ -46,6 +46,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "hbsel") {
+            let nbn = usize(c.args[1usize])
+            let (bx, f0) = mem.alloc[f64](a, nbn)
+            let (bf, f1) = mem.alloc[f64](a, nbn)
+            let (bm, f2) = mem.alloc[f64](a, nbn)
+            let (bd, f3) = mem.alloc[f64](a, nbn)
+            if f0 != ok || f1 != ok || f2 != ok || f3 != ok { os.exit(4) }
+            let xs = c.args[2usize..2usize + n]
+            let (m, eb) = sm.binning1d(a, xs, xs, nbn, bx, bf, bm, bd)
+            if eb != ok { os.exit(4) }
+            let est = sm.hselect_cv_binned(bx[0usize..m], bf[0usize..m], sm.sd_of(xs) / 2.0f64)
+            if !oracle.agrees(est, c) { failures += 1usize }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "hbden") {
             let nbn = usize(c.args[1usize])
             let (bx, f0) = mem.alloc[f64](a, nbn)
