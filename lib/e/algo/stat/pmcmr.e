@@ -1311,3 +1311,52 @@ fn steels_k(a: *mem.Arena, x: []const f64, grp: []const usize, k: usize, alt: us
     out[1usize] = pmin
     ret ok
 }
+
+// lsdTest (kind 0) and gamesHowellTest (kind 1) on one-way data for the table cell (row group ri, column group cj), dif = mean_ri - mean_cj. LSD: t = dif / sqrt(s2 (1/n_i + 1/n_j)) with the pooled s2
+// on n - k df and the unadjusted two-sided p. Games-Howell: q = sqrt(2) dif / sqrt(v_i / n_i + v_j / n_j) with the Welch-Satterthwaite df and the upper Tukey probability of |q| for k means; answers (stat, p)
+fn lsd_gh_pair(x: []const f64, grp: []const usize, k: usize, ri: usize, cj: usize, kind: usize) -> (f64, f64) {
+    let n = x.len
+    var cnt: [16]f64 = zero
+    var mean: [16]f64 = zero
+    var vr: [16]f64 = zero
+    var t = 0usize
+    while t < n {
+        cnt[grp[t] - 1usize] += 1.0f64
+        mean[grp[t] - 1usize] += x[t]
+        t += 1usize
+    }
+    var g = 0usize
+    while g < k {
+        mean[g] = mean[g] / cnt[g]
+        g += 1usize
+    }
+    var ss = 0.0f64
+    t = 0usize
+    while t < n {
+        let d = x[t] - mean[grp[t] - 1usize]
+        ss += d * d
+        vr[grp[t] - 1usize] += d * d
+        t += 1usize
+    }
+    g = 0usize
+    while g < k {
+        vr[g] = vr[g] / (cnt[g] - 1.0f64)
+        g += 1usize
+    }
+    let nf = f64(n)
+    let kf = f64(k)
+    let dif = mean[ri] - mean[cj]
+    if kind == 0usize {
+        let s2 = ss / (nf - kf)
+        let tv = dif / math.sqrt[f64](s2 * (1.0f64 / cnt[ri] + 1.0f64 / cnt[cj]))
+        var at = tv
+        if at < 0.0f64 { at = 0.0f64 - at }
+        ret (tv, 2.0f64 * nb.pt(0.0f64 - at, nf - kf, true, false))
+    }
+    let aa = vr[ri] / cnt[ri] + vr[cj] / cnt[cj]
+    let q = dif / math.sqrt[f64](aa) * math.sqrt[f64](2.0f64)
+    let df = aa * aa / (vr[ri] * vr[ri] / (cnt[ri] * cnt[ri] * (cnt[ri] - 1.0f64)) + vr[cj] * vr[cj] / (cnt[cj] * cnt[cj] * (cnt[cj] - 1.0f64)))
+    var aq = q
+    if aq < 0.0f64 { aq = 0.0f64 - aq }
+    ret (q, 1.0f64 - nb.ptukey(aq, 1.0f64, kf, df, true, false))
+}

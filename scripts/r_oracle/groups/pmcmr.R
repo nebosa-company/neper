@@ -46,4 +46,12 @@ for (rep in 1:14) {
   sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
   add("tk", a, sw2(tk$statistic)); add("tkp", a, sw2(tk$p.value)); add("sc", a, sw2(sc$statistic)); add("scp", a, sw2(sc$p.value))
 }
+# lsdTest ("ls", "lsp") and gamesHowellTest ("gh", "ghp"): statistics and p values, position-weighted over the pairs; unequal variances for the Games-Howell.
+for (rep in 1:14) {
+  k <- sample(3:5, 1); sz <- sample(5:10, k, replace = TRUE); n <- sum(sz); g <- factor(rep(1:k, sz))
+  x <- round(rnorm(n) * rep(runif(k, 0.5, 2), sz) + as.numeric(g) * runif(1, 0, 0.6), 4)
+  a <- c(n, k, x, as.numeric(g)); ls <- suppressWarnings(lsdTest(x, g)); gh <- suppressWarnings(gamesHowellTest(x, g))
+  sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
+  add("ls", a, sw2(ls$statistic)); add("lsp", a, sw2(ls$p.value)); add("gh", a, sw2(gh$statistic)); add("ghp", a, sw2(gh$p.value))
+}
 emit("pmcmr", "PMCMRplus", list(cases))
