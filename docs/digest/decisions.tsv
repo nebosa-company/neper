@@ -4375,4 +4375,5 @@ D7517	743	tm removePunctuation preserve options
 D7518	872	tidytext word tokenisation (ASCII)
 D7519	709	tidytext n-gram tokenisation
 D7520	513	stemming equals SnowballC
-D7375	810	lavaan: path analysis of observed variables
+D7375	811	lavaan: path analysis of observed variables
+D7521	726	marginaleffects for four more links

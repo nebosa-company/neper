@@ -5,9 +5,10 @@
 // Not here: other families and links, comparisons for factors and other contrasts, predictions at a grid or for a new data frame, conditional effects, hypotheses.
 
 use e.math
+use e.math.dist as dist
 use e.mem
 
-// the inverse link and its first two derivatives at eta: link 0 identity, 1 logit, 2 log
+// the inverse link and its first two derivatives at eta: link 0 identity, 1 logit, 2 log, 3 probit, 4 cloglog, 5 inverse, 6 sqrt
 fn mu_d(link: usize, eta: f64, out: []f64) {
     if link == 0usize {
         out[0usize] = eta
@@ -18,6 +19,25 @@ fn mu_d(link: usize, eta: f64, out: []f64) {
         out[0usize] = p
         out[1usize] = p * (1.0f64 - p)
         out[2usize] = p * (1.0f64 - p) * (1.0f64 - 2.0f64 * p)
+    } else if link == 3usize {
+        let d = dist.dnorm(eta, 0.0f64, 1.0f64, false)
+        out[0usize] = dist.pnorm(eta, 0.0f64, 1.0f64, true, false)
+        out[1usize] = d
+        out[2usize] = 0.0f64 - eta * d
+    } else if link == 4usize {
+        let ee = math.exp[f64](eta)
+        let d = ee * math.exp[f64](0.0f64 - ee)
+        out[0usize] = 1.0f64 - math.exp[f64](0.0f64 - ee)
+        out[1usize] = d
+        out[2usize] = d * (1.0f64 - ee)
+    } else if link == 5usize {
+        out[0usize] = 1.0f64 / eta
+        out[1usize] = 0.0f64 - 1.0f64 / (eta * eta)
+        out[2usize] = 2.0f64 / (eta * eta * eta)
+    } else if link == 6usize {
+        out[0usize] = eta * eta
+        out[1usize] = 2.0f64 * eta
+        out[2usize] = 2.0f64
     } else {
         let m = math.exp[f64](eta)
         out[0usize] = m
