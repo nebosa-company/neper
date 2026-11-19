@@ -50535,4 +50535,4 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 
 **Decision.** `emmeans.p_scheffe` is the p value of F = t^2 / rank on (rank, df) degrees of freedom, with rank the number of factor levels less one for the pairwise comparisons of one factor, as `adjust = "scheffe"` uses.
 
-**Result.** `oracle_emmeans` (702 cases, 38 new on the pairwise contrasts of 8 models) equals emmeans on Windows to 1e-6. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, scheffe for other contrast families, joint_tests, eff_size, regrid.
+**Result.** `oracle_emmeans` (702 cases, 36 new on the pairwise contrasts of 8 models) equals emmeans on Windows to 1e-6. Linux pending. L313 stays partial: model-frame grid, glm and mixed models, mvt and dunnett adjustments, scheffe for other contrast families, joint_tests, eff_size, regrid.
