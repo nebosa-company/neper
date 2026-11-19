@@ -28,6 +28,13 @@ fn dmat(a: *mem.Arena, x: []const f64, n: usize) -> []f64 {
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if c.name.len == 4usize && c.name[0usize] == 115u8 {
+        let sn = usize(z[0usize])
+        let sk = usize(z[1usize])
+        let (sv, se) = cl.euclid_soft(a, z[2usize..2usize + sn * sk], z[2usize + sn * sk..2usize + 2usize * sn * sk], sn, sk)
+        if se != ok { ret 0.0f64 / 0.0f64 }
+        ret sv
+    }
     let n = usize(z[1usize])
     let (t1, e1) = hc.hclust(a, dmat(a, z[4usize..4usize + 2usize * n], n), n, usize(z[2usize]))
     let (t2, e2) = hc.hclust(a, dmat(a, z[4usize + 2usize * n..4usize + 4usize * n], n), n, usize(z[3usize]))

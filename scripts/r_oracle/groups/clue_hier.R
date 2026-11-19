@@ -25,4 +25,12 @@ for (rep in 1:40) {
     cases[[length(cases) + 1]] <- case("hier", c(kd, n, m1, m2, as.vector(t(x1)), as.vector(t(x2))), r, rel = 1e-9, abs = 1e-10)
   }
 }
+# "soft" (n, k, U row-major n x k, V row-major n x k): the Euclidean dissimilarity of two soft partitions
+for (rep in 1:40) {
+  n <- sample(8:40, 1); k <- sample(2:5, 1)
+  U <- matrix(rexp(n * k), n, k); U <- U / rowSums(U); V <- matrix(rexp(n * k), n, k); V <- V / rowSums(V)
+  r <- tryCatch(as.numeric(cl_dissimilarity(as.cl_partition(U), as.cl_partition(V), method = "euclidean")), error = function(e) NULL)
+  if (is.null(r)) next
+  cases[[length(cases) + 1]] <- case("soft", c(n, k, as.vector(t(U)), as.vector(t(V))), r, rel = 1e-9, abs = 1e-10)
+}
 emit("clue_hier", "clue", list(cases))

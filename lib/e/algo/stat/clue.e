@@ -540,3 +540,41 @@ fn hier_agreement(a: *mem.Arena, t1: *const hc.Tree, t2: *const hc.Tree, n: usiz
     }
     ret (suv / math.sqrt[f64](suu * svv), ok)
 }
+
+// clue's minimal Euclidean membership distance of two soft partitions given as n by k row-major membership matrices u and v: the classes of v matched to those of u by the maximal cross-product assignment (solve_LSAP(crossprod(u, v), maximum = TRUE))
+fn euclid_soft(a: *mem.Arena, u: []const f64, v: []const f64, n: usize, k: usize) -> (f64, err) {
+    let (costs, e2) = mem.alloc[f64](a, k * k)
+    let (asg, e3) = mem.alloc[usize](a, k)
+    let (scratch, e4) = mem.alloc[f64](a, 4usize * (k + 1usize))
+    let (used, e5) = mem.alloc[usize](a, 2usize * (k + 1usize))
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (0.0f64, Malformed) }
+    var i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            var c = 0.0f64
+            var r = 0usize
+            while r < n {
+                c += u[r * k + i] * v[r * k + j]
+                r += 1usize
+            }
+            costs[i * k + j] = 0.0f64 - c
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (_, e6) = mt.hungarian(costs, k, asg, scratch, used)
+    if e6 != ok { ret (0.0f64, e6) }
+    var d2 = 0.0f64
+    var r2 = 0usize
+    while r2 < n {
+        i = 0usize
+        while i < k {
+            let d = u[r2 * k + i] - v[r2 * k + asg[i]]
+            d2 += d * d
+            i += 1usize
+        }
+        r2 += 1usize
+    }
+    ret (math.sqrt[f64](d2), ok)
+}
