@@ -48,6 +48,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let oq = usize(x[2usize])
             let orow = usize(x[3usize + on * oq])
             if str.eq(c.name, "zs") { got = pf.zscore_distance(a, x[3usize..3usize + on * oq], on, oq, x[0usize] == 1.0f64, orow) } else { got = pf.mahalanobis_distance(a, x[3usize..3usize + on * oq], on, oq, orow) }
+        } else if str.eq(c.name, "iqr") {
+            // args (thr, n, q, x column-major n by q, row)
+            let qn = usize(x[1usize])
+            let qq = usize(x[2usize])
+            let (fl, fe) = mem.alloc[f64](a, qn)
+            if fe != ok { os.exit(11) }
+            if !pf.iqr_flags(a, x[3usize..3usize + qn * qq], qn, qq, x[0usize], fl) { os.exit(12) }
+            got = fl[usize(x[3usize + qn * qq])]
         } else if str.eq(c.name, "cook") {
             let cn = usize(x[0usize])
             let cp = usize(x[1usize])

@@ -728,3 +728,28 @@ fn poisson_score(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
     if which == 1usize { ret (2.0f64 * s1 + nn * s2) / nn }
     ret s1 / math.sqrt[f64](s2) / nn
 }
+
+// performance::check_outliers(x, method = "iqr", threshold = list(iqr = thr)): a row is an outlier when any column lies beyond Q1 - thr IQR or Q3 + thr IQR (type-7 quartiles); x is n by q column-major, flags[i] 1 or 0
+fn iqr_flags(a: *mem.Arena, x: []const f64, n: usize, q: usize, thr: f64, flags: []f64) -> bool {
+    var i = 0usize
+    while i < n {
+        flags[i] = 0.0f64
+        i += 1usize
+    }
+    var j = 0usize
+    while j < q {
+        let (s, e) = dt.sorted_copy(a, x[j * n..(j + 1usize) * n])
+        if e != ok { ret false }
+        let q1 = dt.quant7(s, 0.25f64)
+        let q3 = dt.quant7(s, 0.75f64)
+        let w = q3 - q1
+        i = 0usize
+        while i < n {
+            let v = x[j * n + i]
+            if v < q1 - thr * w || v > q3 + thr * w { flags[i] = 1.0f64 }
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret true
+}

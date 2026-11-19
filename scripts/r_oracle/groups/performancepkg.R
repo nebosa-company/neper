@@ -96,4 +96,13 @@ for (rep in 1:20) {
   v <- c(pc$Estimate[1], pc$Estimate[2], pc$CI_low[1], pc$CI_high[1], pc$CI_low[2], pc$CI_high[2], pc$Chisq[2], pc$p[2], as.numeric(r2_mckelvey(m)), as.numeric(r2_kullback(m)), as.numeric(r2_kullback(m, adjust = FALSE)), unlist(performance_score(m)))
   for (w in 0:13) cases[[length(cases) + 1]] <- case("pcp", c(w, n, p, y, as.vector(t(X))), as.numeric(v[w + 1]), rel = 1e-6, abs = 1e-10)
 }
+
+# check_outliers(method = "iqr", threshold = list(iqr = thr)): "iqr" args (thr, n, q, x column-major n by q, row) the 0/1 flag of the row
+suppressMessages(library(performance))
+for (rep in 1:25) {
+  n <- sample(30:120, 1); q <- sample(2:4, 1); thr <- sample(c(1.5, 1.7, 2.2), 1)
+  X <- as.data.frame(lapply(1:q, function(j) round(if (j %% 2 == 0) rexp(n) else rnorm(n), 4))); names(X) <- paste0("v", 1:q); X[sample(n, 2), 1] <- X[sample(n, 2), 1] + 6
+  fl <- as.logical(check_outliers(X, method = "iqr", threshold = list(iqr = thr)))
+  for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("iqr", c(thr, n, q, as.vector(as.matrix(X)), i - 1), as.numeric(fl[i]), rel = 0, abs = 1e-9)
+}
 emit("performancepkg", "performance", list(cases))
