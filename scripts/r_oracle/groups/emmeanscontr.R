@@ -40,4 +40,16 @@ for (rep in 1:8) {
     for (cc in seq_len(nrow(s))) { v <- c(s$estimate[cc], s$SE[cc], s$df[cc], s$t.ratio[cc], s$p.value[cc], st[cc], sa[[1]][cc], sa[[2]][cc], sa[[3]][cc], sa[[4]][cc]); for (ff in 0:9) if (is.finite(v[ff + 1])) cases[[length(cases) + 1]] <- case("emmtwowayadd", c(kind, k, n, nh, g, y, hd, cc - 1, ff), as.numeric(v[ff + 1]), rel = 1e-8, abs = 1e-10) }
   }
 }
+# interaction model lm(y ~ g * h): "emminteract" args (kind, k, n, nh, g[n], h[n], y[n], c, f)
+for (rep in 1:8) {
+  k <- sample(3:4, 1); nh <- sample(2:3, 1); n <- sample(50:80, 1); g <- sample(0:(k - 1), n, TRUE); h <- sample(0:(nh - 1), n, TRUE)
+  if (any(table(g, h) < 2)) next
+  y <- round(c(0, 0.5, 1, 0.3)[g + 1] + c(0, 0.6, -0.4)[h + 1] + 0.4 * (g == 1) * (h == 1) + rnorm(n), 3)
+  d <- data.frame(g = factor(g), h = factor(h), y = y); e <- emmeans(lm(y ~ g * h, d), "g")
+  for (kind in 0:7) {
+    s <- summary(contrast(e, meth[kind + 1], adjust = "none")); st <- if (kind <= 1) summary(contrast(e, meth[kind + 1], adjust = "tukey"))$p.value else rep(NaN, nrow(s))
+    sa <- lapply(c("scheffe", "bonferroni", "sidak", "holm"), function(ad) summary(contrast(e, meth[kind + 1], adjust = ad))$p.value)
+    for (cc in seq_len(nrow(s))) { v <- c(s$estimate[cc], s$SE[cc], s$df[cc], s$t.ratio[cc], s$p.value[cc], st[cc], sa[[1]][cc], sa[[2]][cc], sa[[3]][cc], sa[[4]][cc]); for (ff in 0:9) if (is.finite(v[ff + 1]) && !(ff == 6 && kind %in% 5:6)) cases[[length(cases) + 1]] <- case("emminteract", c(kind, k, n, nh, g, h, y, cc - 1, ff), as.numeric(v[ff + 1]), rel = 1e-8, abs = 1e-10) }
+  }
+}
 emit("emmeanscontr", "emmeans", list(cases))

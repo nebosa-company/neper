@@ -4569,4 +4569,5 @@ D7668	797	emmeans: one-way contrast estimates and tests
 D7669	793	emmeans: p value adjustments on the one-way contrasts
 D7670	932	emmeans: one-way contrasts with a covariate
 D7671	1170	emmeans: Dunnett adjustments
-D7672	1088	emmeans: additive second factor
+D7672	1029	emmeans: additive second factor
+D7673	1276	emmeans: contrasts in an interaction model

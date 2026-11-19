@@ -680,3 +680,65 @@ fn p_dunnettx(t: f64, m: f64, df: f64) -> f64 {
     let w = (m - 1.0f64) / m
     ret 1.0f64 - (w * tk + (1.0f64 - w) * sd)
 }
+
+// contrast(emmeans(lm(y ~ g * h), "g"), method, adjust = "none") (and the adjustments of `contrast_oneway`, same ten values per contrast): the marginal mean of level i of g is the equal-weight average of its nh cell means, taken from the cell-means fit of the k nh cells
+// (every cell must hold an observation); returns the number of contrasts, 0 when the fit fails
+fn contrast_twoway_int(a: *mem.Arena, grp: []const f64, hgrp: []const f64, y: []const f64, n: usize, k: usize, nh: usize, kind: usize, out: []f64) -> usize {
+    let q = k * nh
+    let (x, e1) = mem.alloc[f64](a, n * q)
+    let (cf, e2) = mem.alloc[f64](a, k * k * k)
+    let (l, e3) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
+    var z = 0usize
+    while z < n * q {
+        x[z] = 0.0f64
+        z += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        x[(usize(grp[i]) * nh + usize(hgrp[i])) * n + i] = 1.0f64
+        i += 1usize
+    }
+    let (fm, fe) = fit(a, x, y, n, q)
+    if fe != ok { ret 0usize }
+    let m = contrast_coefs(kind, k, cf)
+    if m == 0usize { ret 0usize }
+    let df = f64(n - q)
+    // the Scheffe rank is k - 1; emmeans' own rank for the eff and del.eff matrices in an interaction model came out as k on some data and k - 1 on others, which looks like a numerical tolerance, so those two are not compared
+    let srank = f64(k - 1usize)
+    var j = 0usize
+    while j < m {
+        var c = 0usize
+        while c < q {
+            l[c] = cf[(c / nh) * m + j] / f64(nh)
+            c += 1usize
+        }
+        let est = estimate(&fm, l)
+        let se = math.sqrt[f64](variance(&fm, l))
+        let t = est / se
+        out[10usize * j] = est
+        out[10usize * j + 1usize] = se
+        out[10usize * j + 2usize] = df
+        out[10usize * j + 3usize] = t
+        out[10usize * j + 4usize] = p_t(t, df)
+        out[10usize * j + 5usize] = 0.0f64 / 0.0f64
+        if kind <= 1usize { out[10usize * j + 5usize] = p_tukey(t, f64(k), df) }
+        j += 1usize
+    }
+    var pv: [64]f64 = zero
+    j = 0usize
+    while j < m {
+        pv[j] = out[10usize * j + 4usize]
+        out[10usize * j + 6usize] = p_scheffe(out[10usize * j + 3usize], srank, df)
+        out[10usize * j + 7usize] = p_bonferroni(pv[j], f64(m))
+        out[10usize * j + 8usize] = p_sidak(pv[j], f64(m))
+        j += 1usize
+    }
+    holm(pv[0usize..m])
+    j = 0usize
+    while j < m {
+        out[10usize * j + 9usize] = pv[j]
+        j += 1usize
+    }
+    ret m
+}
