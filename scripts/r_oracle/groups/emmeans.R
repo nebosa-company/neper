@@ -73,6 +73,14 @@ for (rep in 1:8) {
     cases[[length(cases) + 1]] <- case("gl_lo", c(base, i - 1, 0), er$asymp.LCL[i], rel = 1e-4, abs = 1e-6)
     cases[[length(cases) + 1]] <- case("gl_hi", c(base, i - 1, 0), er$asymp.UCL[i], rel = 1e-4, abs = 1e-6)
   }
+  pr <- summary(pairs(emmeans(m, "A"), type = "response", adjust = "none")); rr <- 0
+  for (i in 1:(a - 1)) for (j in (i + 1):a) {
+    rr <- rr + 1; ar <- c(base, i - 1, j - 1)
+    cases[[length(cases) + 1]] <- case("go_or", ar, pr$odds.ratio[rr], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("go_se", ar, pr$SE[rr], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("go_z", ar, pr$z.ratio[rr], rel = 1e-4, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("go_p", ar, pr$p.value[rr], rel = 1e-3, abs = 1e-8)
+  }
 }
 # Poisson regression glm(y ~ A + B + x, poisson): "gp_link" "gp_se" "gp_est" "gp_rse" "gp_lo" "gp_hi", args (n, a, b, y[n], A, B, x, level index, 0); tolerance 1e-4 as for the logistic glm
 for (rep in 1:8) {

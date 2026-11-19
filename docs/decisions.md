@@ -50692,3 +50692,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `emmeans.pois_glm_lm` fits a Poisson regression by IRLS with covariance (X' W X)^-1, W = mu and infinite degrees of freedom; the response-scale means are exp(emm) with delta-method standard error exp(emm) se and limits exp(emm +- z se).
 
 **Result.** `oracle_emmeans` (1528 cases; link and response means, SEs and limits of 30 or so levels on 8 models, drawn afresh) equals emmeans on Windows to 1e-4 relative, the tolerance of R's glm convergence (D7361). Linux pending. L313 stays partial: model-frame grid, mixed models, mvt and dunnett adjustments, probit and other links, contrasts on the response scale, regrid, joint_tests with interactions.
+
+## D7363 — emmeans: odds ratios
+
+**Decision.** The pairwise comparisons of a logistic regression on the response scale (`pairs(e, type = "response")`) are exp of the link-scale difference, the delta-method standard error OR times the link standard error, the z ratio of the link difference and its normal two-sided p value.
+
+**Result.** `oracle_emmeans` (1696 cases, 168 new odds-ratio values on 42 pairs of 8 models) equals emmeans with `adjust = "none"` on Windows to 1e-4 relative (p values to 1e-3), the tolerance of R's glm convergence. Linux pending. L313 stays partial: adjusted p values for the response-scale contrasts, rate ratios for Poisson, model-frame grid, mixed models, mvt and dunnett, other links, regrid, joint_tests with interactions.

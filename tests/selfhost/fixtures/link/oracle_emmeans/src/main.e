@@ -182,7 +182,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     xbar = xbar / f64(n)
     var m: em.Lm = zero
     var fe = ok
-    if str.starts_with(c.name, "gl_") {
+    if str.starts_with(c.name, "gl_") || str.starts_with(c.name, "go_") {
         let (gm, ge) = em.logit_glm(a, d, y, n, p)
         m = gm
         fe = ge
@@ -307,6 +307,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let est = em.estimate(&m, rd)
     let se = math.sqrt[f64](em.variance(&m, rd))
     let t = est / se
+    if str.starts_with(c.name, "go_") {
+        // the odds ratio of the pair: exp of the link-scale difference, delta-method SE, z ratio and the unadjusted two-sided normal p
+        let orv = math.exp[f64](est)
+        if str.eq(c.name, "go_or") { ret orv }
+        if str.eq(c.name, "go_se") { ret orv * se }
+        if str.eq(c.name, "go_z") { ret t }
+        ret em.p_t(t, 1.0e300f64)
+    }
     if str.eq(c.name, "pair_est") { ret est }
     if str.eq(c.name, "pair_se") { ret se }
     if str.eq(c.name, "pair_t") { ret t }

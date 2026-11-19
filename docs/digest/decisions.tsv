@@ -4267,4 +4267,5 @@ D7358	820	survival: Schoenfeld residuals
 D7359	775	emmeans: response-scale means for a log response
 D7360	705	emmeans: sqrt and log10 response transformations
 D7361	952	emmeans: logistic regression
-D7362	704	emmeans: Poisson regression
+D7362	705	emmeans: Poisson regression
+D7363	757	emmeans: odds ratios
