@@ -4562,4 +4562,5 @@ D7661	944	psych: maximum likelihood factor analysis
 D7662	619	psych: maximum likelihood loadings
 D7663	919	psych: varimax rotation of the maximum likelihood fit
 D7664	1077	psych: Promax rotation of the maximum likelihood fit
-D7665	878	psych: oblimin rotation of the maximum likelihood fit
+D7665	879	psych: oblimin rotation of the maximum likelihood fit
+D7666	712	psych: factor correlations of the oblimin fit

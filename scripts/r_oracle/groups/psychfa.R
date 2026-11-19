@@ -42,5 +42,6 @@ for (rep in 1:8) {
   if (is.null(f) || any(f$uniquenesses < 0.02)) next
   Ld <- unclass(f$loadings)
   for (kk in 1:q) for (ii in 1:p) cases[[length(cases) + 1]] <- case("famloblimin", c(p, q, as.vector(t(R)), p + (ii - 1) + (kk - 1) * p), as.numeric(Ld[ii, kk]), rel = 5e-3, abs = 2e-3)
+  Ph <- f$Phi; for (kk in 1:q) for (ll in 1:q) cases[[length(cases) + 1]] <- case("famloblimin", c(p, q, as.vector(t(R)), p + p * q + q * q + (kk - 1) * q + (ll - 1)), as.numeric(Ph[kk, ll]), rel = 5e-3, abs = 2e-3)
 }
 emit("psychfa", "psych", list(cases))

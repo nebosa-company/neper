@@ -12,7 +12,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let p = usize(z[0usize])
     let q = usize(z[1usize])
     if c.name.len == 11usize {
-        let (o4, e5) = mem.alloc[f64](a, p + p * q + q * q)
+        let (o4, e5) = mem.alloc[f64](a, p + p * q + 2usize * q * q)
         if e5 != ok { ret 0.0f64 / 0.0f64 }
         if !ps.fa_ml_oblimin(a, z[2usize..2usize + p * p], p, q, o4) { ret 0.0f64 / 0.0f64 }
         ret o4[usize(z[2usize + p * p])]

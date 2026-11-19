@@ -1268,7 +1268,9 @@ fn fa_ml_oblimin(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) 
     let (ml, e1) = mem.alloc[f64](a, p + 1usize + p * q)
     let (xr, e2) = mem.alloc[f64](a, p * q)
     let (srt, e3) = mem.alloc[f64](a, p * q + q * q)
-    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    let (srcs, e6) = mem.alloc[usize](a, q)
+    let (sgs, e7) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok || e6 != ok || e7 != ok { ret false }
     if !fa_ml(a, r, p, q, ml) { ret false }
     var i = 0usize
     while i < p {
@@ -1288,6 +1290,52 @@ fn fa_ml_oblimin(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) 
     while i < p * q + q * q {
         out[p + i] = srt[i]
         i += 1usize
+    }
+    // sorted column k came from the unsorted column whose loadings equal it up to sign
+    var k = 0usize
+    while k < q {
+        var best = 1.0e300f64
+        var c = 0usize
+        while c < q {
+            var dp = 0.0f64
+            var dm = 0.0f64
+            i = 0usize
+            while i < p {
+                let v = srt[i + k * p]
+                let w = rt.loadings[i * q + c]
+                dp += (v - w) * (v - w)
+                dm += (v + w) * (v + w)
+                i += 1usize
+            }
+            if dp < best {
+                best = dp
+                srcs[k] = c
+                sgs[k] = 1.0f64
+            }
+            if dm < best {
+                best = dm
+                srcs[k] = c
+                sgs[k] = 0.0f64 - 1.0f64
+            }
+            c += 1usize
+        }
+        k += 1usize
+    }
+    let o = p + p * q + q * q
+    k = 0usize
+    while k < q {
+        var l = 0usize
+        while l < q {
+            var acc = 0.0f64
+            var rr = 0usize
+            while rr < q {
+                acc += rt.th[rr * q + srcs[k]] * rt.th[rr * q + srcs[l]]
+                rr += 1usize
+            }
+            out[o + k * q + l] = sgs[k] * sgs[l] * acc
+            l += 1usize
+        }
+        k += 1usize
     }
     ret true
 }
