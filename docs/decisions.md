@@ -50122,3 +50122,9 @@ New `e.algo.stat.mgcvpkg` starts the mgcv item with the `bs = "cr"` smooth: `pla
 `e.algo.stat.mgcvpkg` gains `absorb_sum_zero`: the constraint that a smooth sum to zero over the data, absorbed as gam does (`absorb.cons = TRUE`; smoothCon's own default is FALSE): with c the column sums of X, the LINPACK dqrdc2 Householder reflection H = I - u u' / u[0] (u = c / nrmxl, nrmxl carrying the sign of c[0], u[0] += 1) maps c to a multiple of e1, Z is H without its first column, X becomes X Z (n by k - 1) and the scaled penalty Z' S Z. The reflection is written from LINPACK's convention, so the signs of the basis columns are R's.
 
 **Result.** `oracle_mgcv_cr` has 9383 values (adding the absorbed basis and penalty of 12 more cubic regression smooths) and equals smoothCon(..., absorb.cons = TRUE) on Windows. Linux pending. L353 stays partial: the other smooths, penalised IRLS fitting, smoothing-parameter selection and gam itself remain.
+
+## D7342 — mgcv: the P-spline smooth
+
+`e.algo.stat.mgcvpkg` gains `ps_knots`, `ps_basis` and `ps_penalty` for `bs = "ps"`: mgcv's equally spaced knots (the data range widened by 0.1 percent each side, spacing range / (nk - 1) with nk = k - m1, extended m1 + 1 steps beyond, nk + 2 m1 + 2 in all), the B-spline design matrix of order m1 + 2 by the Cox-de Boor recursion (`splines::spline.des`), and the penalty D'D of the m2-th difference matrix; with `scale_penalty` it equals smoothCon's penalty. The first version is not conditioned on the order: m1 from 1 to 3 and m2 from 1 to 3 are covered.
+
+**Result.** `oracle_mgcv_ps` equals `smoothCon(s(x, bs = "ps", k = k, m = c(m1, m2)))` on 5944 values (the knots, the basis and the scaled penalty for 12 covariates, orders 1 to 3, penalty orders 1 to 3) on Windows. Linux pending. L353 stays partial: the thin-plate and tensor smooths, penalised IRLS fitting, smoothing-parameter selection and gam itself remain.

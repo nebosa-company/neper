@@ -304,3 +304,126 @@ fn absorb_sum_zero(a: *mem.Arena, x: []const f64, n: usize, k: usize, s: []const
     }
     ret ok
 }
+
+// ---- the P-spline smooth (bs = "ps"): B-splines of order m1 + 2 (cubic by default, m1 = 2) on equally spaced knots, with the difference penalty of order m2 (default 2).
+// ps_knots writes mgcv's nk + 2 m1 + 2 knots (nk = k - m1; the data range widened by 0.1 percent each side, spacing dx = range / (nk - 1), extended m1 + 1 steps beyond);
+// ps_basis the Cox-de Boor design matrix (n by len(kn) - order, row-major); ps_penalty D'D of the m2-th difference matrix of the basis dimension.
+fn ps_knots(x: []const f64, kdim: usize, m1: usize, out: []f64) {
+    var lo = x[0usize]
+    var hi = x[0usize]
+    var i = 1usize
+    while i < x.len {
+        if x[i] < lo { lo = x[i] }
+        if x[i] > hi { hi = x[i] }
+        i += 1usize
+    }
+    let nk = kdim - m1
+    let xr = hi - lo
+    let xl = lo - xr * 0.001f64
+    let xu = hi + xr * 0.001f64
+    let dx = (xu - xl) / (f64(nk) - 1.0f64)
+    let from = xl - dx * f64(m1 + 1usize)
+    let to = xu + dx * f64(m1 + 1usize)
+    let total = nk + 2usize * m1 + 2usize
+    i = 0usize
+    while i < total {
+        out[i] = from + (to - from) * f64(i) / f64(total - 1usize)
+        i += 1usize
+    }
+}
+
+fn ps_basis(a: *mem.Arena, x: []const f64, kn: []const f64, ord: usize, out: []f64) -> err {
+    let nb = kn.len - ord
+    let (b, e0) = mem.alloc[f64](a, kn.len)
+    let (nx, e1) = mem.alloc[f64](a, kn.len)
+    if e0 != ok || e1 != ok { ret e0 }
+    var r = 0usize
+    while r < x.len {
+        // the order-1 indicators
+        var i = 0usize
+        while i + 1usize < kn.len {
+            b[i] = 0.0f64
+            if kn[i] <= x[r] && x[r] < kn[i + 1usize] { b[i] = 1.0f64 }
+            i += 1usize
+        }
+        var p = 2usize
+        while p <= ord {
+            i = 0usize
+            while i + p < kn.len {
+                var left = 0.0f64
+                let d1 = kn[i + p - 1usize] - kn[i]
+                if d1 > 0.0f64 { left = (x[r] - kn[i]) / d1 * b[i] }
+                var right = 0.0f64
+                let d2 = kn[i + p] - kn[i + 1usize]
+                if d2 > 0.0f64 { right = (kn[i + p] - x[r]) / d2 * b[i + 1usize] }
+                nx[i] = left + right
+                i += 1usize
+            }
+            i = 0usize
+            while i + p < kn.len {
+                b[i] = nx[i]
+                i += 1usize
+            }
+            p += 1usize
+        }
+        var c = 0usize
+        while c < nb {
+            out[r * nb + c] = b[c]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+// S = D'D with D the m2-th order difference matrix of size (nb - m2) by nb
+fn ps_penalty(a: *mem.Arena, nb: usize, m2: usize, s: []f64) -> err {
+    let rows = nb - m2
+    let (d, e0) = mem.alloc[f64](a, rows * nb)
+    let (cur, e1) = mem.alloc[f64](a, (m2 + 1usize))
+    if e0 != ok || e1 != ok { ret e0 }
+    // the coefficients of the m2-th difference: (-1)^(m2 - j) choose(m2, j)
+    var j = 0usize
+    while j <= m2 {
+        var ch = 1.0f64
+        var q = 0usize
+        while q < j {
+            ch = ch * f64(m2 - q) / f64(q + 1usize)
+            q += 1usize
+        }
+        var sg = 1.0f64
+        if (m2 - j) % 2usize == 1usize { sg = 0.0f64 - 1.0f64 }
+        cur[j] = sg * ch
+        j += 1usize
+    }
+    var i = 0usize
+    while i < rows * nb {
+        d[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < rows {
+        j = 0usize
+        while j <= m2 {
+            d[i * nb + i + j] = cur[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var r = 0usize
+    while r < nb {
+        var c = 0usize
+        while c < nb {
+            var v = 0.0f64
+            var q = 0usize
+            while q < rows {
+                v += d[q * nb + r] * d[q * nb + c]
+                q += 1usize
+            }
+            s[r * nb + c] = v
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
