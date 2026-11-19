@@ -1021,3 +1021,79 @@ fn ancova_equal(a: *mem.Arena, x: []const f64, y: []const f64, group: []const f6
     let cc = k1 - aa * bb
     ret (1.0f64 - nm.pchisq(0.0f64 - cc / aa, bb, true, false), ok)
 }
+
+// sm.survival(x, y = time, status, h, hv, p, status.code) at the evaluation point e: the local-linear regression of the ordered event times on the estimated survival-weighted covariate distribution, as sm's code
+fn survival_at(a: *mem.Arena, x: []const f64, y: []const f64, status: []const f64, code: f64, h: f64, hv: f64, p: f64, e: f64) -> (f64, err) {
+    let n = x.len
+    let (ord, e0) = mem.alloc[usize](a, n)
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (wf, e2) = mem.alloc[f64](a, n)
+    let (yw, e3) = mem.alloc[f64](a, n)
+    let (wd, e4) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0.0f64, mem.Full) }
+    var i = 0usize
+    while i < n {
+        ord[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let v = ord[i]
+        var j = i
+        while j > 0usize && y[ord[j - 1usize]] > y[v] {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = v
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        let d = (e - x[ord[i]]) / h
+        w[i] = math.exp[f64](0.0f64 - 0.5f64 * d * d)
+        i += 1usize
+    }
+    var acc = 0.0f64
+    i = n
+    while i > 0usize {
+        acc += w[i - 1usize]
+        wf[i - 1usize] = acc
+        i -= 1usize
+    }
+    var ns = 0usize
+    var cp = 1.0f64
+    var cum = 0.0f64
+    i = 0usize
+    while i < n {
+        if status[ord[i]] == code {
+            let nxt = cp * (1.0f64 - w[i] / wf[i])
+            cum += cp - nxt
+            cp = nxt
+            wd[ns] = cum - p
+            yw[ns] = y[ord[i]]
+            ns += 1usize
+        }
+        i += 1usize
+    }
+    var s0 = 0.0f64
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var k = 0usize
+    while k < ns {
+        let d = wd[k] / hv
+        let kw = math.exp[f64](0.0f64 - 0.5f64 * d * d)
+        s0 += kw
+        s1 += kw * wd[k]
+        s2 += kw * wd[k] * wd[k]
+        k += 1usize
+    }
+    var est = 0.0f64
+    k = 0usize
+    while k < ns {
+        let d = wd[k] / hv
+        let kw = math.exp[f64](0.0f64 - 0.5f64 * d * d)
+        est += kw * (s2 - wd[k] * s1) / (s2 * s0 - s1 * s1) * yw[k]
+        k += 1usize
+    }
+    ret (est, ok)
+}

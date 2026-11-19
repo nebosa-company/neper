@@ -46,6 +46,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "hsv") {
+            let (sv, es) = sm.survival_at(a, c.args[5usize..5usize + n], c.args[5usize + n..5usize + 2usize * n], c.args[5usize + 2usize * n..5usize + 3usize * n], 1.0f64, c.args[1usize], c.args[2usize], c.args[3usize], c.args[4usize])
+            if es != ok { os.exit(4) }
+            if !oracle.agrees(sv, c) {
+                failures += 1usize
+                let _ = io.print(oracle.describe(a, c, sv))
+                let _ = io.print("\n")
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "hanc") || str.eq(c.name, "hanp") {
             let (pv, ep) = sm.ancova_equal(a, c.args[2usize..2usize + n], c.args[2usize + n..2usize + 2usize * n], c.args[2usize + 2usize * n..2usize + 3usize * n], c.args[1usize], str.eq(c.name, "hanp"))
             if ep != ok { os.exit(4) }

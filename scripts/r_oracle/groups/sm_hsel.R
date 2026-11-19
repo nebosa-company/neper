@@ -76,4 +76,11 @@ for (rep in 1:20) {
   r <- tryCatch(sm.ancova(x, y, gr, h = h, model = "parallel", display = "none", verbose = 0)$p, error = function(e) NULL)
   if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hanp", c(n, h, x, y, gr), r, rel = 1e-6, abs = 1e-9)
 }
+# hsv (n, h, hv, p, e, x[n], y[n], status[n]): sm.survival at one evaluation point
+for (rep in 1:30) {
+  n <- sample(30:80, 1); x <- runif(n, 0, 10); y <- round(rexp(n, 0.3 + 0.1 * x), 3) + 0.1; status <- rbinom(n, 1, 0.7); if (sum(status) < 5) next
+  h <- runif(1, 0.8, 2); hv <- runif(1, 0.03, 0.12); p <- c(0.25, 0.5, 0.75)[rep %% 3 + 1]; e <- runif(1, 2, 8)
+  r <- tryCatch(as.numeric(sm.survival(x, y, status, h = h, hv = hv, p = p, eval.points = e, display = "none")$estimate), error = function(e) NULL)
+  if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hsv", c(n, h, hv, p, e, x, y, status), r, rel = 1e-8, abs = 1e-10)
+}
 emit("sm_hsel", "sm", list(cases))
