@@ -1,0 +1,17 @@
+@relation a.b
+@attribute V1 numeric
+@attribute X2nd numeric
+@attribute "a b" numeric
+@attribute x.y string
+@attribute X_z string
+@data
+-1e+22,-1721,TRUE,'Z9','q\'r\\s'
+?,-541,FALSE,'q\'r\\s','L1'
+1e-300,-4548,TRUE,'L1','it\'s'
+123456789012345,?,TRUE,?,'a\\b'
+1234567890123456,-130,FALSE,'a\\b','x y'
+99999,-1130,TRUE,'x y','plain'
+-1804807020.317,-1400,TRUE,'plain','Z9'
+39441317.638,-239,TRUE,'Z9',?
+658241830.606,-131,TRUE,'q\'r\\s','L1'
+961156989.709,-4723,?,'L1','it\'s'

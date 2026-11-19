@@ -1,0 +1,15 @@
+@relation my.data
+@attribute V1 numeric
+@attribute X2nd {'x y','plain','Z9','q\'r\\s'}
+@attribute "a b" {'plain','Z9','q\'r\\s'}
+@attribute x.y date "yyyy-MM-dd"
+@attribute X_z {'q\'r\\s','L1'}
+@attribute Q numeric
+@data
+-2477,'plain','plain',?,'L1',-1374
+-1287,'q\'r\\s','plain','2001-03-10','q\'r\\s',-1769
+-1646,?,'Z9','2069-07-29',?,-300
+?,'Z9','q\'r\\s','2061-04-07','q\'r\\s',-1232
+-1047,'plain','Z9','2063-09-20','L1',-141
+-922,'Z9','q\'r\\s','1971-11-05','q\'r\\s',?
+-760,'Z9',?,'1999-10-10','L1',-4334

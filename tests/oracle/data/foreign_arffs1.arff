@@ -1,0 +1,19 @@
+@relation t
+@attribute f {a,b,c,zz}
+@attribute s string
+@attribute n numeric
+@attribute g {x,y}
+@data
+'b',"x, y",2,y
+?,'?',?,x
+c,'a\\b',3,x
+'',z,4,?
+b, spaced ,5,x
+b,'q''r',6,y
+B,Q,7,x
+a,'p\q',8,'x\y' % a comment
+% whole line
+
+a,"dq""z",9,y
+zz,mid'dle q',10,x
+a,'',11,y

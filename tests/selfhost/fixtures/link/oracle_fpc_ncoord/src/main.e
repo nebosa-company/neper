@@ -35,23 +35,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let e = fp.ncoord(a, x, n, p, cl, k, nn, wtd, sphere, ev, un, pj)
     if e != ok { os.exit(6) }
     if what == 0usize { ret ev[idx] }
-    // the axis sign: the largest-magnitude entry of the direction made positive
-    var col = idx % p
-    var bestv = 0.0f64
-    var sgn = 1.0f64
+    if what == 1usize { ret un[idx] }
+    var tot = 0.0f64
     var r = 0usize
-    while r < p {
-        var av = un[r * p + col]
-        if av < 0.0f64 { av = 0.0f64 - av }
-        if av > bestv {
-            bestv = av
-            sgn = 1.0f64
-            if un[r * p + col] < 0.0f64 { sgn = 0.0f64 - 1.0f64 }
-        }
+    while r < n {
+        tot += f64(r + 1usize) * pj[r * p + idx]
         r += 1usize
     }
-    if what == 1usize { ret sgn * un[idx] }
-    ret sgn * pj[idx]
+    ret tot
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -67,7 +58,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
-                let _ = io.print(oracle.describe(a, c, got))
+                var c2 = *c
+                c2.args = c.args[0usize..8usize]
+                let _ = io.print(oracle.describe(a, &c2, got))
                 let _ = io.print("\n")
             }
         }

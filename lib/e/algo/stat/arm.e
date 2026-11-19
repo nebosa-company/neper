@@ -2,6 +2,7 @@
 //
 // rescale (the numeric core of standardize) is here. Not here: sim, discrete, corrplot data and the model refit of standardize.
 
+use e.algo.stat.armx87 as xe
 use e.algo.rand.rdist as rd
 use e.algo.rand.r as rng
 use e.algo.linalg.decomp as dc
@@ -9,6 +10,7 @@ use e.algo.stat.carlmtest as ols
 use e.algo.stat.mass as ms
 use e.algo.stat.desctools as dt
 use e.algo.stat.gparot as gp
+use e.algo.stat.gbmfit as gb
 use e.math
 use e.math.dist as dist
 use e.mem
@@ -132,176 +134,6 @@ fn binned_resids(a: *mem.Arena, x: []const f64, y: []const f64, nclass0: usize, 
     ret bins
 }
 
-// rescale(x, binary.inputs): a two-valued x by mode (0 "center", 1 "0/1", 2 "-0.5,0.5", 3 "full"), anything else (x - mean) / (2 sd); n values in, n out
-fn rescale(x: []const f64, n: usize, mode: usize, out: []f64) {
-    var lo = x[0usize]
-    var hi = x[0usize]
-    var sum = 0.0f64
-    var i = 0usize
-    while i < n {
-        if x[i] < lo { lo = x[i] }
-        if x[i] > hi { hi = x[i] }
-        sum += x[i]
-        i += 1usize
-    }
-    let mean = sum / f64(n)
-    var ss = 0.0f64
-    var two = true
-    i = 0usize
-    while i < n {
-        ss += (x[i] - mean) * (x[i] - mean)
-        if x[i] != lo && x[i] != hi { two = false }
-        i += 1usize
-    }
-    let sd = math.sqrt[f64](ss / f64(n - 1usize))
-    i = 0usize
-    while i < n {
-        var v = (x[i] - mean) / (2.0f64 * sd)
-        if two && hi != lo {
-            if mode == 0usize { v = x[i] - mean }
-            if mode == 1usize { v = (x[i] - lo) / (hi - lo) }
-            if mode == 2usize { v = x[i] - 0.5f64 }
-        }
-        out[i] = v
-        i += 1usize
-    }
-}
-
-// the design of standardize(): a constant column and each of the q predictors (x is n by q row-major) rescaled by `rescale` with the "center" rule for two-valued inputs; d is n by q + 1
-fn std_design(a: *mem.Arena, x: []const f64, n: usize, q: usize, d: []f64) -> err {
-    let (col, e2) = mem.alloc[f64](a, n)
-    let (sc, e3) = mem.alloc[f64](a, n)
-    if e2 != ok || e3 != ok { ret mem.Full }
-    var i = 0usize
-    while i < n {
-        d[i * (q + 1usize)] = 1.0f64
-        i += 1usize
-    }
-    var c = 0usize
-    while c < q {
-        i = 0usize
-        while i < n {
-            col[i] = x[i * q + c]
-            i += 1usize
-        }
-        rescale(col, n, 0usize, sc)
-        i = 0usize
-        while i < n {
-            d[i * (q + 1usize) + 1usize + c] = sc[i]
-            i += 1usize
-        }
-        c += 1usize
-    }
-    ret ok
-}
-
-// standardize(lm(y ~ x)): the model refitted on the rescaled predictors; out receives the q + 1 coefficients, the intercept first
-fn standardize_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: usize, out: []f64) -> err {
-    let (d, e1) = mem.alloc[f64](a, n * (q + 1usize))
-    if e1 != ok { ret mem.Full }
-    let de = std_design(a, x, n, q, d)
-    if de != ok { ret de }
-    let (f, e) = ols.ols(a, d, y, n, q + 1usize)
-    if e != ok { ret e }
-    var k = 0usize
-    while k <= q {
-        out[k] = f.beta[k]
-        k += 1usize
-    }
-    ret ok
-}
-
-// standardize(glm(y ~ x, family)): the model refitted on the rescaled predictors by iteratively reweighted least squares as glm does it (the usual starting means, deviance change below
-// 1e-8 relative, 25 iterations); family 1 binomial (logit), 2 Poisson (log)
-fn standardize_glm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: usize, family: usize, out: []f64) -> err {
-    let k = q + 1usize
-    let (d, e1) = mem.alloc[f64](a, n * k)
-    let (eta, e2) = mem.alloc[f64](a, n)
-    let (mu, e3) = mem.alloc[f64](a, n)
-    let (am, e4) = mem.alloc[f64](a, k * k)
-    let (bv, e5) = mem.alloc[f64](a, k)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
-    let de = std_design(a, x, n, q, d)
-    if de != ok { ret de }
-    var i = 0usize
-    while i < n {
-        if family == 1usize { mu[i] = (y[i] + 0.5f64) / 2.0f64 } else { mu[i] = y[i] + 0.1f64 }
-        if family == 1usize { eta[i] = math.log[f64](mu[i] / (1.0f64 - mu[i])) } else { eta[i] = math.log[f64](mu[i]) }
-        i += 1usize
-    }
-    var devold = 0.0f64
-    i = 0usize
-    while i < n {
-        devold += dev_resid(family, y[i], mu[i])
-        i += 1usize
-    }
-    var it = 0usize
-    while it < 25usize {
-        var r = 0usize
-        while r < k {
-            var c = 0usize
-            while c < k {
-                am[r * k + c] = 0.0f64
-                c += 1usize
-            }
-            bv[r] = 0.0f64
-            r += 1usize
-        }
-        i = 0usize
-        while i < n {
-            var w = mu[i]
-            var me = mu[i]
-            if family == 1usize {
-                w = mu[i] * (1.0f64 - mu[i])
-                me = w
-            }
-            let z = eta[i] + (y[i] - mu[i]) / me
-            r = 0usize
-            while r < k {
-                var c = 0usize
-                while c < k {
-                    am[r * k + c] += w * d[i * k + r] * d[i * k + c]
-                    c += 1usize
-                }
-                bv[r] += w * d[i * k + r] * z
-                r += 1usize
-            }
-            i += 1usize
-        }
-        let (inv, ie) = gp.invert(a, am, k)
-        if ie != ok { ret ie }
-        var dev = 0.0f64
-        r = 0usize
-        while r < k {
-            var v = 0.0f64
-            var c = 0usize
-            while c < k {
-                v += inv[r * k + c] * bv[c]
-                c += 1usize
-            }
-            out[r] = v
-            r += 1usize
-        }
-        i = 0usize
-        while i < n {
-            var e = 0.0f64
-            r = 0usize
-            while r < k {
-                e += d[i * k + r] * out[r]
-                r += 1usize
-            }
-            eta[i] = e
-            if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) } else { mu[i] = math.exp[f64](e) }
-            dev += dev_resid(family, y[i], mu[i])
-            i += 1usize
-        }
-        it += 1usize
-        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 1.0e-8f64 { break }
-        devold = dev
-    }
-    ret ok
-}
-
 // the deviance residual of one observation (gaussian, binomial or poisson)
 fn dev_resid(family: usize, y: f64, mu: f64) -> f64 {
     if family == 0usize { ret (y - mu) * (y - mu) }
@@ -316,292 +148,241 @@ fn dev_resid(family: usize, y: f64, mu: f64) -> f64 {
     ret 2.0f64 * (d - (y - mu))
 }
 
-// bayesglm with t priors (prior_df, Inf for normal; prior_scale; 10 and df 1 for the intercept in column 0; prior mean 0; scaled = TRUE): arm's EM-style IRLS, replicated step by step
-// so that the iteration at which it stops is the same. family 0 gaussian, 1 binomial (logit), 2 poisson (log); x is n by k row-major with the constant in column 0. coef receives the
-// coefficients and the answer is the number of iterations (0 on failure).
-fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, prior_mean: []const f64, prior_df: []const f64, prior_scale: []const f64, coef: []f64) -> usize {
-    let nf = f64(n)
-    let (ps, e1) = mem.alloc[f64](a, k)
-    let (ps0, e2) = mem.alloc[f64](a, k)
-    let (psd, e3) = mem.alloc[f64](a, k)
-    let (eta, e4) = mem.alloc[f64](a, n)
-    let (mu, e5) = mem.alloc[f64](a, n)
-    let (zz, e6) = mem.alloc[f64](a, n)
-    let (ww, e7) = mem.alloc[f64](a, n)
-    let (am, e8) = mem.alloc[f64](a, k * k)
-    let (bv, e9) = mem.alloc[f64](a, k)
-    let (hat, e10) = mem.alloc[f64](a, k)
-    let (cm, e11) = mem.alloc[f64](a, k)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret 0usize }
-    var ybar = 0.0f64
-    var i = 0usize
-    while i < n {
-        ybar += y[i]
-        i += 1usize
-    }
-    ybar = ybar / nf
-    var yv = 0.0f64
-    i = 0usize
-    while i < n {
-        yv += (y[i] - ybar) * (y[i] - ybar)
-        i += 1usize
-    }
-    yv = yv / (nf - 1.0f64)
-    let ysd = math.sqrt[f64](yv)
+// chol2inv of the upper triangle of the k by k leading block of the column-major r (leading dimension ld): LAPACK's dpotri('U') as the reference build runs it (dtrti2 then dlauu2, the
+// unblocked codes, every product in the reference BLAS order), then the upper triangle copied below. out is k by k column-major (symmetric, so row-major too).
+fn chol2inv_upper(r: []const f64, ld: usize, k: usize, out: []f64) {
     var j = 0usize
     while j < k {
-        ps[j] = prior_scale[j]
-        if family == 0usize { ps[j] = ps[j] * 2.0f64 * ysd }
-        ps0[j] = ps[j]
+        var i = 0usize
+        while i < k {
+            out[i + j * k] = 0.0f64
+            if i <= j { out[i + j * k] = r[i + j * ld] }
+            i += 1usize
+        }
         j += 1usize
+    }
+    // dtrti2: inverse of the upper triangular factor in place
+    j = 0usize
+    while j < k {
+        out[j + j * k] = 1.0f64 / out[j + j * k]
+        let ajj = 0.0f64 - out[j + j * k]
+        // dtrmv('U', 'N', 'N', j, a, x = column j above the diagonal)
+        var c = 0usize
+        while c < j {
+            let t = out[c + j * k]
+            if t != 0.0f64 {
+                var i = 0usize
+                while i < c {
+                    out[i + j * k] = out[i + j * k] + t * out[i + c * k]
+                    i += 1usize
+                }
+                out[c + j * k] = out[c + j * k] * out[c + c * k]
+            }
+            c += 1usize
+        }
+        var i2 = 0usize
+        while i2 < j {
+            out[i2 + j * k] = ajj * out[i2 + j * k]
+            i2 += 1usize
+        }
+        j += 1usize
+    }
+    // dlauu2: the product U U'
+    var i = 0usize
+    while i < k {
+        let aii = out[i + i * k]
+        if i + 1usize < k {
+            var dot = 0.0f64
+            var c = i
+            while c < k {
+                dot = dot + out[i + c * k] * out[i + c * k]
+                c += 1usize
+            }
+            out[i + i * k] = dot
+            // dgemv('N', i, k - i - 1, 1, A(1, i + 1), x = row i of A(., i + 1..), beta = aii, y = column i)
+            var r2 = 0usize
+            while r2 < i {
+                out[r2 + i * k] = aii * out[r2 + i * k]
+                r2 += 1usize
+            }
+            var cc = i + 1usize
+            while cc < k {
+                let t = out[i + cc * k]
+                r2 = 0usize
+                while r2 < i {
+                    out[r2 + i * k] = out[r2 + i * k] + t * out[r2 + cc * k]
+                    r2 += 1usize
+                }
+                cc += 1usize
+            }
+        } else {
+            var r2 = 0usize
+            while r2 <= i {
+                out[r2 + i * k] = aii * out[r2 + i * k]
+                r2 += 1usize
+            }
+        }
+        i += 1usize
     }
     j = 0usize
     while j < k {
-        // the number of distinct values of column j decides its scale: two values the range, more than two twice the sd
-        var lo = x[j]
-        var hi = x[j]
-        var mean = 0.0f64
-        i = 0usize
-        while i < n {
-            let v = x[i * k + j]
-            if v < lo { lo = v }
-            if v > hi { hi = v }
-            mean += v
-            i += 1usize
+        var i3 = j + 1usize
+        while i3 < k {
+            out[i3 + j * k] = out[j + i3 * k]
+            i3 += 1usize
         }
-        mean = mean / nf
-        cm[j] = mean
-        var distinct = 0usize
-        i = 0usize
-        while i < n && distinct < 3usize {
-            var seen = false
-            var q = 0usize
-            while q < i {
-                if x[q * k + j] == x[i * k + j] { seen = true }
-                q += 1usize
-            }
-            if !seen { distinct += 1usize }
-            i += 1usize
-        }
-        var xs = 1.0f64
-        if distinct == 2usize { xs = hi - lo }
-        if distinct > 2usize {
-            var vv = 0.0f64
-            i = 0usize
-            while i < n {
-                vv += (x[i * k + j] - mean) * (x[i * k + j] - mean)
-                i += 1usize
-            }
-            xs = 2.0f64 * math.sqrt[f64](vv / (nf - 1.0f64))
-        }
-        ps[j] = ps[j] / xs
-        psd[j] = ps[j]
         j += 1usize
     }
-    i = 0usize
-    while i < n {
-        var m0 = y[i]
-        if family == 1usize || family == 3usize || family == 4usize { m0 = (y[i] + 0.5f64) / 2.0f64 }
-        if family == 2usize { m0 = y[i] + 0.1f64 }
-        mu[i] = m0
-        eta[i] = m0
-        if family == 1usize { eta[i] = math.log[f64](m0 / (1.0f64 - m0)) }
-        if family == 3usize { eta[i] = dist.qnorm(m0, 0.0f64, 1.0f64, true, false) }
-        if family == 4usize { eta[i] = math.log[f64](0.0f64 - math.log[f64](1.0f64 - m0)) }
-        if family == 2usize { eta[i] = math.log[f64](m0) }
+}
+
+// the reference BLAS dnrm2 of LAPACK 3.10 and later (what R 4.x links): the plain sum of squares of the mid-range values, sqrt at the end. A value outside [2^-511, 2^486] takes the scaled
+// path of the library's other qr instead (ponytail: not the three-accumulator form, which only differs for inputs near overflow)
+fn dnrm2_blue(x: []const f64, from: usize, count: usize) -> f64 {
+    var amed = 0.0f64
+    var i = 0usize
+    var odd = false
+    while i < count {
+        let v = math.abs[f64](x[from + i])
+        if v > 1.0e146f64 || (v < 1.0e-153f64 && v != 0.0f64) { odd = true }
+        amed = amed + v * v
         i += 1usize
     }
-    var disp = yv / 10000.0f64
-    if family != 0usize { disp = 1.0f64 }
-    var dispold = disp
-    var devold = 0.0f64
-    i = 0usize
-    while i < n {
-        devold += dev_resid(family, y[i], mu[i])
-        i += 1usize
+    if odd { ret dc.norm2(x, from, count) }
+    ret math.sqrt[f64](amed)
+}
+
+// dqrdc2 of R for a full-rank n by k column-major x (n > k), in place: the R factor above the diagonal, the Householder vectors below, qraux; fails with Singular where dqrdc2 would pivot
+// (a column norm under 1e-7 of its original)
+fn dqrdc2_full(q: []f64, n: usize, k: usize, qraux: []f64, w2: []f64, tol: f64) -> err {
+    var j = 0usize
+    while j < k {
+        qraux[j] = dnrm2_blue(q, j * n, n)
+        w2[j] = qraux[j]
+        if w2[j] == 0.0f64 { w2[j] = 1.0f64 }
+        j += 1usize
     }
-    var iter = 1usize
-    while iter <= 25usize {
-        i = 0usize
-        while i < n {
-            var me = 1.0f64
-            var vr = 1.0f64
-            if family == 1usize {
-                me = mu[i] * (1.0f64 - mu[i])
-                vr = me
-            }
-            if family == 3usize {
-                me = dist.dnorm(eta[i], 0.0f64, 1.0f64, false)
-                if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
-                vr = mu[i] * (1.0f64 - mu[i])
-            }
-            if family == 4usize {
-                me = math.exp[f64](eta[i]) * math.exp[f64](0.0f64 - math.exp[f64](eta[i]))
-                if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
-                vr = mu[i] * (1.0f64 - mu[i])
-            }
-            if family == 2usize {
-                me = mu[i]
-                vr = mu[i]
-            }
-            zz[i] = eta[i] + (y[i] - mu[i]) / me
-            ww[i] = math.sqrt[f64](me * me / vr)
-            i += 1usize
+    var l = 0usize
+    while l < k {
+        if qraux[l] < w2[l] * tol { ret dc.Singular }
+        var nrmxl = dnrm2_blue(q, l * n + l, n - l)
+        if nrmxl == 0.0f64 { ret dc.Singular }
+        if q[l * n + l] != 0.0f64 {
+            if q[l * n + l] < 0.0f64 { nrmxl = 0.0f64 - math.abs[f64](nrmxl) } else { nrmxl = math.abs[f64](nrmxl) }
         }
-        // the normal equations of the weighted least squares augmented by the k prior rows: the identity with row 0 replaced by the column means (intercept and scaled);
-        // the prior mean is 0, so the prior rows add nothing to the right-hand side
-        var r = 0usize
-        while r < k {
-            var c = 0usize
-            while c < k {
-                var v = 0.0f64
-                i = 0usize
-                while i < n {
-                    v += ww[i] * ww[i] * x[i * k + r] * x[i * k + c]
-                    i += 1usize
-                }
-                var pr = 0.0f64
-                var j2 = 0usize
-                while j2 < k {
-                    let wj = math.sqrt[f64](disp) / psd[j2]
-                    var vr0 = 0.0f64
-                    var vc0 = 0.0f64
-                    if j2 == 0usize {
-                        vr0 = cm[r]
-                        vc0 = cm[c]
-                    } else {
-                        if r == j2 { vr0 = 1.0f64 }
-                        if c == j2 { vc0 = 1.0f64 }
-                    }
-                    pr += wj * wj * vr0 * vc0
-                    j2 += 1usize
-                }
-                am[r * k + c] = v + pr
-                c += 1usize
-            }
-            var t = 0.0f64
-            i = 0usize
-            while i < n {
-                t += ww[i] * ww[i] * x[i * k + r] * zz[i]
-                i += 1usize
-            }
-            var j3 = 0usize
-            while j3 < k {
-                let wj3 = math.sqrt[f64](disp) / psd[j3]
-                var vr3 = 0.0f64
-                if j3 == 0usize { vr3 = cm[r] } else {
-                    if r == j3 { vr3 = 1.0f64 }
-                }
-                t += wj3 * wj3 * vr3 * prior_mean[j3]
-                j3 += 1usize
-            }
-            bv[r] = t
+        let inv = 1.0f64 / nrmxl
+        var r = l
+        while r < n {
+            q[l * n + r] = q[l * n + r] * inv
             r += 1usize
         }
-        let (inv, ie) = gp.invert(a, am, k)
-        if ie != ok { ret 0usize }
-        r = 0usize
-        while r < k {
-            var v = 0.0f64
-            var c = 0usize
-            while c < k {
-                v += inv[r * k + c] * bv[c]
-                c += 1usize
+        q[l * n + l] = 1.0f64 + q[l * n + l]
+        var c = l + 1usize
+        while c < k {
+            var dot = 0.0f64
+            r = l
+            while r < n {
+                dot = dot + q[l * n + r] * q[c * n + r]
+                r += 1usize
             }
-            hat[r] = v
-            r += 1usize
-        }
-        if family == 0usize {
-            j = 0usize
-            while j < k {
-                ps[j] = ps0[j]
-                j += 1usize
+            let t = 0.0f64 - dot / q[l * n + l]
+            r = l
+            while r < n {
+                q[c * n + r] = q[c * n + r] + t * q[l * n + r]
+                r += 1usize
             }
+            if qraux[c] != 0.0f64 {
+                let ra = math.abs[f64](q[c * n + l]) / qraux[c]
+                var tt = 1.0f64 - ra * ra
+                if tt < 0.0f64 { tt = 0.0f64 }
+                if math.abs[f64](tt) < 0.000001f64 {
+                    qraux[c] = dnrm2_blue(q, c * n + l + 1usize, n - l - 1usize)
+                } else {
+                    qraux[c] = qraux[c] * math.sqrt[f64](tt)
+                }
+            }
+            c += 1usize
         }
-        j = 0usize
+        qraux[l] = q[l * n + l]
+        q[l * n + l] = 0.0f64 - nrmxl
+        l += 1usize
+    }
+    ret ok
+}
+
+// summary(lm(y ~ x - 1)) the way R computes it: x is n by k row-major; beta is the coefficients, cov the unscaled covariance chol2inv(R) (k by k) and rss the residual sum of squares, all from
+// the dqrdc2 fit. Fails on a rank-deficient design.
+fn lm_summary(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, beta: []f64, cov: []f64, res: []f64) -> (f64, err) {
+    let (cm, e0) = mem.alloc[f64](a, n * k)
+    if e0 != ok { ret (0.0f64, e0) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
         while j < k {
-            let dfj = prior_df[j]
-            if dfj == math.inf64() { psd[j] = ps[j] } else { psd[j] = math.sqrt[f64](((hat[j] - prior_mean[j]) * (hat[j] - prior_mean[j]) + inv[j * k + j] * disp + dfj * ps[j] * ps[j]) / (1.0f64 + dfj)) }
-            coef[j] = hat[j]
+            cm[i + j * n] = x[i * k + j]
             j += 1usize
         }
-        var dev = 0.0f64
-        i = 0usize
-        while i < n {
-            var e = 0.0f64
-            j = 0usize
-            while j < k {
-                e += x[i * k + j] * hat[j]
-                j += 1usize
-            }
-            eta[i] = e
-            if family == 0usize { mu[i] = e }
-            if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) }
-            if family == 2usize { mu[i] = math.exp[f64](e) }
-            if family == 3usize {
-                var ec = e
-                if ec < -8.125890664701906f64 { ec = -8.125890664701906f64 }
-                if ec > 8.125890664701906f64 { ec = 8.125890664701906f64 }
-                mu[i] = dist.pnorm(ec, 0.0f64, 1.0f64, true, false)
-            }
-            if family == 4usize {
-                var mc4 = 1.0f64 - math.exp[f64](0.0f64 - math.exp[f64](e))
-                if mc4 < 2.220446049250313e-16f64 { mc4 = 2.220446049250313e-16f64 }
-                if mc4 > 1.0f64 - 2.220446049250313e-16f64 { mc4 = 1.0f64 - 2.220446049250313e-16f64 }
-                mu[i] = mc4
-            }
-            dev += dev_resid(family, y[i], mu[i])
-            i += 1usize
-        }
-        if family == 0usize {
-            var mse = 0.0f64
-            var unc = 0.0f64
-            i = 0usize
-            while i < n {
-                var e = 0.0f64
-                j = 0usize
-                while j < k {
-                    e += x[i * k + j] * hat[j]
-                    j += 1usize
-                }
-                let rr = ww[i] * (zz[i] - e)
-                mse += rr * rr
-                var q = 0.0f64
-                j = 0usize
-                while j < k {
-                    var xv = 0.0f64
-                    var c = 0usize
-                    while c < k {
-                        xv += x[i * k + c] * inv[c * k + j]
-                        c += 1usize
-                    }
-                    q += xv * x[i * k + j]
-                    j += 1usize
-                }
-                unc += q
-                i += 1usize
-            }
-            disp = mse / nf + unc / nf * disp
-        }
-        if iter > 1usize && math.abs[f64](dev - devold) / (0.1f64 + math.abs[f64](dev)) < 1.0e-8f64 && math.abs[f64](disp - dispold) / (0.1f64 + math.abs[f64](disp)) < 1.0e-8f64 { ret iter }
-        devold = dev
-        dispold = disp
-        iter += 1usize
+        i += 1usize
     }
-    ret 25usize
+    let (qraux, e2) = mem.alloc[f64](a, k)
+    let (pv, e3) = mem.alloc[usize](a, k)
+    let (qty, e4) = mem.alloc[f64](a, n)
+    if e2 != ok || e3 != ok || e4 != ok { ret (0.0f64, mem.Full) }
+    let (w2a, e5) = mem.alloc[f64](a, k)
+    if e5 != ok { ret (0.0f64, e5) }
+    let qe = dqrdc2_full(cm, n, k, qraux, w2a, 0.0000001f64)
+    if qe != ok { ret (0.0f64, qe) }
+    let f = dc.Qr { qr: cm, qraux: qraux, pivot: pv, rank: k, n: n, p: k }
+    chol2inv_upper(cm, n, k, cov)
+    i = 0usize
+    while i < n {
+        qty[i] = y[i]
+        i += 1usize
+    }
+    dc.qr_qty(&f, qty)
+    var jj = k
+    while jj > 0usize {
+        jj -= 1usize
+        var s = qty[jj]
+        var c = jj + 1usize
+        while c < k {
+            s = s - cm[c * n + jj] * beta[c]
+            c += 1usize
+        }
+        beta[jj] = s / cm[jj * n + jj]
+    }
+    // the residuals: Q [0; qty[k..n]], applied from the last reflection back as dqrsl does
+    i = 0usize
+    while i < k {
+        qty[i] = 0.0f64
+        i += 1usize
+    }
+    dc.qr_qy(&f, qty)
+    var rss = 0.0f64
+    var rc = 0.0f64
+    i = 0usize
+    while i < n {
+        res[i] = qty[i]
+        let sq = qty[i] * qty[i]
+        let tt = rss + sq
+        if math.abs[f64](rss) >= math.abs[f64](sq) { rc += (rss - tt) + sq } else { rc += (sq - tt) + rss }
+        rss = tt
+        i += 1usize
+    }
+    rss = rss + rc
+    ret (rss, ok)
 }
 
 // arm::sim for an lm (n.sims draws): sigma[s] = sigma.hat sqrt((n - k) / rchisq(1, n - k)), then beta[s, ] = mvrnorm(1, beta.hat, (X'X)^-1 sigma[s]^2), in that order per draw so one R stream gives
 // the same numbers; x is n by k row-major; beta is nsims by k row-major
 fn sim_lm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, k: usize, nsims: usize, sigma: []f64, beta: []f64) -> err {
-    let (f, e) = ols.ols(a, x, y, n, k)
+    let (bh, e0) = mem.alloc[f64](a, k)
+    let (v0, e3) = mem.alloc[f64](a, k * k)
+    if e0 != ok || e3 != ok { ret mem.Full }
+    let (rs0, e4) = mem.alloc[f64](a, n)
+    if e4 != ok { ret mem.Full }
+    let (rss, e) = lm_summary(a, x, y, n, k, bh, v0, rs0)
     if e != ok { ret e }
-    var rss = 0.0f64
     var i = 0usize
-    while i < n {
-        rss += f.resid[i] * f.resid[i]
-        i += 1usize
-    }
     let df = f64(n - k)
     let sh = math.sqrt[f64](rss / df)
     let (cv, e1) = mem.alloc[f64](a, k * k)
@@ -612,10 +393,10 @@ fn sim_lm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, 
         sigma[s] = sh * math.sqrt[f64](df / rd.rchisq(g, df))
         i = 0usize
         while i < k * k {
-            cv[i] = f.xtx_inv[i] * sigma[s] * sigma[s]
+            cv[i] = v0[i] * (sigma[s] * sigma[s])
             i += 1usize
         }
-        let me = ms.mvrnorm(a, g, 1usize, k, f.beta, cv, dr)
+        let me = ms.mvrnorm(a, g, 1usize, k, bh, cv, dr)
         if me != ok { ret me }
         i = 0usize
         while i < k {
@@ -649,12 +430,16 @@ fn glm_fit_w(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, 
     var devold = 0.0f64
     while i < n {
         if family == 1usize { mu[i] = (y[i] + 0.5f64) / 2.0f64 } else { mu[i] = y[i] + 0.1f64 }
-        if family == 1usize { eta[i] = math.log[f64](mu[i] / (1.0f64 - mu[i])) } else { eta[i] = math.log[f64](mu[i]) }
-        if eta0.len == n {
-            eta[i] = eta0[i]
-            if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[i])) } else { mu[i] = math.exp[f64](eta[i]) }
+        if family == 1usize { eta[i] = xe.log_r(mu[i] / (1.0f64 - mu[i])) } else { eta[i] = xe.log_r(mu[i]) }
+        if eta0.len == n { eta[i] = eta0[i] }
+        if family == 1usize {
+            var tmp = xe.exp_r(eta[i])
+            if eta[i] < 0.0f64 - 30.0f64 { tmp = 2.220446049250313e-16f64 }
+            if eta[i] > 30.0f64 { tmp = 1.0f64 / 2.220446049250313e-16f64 }
+            mu[i] = tmp / (1.0f64 + tmp)
+        } else {
+            mu[i] = xe.exp_r(eta[i])
             if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 }
-            if family == 1usize && mu[i] > 1.0f64 - 2.220446049250313e-16f64 { mu[i] = 1.0f64 - 2.220446049250313e-16f64 }
         }
         devold += dev_resid(family, y[i], mu[i])
         i += 1usize
@@ -667,11 +452,17 @@ fn glm_fit_w(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, 
         i = 0usize
         while i < n {
             var vr = mu[i]
-            if family == 1usize { vr = mu[i] * (1.0f64 - mu[i]) }
-            var me = vr
-            if family == 2usize { me = math.exp[f64](eta[i]) }
-            if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
-            let sw = me / math.sqrt[f64](vr)
+            var me = 0.0f64
+            if family == 1usize {
+                vr = mu[i] * (1.0f64 - mu[i])
+                let opexp = 1.0f64 + xe.exp_r(eta[i])
+                me = xe.exp_r(eta[i]) / (opexp * opexp)
+                if eta[i] > 30.0f64 || eta[i] < 0.0f64 - 30.0f64 { me = 2.220446049250313e-16f64 }
+            } else {
+                me = xe.exp_r(eta[i])
+                if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
+            }
+            let sw = math.sqrt[f64]((me * me) / vr)
             wlast[i] = sw * sw
             let z = eta[i] + (y[i] - mu[i]) / me
             var c = 0usize
@@ -682,58 +473,34 @@ fn glm_fit_w(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, 
             zq[i] = sw * z
             i += 1usize
         }
-        let (fq, fe) = dc.qr(a, xq, n, k, 1.0e-11f64)
-        if fe != ok { ret fe }
-        if fq.rank < k { ret gp.Singular }
+        let (w2a, e8) = mem.alloc[f64](a, k)
+        let (qxa, e9) = mem.alloc[f64](a, k)
+        let (pva, e10) = mem.alloc[usize](a, k)
+        if e8 != ok || e9 != ok || e10 != ok { ret mem.Full }
+        let fe = dqrdc2_full(xq, n, k, qxa, w2a, 1.0e-11f64)
+        if fe != ok { ret gp.Singular }
+        let fq = dc.Qr { qr: xq, qraux: qxa, pivot: pva, rank: k, n: n, p: k }
         dc.qr_qty(&fq, zq)
+        // dqrsl's coefficient solve, column oriented
         var r = k
         while r > 0usize {
             r -= 1usize
-            var v = zq[r]
-            var c = r + 1usize
-            while c < k {
-                v -= fq.qr[c * n + r] * bq[c]
-                c += 1usize
+            bq[r] = zq[r] / xq[r * n + r]
+            if r > 0usize {
+                let t = 0.0f64 - bq[r]
+                var q2 = 0usize
+                while q2 < r {
+                    zq[q2] = zq[q2] + t * xq[r * n + q2]
+                    q2 += 1usize
+                }
             }
-            bq[r] = v / fq.qr[r * n + r]
         }
         r = 0usize
         while r < k {
-            beta[fq.pivot[r]] = bq[r]
+            beta[r] = bq[r]
             r += 1usize
         }
-        // (R'R)^-1 = R^-1 R^-T, R upper triangular
-        var col = 0usize
-        while col < k {
-            var rr = k
-            while rr > 0usize {
-                rr -= 1usize
-                var v = 0.0f64
-                if rr == col { v = 1.0f64 }
-                var c = rr + 1usize
-                while c < k {
-                    v -= fq.qr[c * n + rr] * ri[c * k + col]
-                    c += 1usize
-                }
-                ri[rr * k + col] = v / fq.qr[rr * n + rr]
-            }
-            col += 1usize
-        }
-        r = 0usize
-        while r < k {
-            var c = 0usize
-            while c < k {
-                var v = 0.0f64
-                var m2 = 0usize
-                while m2 < k {
-                    v += ri[r * k + m2] * ri[c * k + m2]
-                    m2 += 1usize
-                }
-                cov[fq.pivot[r] * k + fq.pivot[c]] = v
-                c += 1usize
-            }
-            r += 1usize
-        }
+        chol2inv_upper(xq, n, k, cov)
         var dev = 0.0f64
         i = 0usize
         while i < n {
@@ -744,9 +511,15 @@ fn glm_fit_w(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, 
                 r += 1usize
             }
             eta[i] = e
-            if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) } else { mu[i] = math.exp[f64](e) }
-            if family == 1usize { if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 }
-                if mu[i] > 1.0f64 - 2.220446049250313e-16f64 { mu[i] = 1.0f64 - 2.220446049250313e-16f64 } } else { if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 } }
+            if family == 1usize {
+                var tmp = xe.exp_r(e)
+                if e < 0.0f64 - 30.0f64 { tmp = 2.220446049250313e-16f64 }
+                if e > 30.0f64 { tmp = 1.0f64 / 2.220446049250313e-16f64 }
+                mu[i] = tmp / (1.0f64 + tmp)
+            } else {
+                mu[i] = xe.exp_r(e)
+                if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 }
+            }
             dev += dev_resid(family, y[i], mu[i])
             i += 1usize
         }
@@ -760,14 +533,4 @@ fn glm_fit_w(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, 
         devold = dev
     }
     ret ok
-}
-
-// arm::sim for a binomial or poisson glm: beta = mvrnorm(nsims, beta.hat, cov.scaled) and sigma = sqrt(dispersion) = 1; the draws are nsims by k row-major in beta (all normals drawn at once)
-fn sim_glm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, nsims: usize, bhat: []f64, beta: []f64) -> err {
-    let (cv, e1) = mem.alloc[f64](a, k * k)
-    if e1 != ok { ret e1 }
-    var nostart: []f64 = zero
-    let fe = glm_fit(a, x, y, n, k, family, nostart, bhat, cv)
-    if fe != ok { ret fe }
-    ret ms.mvrnorm(a, g, nsims, k, bhat, cv, beta)
 }

@@ -496,10 +496,15 @@ fn rpretty(a: *mem.Arena, dmin: f64, dmax: f64, m: f64) -> ([]f64, err) {
 // --- base R's pretty(x, n).
 
 fn pretty(a: *mem.Arena, lo0: f64, hi0: f64, n: i64) -> ([]f64, err) {
+    let (s, e) = pretty_min(a, lo0, hi0, n, n / 3i64)
+    ret (s, e)
+}
+
+// pretty(x, n, min.n)
+fn pretty_min(a: *mem.Arena, lo0: f64, hi0: f64, n: i64, min_n: i64) -> ([]f64, err) {
     var lo = lo0
     var up = hi0
     var ndiv = n
-    let min_n = n / 3i64
     let shrink = 0.75f64
     let h = 1.5f64
     let h5 = 0.5f64 + 1.5f64 * h

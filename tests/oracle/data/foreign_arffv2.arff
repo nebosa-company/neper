@@ -1,0 +1,20 @@
+@relation X1abc
+@attribute V1 numeric
+@attribute X2nd date "yyyy-MM-dd"
+@attribute "a b" string
+@attribute x.y {'Z9','q\'r\\s','L1'}
+@attribute X_z numeric
+@attribute Q numeric
+@data
+-4440,'2063-01-31','plain','Z9',FALSE,1e-300
+?,?,'Z9',?,TRUE,12345678901234568
+-1709,'2001-12-13','q\'r\\s','L1',FALSE,0.333333333333333
+-3035,'1997-10-11','L1','L1',?,1e+05
+-2289,'2073-12-03','it\'s','L1',TRUE,?
+-246,'1974-11-20','a\\b','q\'r\\s',FALSE,25
+-1864,'1973-09-10',?,'L1',FALSE,340325.57586
+-4284,'1983-07-30','plain','q\'r\\s',FALSE,565686.37449
+-1132,'1992-10-07','Z9','L1',FALSE,-300085.60813
+-2878,'1979-08-09','q\'r\\s','Z9',FALSE,-767263.24418
+-4733,'2018-09-02','L1','q\'r\\s',FALSE,606916.88494
+-1120,'2033-07-30','it\'s','Z9',FALSE,-672613.05517

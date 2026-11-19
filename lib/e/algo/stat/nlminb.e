@@ -1287,6 +1287,25 @@ fn drmnf(p: *Port) {
 // (or a shorter list) leaving R's default (200, 150, 0, 1e-10, 1.5e-8, 2.2e-14, 1, 1, 1e-10). With use_gr the routine is drmng and gr(ctx, x, g) fills the gradient. R turns a NaN
 // objective into Inf; a NaN gradient ends the run with code 99
 fn nlminb[Ctx: type](a: *mem.Arena, c: *Ctx, f: fn(*Ctx, []const f64) -> f64, gr: fn(*Ctx, []const f64, []f64), use_gr: bool, par: []f64, ctl: []const f64) -> Nlminb {
+    var none: [1]f64 = zero
+    ret nlminb_run[Ctx](a, c, f, gr, use_gr, par, ctl, none[0usize..0usize])
+}
+
+// nlminb(start, f, gr, lower, upper): the bounds drive drmnfb or drmngb; a lower bound of -Inf or an upper of Inf leaves that side free
+fn nlminb_bounded[Ctx: type](a: *mem.Arena, c: *Ctx, f: fn(*Ctx, []const f64) -> f64, gr: fn(*Ctx, []const f64, []f64), use_gr: bool, par: []f64, ctl: []const f64, lower: []const f64, upper: []const f64) -> Nlminb {
+    let (bb, e) = mem.alloc[f64](a, 2usize * par.len)
+    var res = Nlminb { objective: 0.0f64 / 0.0f64, code: 0i64 - 1i64, iterations: 0usize, fevals: 0usize, gevals: 0usize }
+    if e != ok { ret res }
+    var i = 0usize
+    while i < par.len {
+        bb[2usize * i] = lower[i]
+        bb[2usize * i + 1usize] = upper[i]
+        i += 1usize
+    }
+    ret nlminb_run[Ctx](a, c, f, gr, use_gr, par, ctl, bb)
+}
+
+fn nlminb_run[Ctx: type](a: *mem.Arena, c: *Ctx, f: fn(*Ctx, []const f64) -> f64, gr: fn(*Ctx, []const f64, []f64), use_gr: bool, par: []f64, ctl: []const f64, bb: []const f64) -> Nlminb {
     let n = par.len
     let liv = 78usize + 3usize * n
     let lv = 130usize + n * (n + 27usize) / 2usize
@@ -1308,6 +1327,7 @@ fn nlminb[Ctx: type](a: *mem.Arena, c: *Ctx, f: fn(*Ctx, []const f64) -> f64, gr
     let me = machep()
     iv[1usize] = 12i64
     iv[I_LMAT] = 72i64
+    iv[I_PERM] = 60i64
     iv[I_MXFCAL] = 200i64
     iv[I_MXITER] = 150i64
     iv[I_INITH] = 1i64
@@ -1351,7 +1371,11 @@ fn nlminb[Ctx: type](a: *mem.Arena, c: *Ctx, f: fn(*Ctx, []const f64) -> f64, gr
     var p = Port { iv: iv, v: v, n: n, fx: 1.0f64 / 0.0f64, d0: d0, x0: x0 }
     var go = true
     while go {
-        if use_gr { drmng(&p, g0) } else { drmnf(&p) }
+        if bb.len > 0usize {
+            if use_gr { drmngb(&p, bb, g0) } else { drmnfb(&p, bb) }
+        } else {
+            if use_gr { drmng(&p, g0) } else { drmnf(&p) }
+        }
         let code = iv[1usize]
         if code >= 3i64 {
             go = false
@@ -1382,4 +1406,964 @@ fn nlminb[Ctx: type](a: *mem.Arena, c: *Ctx, f: fn(*Ctx, []const f64) -> f64, gr
     res.fevals = usize(iv[I_NFCALL])
     res.gevals = usize(iv[I_NGCALL])
     ret res
+}
+
+// ---- bounds: DRMNFB and DRMNGB (the double-dogleg BFGS method with the variables held on their bounds), with DD7DGB, DS3GRD and the permutation helpers they call.
+// bb holds the bounds as PORT's B(2, n): bb[2 (j - 1)] the lower and bb[2 (j - 1) + 1] the upper bound of x(j); infinite bounds stay infinite. ditsum and stopx do nothing as nlminb leaves them.
+
+const I_IVNEED: usize = 3usize
+const I_NEXTIV: usize = 46usize
+const I_NC: usize = 48usize
+const I_PERM: usize = 58usize
+
+// DV7IPR: x(i) = x(ip(i)) for the 1-based permutation at iv[ip ..]
+fn dv7ipr(p: *Port, n: usize, ip: usize, x: usize) {
+    let v = p.v
+    let iv = p.iv
+    var tmp: [512]f64 = zero
+    var i = 0usize
+    while i < n {
+        tmp[i] = v[x + usize(iv[ip + i]) - 1usize]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        v[x + i] = tmp[i]
+        i += 1usize
+    }
+}
+
+// DV7SHF: move x(k) to the end, shifting the rest down
+fn dv7shf(v: []f64, n: usize, k: usize, x: usize) {
+    if k >= n { ret }
+    let t = v[x + k - 1usize]
+    var i = k
+    while i < n {
+        v[x + i - 1usize] = v[x + i]
+        i += 1usize
+    }
+    v[x + n - 1usize] = t
+}
+
+// I7SHFT for k >= 0 on the integer array at iv[x ..]
+fn i7shft(iv: []i64, n: usize, k: usize, x: usize) {
+    if k >= n { ret }
+    let t = iv[x + k - 1usize]
+    var i = k
+    while i < n {
+        iv[x + i - 1usize] = iv[x + i]
+        i += 1usize
+    }
+    iv[x + n - 1usize] = t
+}
+
+// DH2RFG: the Householder reflection (x, y, z) that zeroes b against a; returns the new a
+fn dh2rfg(a: f64, b: f64, xyz: []f64) -> f64 {
+    if b == 0.0f64 {
+        xyz[0usize] = 0.0f64
+        xyz[1usize] = 0.0f64
+        xyz[2usize] = 0.0f64
+        ret a
+    }
+    let t = math.abs[f64](a) + math.abs[f64](b)
+    var a1 = a / t
+    let b1 = b / t
+    var c = math.sqrt[f64](a1 * a1 + b1 * b1)
+    if a1 > 0.0f64 { c = 0.0f64 - c }
+    a1 = a1 - c
+    xyz[2usize] = b1 / a1
+    xyz[0usize] = a1 / c
+    xyz[1usize] = b1 / c
+    ret t * c
+}
+
+// DQ7RSH without the Q'r part: the upper triangle of R (by columns, packed) after column k moves to the last column and the columns above shift left, reduced back to triangular form
+fn dq7rsh(p: *Port, k: usize, np: usize, r: usize, w: usize) {
+    let v = p.v
+    if k >= np { ret }
+    let km1 = k - 1usize
+    var k1 = k * km1 / 2usize
+    dv7cpy(v, k, w, r + k1)
+    var wj = v[w + k - 1usize]
+    let pm1 = np - 1usize
+    var j1 = k1 + km1
+    var xyz: [3]f64 = zero
+    var j = k
+    while j <= pm1 {
+        let jm1 = j - 1usize
+        let jp1 = j + 1usize
+        if jm1 > 0usize { dv7cpy(v, jm1, r + k1, r + j1 + 1usize) }
+        j1 += jp1
+        k1 += j
+        let a = v[r + j1 - 1usize]
+        let b = v[r + j1]
+        if b == 0.0f64 {
+            v[r + k1 - 1usize] = a
+            xyz[0usize] = 0.0f64
+            xyz[2usize] = 0.0f64
+        } else {
+            v[r + k1 - 1usize] = dh2rfg(a, b, xyz[0usize..3usize])
+            if j != pm1 {
+                var i1 = j1
+                var i = jp1
+                while i <= pm1 {
+                    i1 += i
+                    let t = v[r + i1 - 1usize] * xyz[0usize] + v[r + i1] * xyz[1usize]
+                    v[r + i1 - 1usize] = v[r + i1 - 1usize] + t
+                    v[r + i1] = v[r + i1] + t * xyz[2usize]
+                    i += 1usize
+                }
+            }
+        }
+        let t = xyz[0usize] * wj
+        v[w + j - 1usize] = wj + t
+        wj = t * xyz[2usize]
+        j += 1usize
+    }
+    v[w + np - 1usize] = wj
+    dv7cpy(v, np, r + k1, w)
+}
+
+// DD7DGB: the double-dogleg step among the free variables, shortened where it meets a bound (which then leaves the free set). dig, dst, nwtst, step, td, tg, w, x0 are offsets into v; ipiv is an offset into iv
+fn dd7dgb(p: *Port, bb: []const f64, dig: usize, dst: usize, g: usize, ipiv: usize, l: usize, pc: usize, nwtst: usize, step: usize, td: usize, tg: usize, w: usize, x0: usize) {
+    let v = p.v
+    let iv = p.iv
+    let np = p.n
+    let d = p.d0
+    let meps2 = 2.0f64 * machep()
+    let gnorm0 = v[V_DGNORM]
+    v[V_DSTNRM] = 0.0f64
+    var dnwtst = 0.0f64
+    var nred = 0.0f64
+    if iv[I_KAGQT] >= 0i64 {
+        dnwtst = v[V_DST0]
+        nred = v[V_NREDUC]
+    }
+    var pred = 0.0f64
+    v[V_STPPAR] = 0.0f64
+    let rad = v[V_RADIUS]
+    if pc == 0usize {
+        dnwtst = 0.0f64
+        dv7scp(v, np, step, 0.0f64)
+    } else {
+        var p1 = pc
+        dv7cpy(v, np, td, d)
+        dv7ipr(p, np, ipiv, td)
+        dv7scp(v, pc, dst, 0.0f64)
+        dv7cpy(v, np, tg, g)
+        dv7ipr(p, np, ipiv, tg)
+        var going = true
+        while going {
+            dl7ivm(v, p1, nwtst, l, tg)
+            let ghinvg = dd7tpr(v, p1, nwtst, nwtst)
+            v[V_NREDUC] = 0.5f64 * ghinvg
+            dl7itv(v, p1, nwtst, l, nwtst)
+            dv7vmp(v, p1, step, nwtst, td, 1i64)
+            v[V_DST0] = dv2nrm(v, pc, step)
+            if iv[I_KAGQT] < 0i64 {
+                iv[I_KAGQT] = 0i64
+                dnwtst = v[V_DST0]
+                nred = v[V_NREDUC]
+            }
+            v[V_RADIUS] = rad - v[V_DSTNRM]
+            if v[V_RADIUS] <= 0.0f64 {
+                going = false
+            } else {
+                dv7vmp(v, p1, dig, tg, td, 0i64 - 1i64)
+                let gnorm = dv2nrm(v, p1, dig)
+                if gnorm <= 0.0f64 {
+                    going = false
+                } else {
+                    v[V_DGNORM] = gnorm
+                    dv7vmp(v, p1, dig, dig, td, 0i64 - 1i64)
+                    dl7tvm(v, p1, w, l, dig)
+                    v[V_GTHG] = dv2nrm(v, p1, w)
+                    iv[I_KAGQT] = iv[I_KAGQT] + 1i64
+                    dd7dog(v, dig, p1, nwtst, step)
+                    var t = 1.0f64
+                    var k = 0i64
+                    var i = 1usize
+                    while i <= p1 {
+                        let j = usize(iv[ipiv + i - 1usize])
+                        let x0i = v[x0 + j - 1usize] + v[dst + i - 1usize] / v[td + i - 1usize]
+                        let xi = x0i + v[step + i - 1usize]
+                        let lo = bb[2usize * (j - 1usize)]
+                        let hi = bb[2usize * (j - 1usize) + 1usize]
+                        var ti = 0.0f64
+                        var jj = 0i64
+                        var hit = false
+                        if xi < lo {
+                            ti = (lo - x0i) / v[step + i - 1usize]
+                            jj = 0i64 - i64(i)
+                            hit = true
+                        } else if xi > hi {
+                            ti = (hi - x0i) / v[step + i - 1usize]
+                            jj = i64(i)
+                            hit = true
+                        }
+                        if hit && !(t <= ti) {
+                            k = jj
+                            t = ti
+                        }
+                        i += 1usize
+                    }
+                    dv7vmp(v, p1, step, step, td, 1i64)
+                    dv2axy(v, p1, dst, t, step, dst)
+                    v[V_DSTNRM] = dv2nrm(v, pc, dst)
+                    let t1 = t * v[V_GRDFAC]
+                    var t2 = t * v[V_NWTFAC]
+                    let gt = v[V_GTHG] * t1
+                    pred = pred - t1 * gnorm * ((t2 + 1.0f64) * gnorm) - t2 * (1.0f64 + 0.5f64 * t2) * ghinvg - 0.5f64 * (gt * gt)
+                    if k == 0i64 {
+                        going = false
+                    } else {
+                        dl7vml(v, p1, w, l, w)
+                        t2 = 1.0f64 - t2
+                        i = 1usize
+                        while i <= p1 {
+                            v[tg + i - 1usize] = t2 * v[tg + i - 1usize] - t1 * v[w + i - 1usize]
+                            i += 1usize
+                        }
+                        let p1m1 = p1 - 1usize
+                        var ak = k
+                        if ak < 0i64 { ak = 0i64 - ak }
+                        let jk = usize(ak)
+                        if jk != p1 {
+                            dq7rsh(p, jk, p1, l, w)
+                            i7shft(iv, p1, jk, ipiv)
+                            dv7shf(v, p1, jk, tg)
+                            dv7shf(v, p1, jk, td)
+                            dv7shf(v, p1, jk, dst)
+                        }
+                        if k < 0i64 { iv[ipiv + p1 - 1usize] = 0i64 - iv[ipiv + p1 - 1usize] }
+                        p1 = p1m1
+                        if p1 == 0usize { going = false }
+                    }
+                }
+            }
+        }
+        dv7scp(v, np, step, 0.0f64)
+        var i = 1usize
+        while i <= pc {
+            var j = iv[ipiv + i - 1usize]
+            if j < 0i64 { j = 0i64 - j }
+            v[step + usize(j) - 1usize] = v[dst + i - 1usize] / v[td + i - 1usize]
+            i += 1usize
+        }
+        if p1 < pc {
+            dv2axy(v, np, td, 1.0f64, step, x0)
+            i = p1 + 1usize
+            while i <= pc {
+                var j = iv[ipiv + i - 1usize]
+                var t = meps2
+                if j <= 0i64 {
+                    t = 0.0f64 - t
+                    j = 0i64 - j
+                    iv[ipiv + i - 1usize] = j
+                }
+                let uj = usize(j)
+                t = t * math.max[f64](math.abs[f64](v[td + uj - 1usize]), math.abs[f64](v[x0 + uj - 1usize]))
+                v[step + uj - 1usize] = v[step + uj - 1usize] + t
+                i += 1usize
+            }
+        }
+    }
+    v[V_DGNORM] = gnorm0
+    v[V_NREDUC] = nred
+    v[V_PREDUC] = pred
+    v[V_RADIUS] = rad
+    v[V_DST0] = dnwtst
+    v[V_GTSTEP] = dd7tpr(v, np, step, g)
+}
+
+// DS3GRD: Stewart's finite-difference gradient kept inside the bounds, by reverse communication through iv(sgirc) as ds7grd does; alpha is the diagonal of the Hessian approximation
+fn ds3grd(p: *Port, bb: []const f64, alpha: usize, g: usize, w: usize) {
+    let v = p.v
+    let iv = p.iv
+    let np = p.n
+    let d = p.d0
+    let x = p.x0
+    let eta0 = v[V_ETA0]
+    let pi_ = i64(np)
+    var irc = iv[I_SGIRC]
+    var pc = 0i64
+    if irc < 0i64 {
+        pc = 80i64
+    } else if irc > 0i64 {
+        pc = 210i64
+    } else {
+        v[w] = machep()
+        v[w + 1usize] = math.sqrt[f64](v[w])
+        v[w + 3usize] = p.fx
+        pc = 20i64
+    }
+    var i = 0usize
+    var h = 0.0f64
+    var xih = 0.0f64
+    var xi = 0.0f64
+    var axibar = 0.0f64
+    var alphai = 0.0f64
+    var gi = 0.0f64
+    var aai = 0.0f64
+    var agi = 0.0f64
+    var afxeta = 0.0f64
+    var h0 = 0.0f64
+    var lo = 0.0f64
+    var hi = 0.0f64
+    var hit = false
+    while true {
+        if pc == 20i64 {
+            var air = irc
+            if air < 0i64 { air = 0i64 - air }
+            i = usize(air) + 1usize
+            if i > np {
+                pc = 220i64
+            } else {
+                irc = i64(i)
+                if bb[2usize * (i - 1usize)] < bb[2usize * (i - 1usize) + 1usize] {
+                    pc = 30i64
+                } else {
+                    v[g + i - 1usize] = 0.0f64
+                }
+            }
+        }
+        if pc == 30i64 {
+            lo = bb[2usize * (i - 1usize)]
+            hi = bb[2usize * (i - 1usize) + 1usize]
+            let afx = math.abs[f64](v[w + 3usize])
+            let me = v[w]
+            h0 = v[w + 1usize]
+            let hmin = 50.0f64 * me
+            xi = v[x + i - 1usize]
+            v[w + 5usize] = xi
+            let axi = math.abs[f64](xi)
+            axibar = math.max[f64](axi, 1.0f64 / v[d + i - 1usize])
+            gi = v[g + i - 1usize]
+            agi = math.abs[f64](gi)
+            var eta = math.abs[f64](eta0)
+            if afx > 0.0f64 { eta = math.max[f64](eta, agi * axi * me / afx) }
+            alphai = v[alpha + i - 1usize]
+            if alphai == 0.0f64 {
+                pc = 130i64
+            } else if gi == 0.0f64 || p.fx == 0.0f64 {
+                pc = 140i64
+            } else {
+                afxeta = afx * eta
+                aai = math.abs[f64](alphai)
+                if gi * gi <= afxeta * aai {
+                    h = 2.0f64 * math.pow[f64](afxeta * agi, 1.0f64 / 3.0f64) * math.pow[f64](aai, (0.0f64 - 2.0f64) / 3.0f64)
+                    h = h * (1.0f64 - 2.0f64 * agi / (3.0f64 * aai * h + 4.0f64 * agi))
+                } else {
+                    h = 2.0f64 * math.sqrt[f64](afxeta / aai)
+                    h = h * (1.0f64 - aai * h / (3.0f64 * aai * h + 4.0f64 * agi))
+                }
+                h = math.max[f64](h, hmin * axibar)
+                if aai * h <= 0.002f64 * agi {
+                    pc = 120i64
+                } else {
+                    let discon = 2000.0f64 * afxeta
+                    h = discon / (agi + math.sqrt[f64](gi * gi + aai * discon))
+                    h = math.max[f64](h, hmin * axibar)
+                    if h >= 0.02f64 * axibar { h = axibar * math.pow[f64](h0, 2.0f64 / 3.0f64) }
+                    xih = xi + h
+                    if xi - h < lo {
+                        if xi + 2.0f64 * h > hi {
+                            pc = 190i64
+                        } else {
+                            irc = 0i64 - (i64(i) + pi_)
+                            pc = 200i64
+                        }
+                    } else {
+                        irc = 0i64 - i64(i)
+                        if xih <= hi {
+                            pc = 200i64
+                        } else {
+                            h = 0.0f64 - h
+                            xih = xi + h
+                            if xi + 2.0f64 * h < lo {
+                                pc = 190i64
+                            } else {
+                                irc = 0i64 - (i64(i) + pi_)
+                                pc = 200i64
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if pc == 80i64 {
+            i = usize(0i64 - irc)
+            if i <= np {
+                pc = 100i64
+            } else {
+                i = i - np
+                if i > np {
+                    i = i - np
+                    v[g + i - 1usize] = (4.0f64 * v[w + 2usize] - p.fx - 3.0f64 * v[w + 3usize]) / v[w + 4usize]
+                    irc = i64(i)
+                    v[x + i - 1usize] = v[w + 5usize]
+                    pc = 20i64
+                } else {
+                    v[w + 2usize] = p.fx
+                    h = 2.0f64 * v[w + 4usize]
+                    xih = v[w + 5usize] + h
+                    irc = irc - pi_
+                    pc = 200i64
+                }
+            }
+        }
+        if pc == 100i64 {
+            h = 0.0f64 - v[w + 4usize]
+            if h > 0.0f64 {
+                v[g + i - 1usize] = (v[w + 2usize] - p.fx) / (2.0f64 * h)
+                v[x + i - 1usize] = v[w + 5usize]
+                pc = 20i64
+            } else {
+                v[w + 2usize] = p.fx
+                xih = v[w + 5usize] + h
+                pc = 200i64
+            }
+        }
+        if pc == 120i64 {
+            if h >= 0.02f64 * axibar { h = h0 * axibar }
+            if alphai * gi < 0.0f64 { h = 0.0f64 - h }
+            pc = 150i64
+        }
+        if pc == 130i64 {
+            h = axibar
+            pc = 150i64
+        }
+        if pc == 140i64 {
+            h = h0 * axibar
+            pc = 150i64
+        }
+        if pc == 150i64 {
+            hit = false
+            pc = 160i64
+        }
+        if pc == 160i64 {
+            xih = xi + h
+            if h > 0.0f64 {
+                if xih <= hi {
+                    pc = 200i64
+                } else {
+                    pc = 180i64
+                }
+            } else if xih >= lo {
+                pc = 200i64
+            } else {
+                pc = 180i64
+            }
+        }
+        if pc == 180i64 {
+            if hit {
+                pc = 190i64
+            } else {
+                hit = true
+                h = 0.0f64 - h
+                pc = 160i64
+            }
+        }
+        if pc == 190i64 {
+            irc = i64(i) + pi_
+            p.fx = v[w + 3usize]
+            iv[I_SGIRC] = irc
+            ret
+        }
+        if pc == 200i64 {
+            v[x + i - 1usize] = xih
+            v[w + 4usize] = h
+            iv[I_SGIRC] = irc
+            ret
+        }
+        if pc == 210i64 {
+            let ir = usize(irc)
+            v[g + ir - 1usize] = (p.fx - v[w + 3usize]) / v[w + 4usize]
+            v[x + ir - 1usize] = v[w + 5usize]
+            pc = 20i64
+        }
+        if pc == 220i64 {
+            irc = 0i64
+            p.fx = v[w + 3usize]
+            iv[I_SGIRC] = irc
+            ret
+        }
+    }
+}
+
+// DRMNGB: the iterations by reverse communication; the gradient (at v offset g) is wanted when iv(1) is 2, f when it is 1
+fn drmngb(p: *Port, bb: []const f64, g: usize) {
+    let v = p.v
+    let iv = p.iv
+    let n = p.n
+    let d = p.d0
+    let x = p.x0
+    let nn = i64(n)
+    var pc = 0i64
+    var i = iv[1usize]
+    var k = 0i64
+    var rstrst = 0i64
+    var l = 0usize
+    var step1 = 0usize
+    var x01 = 0usize
+    var ipi = 0usize
+    var temp1 = 0usize
+    var g01 = 0usize
+    if i == 1i64 {
+        pc = 70i64
+    } else if i == 2i64 {
+        pc = 80i64
+    } else {
+        if iv[1usize] == 12i64 || iv[1usize] == 13i64 {
+            iv[I_VNEED] = iv[I_VNEED] + nn * (nn + 19i64) / 2i64
+            iv[I_IVNEED] = iv[I_IVNEED] + nn
+        }
+        i = iv[1usize] - 2i64
+        if i > 12i64 { ret }
+        if i >= 1i64 && i <= 6i64 {
+            pc = 250i64
+        } else if i == 7i64 || i == 9i64 {
+            pc = 190i64
+        } else if i == 8i64 {
+            pc = 150i64
+        } else if i == 10i64 || i == 11i64 {
+            pc = 20i64
+        } else if i == 12i64 {
+            pc = 30i64
+        } else {
+            ret
+        }
+    }
+    while true {
+        if pc == 20i64 {
+            l = usize(iv[I_LMAT])
+            iv[I_X0] = i64(l + n * (n + 1usize) / 2usize)
+            iv[I_STEP] = iv[I_X0] + 2i64 * nn
+            iv[I_STLSTG] = iv[I_STEP] + 2i64 * nn
+            iv[I_NWTSTP] = iv[I_STLSTG] + nn
+            iv[I_DG] = iv[I_NWTSTP] + 2i64 * nn
+            iv[I_NEXTV] = iv[I_DG] + 2i64 * nn
+            iv[I_NEXTIV] = iv[I_PERM] + nn
+            if iv[1usize] != 13i64 {
+                pc = 30i64
+            } else {
+                iv[1usize] = 14i64
+                ret
+            }
+        }
+        if pc == 30i64 {
+            iv[I_NITER] = 0i64
+            iv[I_NFCALL] = 1i64
+            iv[I_NGCALL] = 1i64
+            iv[I_NFGCAL] = 1i64
+            iv[I_MODE] = 0i64 - 1i64
+            iv[I_MODEL] = 1i64
+            iv[I_STGLIM] = 1i64
+            iv[I_TOOBIG] = 0i64
+            iv[I_CNVCOD] = 0i64
+            iv[I_RADINC] = 0i64
+            iv[I_NC] = nn
+            v[V_RAD0] = 0.0f64
+            ipi = usize(iv[I_PERM])
+            var bad = false
+            var ii = 1usize
+            while ii <= n {
+                iv[ipi] = i64(ii)
+                ipi += 1usize
+                if bb[2usize * (ii - 1usize)] > bb[2usize * (ii - 1usize) + 1usize] { bad = true }
+                if bad { ii = n + 1usize } else { ii += 1usize }
+            }
+            if bad {
+                pc = 410i64
+            } else {
+                if v[V_DINIT] >= 0.0f64 { dv7scp(v, n, d, v[V_DINIT]) }
+                if iv[I_INITH] == 1i64 {
+                    l = usize(iv[I_LMAT])
+                    dv7scp(v, n * (n + 1usize) / 2usize, l, 0.0f64)
+                    var kk = l - 1usize
+                    ii = 1usize
+                    while ii <= n {
+                        kk += ii
+                        var t = v[d + ii - 1usize]
+                        if t <= 0.0f64 { t = 1.0f64 }
+                        v[kk] = t
+                        ii += 1usize
+                    }
+                }
+                iv[1usize] = 1i64
+                pc = 440i64
+            }
+        }
+        if pc == 70i64 {
+            v[V_F] = p.fx
+            if iv[I_MODE] >= 0i64 {
+                pc = 250i64
+            } else {
+                v[V_F0] = p.fx
+                iv[1usize] = 2i64
+                if iv[I_TOOBIG] == 0i64 { ret }
+                iv[1usize] = 63i64
+                pc = 430i64
+            }
+        }
+        if pc == 80i64 {
+            if iv[I_TOOBIG] != 0i64 {
+                iv[1usize] = 65i64
+                pc = 430i64
+            } else {
+                pc = 90i64
+            }
+        }
+        if pc == 90i64 {
+            ipi = usize(iv[I_PERM])
+            var ipn = ipi + n
+            var n1 = n
+            let np1 = n + 1usize
+            l = usize(iv[I_LMAT])
+            let w1 = usize(iv[I_NWTSTP]) + n
+            let kc = i64(n) - iv[I_NC]
+            var ii = 1usize
+            while ii <= n {
+                ipn -= 1usize
+                let j = usize(iv[ipn])
+                let lo = bb[2usize * (j - 1usize)]
+                let hi = bb[2usize * (j - 1usize) + 1usize]
+                var fixed = false
+                if lo >= hi {
+                    fixed = true
+                } else {
+                    let xi = v[x + j - 1usize]
+                    let gi = v[g + j - 1usize]
+                    if xi <= lo && gi > 0.0f64 { fixed = true }
+                    if xi >= hi && gi < 0.0f64 { fixed = true }
+                }
+                if fixed {
+                    let i1 = np1 - ii
+                    if i1 < n1 {
+                        i7shft(iv, n1, i1, ipi)
+                        dq7rsh(p, i1, n1, l, w1)
+                    }
+                    n1 -= 1usize
+                } else {
+                    if i64(ii) <= kc { iv[I_CNVCOD] = 0i64 }
+                }
+                ii += 1usize
+            }
+            iv[I_NC] = i64(n1)
+            v[V_DGNORM] = 0.0f64
+            if n1 > 0usize {
+                let dg1 = usize(iv[I_DG])
+                dv7vmp(v, n, dg1, g, d, 0i64 - 1i64)
+                dv7ipr(p, n, ipi, dg1)
+                v[V_DGNORM] = dv2nrm(v, n1, dg1)
+            }
+            pc = 130i64
+        }
+        if pc == 130i64 {
+            if iv[I_CNVCOD] != 0i64 {
+                pc = 420i64
+            } else if iv[I_MODE] == 0i64 {
+                pc = 370i64
+            } else {
+                v[V_RADIUS] = v[V_LMAX0]
+                iv[I_MODE] = 0i64
+                pc = 150i64
+            }
+        }
+        if pc == 150i64 {
+            k = iv[I_NITER]
+            if k < iv[I_MXITER] {
+                pc = 160i64
+            } else {
+                iv[1usize] = 10i64
+                pc = 430i64
+            }
+        }
+        if pc == 160i64 {
+            iv[I_NITER] = k + 1i64
+            if k != 0i64 {
+                let t = v[V_RADFAC] * v[V_DSTNRM]
+                if v[V_RADFAC] < 1.0f64 || t > v[V_RADIUS] { v[V_RADIUS] = t }
+            }
+            pc = 170i64
+        }
+        if pc == 170i64 {
+            x01 = usize(iv[I_X0])
+            v[V_F0] = v[V_F]
+            iv[I_IRC] = 4i64
+            iv[I_KAGQT] = 0i64 - 1i64
+            dv7cpy(v, n, x01, x)
+            pc = 200i64
+        }
+        if pc == 190i64 {
+            if v[V_F] >= v[V_F0] {
+                pc = 200i64
+            } else {
+                v[V_RADFAC] = 1.0f64
+                k = iv[I_NITER]
+                pc = 160i64
+            }
+        }
+        if pc == 200i64 {
+            if iv[I_NFCALL] < iv[I_MXFCAL] {
+                pc = 220i64
+            } else {
+                iv[1usize] = 9i64
+                if v[V_F] >= v[V_F0] {
+                    pc = 430i64
+                } else {
+                    iv[I_CNVCOD] = iv[1usize]
+                    pc = 360i64
+                }
+            }
+        }
+        if pc == 220i64 {
+            step1 = usize(iv[I_STEP])
+            let dg1 = usize(iv[I_DG])
+            let nwtst1 = usize(iv[I_NWTSTP])
+            let w1 = nwtst1 + n
+            let dstep1 = step1 + n
+            ipi = usize(iv[I_PERM])
+            l = usize(iv[I_LMAT])
+            let tg1 = dg1 + n
+            x01 = usize(iv[I_X0])
+            let td1 = x01 + n
+            dd7dgb(p, bb, dg1, dstep1, g, ipi, l, usize(iv[I_NC]), nwtst1, step1, td1, tg1, w1, x01)
+            if iv[I_IRC] != 6i64 {
+                iv[I_TOOBIG] = 0i64
+                if v[V_DSTNRM] <= 0.0f64 {
+                    pc = 250i64
+                } else if iv[I_IRC] == 5i64 && v[V_RADFAC] > 1.0f64 && !(v[V_PREDUC] > 1.2f64 * v[V_FDIF]) {
+                    if iv[I_RESTOR] != 2i64 {
+                        pc = 250i64
+                    } else {
+                        rstrst = 0i64
+                        pc = 260i64
+                    }
+                } else {
+                    dv2axy(v, n, x, 1.0f64, step1, x01)
+                    iv[I_NFCALL] = iv[I_NFCALL] + 1i64
+                    iv[1usize] = 1i64
+                    pc = 440i64
+                }
+            } else if iv[I_RESTOR] != 2i64 {
+                pc = 250i64
+            } else {
+                rstrst = 2i64
+                pc = 260i64
+            }
+        }
+        if pc == 250i64 {
+            rstrst = 3i64
+            pc = 260i64
+        }
+        if pc == 260i64 {
+            x01 = usize(iv[I_X0])
+            v[V_RELDX] = drldst(v, n, d, x, x01)
+            da7sst(p)
+            step1 = usize(iv[I_STEP])
+            let lstgst = usize(iv[I_STLSTG])
+            let rs = iv[I_RESTOR] + 1i64
+            if rs == 2i64 {
+                dv7cpy(v, n, x, x01)
+            } else if rs == 3i64 {
+                dv7cpy(v, n, lstgst, x)
+            } else if rs == 4i64 {
+                dv7cpy(v, n, x, lstgst)
+                dv2axy(v, n, step1, 0.0f64 - 1.0f64, x01, x)
+                v[V_RELDX] = drldst(v, n, d, x, x01)
+                iv[I_RESTOR] = rstrst
+            }
+            k = iv[I_IRC]
+            if k == 1i64 || k == 5i64 {
+                v[V_RADIUS] = v[V_RADFAC] * v[V_DSTNRM]
+                pc = 200i64
+            } else if k >= 2i64 && k <= 4i64 {
+                pc = 340i64
+            } else if k == 6i64 {
+                v[V_RADIUS] = v[V_LMAXS]
+                pc = 220i64
+            } else if k >= 7i64 && k <= 12i64 {
+                iv[I_CNVCOD] = k - 4i64
+                pc = 340i64
+                if v[V_F] >= v[V_F0] {
+                    pc = 420i64
+                } else if iv[I_XIRC] == 14i64 {
+                    pc = 420i64
+                } else {
+                    iv[I_XIRC] = 14i64
+                }
+            } else if k == 13i64 {
+                pc = 400i64
+            } else {
+                pc = 370i64
+            }
+        }
+        if pc == 340i64 {
+            x01 = usize(iv[I_X0])
+            step1 = usize(iv[I_STEP])
+            dv2axy(v, n, step1, 0.0f64 - 1.0f64, x01, x)
+            if iv[I_IRC] == 3i64 {
+                ipi = usize(iv[I_PERM])
+                dv7cpy(v, n, x01, step1)
+                dv7ipr(p, n, ipi, x01)
+                l = usize(iv[I_LMAT])
+                temp1 = usize(iv[I_STLSTG])
+                dl7tvm(v, n, temp1, l, x01)
+                dl7vml(v, n, x01, l, temp1)
+                temp1 = usize(iv[I_STLSTG])
+                let temp0 = temp1 - 1usize
+                var ii = 1usize
+                while ii <= n {
+                    let j = usize(iv[ipi])
+                    ipi += 1usize
+                    v[temp0 + j] = v[x01]
+                    x01 += 1usize
+                    ii += 1usize
+                }
+            }
+            pc = 360i64
+        }
+        if pc == 360i64 {
+            g01 = usize(iv[I_NWTSTP]) + n
+            dv7cpy(v, n, g01, g)
+            iv[I_NGCALL] = iv[I_NGCALL] + 1i64
+            iv[I_TOOBIG] = 0i64
+            iv[1usize] = 2i64
+            ret
+        }
+        if pc == 370i64 {
+            g01 = usize(iv[I_NWTSTP]) + n
+            dv2axy(v, n, g01, 0.0f64 - 1.0f64, g01, g)
+            step1 = usize(iv[I_STEP])
+            temp1 = usize(iv[I_STLSTG])
+            if iv[I_IRC] == 3i64 {
+                dv2axy(v, n, temp1, 0.0f64 - 1.0f64, g01, temp1)
+                dv7vmp(v, n, temp1, temp1, d, 0i64 - 1i64)
+                if dv2nrm(v, n, temp1) <= v[V_DGNORM] * v[V_TUNER4] {
+                    v[V_RADFAC] = v[V_INCFAC]
+                } else if !(dd7tpr(v, n, g, step1) >= v[V_GTSTEP] * v[V_TUNER5]) {
+                    v[V_RADFAC] = v[V_INCFAC]
+                }
+            }
+            let w1 = usize(iv[I_NWTSTP])
+            let z = usize(iv[I_X0])
+            l = usize(iv[I_LMAT])
+            ipi = usize(iv[I_PERM])
+            dv7ipr(p, n, ipi, step1)
+            dv7ipr(p, n, ipi, g01)
+            dw7zbf(v, l, n, step1, w1, g01, z)
+            dl7upd(v, temp1, step1, l, g01, l, n, w1, z)
+            iv[1usize] = 2i64
+            pc = 150i64
+        }
+        if pc == 400i64 {
+            iv[1usize] = 64i64
+            ret
+        }
+        if pc == 410i64 {
+            iv[1usize] = 82i64
+            ret
+        }
+        if pc == 420i64 {
+            iv[1usize] = iv[I_CNVCOD]
+            iv[I_CNVCOD] = 0i64
+            ret
+        }
+        if pc == 430i64 { ret }
+        if pc == 440i64 {
+            var ii = 0usize
+            while ii < n {
+                if v[x + ii] < bb[2usize * ii] { v[x + ii] = bb[2usize * ii] }
+                if v[x + ii] > bb[2usize * ii + 1usize] { v[x + ii] = bb[2usize * ii + 1usize] }
+                ii += 1usize
+            }
+            ret
+        }
+    }
+}
+
+// DRMNFB: drmngb with the gradient by finite differences kept inside the bounds (ds3grd)
+fn drmnfb(p: *Port, bb: []const f64) {
+    let v = p.v
+    let iv = p.iv
+    let n = p.n
+    let nn = i64(n)
+    let iv1 = iv[1usize]
+    var g1 = 0usize
+    var pc = 0i64
+    if iv1 == 1i64 {
+        pc = 10i64
+    } else if iv1 == 2i64 {
+        pc = 50i64
+    } else {
+        if iv1 == 12i64 || iv1 == 13i64 { iv[I_VNEED] = iv[I_VNEED] + 2i64 * nn + 6i64 }
+        if iv1 == 14i64 {
+            pc = 10i64
+        } else if iv1 > 2i64 && iv1 < 12i64 {
+            pc = 10i64
+        } else {
+            g1 = 1usize
+            if iv1 == 12i64 { iv[1usize] = 13i64 }
+            pc = 20i64
+        }
+    }
+    while true {
+        if pc == 10i64 {
+            g1 = usize(iv[I_G])
+            pc = 20i64
+        }
+        if pc == 20i64 {
+            drmngb(p, bb, g1)
+            if iv[1usize] < 2i64 { ret }
+            if iv[1usize] > 2i64 {
+                pc = 80i64
+            } else {
+                if iv[I_NITER] == 0i64 { dv7scp(v, n, g1, 0.0f64) }
+                var j = usize(iv[I_LMAT])
+                let alpha0 = g1 - n - 1usize
+                var ipi = usize(iv[I_PERM])
+                var i = 1usize
+                while i <= n {
+                    let k = alpha0 + usize(iv[ipi])
+                    v[k] = dd7tpr(v, i, j, j)
+                    ipi += 1usize
+                    j += i
+                    i += 1usize
+                }
+                iv[I_NGCALL] = iv[I_NGCALL] - 1i64
+                iv[I_SGIRC] = 0i64
+                p.fx = v[V_F]
+                pc = 60i64
+            }
+        }
+        if pc == 50i64 {
+            if iv[I_TOOBIG] != 0i64 { pc = 10i64 } else { pc = 60i64 }
+        }
+        if pc == 60i64 {
+            g1 = usize(iv[I_G])
+            let alpha = g1 - n
+            ds3grd(p, bb, alpha, g1, alpha - 6usize)
+            let ic = iv[I_SGIRC]
+            if ic == 0i64 {
+                pc = 10i64
+            } else if ic <= nn {
+                iv[I_NGCALL] = iv[I_NGCALL] + 1i64
+                ret
+            } else {
+                iv[I_TOOBIG] = 1i64
+                pc = 10i64
+            }
+        }
+        if pc == 80i64 {
+            if iv[1usize] != 14i64 { ret }
+            iv[I_G] = iv[I_NEXTV] + nn + 6i64
+            iv[I_NEXTV] = iv[I_G] + nn
+            if iv1 != 13i64 {
+                pc = 10i64
+            } else {
+                ret
+            }
+        }
+    }
 }

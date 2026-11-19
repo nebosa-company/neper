@@ -1,0 +1,16 @@
+@relation partial
+@attribute y date 'yyyy'
+@attribute t date 'HH:mm:ss'
+@attribute d date 'dd'
+@attribute ym date 'yyyy-MM'
+@attribute md date 'MM-dd'
+@attribute yy date 'YY'
+@attribute yd date 'yyyy-DDD'
+@attribute dd date 'DDD'
+@data
+2011,10:20:30,04,2011-03,03-04,99,2011-064,064
+1999,23:59:59,28,1999-12,12-25,05,1999-001,001
+?,00:00:00,15,?,?,?,?,?
+2030,25:00:00,01,2030-01,01-01,70,2011-123,123
+2000,00:00:00,01,2000-01,01-01,68,2012-366,366
+2000,00:00:00,01,2000-01,01-01,69,2011-021,021

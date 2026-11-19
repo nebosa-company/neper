@@ -6,7 +6,7 @@
 suppressMessages(library(GeneralizedHyperbolic))
 cases <- list()
 svn <- list(hyperb = c("BN", "US", "FN", "SL", "MoM"), nig = c("FN", "US", "FN", "FN", "MoM", "Cauchy"))
-meths <- c("Nelder-Mead", "BFGS", "L-BFGS-B", "constrOptim")
+meths <- c("Nelder-Mead", "BFGS", "L-BFGS-B", "constrOptim", "nlm", "nlminb")
 one <- function(seed, n, fam, kind, sm, method, gen) {
   set.seed(seed)
   x <- if (fam == 0) rhyperb(n, param = gen) else rnig(n, param = gen)
@@ -24,13 +24,17 @@ add <- function(seed, n, fam, kind, sm, method, gen, whats = c(0:4, 6, 7:10)) {
   # a gradient method that ends against the delta boundary stops where finite-difference noise decides: not a defined result
   if (method > 0 && r$res$param[2] < 0.2) return(invisible())
   res <- r$res
-  vals <- c(as.numeric(res$param), res$maxLik, res$conv, res$iter, as.numeric(res$paramStart))
+  vals <- c(as.numeric(res$param), res$maxLik, if (length(res$conv)) res$conv else NA, res$iter, as.numeric(res$paramStart))
   tol <- c(1e-5, 1e-5, 1e-5, 1e-5, 1e-7, 0, 0, 1e-8, 1e-8, 1e-8, 1e-8)
-  if (method > 0) tol[1:4] <- 2e-4
+  if (method > 0 && method != 4) tol[1:4] <- 2e-4
+  # nlminb reports its convergence code in iter (and nothing in conv), exact; a bound-active run ends where finite-difference noise decides
+  if (method == 4) tol[1:4] <- 3e-3
+  # nlm stops when the finite-difference gradient is under 1e-6, so its estimate is only that exact and besselK differing in the last bit can move one step: 3e-3 on the estimate, the step count to 2
   for (w in whats) {
     rl <- tol[w + 1]; ab <- tol[w + 1] * 1e-2
     # BFGS and L-BFGS-B stop on a finite-difference gradient: the function count is checked to 15 percent and 3 calls
-    if (w == 6 && method > 0) { rl <- 0.15; ab <- 3 }
+    if (w == 6 && method == 4) { rl <- 0.1; ab <- 2 }
+    if (w == 6 && method > 0 && method != 4 && method != 5) { rl <- 0.15; ab <- 3 }
     cases[[length(cases) + 1]] <<- case("ghypfit", c(seed, n, fam, kind, sm, method, w, gen, r$us), vals[w + 1], rel = rl, abs = ab)
   }
 }
@@ -43,7 +47,10 @@ for (rep in 1:6) {
   for (m in 0:2) { add(sd0, n, 1, 2, 0, m, gen); add(sd0, n, 1, 1, 0, m, gen) }
   add(sd0, n, 1, 4, 0, 0, gen)
   for (m in 0:2) add(sd0, n, 1, 5, 0, m, gen)
-  for (kd in c(0, 1, 2)) add(sd0, n, 0, kd, 0, 3, gen)
+  for (kd in c(0, 1, 2)) { add(sd0, n, 0, kd, 0, 3, gen); add(sd0, n, 0, kd, 0, 4, gen) }
+  for (kd in c(1, 2, 5)) add(sd0, n, 1, kd, 0, 4, gen)
+  for (kd in c(0, 1, 2)) add(sd0, n, 0, kd, 0, 5, gen)
+  for (kd in c(1, 2, 5)) add(sd0, n, 1, kd, 0, 5, gen)
   for (kd in c(1, 2, 5)) add(sd0, n, 1, kd, 0, 3, gen)
 }
 # "gigfit": (seed, n, start 0 LM / 1 GammaIG / 2 US, stand 0/1, what, generating chi, psi, lambda, user start chi, psi, lambda); the data are set.seed(seed); rgig(n, generating).
@@ -54,13 +61,16 @@ for (rep in 1:8) {
   gen <- c(runif(1, 0.5, 3), runif(1, 0.5, 3), c(runif(1, -1.5, 0.9), runif(1, 1.1, 2.5))[sample(1:2, 1)])
   set.seed(sd0); x <- rgig(n, gen[1], gen[2], gen[3])
   us <- c(1.2, 1.1, 0.7)
-  for (kind in 0:2) for (stand in 0:1) {
+  for (kind in 0:2) for (stand in 0:1) for (mm in 0:1) {
     sv <- c("LM", "GammaIG", "US")[kind + 1]
-    fit <- tryCatch(suppressWarnings(gigFit(x, paramStart = us, startValues = sv, method = "Nelder-Mead", stand = stand == 1)), error = function(e) NULL)
+    fit <- tryCatch(suppressWarnings(gigFit(x, paramStart = us, startValues = sv, method = c("Nelder-Mead", "nlm")[mm + 1], stand = stand == 1)), error = function(e) NULL)
     if (is.null(fit) || !all(is.finite(fit$param)) || !is.finite(fit$maxLik)) next
-    vals <- c(as.numeric(fit$param), fit$maxLik, fit$conv, fit$iter, as.numeric(fit$paramStart))
+    # an nlm run that leaves the likelihood ridge (a parameter outside 1e-3 .. 1e3 on a flat surface) ends where finite-difference noise decides: not a defined result
+    if (mm == 1 && (any(abs(fit$param) > 1e3) || any(abs(fit$param[1:2]) < 1e-3))) next
+    # R's gigFit reads the conv and iter of an nlm result at indices that do not exist: both are empty or NA, so only the fit is compared for nlm
+    vals <- c(as.numeric(fit$param), fit$maxLik, if (length(fit$conv)) fit$conv else NA, fit$iter, as.numeric(fit$paramStart))
     tol <- c(1e-5, 1e-5, 1e-5, 1e-7, 0, 0, 1e-8, 1e-8, 1e-8)
-    for (w in 0:8) cases[[length(cases) + 1]] <- case("gigfit", c(sd0, n, kind, stand, w, gen, us), vals[w + 1], rel = tol[w + 1], abs = tol[w + 1] * 1e-2)
+    for (w in 0:8) { if (mm == 1 && w %in% 4:5) next; cases[[length(cases) + 1]] <- case("gigfit", c(sd0, n, kind, stand + 2 * mm, w, gen, us), vals[w + 1], rel = tol[w + 1], abs = tol[w + 1] * 1e-2) }
   }
 }
 emit("ghypfit", "GeneralizedHyperbolic", list(cases))

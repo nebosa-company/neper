@@ -1,4 +1,5 @@
 # MASS: fitdistr(x, "t"). Args: (n, which, x[n]): which 0 m, 1 s, 2 df, 3 sd m, 4 sd s, 5 sd df, 6 loglik
+# Tolerances (1e-5, standard errors of the t fit 1e-3): the t likelihood is flat in df and Nelder-Mead stops at reltol 1.5e-8, which amplifies the one-ulp exp/log/lgamma differences measured by mass_probe.R; see the ceiling note there
 suppressMessages(library(MASS))
 cases <- list()
 set.seed(20262383)

@@ -1,0 +1,6 @@
+@relation t
+@attribute a numeric
+@attribute b numeric
+@data
+1,2
+3

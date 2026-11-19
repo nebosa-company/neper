@@ -1,0 +1,22 @@
+# Bit-exactness probe of the primitives under MASS fitdistr/polr/isoMDS: args (fn, a, b, c); every case is exact (rel 0, abs 0)
+# Ceiling note: R (ucrt) rounds exp, log, log1p correctly; Neper fdlibm-derived exp, log, log1p, pow and lgamma differ by an ulp in 7-70% of points (this fixture counts them per kind). The optimiser-driven MASS fits amplify that, which bounds their tolerances (see the notes in mass_fd*.R, mass_polr.R, mass_glmnb.R, mass_stepx.R, mass_mds.R). Fixing it means correctly rounded e.math exp/log, a repo-wide golden change
+cases <- list()
+set.seed(20262391)
+for (i in 1:300) {
+  x <- runif(1, 0.01, 6); a <- runif(1, 1, 20); b <- runif(1, 1, 20)
+  cases[[length(cases) + 1]] <- case("probe", c(0, x, 0, 0), exp(-x), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(1, x, 0, 0), log(x), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(2, x, a, 0), x^(a / 7), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(3, x, 0, 0), pnorm(x - 3), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(4, x, 0, 0), plogis(x - 3), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(5, x, a, 0), dt(x - 3, a, log = TRUE), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(6, x, a, b), df(x, a, b, log = TRUE), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(7, floor(x * 3), a, b / (a + b)), dnbinom(floor(x * 3), size = a, prob = b / (a + b), log = TRUE), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(8, x, a, b), dbeta(x / 6, a, b, log = TRUE), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(9, x + a, 0, 0), lgamma(x + a), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(10, x, 0, 0), log1p(x), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(11, x, a, 0), dchisq(x, a, log = TRUE), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(12, x, 0, 0), sqrt(x), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("probe", c(13, x, a, 0), dgamma(x, a, scale = 0.7, log = TRUE), rel = 0, abs = 0)
+}
+emit("mass_probe", "MASS", list(cases))

@@ -14,7 +14,7 @@ one <- function(n, k, beta, sg, pr, flipfrac = 0.2) {
   prm <- parameters(fit)
   flat <- c(as.vector(rbind(1, x1)), y, init)
   hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
-  add <- function(what, idx, v, rel = 1e-5, abs = 1e-8) cases[[length(cases) + 1]] <<- case("f", hdr(what, idx), v, rel = rel, abs = abs)
+  add <- function(what, idx, v, rel = 1e-9, abs = 1e-9) cases[[length(cases) + 1]] <<- case("f", hdr(what, idx), v, rel = rel, abs = abs)
   add(0, 0, as.numeric(logLik(fit)))
   add(7, 0, AIC(fit)); add(8, 0, BIC(fit)); add(9, 0, ICL(fit))
   add(1, 0, fit@iter, 0, 0)
@@ -22,7 +22,7 @@ one <- function(n, k, beta, sg, pr, flipfrac = 0.2) {
   for (j in seq_len(kk)) add(3, j - 1, fit@prior[j])
   for (j in seq_len(kk)) { add(4, (j - 1) * 2, prm[1, j]); add(4, (j - 1) * 2 + 1, prm[2, j]); add(5, j - 1, prm[3, j]) }
   cl <- fit@cluster
-  for (i in seq_len(n)) add(6, i - 1, cl[i], 0, 0)
+  add(6, 0, sum(seq_len(n) * cl), 0, 0)
 }
 one(120, 2, rbind(c(0, 2), c(3, -1.5)), c(0.5, 0.7), c(0.5, 0.5))
 one(150, 3, rbind(c(0, 2), c(3, -1.5), c(-2, 0.5)), c(0.4, 0.6, 0.5), c(0.4, 0.3, 0.3))
@@ -39,12 +39,12 @@ oneseed <- function(n, k, beta, sg, pr, seed) {
   kk <- fit@k; prm <- parameters(fit)
   flat <- c(seed + 1, as.vector(rbind(1, x1)), y)
   hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
-  addf <- function(what, idx, v, rel = 1e-5, abs = 1e-8) cases[[length(cases) + 1]] <<- case("fs", hdr(what, idx), v, rel = rel, abs = abs)
+  addf <- function(what, idx, v, rel = 1e-9, abs = 1e-9) cases[[length(cases) + 1]] <<- case("fs", hdr(what, idx), v, rel = rel, abs = abs)
   addf(0, 0, as.numeric(logLik(fit))); addf(1, 0, fit@iter, 0, 0); addf(2, 0, kk, 0, 0)
   for (j in seq_len(kk)) addf(3, j - 1, fit@prior[j])
   for (j in seq_len(kk)) { addf(4, (j - 1) * 2, prm[1, j]); addf(4, (j - 1) * 2 + 1, prm[2, j]); addf(5, j - 1, prm[3, j]) }
   cl <- fit@cluster
-  for (i in seq_len(n)) addf(6, i - 1, cl[i], 0, 0)
+  addf(6, 0, sum(seq_len(n) * cl), 0, 0)
 }
 oneseed(100, 2, rbind(c(0, 2), c(3, -1.5)), c(0.5, 0.7), c(0.5, 0.5), 11)
 oneseed(120, 2, rbind(c(1, 1), c(-1, 2)), c(0.4, 0.4), c(0.5, 0.5), 22)
@@ -60,13 +60,13 @@ onepois <- function(n, k, beta, pr, flipfrac = 0.15) {
   kk <- fit@k; prm <- parameters(fit)
   flat <- c(as.vector(rbind(1, x1)), y, init)
   hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
-  addf <- function(what, idx, v, rel = 1e-5, abs = 1e-8) cases[[length(cases) + 1]] <<- case("fp", hdr(what, idx), v, rel = rel, abs = abs)
+  addf <- function(what, idx, v, rel = 1e-9, abs = 1e-9) cases[[length(cases) + 1]] <<- case("fp", hdr(what, idx), v, rel = rel, abs = abs)
   addf(0, 0, as.numeric(logLik(fit))); addf(1, 0, fit@iter, 0, 0); addf(2, 0, kk, 0, 0)
   addf(7, 0, AIC(fit)); addf(8, 0, BIC(fit)); addf(9, 0, ICL(fit))
   for (j in seq_len(kk)) addf(3, j - 1, fit@prior[j])
   for (j in seq_len(kk)) { addf(4, (j - 1) * 2, prm[1, j]); addf(4, (j - 1) * 2 + 1, prm[2, j]) }
   cl <- fit@cluster
-  for (i in seq_len(n)) addf(6, i - 1, cl[i], 0, 0)
+  addf(6, 0, sum(seq_len(n) * cl), 0, 0)
 }
 onepois(150, 2, rbind(c(1, 1.5), c(2.5, -1.2)), c(0.5, 0.5))
 onepois(200, 2, rbind(c(0.5, 1), c(2, 0.8)), c(0.4, 0.6))
@@ -85,7 +85,7 @@ onestep <- function(n, beta, sg, pr, seed) {
     fit <- st@models[[as.character(kk)]]
     prm <- parameters(fit); ll <- st@logLiks[as.character(kk), ]
     hdr <- function(what, idx) c(n, 2, kk, what, idx, flat)
-    adds <- function(what, idx, v) cases[[length(cases) + 1]] <<- case("st", hdr(what, idx), v, rel = 1e-5, abs = 1e-8)
+    adds <- function(what, idx, v) cases[[length(cases) + 1]] <<- case("st", hdr(what, idx), v, rel = 1e-9, abs = 1e-9)
     adds(0, 0, as.numeric(logLik(fit)))
     for (m in seq_along(ll)) if (is.finite(ll[m])) adds(1, m - 1, ll[m])
     for (j in seq_len(fit@k)) adds(3, j - 1, fit@prior[j])
@@ -107,13 +107,13 @@ onebin <- function(n, k, beta, pr, flipfrac = 0.15) {
   kk <- fit@k; prm <- parameters(fit)
   flat <- c(as.vector(rbind(1, x1)), succ, size, init)
   hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
-  addf <- function(what, idx, v, rel = 1e-5, abs = 1e-8) cases[[length(cases) + 1]] <<- case("fb", hdr(what, idx), v, rel = rel, abs = abs)
+  addf <- function(what, idx, v, rel = 1e-9, abs = 1e-9) cases[[length(cases) + 1]] <<- case("fb", hdr(what, idx), v, rel = rel, abs = abs)
   addf(0, 0, as.numeric(logLik(fit))); addf(1, 0, fit@iter, 0, 0); addf(2, 0, kk, 0, 0)
   addf(7, 0, AIC(fit)); addf(8, 0, BIC(fit)); addf(9, 0, ICL(fit))
   for (j in seq_len(kk)) addf(3, j - 1, fit@prior[j])
   for (j in seq_len(kk)) { addf(4, (j - 1) * 2, prm[1, j]); addf(4, (j - 1) * 2 + 1, prm[2, j]) }
   cl <- fit@cluster
-  for (i in seq_len(n)) addf(6, i - 1, cl[i], 0, 0)
+  addf(6, 0, sum(seq_len(n) * cl), 0, 0)
 }
 onebin(160, 2, rbind(c(-1, 2), c(1, -2)), c(0.5, 0.5))
 onebin(200, 2, rbind(c(0, 1.5), c(1.5, 0.5)), c(0.4, 0.6))
@@ -129,13 +129,13 @@ onegam <- function(n, k, beta, shp, pr, flipfrac = 0.15) {
   kk <- fit@k; prm <- parameters(fit)
   flat <- c(as.vector(rbind(1, x1)), y, init)
   hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
-  addf <- function(what, idx, v, rel = 1e-4, abs = 1e-7) cases[[length(cases) + 1]] <<- case("fg", hdr(what, idx), v, rel = rel, abs = abs)
+  addf <- function(what, idx, v, rel = 1e-9, abs = 1e-9) cases[[length(cases) + 1]] <<- case("fg", hdr(what, idx), v, rel = rel, abs = abs)
   addf(0, 0, as.numeric(logLik(fit))); addf(1, 0, fit@iter, 0, 0); addf(2, 0, kk, 0, 0)
   addf(7, 0, AIC(fit)); addf(8, 0, BIC(fit)); addf(9, 0, ICL(fit))
   for (j in seq_len(kk)) addf(3, j - 1, fit@prior[j])
   for (j in seq_len(kk)) { addf(4, (j - 1) * 2, prm[1, j]); addf(4, (j - 1) * 2 + 1, prm[2, j]); addf(5, j - 1, prm[3, j]) }
   cl <- fit@cluster
-  for (i in seq_len(n)) addf(6, i - 1, cl[i], 0, 0)
+  addf(6, 0, sum(seq_len(n) * cl), 0, 0)
 }
 onegam(160, 2, rbind(c(0.8, 1.5), c(2.5, -1.0)), c(6, 9), c(0.5, 0.5))
 onegam(200, 2, rbind(c(1, 1), c(2, 2)), c(8, 5), c(0.4, 0.6))
@@ -150,12 +150,12 @@ onecem <- function(n, k, beta, sg, pr, flipfrac = 0.2) {
   kk <- fit@k; prm <- parameters(fit)
   flat <- c(as.vector(rbind(1, x1)), y, init)
   hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
-  addf <- function(what, idx, v, rel = 1e-5, abs = 1e-8) cases[[length(cases) + 1]] <<- case("fc", hdr(what, idx), v, rel = rel, abs = abs)
+  addf <- function(what, idx, v, rel = 1e-9, abs = 1e-9) cases[[length(cases) + 1]] <<- case("fc", hdr(what, idx), v, rel = rel, abs = abs)
   addf(0, 0, as.numeric(logLik(fit))); addf(1, 0, fit@iter, 0, 0); addf(2, 0, kk, 0, 0)
   for (j in seq_len(kk)) addf(3, j - 1, fit@prior[j])
   for (j in seq_len(kk)) { addf(4, (j - 1) * 2, prm[1, j]); addf(4, (j - 1) * 2 + 1, prm[2, j]); addf(5, j - 1, prm[3, j]) }
   cl <- fit@cluster
-  for (i in seq_len(n)) addf(6, i - 1, cl[i], 0, 0)
+  addf(6, 0, sum(seq_len(n) * cl), 0, 0)
 }
 onecem(120, 2, rbind(c(0, 2), c(3, -1.5)), c(0.5, 0.7), c(0.5, 0.5))
 onecem(150, 3, rbind(c(0, 2), c(3, -1.5), c(-2, 0.5)), c(0.4, 0.6, 0.5), c(0.4, 0.3, 0.3))

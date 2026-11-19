@@ -21,13 +21,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (mp, e4) = mem.alloc[usize](a, k)
         let (vl, e5) = mem.alloc[f64](a, k + 1usize)
         if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+        // a name starting with n is a clustering with a noise cluster: its probability and z column come first and are left out of the merge, as fpc moves them last
+        var kp = k
+        var sh = 0usize
+        if c.name[0usize] == 110u8 {
+            kp = k + 1usize
+            sh = 1usize
+        }
         var o = 4usize
         var q = 0usize
         while q < k {
-            pr[q] = z[o + q]
+            pr[q] = z[o + sh + q]
             q += 1usize
         }
-        o += k
+        o += kp
         q = 0usize
         while q < k * d {
             mu[q] = z[o + q]
@@ -42,11 +49,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         o += k * d * d
         q = 0usize
         while q < n * k {
-            zz[q] = z[o + q]
+            zz[q] = z[o + (q / k) * kp + sh + q % k]
             q += 1usize
         }
-        o += n * k
-        let (nv, em) = fp.merge_bhat(a, z[o..o + n * d], n, d, k, pr, mu, sg, zz, cut, mp, vl, c.name[2usize] == 100u8)
+        o += n * kp
+        let (nv, em) = fp.merge_bhat(a, z[o..o + n * d], n, d, k, pr, mu, sg, zz, cut, mp, vl, c.name[2usize] == 100u8, 0usize)
         if em != ok { ret 0.0f64 / 0.0f64 }
         let stat = usize(z[o + n * d])
         var t = 0.0f64

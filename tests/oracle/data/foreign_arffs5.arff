@@ -1,0 +1,8 @@
+@relation t
+@attribute n numeric
+@attribute m numeric
+@data
+Inf,-inf
+NaN,Infinity
+?,-Infinity
+1,0x1A

@@ -1,0 +1,21 @@
+@relation df
+
+@attribute V1 string
+
+@attribute X2nd numeric
+
+@attribute "a b" numeric
+
+@data
+'a\\b',0.3,99999
+
+?,-1e+22,25
+
+'plain',0.333333333333333,1e-04
+
+'Z9',?,123456789012345
+
+'q\'r\\s',12345678901234568,?
+
+'L1',1e-05,0.00012345
+

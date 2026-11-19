@@ -50,6 +50,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if which == 8usize || which == 9usize {
+        var tot = 0usize
+        var arr = units
+        tot = p * p
+        if which == 9usize {
+            arr = proj
+            tot = n * p
+        }
+        while k < tot {
+            s += f64(k + 1usize) * arr[k]
+            k += 1usize
+        }
+        ret s
+    }
     if which == 7usize {
         while k < p * p {
             s += math.abs[f64](units[k])
@@ -84,7 +98,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
-                let _ = io.print(oracle.describe(a, c, got))
+                var c2 = *c
+                c2.args = c.args[c.args.len - 1usize..]
+                let _ = io.print(oracle.describe(a, &c2, got))
                 let _ = io.print("\n")
             }
         }

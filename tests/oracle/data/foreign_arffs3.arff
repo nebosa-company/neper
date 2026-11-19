@@ -1,0 +1,10 @@
+@relation t
+@attribute n numeric
+@attribute m real
+@attribute k NUMERIC
+@data
+ 1 2 ,.5,5.
+1e3,+5,-2.5E-2
+?,?,
+7,8,9
+007,1e+2,0.1

@@ -1,4 +1,5 @@
 # MASS: fitdistr(x, "beta" / "f", start). Args: (kind 5 beta 6 F, n, which 0 est1 1 est2 2 sd1 3 sd2 4 loglik, start1, start2, x[n])
+# Tolerances (beta 1e-5/1e-3, F 2e-2, chi-squared sd 1e-3): optim Nelder-Mead stops at reltol 1.5e-8 and the F likelihood is flat in (df1, df2), so a one-ulp change in one density moves the stop point by far more than 1e-8; see the ceiling note in mass_probe.R
 suppressMessages(library(MASS))
 cases <- list()
 set.seed(20262384)

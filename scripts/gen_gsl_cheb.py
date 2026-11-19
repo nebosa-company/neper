@@ -6,7 +6,8 @@ and cheb_eval_mode gsl's cheb_eval_mode_e. The id, order, order_sp and interval 
 import re, sys
 
 SRC = 'D:/Temp/claude/src/gslsrc/gsl-2.7.1/specfunc/'
-OUT = 'D:/repos/neper/.claude/worktrees/agent-a8603e5300567a51d/lib/e/algo/stat/gslcheb.e'
+import os
+OUT = os.environ.get('GSL_CHEB_OUT', 'lib/e/algo/stat/gslcheb.e')
 FILES = sys.argv[1:] if len(sys.argv) > 1 else ['dawson', 'clausen', 'expint', 'airy', 'airy_der', 'bessel_I0', 'bessel_I1', 'bessel_K0', 'bessel_K1', 'zeta', 'bessel_J0', 'bessel_J1', 'bessel_Y0', 'bessel_Y1', 'bessel_amp_phase', 'erfc', 'psi', 'atanint', 'expint3', 'shint', 'sinint', 'debye']
 
 tables = []
@@ -36,6 +37,7 @@ def lit(v):
         v += '.0'
     v = re.sub(r'^([-+]?)\.', r'\g<1>0.', v)
     v = v.lstrip('+')
+    v = re.sub(r'(\d)\.([eE])', r'\1.0\2', v)
     return v + 'f64'
 
 

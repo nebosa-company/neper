@@ -9,6 +9,7 @@
 // Not here: lqs, cov.rob, isoMDS, sammon, stepAIC and the numerically optimised fitdistr families.
 
 use e.algo.linalg.decomp as decomp
+use e.algo.linalg.lapack_gesdd as gesdd
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.rand.r as rng
 use e.algo.sort
@@ -280,6 +281,12 @@ fn quant7(s: []const f64, p: f64) -> f64 {
 
 // ginv(x) for an m by n column-major x: the n by m Moore-Penrose inverse, singular values below sqrt(eps) * max dropped
 fn ginv(a: *mem.Arena, x: []const f64, m: usize, n: usize) -> ([]f64, err) {
+    let (g, e) = ginv_tol(a, x, m, n, 1.4901161193847656e-8f64)
+    ret (g, e)
+}
+
+// ginv(X, tol): the singular values not above tol * the largest are dropped
+fn ginv_tol(a: *mem.Arena, x: []const f64, m: usize, n: usize, tol_in: f64) -> ([]f64, err) {
     let (s, e) = decomp.svd(a, x, m, n)
     let (out, oe) = mem.alloc[f64](a, n * m)
     if e != ok || oe != ok { ret (out, e) }
@@ -294,7 +301,8 @@ fn ginv(a: *mem.Arena, x: []const f64, m: usize, n: usize) -> ([]f64, err) {
         if s.d[j] > mx { mx = s.d[j] }
         j += 1usize
     }
-    let tol = 1.4901161193847656e-8f64 * mx
+    var tol = tol_in * mx
+    if tol < 0.0f64 { tol = 0.0f64 }
     j = 0usize
     while j < s.k {
         if s.d[j] > tol {
@@ -419,6 +427,17 @@ fn rlm_psi(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, ps
     ret ok
 }
 
+// seq(lo, hi, length = out.len): the grid kde2d evaluates on
+fn kde2d_grid(lo: f64, hi: f64, out: []f64) {
+    let by = (hi - lo) / f64(out.len - 1usize)
+    var i = 0usize
+    while i < out.len {
+        out[i] = lo + f64(i) * by
+        i += 1usize
+    }
+    out[out.len - 1usize] = hi
+}
+
 // kde2d(x, y, h, n, lims): the bivariate normal kernel density estimate on the n1 by n2 grid (z[i + n1 j] at (gx[i], gy[j])), the bandwidths h / 4 with h the given pair or bandwidth.nrd of each variable; lims = (x lo, x hi, y lo, y hi)
 fn kde2d(a: *mem.Arena, x: []const f64, y: []const f64, h1: f64, h2: f64, n1: usize, n2: usize, lims: []const f64, z: []f64) -> err {
     let nx = x.len
@@ -431,20 +450,8 @@ fn kde2d(a: *mem.Arena, x: []const f64, y: []const f64, h1: f64, h2: f64, n1: us
     let (gx, e1) = mem.alloc[f64](a, n1)
     let (gy, e2) = mem.alloc[f64](a, n2)
     if e1 != ok || e2 != ok { ret mem.Full }
-    let bx = (lims[1usize] - lims[0usize]) / f64(n1 - 1usize)
-    let by = (lims[3usize] - lims[2usize]) / f64(n2 - 1usize)
-    var i = 0usize
-    while i < n1 {
-        gx[i] = lims[0usize] + f64(i) * bx
-        i += 1usize
-    }
-    gx[n1 - 1usize] = lims[1usize]
-    i = 0usize
-    while i < n2 {
-        gy[i] = lims[2usize] + f64(i) * by
-        i += 1usize
-    }
-    gy[n2 - 1usize] = lims[3usize]
+    kde2d_grid(lims[0usize], lims[1usize], gx)
+    kde2d_grid(lims[2usize], lims[3usize], gy)
     let c = 0.3989422804014327f64
     var gi = 0usize
     while gi < n1 {
@@ -469,7 +476,10 @@ fn kde2d(a: *mem.Arena, x: []const f64, y: []const f64, h1: f64, h2: f64, n1: us
 // mvrnorm(n, mu, Sigma) with the generator r: sigma is p by p row-major (symmetric), out is n by p row-major. The n * p normals are drawn column by column
 // (as rnorm(p * n) fills matrix(, n)); the result is mu + Z diag(sqrt(lambda)) V' row by row, with V and lambda from eigen(Sigma, symmetric = TRUE).
 // Fails when Sigma has an eigenvalue below -1e-6 times the largest.
-fn mvrnorm(a: *mem.Arena, r: *rng.Rng, n: usize, p: usize, mu: []const f64, sigma: []const f64, out: []f64) -> err {
+fn mvrnorm(a: *mem.Arena, r: *rng.Rng, n: usize, p: usize, mu: []const f64, sigma: []const f64, out: []f64) -> err { ret mvrnorm_ex(a, r, n, p, mu, sigma, 0.000001f64, false, out) }
+
+// mvrnorm with tol and empirical = TRUE (the draws centred, rotated to their principal axes by the sign-exact svd and scaled to unit variance, needs n >= p)
+fn mvrnorm_ex(a: *mem.Arena, r: *rng.Rng, n: usize, p: usize, mu: []const f64, sigma: []const f64, tol: f64, empirical: bool, out: []f64) -> err {
     let (w, e1) = mem.alloc[f64](a, p)
     if e1 != ok { ret e1 }
     let (v, e2) = mem.alloc[f64](a, p * p)
@@ -487,7 +497,7 @@ fn mvrnorm(a: *mem.Arena, r: *rng.Rng, n: usize, p: usize, mu: []const f64, sigm
     }
     k = 0usize
     while k < p {
-        if w[k] < 0.0f64 - 0.000001f64 * top { ret NotPositive }
+        if w[k] < 0.0f64 - tol * top { ret NotPositive }
         k += 1usize
     }
     // the normals, column by column: z[i * p + j] is row i of column j
@@ -499,6 +509,10 @@ fn mvrnorm(a: *mem.Arena, r: *rng.Rng, n: usize, p: usize, mu: []const f64, sigm
             i += 1usize
         }
         j += 1usize
+    }
+    if empirical {
+        let e5 = empirical_rotate(a, z, n, p)
+        if e5 != ok { ret e5 }
     }
     var i = 0usize
     while i < n {
@@ -522,6 +536,58 @@ fn mvrnorm(a: *mem.Arena, r: *rng.Rng, n: usize, p: usize, mu: []const f64, sigm
     ret ok
 }
 
+// scale(X, TRUE, FALSE), X %*% svd(X, nu = 0)$v, scale(X, FALSE, TRUE) on the n by p draws z (row-major, in place)
+fn empirical_rotate(a: *mem.Arena, z: []f64, n: usize, p: usize) -> err {
+    if n < p { ret NotPositive }
+    let (x, e1) = mem.alloc[f64](a, n * p)
+    let (s, e2) = mem.alloc[f64](a, p)
+    let (u, e3) = mem.alloc[f64](a, n * p)
+    let (vt, e4) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var j = 0usize
+    while j < p {
+        var m = 0.0f64
+        var i = 0usize
+        while i < n {
+            m += z[i * p + j]
+            i += 1usize
+        }
+        m = m / f64(n)
+        i = 0usize
+        while i < n {
+            x[i + n * j] = z[i * p + j] - m
+            i += 1usize
+        }
+        j += 1usize
+    }
+    let se = gesdd.svd_all(a, x, n, p, s, u, vt)
+    if se != ok { ret se }
+    j = 0usize
+    while j < p {
+        var ss = 0.0f64
+        var i = 0usize
+        while i < n {
+            var t = 0.0f64
+            var k = 0usize
+            while k < p {
+                t += x[i + n * k] * vt[j + p * k]
+                k += 1usize
+            }
+            z[i * p + j] = t
+            ss += t * t
+            i += 1usize
+        }
+        let sc = math.sqrt[f64](ss / f64(n - 1usize))
+        i = 0usize
+        while i < n {
+            z[i * p + j] = z[i * p + j] / sc
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
 // MASS negative.binomial(theta): the family's variance, deviance residual and aic term at one observation
 fn nb_variance(mu: f64, theta: f64) -> f64 { ret mu + mu * mu / theta }
 
@@ -538,10 +604,14 @@ fn nb_aic_term(y: f64, mu: f64, wt: f64, theta: f64) -> f64 {
 
 // gamma.shape of a Gamma glm: the maximum-likelihood shape alpha by Newton from the moment start, from the response y, the fitted values u, the prior weights A, the deviance and its residual degrees of freedom; alpha and its standard error go to out[0], out[1]
 fn gamma_shape(y: []const f64, u: []const f64, aw: []const f64, deviance: f64, dfres: f64, itlim: usize, out: []f64) {
+    gamma_shape_ex(y, u, aw, deviance, dfres, itlim, math.sqrt[f64](math.sqrt[f64](2.220446049250313e-16f64)), out)
+}
+
+// the same with eps.max given
+fn gamma_shape_ex(y: []const f64, u: []const f64, aw: []const f64, deviance: f64, dfres: f64, itlim: usize, epsmax: f64, out: []f64) {
     let dbar = deviance / dfres
     var alpha = (6.0f64 + 2.0f64 * dbar) / (dbar * (6.0f64 + dbar))
     let n = y.len
-    let epsmax = math.sqrt[f64](math.sqrt[f64](2.220446049250313e-16f64))
     var eps = 1.0f64
     var itr = 0usize
     var inf = 0.0f64

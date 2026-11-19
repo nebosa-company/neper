@@ -25,7 +25,7 @@ for (rep in 1:24) {
   n <- sample(5:30, 1); x <- if (rep %% 2 == 0) round(rnorm(n, 3, 2), 3) else sample(c(0, 1), n, TRUE)
   if (length(unique(x)) < 2) x[1:2] <- c(0, 1)
   m <- sample(1:4, 1); r <- rescale(x, modes[m])
-  for (j in 1:n) add("rescale", c(m - 1, n, x, j - 1), r[j])
+  for (j in 1:n) cases[[length(cases) + 1]] <- case("rescale", c(m - 1, n, x, j - 1), r[j], rel = 1e-12, abs = 1e-14)
 }
 # standardize(lm): "stdlm" args (n, q, y, x row-major without the intercept, index): coefficient index (0 the intercept)
 for (rep in 1:15) {
@@ -50,7 +50,7 @@ for (rep in 1:16) {
   m <- tryCatch(suppressWarnings(glm(fo_g, data = dfx_g, family = fam_g)), error = function(e) NULL)
   if (is.null(m)) next
   cf <- as.numeric(coef(suppressWarnings(standardize(m))))
-  for (j in 0:q) cases[[length(cases) + 1]] <- case("stdglm", c(n, q, fam, y, as.vector(t(Xm)), j), cf[j + 1], rel = 1e-6, abs = 1e-8)
+  for (j in 0:q) cases[[length(cases) + 1]] <- case("stdglm", c(n, q, fam, y, as.vector(t(Xm)), j), cf[j + 1], rel = 1e-9, abs = 1e-11)
 }
 # bayesglm: args (n, k, family 0 gaussian 1 binomial 2 poisson, x[n * k] row-major with the constant first, y[n], j): coefficient j (0-based) of bayesglm with the default priors.
 for (rep in 1:18) {
@@ -61,7 +61,7 @@ for (rep in 1:18) {
   d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
   f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = list(gaussian, binomial, poisson)[[fam + 1]])), error = function(e) NULL)
   if (is.null(f)) next
-  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm", c(n, k, fam, as.vector(t(X)), y, j), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm", c(n, k, fam, as.vector(t(X)), y, j), unname(coef(f))[j + 1], rel = 1e-9, abs = 1e-11)
 }
 # bayesglm2: the same with prior.df and prior.scale given: args (n, k, family, x, y, j, prior.df, prior.scale).
 for (rep in 1:18) {
@@ -72,7 +72,7 @@ for (rep in 1:18) {
   d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
   f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = list(gaussian, binomial, poisson)[[fam + 1]], prior.df = pdf, prior.scale = psc)), error = function(e) NULL)
   if (is.null(f)) next
-  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, fam, as.vector(t(X)), y, j, pdf, psc), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, fam, as.vector(t(X)), y, j, pdf, psc), unname(coef(f))[j + 1], rel = 1e-9, abs = 1e-11)
 }
 # bayesglm2 with the probit link (family code 3): the default prior scales are 4 and 16 (2.5 and 10 times 1.6); the arguments carry prior.df and 4.
 for (rep in 1:9) {
@@ -81,7 +81,7 @@ for (rep in 1:9) {
   d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
   f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = binomial(link = "probit"), prior.df = pdf)), error = function(e) NULL)
   if (is.null(f)) next
-  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, 3, as.vector(t(X)), y, j, pdf, 4), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, 3, as.vector(t(X)), y, j, pdf, 4), unname(coef(f))[j + 1], rel = 1e-9, abs = 1e-11)
 }
 # bayesglm2 with the cloglog link (family code 4), default prior scale 2.5 and 10
 for (rep in 1:9) {
@@ -90,7 +90,7 @@ for (rep in 1:9) {
   d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
   f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = binomial(link = "cloglog"), prior.df = pdf)), error = function(e) NULL)
   if (is.null(f)) next
-  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, 4, as.vector(t(X)), y, j, pdf, 2.5), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, 4, as.vector(t(X)), y, j, pdf, 2.5), unname(coef(f))[j + 1], rel = 1e-9, abs = 1e-11)
 }
 # bayesglm3: per-coefficient prior mean, df and scale (the full vectors, the intercept first): args (n, k, family, x, y, j, mean[k], df[k], scale[k]).
 for (rep in 1:12) {
@@ -101,7 +101,7 @@ for (rep in 1:12) {
   d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
   f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = list(gaussian, binomial, poisson)[[fam + 1]], prior.mean = pm, prior.df = pd, prior.scale = psc)), error = function(e) NULL)
   if (is.null(f)) next
-  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm3", c(n, k, fam, as.vector(t(X)), y, j, c(0, pm), c(1, pd), c(10, psc)), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm3", c(n, k, fam, as.vector(t(X)), y, j, c(0, pm), c(1, pd), c(10, psc)), unname(coef(f))[j + 1], rel = 1e-9, abs = 1e-11)
 }
 # sim(lm): "simlm" args (seed, nsims, n, k, y[n], x[n*k] row-major, which, s) with which 0 sigma[s], 1 sum((beta[s, ] - beta.hat)^2): a sum of squares does not depend on the sign or the basis of the
 # eigenvectors mvrnorm uses (a LAPACK build may flip one), so it checks the draws without fixing the signs
@@ -110,17 +110,9 @@ for (rep in 1:14) {
   fit <- lm(y ~ X - 1); sd0 <- sample(1:100000, 1); ns <- 6
   set.seed(sd0); s <- sim(fit, ns)
   for (i in 1:ns) {
-    cases[[length(cases) + 1]] <- case("simlm", c(sd0, ns, n, k, y, as.vector(t(X)), 0, i - 1), s@sigma[i], rel = 1e-9, abs = 1e-12)
+    cases[[length(cases) + 1]] <- case("simlm", c(sd0, ns, n, k, y, as.vector(t(X)), 0, i - 1), s@sigma[i], rel = 1e-12, abs = 1e-14)
+    for (j in 1:k) cases[[length(cases) + 1]] <- case("simlmc", c(sd0, ns, n, k, y, as.vector(t(X)), 2, i - 1, j - 1), s@coef[i, j], rel = 1e-8, abs = 1e-10)
     cases[[length(cases) + 1]] <- case("simlm", c(sd0, ns, n, k, y, as.vector(t(X)), 1, i - 1), sum((s@coef[i, ] - coef(fit))^2), rel = 1e-8, abs = 1e-10)
   }
-}
-# sim(glm): "simglm" args (seed, nsims, n, k, fam 1 binomial 2 poisson, y[n], x[n*k] row-major, which, s) with which 0 sum((draw s - coef)^2), 1 coef[s]
-for (rep in 1:12) {
-  n <- sample(40:120, 1); k <- sample(2:4, 1); fam <- 1 + rep %% 2; X <- matrix(round(rnorm(n * k, 0, 0.7), 4), n, k); X[, 1] <- 1; b <- rnorm(k, 0, 0.5)
-  y <- if (fam == 1) rbinom(n, 1, plogis(X %*% b)) else rpois(n, exp(X %*% b))
-  fit <- tryCatch(suppressWarnings(glm(y ~ X - 1, family = if (fam == 1) binomial else poisson)), error = function(e) NULL); if (is.null(fit)) next
-  sd0 <- sample(1:100000, 1); ns <- 5; set.seed(sd0); s <- sim(fit, ns)
-  for (i in 1:ns) cases[[length(cases) + 1]] <- case("simglm", c(sd0, ns, n, k, fam, y, as.vector(t(X)), 0, i - 1), sum((s@coef[i, ] - coef(fit))^2), rel = 1e-6, abs = 1e-9)
-  for (j in 1:k) cases[[length(cases) + 1]] <- case("simglm", c(sd0, ns, n, k, fam, y, as.vector(t(X)), 1, j - 1), coef(fit)[j], rel = 1e-6, abs = 1e-9)
 }
 emit("arm", "arm", list(cases))

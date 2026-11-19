@@ -22,6 +22,11 @@ fn same_key(k: []const f64, x: []const f64, skip: usize, n: usize) -> bool {
     ret true
 }
 
+fn nlm_of(v: f64) -> usize {
+    if v >= 1.5f64 { ret 4usize }
+    ret 0usize
+}
+
 fn gig_answer(a: *mem.Arena, x: []const f64, ch: *Cache) -> f64 {
     if !(ch.valid && same_key(ch.key[0usize..16usize], x, 4usize, 11usize)) {
         var i = 0usize
@@ -36,7 +41,7 @@ fn gig_answer(a: *mem.Arena, x: []const f64, ch: *Cache) -> f64 {
         var rng: rg.Rng = zero
         rg.seed(&rng, i64(x[0usize]))
         gh.rgig(&rng, nn, x[5usize], x[6usize], x[7usize], d)
-        ch.good = gg.gig_fit(a, d, usize(x[2usize]), x[8usize..11usize], x[3usize] == 1.0f64, ch.out[0usize..11usize])
+        ch.good = gg.gig_fit(a, d, usize(x[2usize]), x[8usize..11usize], x[3usize] == 1.0f64 || x[3usize] == 3.0f64, nlm_of(x[3usize]), ch.out[0usize..11usize])
     }
     if !ch.good { ret 0.0f64 / 0.0f64 }
     ret ch.out[usize(x[4usize])]

@@ -17,6 +17,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let e = fp.dbscan(a, z[6usize..6usize + n * p], n, p, z[2usize], usize(z[3usize]), cv, sd)
     if e != ok { os.exit(5) }
     let idx = usize(z[5usize])
+    if usize(z[4usize]) >= 2usize {
+        // 2: sum((i + 1) * label[i]), 3: sum((i + 1) * isseed[i])
+        var t = 0.0f64
+        var i = 0usize
+        while i < n {
+            if usize(z[4usize]) == 2usize { t += f64(i + 1usize) * f64(cv[i]) }
+            if usize(z[4usize]) == 3usize && sd[i] { t += f64(i + 1usize) }
+            i += 1usize
+        }
+        ret t
+    }
     if usize(z[4usize]) == 0usize { ret f64(cv[idx]) }
     if sd[idx] { ret 1.0f64 }
     ret 0.0f64

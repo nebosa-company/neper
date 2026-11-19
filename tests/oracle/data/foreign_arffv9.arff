@@ -1,0 +1,14 @@
+@relation my.data
+@attribute V1 date "yyyy-MM-dd HH:mm:ss"
+@attribute X2nd string
+@attribute "a b" numeric
+@attribute x.y date "yyyy-MM-dd HH:mm:ss"
+@attribute X_z numeric
+@attribute Q numeric
+@data
+'1974-04-12 12:05:00','x y',FALSE,'2034-01-08 15:23:00',TRUE,TRUE
+'2025-06-01 22:07:00',?,TRUE,'2007-07-12 05:53:00',TRUE,FALSE
+'2049-12-25 11:19:00','Z9',?,'2011-06-30 18:29:00',?,FALSE
+'2028-11-22 08:38:00','q\'r\\s',TRUE,?,FALSE,FALSE
+?,'L1',TRUE,'2021-08-25 12:59:00',TRUE,?
+'2051-06-01 12:05:00','it\'s',FALSE,'2008-09-11 17:38:00',FALSE,FALSE

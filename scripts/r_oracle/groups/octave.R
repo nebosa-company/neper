@@ -90,4 +90,13 @@ for (i in 12:13) {
   add("nvars", c(i, 0), length(d))
   for (j in seq_along(d)) { v <- d[[j]]; add("count", c(i, j - 1), length(v)); add("sum", c(i, j - 1), rs(v)); add("isum", c(i, j - 1), ri(v)) }
 }
+# Inf, -Inf, NaN and NA as Octave writes them (file 14): scalars and matrix entries; the sums are Inf, -Inf or NaN
+writeLines(c("# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>",
+             "# name: pi", "# type: scalar", "Inf", "# name: ni", "# type: scalar", "-Inf", "# name: nn", "# type: scalar", "NaN", "# name: na", "# type: scalar", "NA",
+             "# name: m1", "# type: matrix", "# rows: 2", "# columns: 2", " 1 Inf", " 2 3", "# name: m2", "# type: matrix", "# rows: 1", "# columns: 3", " -Inf 5 6",
+             "# name: m3", "# type: matrix", "# rows: 1", "# columns: 3", " NaN NA 1", "# name: m4", "# type: matrix", "# rows: 1", "# columns: 2", " NA 4"),
+           file.path(root, "tests/oracle/data/octave_14.txt"))
+d <- read.octave(file.path(root, "tests/oracle/data/octave_14.txt"))
+add("nvars", c(14, 0), length(d))
+for (j in seq_along(d)) { v <- d[[j]]; add("count", c(14, j - 1), length(v)); add("sum", c(14, j - 1), sum(as.numeric(v))); add("isum", c(14, j - 1), 0) }
 emit("octave", "foreign", list(cases))

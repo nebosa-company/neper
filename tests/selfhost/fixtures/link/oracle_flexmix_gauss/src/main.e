@@ -9,6 +9,19 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn nn_of(c: *const oracle.Case) -> usize { ret usize(c.args[0usize]) }
+
+// sum over i of i * cluster[i] with both 1-based, the checksum the oracle writes
+fn csum(f: *const fx.Fm, n: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        s += f64(i + 1usize) * f64(f.cluster[i] + 1usize)
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer_seeded(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[0usize])
@@ -28,7 +41,7 @@ fn answer_seeded(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if what == 3usize { ret f.prior[idx] }
     if what == 4usize { ret f.coef[idx] }
     if what == 5usize { ret f.sigma[idx] }
-    ret f64(f.cluster[idx] + 1usize)
+    ret csum(&f, nn_of(c))
 }
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
@@ -57,7 +70,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if wh == 3usize { ret fc.prior[ix] }
         if wh == 4usize { ret fc.coef[ix] }
         if wh == 5usize { ret fc.sigma[ix] }
-        ret f64(fc.cluster[ix] + 1usize)
+        ret csum(&fc, nn_of(c))
     }
     if str.eq(c.name, "fg") {
         let zz = c.args
@@ -86,7 +99,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if wh == 7usize { ret fx.aic(&fg) }
         if wh == 8usize { ret fx.bic(&fg, nn) }
         if wh == 9usize { ret fx.icl(&fg, nn) }
-        ret f64(fg.cluster[ix] + 1usize)
+        ret csum(&fg, nn_of(c))
     }
     if str.eq(c.name, "fb") {
         let zz = c.args
@@ -115,7 +128,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if wh == 7usize { ret fx.aic(&fb) }
         if wh == 8usize { ret fx.bic(&fb, nn) }
         if wh == 9usize { ret fx.icl(&fb, nn) }
-        ret f64(fb.cluster[ix] + 1usize)
+        ret csum(&fb, nn_of(c))
     }
     if str.eq(c.name, "st") {
         let zz = c.args
@@ -170,7 +183,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if wh == 7usize { ret fx.aic(&fp) }
         if wh == 8usize { ret fx.bic(&fp, nn) }
         if wh == 9usize { ret fx.icl(&fp, nn) }
-        ret f64(fp.cluster[ix] + 1usize)
+        ret csum(&fp, nn_of(c))
     }
     let z = c.args
     let n = usize(z[0usize])
@@ -199,7 +212,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if what == 7usize { ret fx.aic(&f) }
     if what == 8usize { ret fx.bic(&f, n) }
     if what == 9usize { ret fx.icl(&f, n) }
-    ret f64(f.cluster[idx] + 1usize)
+    ret csum(&f, nn_of(c))
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

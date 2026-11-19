@@ -126,6 +126,68 @@ fn lp_int(a: *mem.Arena, cc: []const f64, am: []const f64, b: []const f64, m: us
     ret (best.obj, ok)
 }
 
+// lp(direction, c, A, rel, b, int.vec) over x >= 0 with the row codes 0 (<=), 1 (>=) and 2 (=): answers (optimum, status) with lpSolve's status codes
+// 0 optimal, 2 infeasible, 3 unbounded; x receives the solution
+fn lp_general(a: *mem.Arena, maximise: bool, cc: []const f64, am: []const f64, rel: []const usize, b: []const f64, m: usize, n: usize, isint: []const bool, x: []f64) -> (f64, usize) {
+    var rows = m
+    var i = 0usize
+    while i < m {
+        if rel[i] == 2usize { rows += 1usize }
+        i += 1usize
+    }
+    let (a2, e0) = mem.alloc[f64](a, rows * n)
+    let (b2, e1) = mem.alloc[f64](a, rows)
+    let (c2, e2) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0.0f64, 9usize) }
+    var j = 0usize
+    while j < n {
+        c2[j] = cc[j]
+        if !maximise { c2[j] = 0.0f64 - cc[j] }
+        j += 1usize
+    }
+    var r = 0usize
+    i = 0usize
+    while i < m {
+        var pass = 0usize
+        while pass < 2usize {
+            var sg = 1.0f64
+            if rel[i] == 1usize { sg = 0.0f64 - 1.0f64 }
+            if rel[i] == 2usize && pass == 1usize { sg = 0.0f64 - 1.0f64 }
+            j = 0usize
+            while j < n {
+                a2[r * n + j] = sg * am[i * n + j]
+                j += 1usize
+            }
+            b2[r] = sg * b[i]
+            r += 1usize
+            pass += 1usize
+            if rel[i] != 2usize { pass = 2usize }
+        }
+        i += 1usize
+    }
+    let (tab, e3) = mem.alloc[f64](a, (rows + 2usize) * (n + rows + 2usize))
+    let (bas, e4) = mem.alloc[usize](a, rows)
+    if e3 != ok || e4 != ok { ret (0.0f64, 9usize) }
+    let (v, es) = opt.simplex(c2, a2, b2, rows, n, x, tab, bas)
+    if es == opt.Infeasible { ret (0.0f64, 2usize) }
+    if es == opt.Unbounded { ret (0.0f64, 3usize) }
+    if es != ok { ret (0.0f64, 9usize) }
+    var any_int = false
+    j = 0usize
+    while j < n {
+        if isint[j] { any_int = true }
+        j += 1usize
+    }
+    var obj = v
+    if any_int {
+        let (vi, ei) = lp_int(a, c2, a2, b2, rows, n, isint, x)
+        if ei != ok { ret (0.0f64, 2usize) }
+        obj = vi
+    }
+    if maximise { ret (obj, 0usize) }
+    ret (0.0f64 - obj, 0usize)
+}
+
 // lp.transport(cost.mat, direction, row.signs, row.rhs, col.signs, col.rhs): the transportation problem over m supply rows and n demand columns, every shipment x_ij >= 0;
 // a sign is 0 for <=, 1 for >=, 2 for =. Solved as a linear program with the simplex (an equality is a <= row and a negated >= row). Answers the optimal cost (the maximum
 // when maximise); the shipments go to x (m by n, row-major). Infeasible problems answer an error.

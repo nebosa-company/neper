@@ -1,23 +1,31 @@
-// ARFF (Weka) reader as foreign::read.arff takes it for dense data: @relation, @attribute (numeric, real, integer, string, date and nominal sets),
-// @data rows with '?' for a missing value, % comments and quoted fields. Numeric and integer columns keep their values; a nominal value becomes its
-// 1-based rank in the sorted set of declared levels (the factor code, as read.arff sorts the levels); string columns are recorded as such and read as NaN.
+// ARFF (Weka) reader as foreign::read.arff takes it: @relation, @attribute (numeric, real, string, date and nominal sets; any other type is "Invalid type specification"), and @data rows read
+// as read.table(sep = ",", na.strings = "?", comment.char = "%") reads them, so quoting is scan's (a quote starts a quoted section anywhere in a text field, a doubled quote is one quote), a
+// number is R_strtod over the field with its blanks dropped (an NA or text is an error), a record that ends inside a quote is dropped, and a row with more fields than columns is an error
+// where R would make the first field row names. A nominal value becomes its 1-based rank among the values the data hold (not the declared levels, which read.arff ignores), sorted bytewise as
+// in R's C locale (R sorts in its session locale), with the backslashes of a level removed; string columns keep their text.
 // A date column holds seconds since 1970-01-01 UTC. Its format is the attribute's own (Weka style, converted as read.arff converts it with
 // ISO_8601_to_POSIX_datetime_format, the chain of first-occurrence substitutions) or the default "%Y-%m-%d %H:%M:%S"; the text is parsed the way
 // strptime does it (trailing input ignored, numbers up to their width, days checked against the month). A value that does not parse is NaN.
 // A sparse row ('{' first) and a relational attribute are errors, as read.arff reports them.
 //
 // The directives Y y m d H M S j set the time; w and U are read and ignored, as R does. Any other directive makes the value NaN.
-// Ceiling: R fills a month or day that the format lacks from today's date; this reader leaves it at January 1st (1970), so such a value differs.
+// As R's strptime does (glibc_fix), a year the format lacks is today's, a day-of-year (%j) gives the month and day, and otherwise a missing day is today's
+// and a missing month is today's, except that a month without a day is not a date. Today is read from the wall clock in UTC.
 // Weights are not here.
 
+use e.fmt.dbf as dbf
+use e.fmt.systat as sys
 use e.mem
 use e.str
+use e.time
 
 error Malformed
 error TooMany
 
 // kind: 0 numeric, 1 nominal, 2 string, 3 date
-type Arff = struct { ncols: usize, nrows: usize, kind: []u8, nlev: []usize, values: []f64 }
+// values: a nominal column's 1-based code among its levels, a character column's 1-based row, a date's seconds, a number; NaN for missing. lvl: the levels of the nominal columns in column
+// order (the values the data hold, sorted bytewise as in the C locale, backslashes removed); txt: the text of a character column at [row * ncols + column]
+type Arff = struct { ncols: usize, nrows: usize, kind: []u8, nlev: []usize, values: []f64, lvl: []str, txt: []str }
 
 fn lower(c: u8) -> u8 {
     if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
@@ -31,39 +39,6 @@ fn starts_ci(t: str, at: usize, word: str) -> bool {
     var i = 0usize
     while i < word.len {
         if lower(t[at + i]) != word[i] { ret false }
-        i += 1usize
-    }
-    ret true
-}
-
-// the end of the field starting at `at` within [at, end): quoted fields end at the closing quote; others at a comma; returns (start, stop, next)
-fn field(t: str, at: usize, end: usize) -> (usize, usize, usize) {
-    var i = at
-    while i < end && is_space(t[i]) { i += 1usize }
-    if i < end && (t[i] == 39u8 || t[i] == 34u8) {
-        let q = t[i]
-        let s = i + 1usize
-        var j = s
-        while j < end && t[j] != q { j += 1usize }
-        var nx = j + 1usize
-        while nx < end && is_space(t[nx]) { nx += 1usize }
-        if nx < end && t[nx] == 44u8 { nx += 1usize }
-        ret (s, j, nx)
-    }
-    var j = i
-    while j < end && t[j] != 44u8 { j += 1usize }
-    var e = j
-    while e > i && is_space(t[e - 1usize]) { e -= 1usize }
-    var nx = j
-    if nx < end { nx += 1usize }
-    ret (i, e, nx)
-}
-
-fn same(t: str, a: usize, b: usize, c: usize, d: usize) -> bool {
-    if b - a != d - c { ret false }
-    var i = 0usize
-    while i < b - a {
-        if t[a + i] != t[c + i] { ret false }
         i += 1usize
     }
     ret true
@@ -239,11 +214,12 @@ fn directive(dc: u8, s: str, at: usize) -> (i64, usize, bool) {
 }
 
 // seconds since 1970-01-01 UTC of s read with the strptime format f (blanks in f match any run of blanks; trailing text is ignored); NaN when it does not parse
-fn strptime(f: []u8, s: str) -> f64 {
+fn strptime(f: []u8, s: str, today: i64) -> f64 {
     let bad = 0.0f64 / 0.0f64
-    var y = 1970i64
-    var mo = 1i64
-    var d = 1i64
+    var y = 0i64
+    var mo = 0i64
+    var d = 0i64
+    var have_y = false
     var hh = 0i64
     var mi = 0i64
     var ss = 0i64
@@ -259,8 +235,12 @@ fn strptime(f: []u8, s: str) -> f64 {
             let (v, nx, g) = directive(dc, s, si)
             if !g { ret bad }
             si = nx
-            if dc == 89u8 { y = v }
+            if dc == 89u8 {
+                y = v
+                have_y = true
+            }
             if dc == 121u8 {
+                have_y = true
                 y = 1900i64 + v
                 if v < 69i64 { y = 2000i64 + v }
             }
@@ -279,10 +259,17 @@ fn strptime(f: []u8, s: str) -> f64 {
             fi += 1usize
         }
     }
+    let (ty, tm, td) = time.civil_from_days(today)
+    if !have_y { y = ty }
     var days = 0i64
-    if yday > 0i64 {
+    if yday > 0i64 && (mo == 0i64 || d == 0i64) {
         days = days_from_civil(y, 1i64, 1i64) + yday - 1i64
     } else {
+        if d == 0i64 {
+            if mo != 0i64 { ret bad }
+            d = td
+        }
+        if mo == 0i64 { mo = tm }
         if d > days_in_month(y, mo) { ret bad }
         days = days_from_civil(y, mo, d)
     }
@@ -290,6 +277,15 @@ fn strptime(f: []u8, s: str) -> f64 {
 }
 
 fn parse(a: *mem.Arena, t: str) -> (Arff, err) {
+    var today = 0i64
+    let (now, ne) = time.now()
+    if ne == ok { today = time.floor_div(now.nanos, 86400000000000i64) }
+    let (pr, pe) = parse_on(a, t, today)
+    ret (pr, pe)
+}
+
+// parse with the day a date format's missing parts are taken from (days since 1970-01-01)
+fn parse_on(a: *mem.Arena, t: str, today: i64) -> (Arff, err) {
     var out: Arff = zero
     // pass 1: the attributes and the line where the data start
     var cols = 0usize
@@ -299,11 +295,6 @@ fn parse(a: *mem.Arena, t: str) -> (Arff, err) {
     if e1 != ok { ret (out, e1) }
     let (nlev, e2) = mem.alloc[usize](a, 256usize)
     if e2 != ok { ret (out, e2) }
-    // level boundaries: lv_s[c * 64 + l], lv_e likewise
-    let (lv_s, e3) = mem.alloc[usize](a, 256usize * 64usize)
-    if e3 != ok { ret (out, e3) }
-    let (lv_e, e4) = mem.alloc[usize](a, 256usize * 64usize)
-    if e4 != ok { ret (out, e4) }
     // date columns: the strptime format of each, at most 128 bytes at c * 128
     let (fbuf, e6) = mem.alloc[u8](a, 256usize * 128usize)
     if e6 != ok { ret (out, e6) }
@@ -335,21 +326,7 @@ fn parse(a: *mem.Arena, t: str) -> (Arff, err) {
                 while p < le && is_space(t[p]) { p += 1usize }
                 if p < le && t[p] == 123u8 {
                     kind[cols] = 1u8
-                    var n = 0usize
-                    p += 1usize
-                    let close = le
-                    var cl = p
-                    while cl < close && t[cl] != 125u8 { cl += 1usize }
-                    while p < cl {
-                        let (fs, fe, nx) = field(t, p, cl)
-                        if n < 64usize {
-                            lv_s[cols * 64usize + n] = fs
-                            lv_e[cols * 64usize + n] = fe
-                            n += 1usize
-                        }
-                        p = nx
-                    }
-                    nlev[cols] = n
+                    nlev[cols] = 0usize
                 } else if starts_ci(t, p, "string") {
                     kind[cols] = 2u8
                 } else if starts_ci(t, p, "relational") {
@@ -377,8 +354,11 @@ fn parse(a: *mem.Arena, t: str) -> (Arff, err) {
                         j += 1usize
                     }
                     fmt_n[cols] = n
-                } else {
+                } else if starts_ci(t, p, "numeric") || starts_ci(t, p, "real") {
                     kind[cols] = 0u8
+                } else {
+                    // read.arff accepts only numeric, real, string, date and a nominal set; "Invalid type specification"
+                    ret (out, Malformed)
                 }
                 cols += 1usize
             } else if starts_ci(t, s, "@data") {
@@ -388,76 +368,234 @@ fn parse(a: *mem.Arena, t: str) -> (Arff, err) {
         }
         i = le + 1usize
     }
-    // pass 2: count the data rows and read them
-    var rows = 0usize
+    // pass 2: the data as read.table(sep = ",", na.strings = "?", comment.char = "%", colClasses) reads them
+    var maxrows = 1usize
     i = data_at
     while i < t.len {
-        var le = i
-        while le < t.len && t[le] != 10u8 { le += 1usize }
-        var s = i
-        while s < le && is_space(t[s]) { s += 1usize }
-        if s < le && t[s] != 37u8 { rows += 1usize }
-        i = le + 1usize
+        if t[i] == 10u8 { maxrows += 1usize }
+        i += 1usize
     }
-    let (vals, e5) = mem.alloc[f64](a, rows * cols + 1usize)
+    let (vals, e5) = mem.alloc[f64](a, maxrows * cols + 1usize)
     if e5 != ok { ret (out, e5) }
+    let (ts, e10) = mem.alloc[usize](a, maxrows * cols + 1usize)
+    let (tl, e11) = mem.alloc[usize](a, maxrows * cols + 1usize)
+    let (dsx, e12) = mem.alloc[usize](a, maxrows + 1usize)
+    let (drank, e13) = mem.alloc[usize](a, maxrows + 1usize)
+    let (lvls, e16) = mem.alloc[str](a, maxrows * cols + 1usize)
+    let (txts, e17) = mem.alloc[str](a, maxrows * cols + 1usize)
+    let (sbuf, sbe) = mem.alloc[u8](a, t.len - data_at + cols + 16usize)
+    if e10 != ok || e11 != ok || e12 != ok || e13 != ok || e16 != ok || e17 != ok || sbe != ok { ret (out, mem.Full) }
+    var sn = 0usize
+    var sc = Scn { t: t, p: data_at }
     var r = 0usize
-    i = data_at
-    while i < t.len {
-        var le = i
-        while le < t.len && t[le] != 10u8 { le += 1usize }
-        var s = i
-        while s < le && is_space(t[s]) { s += 1usize }
-        if s < le && t[s] != 37u8 {
-            if t[s] == 123u8 { ret (out, Malformed) }
-            var p = s
+    var more = true
+    while more {
+        // blank lines are skipped, the end of the file ends the data
+        let save = sc.p
+        let c0 = getc(&sc, false)
+        if c0 < 0i64 {
+            more = false
+        } else if c0 != 10i64 {
+            sc.p = save
+            var eofq = false
             var c = 0usize
             while c < cols {
-                let (fs, fe, nx) = field(t, p, le)
-                p = nx
-                var v = 0.0f64 / 0.0f64
-                let miss = fe == fs + 1usize && t[fs] == 63u8
-                if !miss && fe > fs {
-                    if kind[c] == 0u8 {
-                        let (x, pe) = str.parse_f64(t[fs..fe])
-                        if pe == ok { v = x }
-                    } else if kind[c] == 3u8 {
-                        v = strptime(fbuf[c * 128usize..c * 128usize + fmt_n[c]], t[fs..fe])
-                    } else if kind[c] == 1u8 {
-                        var l = 0usize
-                        while l < nlev[c] {
-                            if same(t, fs, fe, lv_s[c * 64usize + l], lv_e[c * 64usize + l]) {
-                                v = f64(sorted_rank(t, lv_s, lv_e, c * 64usize, nlev[c], l))
-                                break
-                            }
-                            l += 1usize
+                var term = 0i64
+                if kind[c] == 0u8 {
+                    // blanks anywhere in a number are dropped; empty, "?" and NA are missing
+                    let nstart = sn
+                    var go = true
+                    while go {
+                        let ch = getc(&sc, false)
+                        if ch == 44i64 || ch == 10i64 || ch < 0i64 {
+                            term = ch
+                            go = false
+                        } else if ch != 32i64 && ch != 9i64 {
+                            sbuf[sn] = u8(ch)
+                            sn += 1usize
                         }
                     }
+                    let nt = sbuf[nstart..sn]
+                    var v = 0.0f64 / 0.0f64
+                    if sn > nstart && !str.eq(nt, "?") {
+                        let (x, okn) = strict_number(a, nt)
+                        if !okn { ret (out, Malformed) }
+                        v = x
+                    }
+                    vals[r * cols + c] = v
+                    sn = nstart
+                } else {
+                    let st = sn
+                    var go = true
+                    while go {
+                        let ch = getc(&sc, false)
+                        if ch == 44i64 || ch == 10i64 || ch < 0i64 {
+                            term = ch
+                            go = false
+                        } else if ch == 39i64 || ch == 34i64 {
+                            var inq = true
+                            while inq {
+                                var ch2 = getc(&sc, true)
+                                while ch2 >= 0i64 && ch2 != ch {
+                                    sbuf[sn] = u8(ch2)
+                                    sn += 1usize
+                                    ch2 = getc(&sc, true)
+                                }
+                                if ch2 < 0i64 {
+                                    // the end inside a quote: scan drops the unfinished record
+                                    eofq = true
+                                    term = ch2
+                                    go = false
+                                    inq = false
+                                } else {
+                                    let save2 = sc.p
+                                    let ch3 = getc(&sc, true)
+                                    if ch3 == ch {
+                                        sbuf[sn] = u8(ch)
+                                        sn += 1usize
+                                    } else if ch3 == 44i64 || ch3 == 10i64 || ch3 < 0i64 {
+                                        term = ch3
+                                        go = false
+                                        inq = false
+                                    } else {
+                                        sc.p = save2
+                                        inq = false
+                                    }
+                                }
+                            }
+                        } else {
+                            sbuf[sn] = u8(ch)
+                            sn += 1usize
+                        }
+                    }
+                    ts[r * cols + c] = st
+                    tl[r * cols + c] = sn - st
+                    vals[r * cols + c] = 0.0f64
+                    // "?" is missing
+                    if sn - st == 1usize && sbuf[st] == 63u8 { vals[r * cols + c] = 0.0f64 / 0.0f64 }
                 }
-                vals[r * cols + c] = v
+                if eofq {
+                    more = false
+                } else {
+                    if c + 1usize < cols && term != 44i64 { ret (out, Malformed) }
+                    if c + 1usize == cols && term == 44i64 { ret (out, Malformed) }
+                    if term < 0i64 { more = false }
+                }
                 c += 1usize
             }
-            r += 1usize
+            if !eofq { r += 1usize }
         }
-        i = le + 1usize
+    }
+    let all = sbuf[0usize..sn]
+    // dates, strings and the factors with the levels the data hold, sorted, with the backslashes removed
+    var nl_total = 0usize
+    var c1 = 0usize
+    while c1 < cols {
+        if kind[c1] == 3u8 {
+            var rr = 0usize
+            while rr < r {
+                let ix = rr * cols + c1
+                if vals[ix] == vals[ix] { vals[ix] = strptime(fbuf[c1 * 128usize..c1 * 128usize + fmt_n[c1]], all[ts[ix]..ts[ix] + tl[ix]], today) }
+                rr += 1usize
+            }
+        } else if kind[c1] == 2u8 {
+            var rr = 0usize
+            while rr < r {
+                let ix = rr * cols + c1
+                txts[ix] = all[ts[ix]..ts[ix] + tl[ix]]
+                if vals[ix] == vals[ix] { vals[ix] = f64(rr + 1usize) }
+                rr += 1usize
+            }
+        } else if kind[c1] == 1u8 {
+            var nd = 0usize
+            var rr = 0usize
+            while rr < r {
+                let ix = rr * cols + c1
+                if vals[ix] == vals[ix] {
+                    var found = false
+                    var k = 0usize
+                    while k < nd && !found {
+                        let jx = dsx[k]
+                        if same(all, ts[jx], ts[jx] + tl[jx], ts[ix], ts[ix] + tl[ix]) { found = true }
+                        k += 1usize
+                    }
+                    if !found {
+                        dsx[nd] = ix
+                        nd += 1usize
+                    }
+                }
+                rr += 1usize
+            }
+            var k = 0usize
+            while k < nd {
+                let kx = dsx[k]
+                var rank = 1usize
+                var m = 0usize
+                while m < nd {
+                    let mx = dsx[m]
+                    if m != k && less(all, ts[mx], ts[mx] + tl[mx], ts[kx], ts[kx] + tl[kx]) { rank += 1usize }
+                    m += 1usize
+                }
+                drank[k] = rank
+                // the level text without its backslashes
+                var nb = 0usize
+                var q = 0usize
+                while q < tl[kx] {
+                    if all[ts[kx] + q] == 92u8 { nb += 1usize }
+                    q += 1usize
+                }
+                var txt: str = all[ts[kx]..ts[kx] + tl[kx]]
+                if nb > 0usize {
+                    let (lb, le2) = str.builder(a, tl[kx])
+                    if le2 != ok { ret (out, le2) }
+                    var lw = lb
+                    q = 0usize
+                    while q < tl[kx] {
+                        if all[ts[kx] + q] != 92u8 { let _ = str.push_byte(&lw, all[ts[kx] + q]) }
+                        q += 1usize
+                    }
+                    txt = str.done(&lw)
+                }
+                lvls[nl_total + rank - 1usize] = txt
+                k += 1usize
+            }
+            rr = 0usize
+            while rr < r {
+                let ix = rr * cols + c1
+                if vals[ix] == vals[ix] {
+                    k = 0usize
+                    while k < nd {
+                        let jx = dsx[k]
+                        if same(all, ts[jx], ts[jx] + tl[jx], ts[ix], ts[ix] + tl[ix]) { vals[ix] = f64(drank[k]) }
+                        k += 1usize
+                    }
+                }
+                rr += 1usize
+            }
+            nlev[c1] = nd
+            nl_total += nd
+        }
+        c1 += 1usize
     }
     out.ncols = cols
-    out.nrows = rows
+    out.nrows = r
     out.kind = kind[0usize..cols]
     out.nlev = nlev[0usize..cols]
     out.values = vals
+    out.lvl = lvls[0usize..nl_total]
+    out.txt = txts
     ret (out, ok)
 }
 
-// the code of level l of a column among its declared levels sorted bytewise (foreign::read.arff returns the factor levels sorted)
-fn sorted_rank(t: str, lv_s: []const usize, lv_e: []const usize, base: usize, n: usize, l: usize) -> usize {
-    var rank = 1usize
-    var o = 0usize
-    while o < n {
-        if o != l && less(t, lv_s[base + o], lv_e[base + o], lv_s[base + l], lv_e[base + l]) { rank += 1usize }
-        o += 1usize
+// the field texts equal
+fn same(t: str, a: usize, b: usize, c: usize, d: usize) -> bool {
+    if b - a != d - c { ret false }
+    var i = 0usize
+    while i < b - a {
+        if t[a + i] != t[c + i] { ret false }
+        i += 1usize
     }
-    ret rank
+    ret true
 }
 
 fn less(t: str, a: usize, b: usize, c: usize, d: usize) -> bool {
@@ -469,24 +607,155 @@ fn less(t: str, a: usize, b: usize, c: usize, d: usize) -> bool {
     ret b - a < d - c
 }
 
-// foreign::write.arff for numeric and factor columns: "@relation <relation>", one "@attribute <name> numeric" or "@attribute <name> {'l1','l2',...}" per column, "@data", then the
-// rows as comma-separated values (a missing value is ?, a nominal value its quoted level, a number its shortest round-trip text). t holds the columns (kind 0 numeric, 1 nominal
-// with the 1-based level code in values and nlev levels); names and levels (the levels of the nominal columns in column order, flat) are the labels. Characters ' and \ in a
-// level are escaped with a backslash as write.arff does. Ceiling: R prints numbers with 15 significant digits, this the shortest text that reads back, so the two agree for numbers
-// with at most 15 significant digits.
-fn write(a: *mem.Arena, relation: str, names: []const str, levels: []const str, t: Arff) -> (str, err) {
+// scan's reader over the data: the next byte or -1 at the end; an unquoted % skips the rest of its line and answers the newline, and CRLF is one newline
+type Scn = struct { t: str, p: usize }
+
+fn getc(s: *Scn, inq: bool) -> i64 {
+    let t = s.t
+    if s.p >= t.len { ret 0i64 - 1i64 }
+    var c = t[s.p]
+    s.p += 1usize
+    if c == 13u8 && s.p < t.len && t[s.p] == 10u8 {
+        c = 10u8
+        s.p += 1usize
+    }
+    if !inq && c == 37u8 {
+        while s.p < t.len && t[s.p] != 10u8 { s.p += 1usize }
+        if s.p < t.len {
+            s.p += 1usize
+            ret 10i64
+        }
+        ret 0i64 - 1i64
+    }
+    ret i64(c)
+}
+
+fn hexval(c: u8) -> i64 {
+    if c >= 48u8 && c <= 57u8 { ret i64(c - 48u8) }
+    if c >= 97u8 && c <= 102u8 { ret i64(c - 87u8) }
+    if c >= 65u8 && c <= 70u8 { ret i64(c - 55u8) }
+    ret 0i64 - 1i64
+}
+
+// a number as scan(what = double) takes it: R_strtod over the whole field (blanks were dropped): NaN, Inf, or [sign] digits [. digits] [e [sign] digits]
+fn strict_number(a: *mem.Arena, s: str) -> (f64, bool) {
+    let nan = 0.0f64 / 0.0f64
+    var p = 0usize
+    if p < s.len && (s[p] == 45u8 || s[p] == 43u8) { p += 1usize }
+    let rest = s[p..s.len]
+    if str.eq(rest, "NaN") || str.eq(rest, "nan") { ret (nan, true) }
+    if str.eq(rest, "Inf") || str.eq(rest, "inf") || str.eq(rest, "infinity") || str.eq(rest, "Infinity") {
+        if s[0usize] == 45u8 { ret (0.0f64 - 1.0f64 / 0.0f64, true) }
+        ret (1.0f64 / 0.0f64, true)
+    }
+    if s.len > p + 2usize && s[p] == 48u8 && (s[p + 1usize] == 120u8 || s[p + 1usize] == 88u8) {
+        // hexadecimal: digits [. digits] [p [sign] decimal exponent of two]
+        var q = p + 2usize
+        var m = 0.0f64
+        var any = false
+        while q < s.len && hexval(s[q]) >= 0i64 {
+            m = m * 16.0f64 + f64(hexval(s[q]))
+            q += 1usize
+            any = true
+        }
+        var e2 = 0i64
+        if q < s.len && s[q] == 46u8 {
+            q += 1usize
+            while q < s.len && hexval(s[q]) >= 0i64 {
+                m = m * 16.0f64 + f64(hexval(s[q]))
+                e2 -= 4i64
+                q += 1usize
+                any = true
+            }
+        }
+        if !any { ret (nan, false) }
+        if q < s.len && (s[q] == 112u8 || s[q] == 80u8) {
+            q += 1usize
+            var sg = 1i64
+            if q < s.len && (s[q] == 45u8 || s[q] == 43u8) {
+                if s[q] == 45u8 { sg = 0i64 - 1i64 }
+                q += 1usize
+            }
+            var ex = 0i64
+            var ed2 = 0usize
+            while q < s.len && s[q] >= 48u8 && s[q] <= 57u8 {
+                ex = ex * 10i64 + i64(s[q] - 48u8)
+                q += 1usize
+                ed2 += 1usize
+            }
+            if ed2 == 0usize { ret (nan, false) }
+            e2 += sg * ex
+        }
+        if q != s.len { ret (nan, false) }
+        var hv = m
+        var ee = e2
+        while ee > 0i64 {
+            hv = hv * 2.0f64
+            ee -= 1i64
+        }
+        while ee < 0i64 {
+            hv = hv / 2.0f64
+            ee += 1i64
+        }
+        if s[0usize] == 45u8 { hv = 0.0f64 - hv }
+        ret (hv, true)
+    }
+    var nd = 0usize
+    while p < s.len && s[p] >= 48u8 && s[p] <= 57u8 {
+        p += 1usize
+        nd += 1usize
+    }
+    if p < s.len && s[p] == 46u8 {
+        p += 1usize
+        while p < s.len && s[p] >= 48u8 && s[p] <= 57u8 {
+            p += 1usize
+            nd += 1usize
+        }
+    }
+    if nd == 0usize { ret (nan, false) }
+    if p < s.len && (s[p] == 101u8 || s[p] == 69u8) {
+        p += 1usize
+        if p < s.len && (s[p] == 45u8 || s[p] == 43u8) { p += 1usize }
+        var ed = 0usize
+        while p < s.len && s[p] >= 48u8 && s[p] <= 57u8 {
+            p += 1usize
+            ed += 1usize
+        }
+        if ed == 0usize { ret (nan, false) }
+    }
+    if p != s.len { ret (nan, false) }
+    ret (dbf.atof(a, s), true)
+}
+
+// foreign::write.arff: "@relation <relation>" (make.names, then quoted or X-prefixed as write.arff's spquote does), one "@attribute <name> <type>" per column, "@data", then the rows as
+// comma-separated values with ? for a missing one. t holds the columns, kind 0 numeric (written as R writes a double: up to 15 significant digits, fixed or scientific whichever is
+// narrower), 1 nominal ({'l1','l2',...}; the 1-based level code in values), 2 character (string, each value quoted), 3 Date (date "yyyy-MM-dd"; days since 1970, quoted), 4 POSIXct (date
+// "yyyy-MM-dd HH:mm:ss"; seconds since 1970 in UTC, quoted, written as R's default format picks it: the date alone when every time is midnight),
+// 5 logical (numeric; TRUE or FALSE), 6 integer (numeric; plain digits). For kinds 1 and 2 `levels` holds, in column order, nlev levels (a nominal column's levels; the strings of a character
+// column, the value being the 1-based index into them); a ' or \ in them is escaped with a backslash as write.arff does. Names with a blank are double-quoted and ones that do not start
+// with a letter are prefixed with X. A NaN is taken as NA. eol ends every line but "@data", which write.arff always ends with "\n".
+fn write(a: *mem.Arena, relation: str, names: []const str, levels: []const str, t: Arff, eol: str) -> (str, err) {
+    // everything that stays allocated comes before the builder, which must be the last claim on the arena
+    let (rel, re) = sys.make_name(a, relation)
+    if re != ok { ret ("", re) }
+    // a POSIXct column's format: 0 date, 1 minutes, 2 seconds
+    let (pfmt, pe) = mem.alloc[u8](a, t.ncols + 1usize)
+    if pe != ok { ret ("", pe) }
+    let (sig, se) = mem.alloc[u8](a, 16usize)
+    if se != ok { ret ("", se) }
     let (b0, e0) = str.builder(a, 4096usize)
     if e0 != ok { ret ("", e0) }
     var b = b0
     let _ = str.push(&b, "@relation ")
-    let _ = str.push(&b, relation)
-    let _ = str.push_byte(&b, 10u8)
+    push_spquote(&b, rel)
+    let _ = str.push(&b, eol)
     var lbase = 0usize
     var j = 0usize
     while j < t.ncols {
         let _ = str.push(&b, "@attribute ")
-        let _ = str.push(&b, names[j])
-        if t.kind[j] == 1u8 {
+        push_spquote(&b, names[j])
+        let k = t.kind[j]
+        if k == 1u8 {
             let _ = str.push(&b, " {")
             var l = 0usize
             while l < t.nlev[j] {
@@ -495,11 +764,33 @@ fn write(a: *mem.Arena, relation: str, names: []const str, levels: []const str, 
                 l += 1usize
             }
             let _ = str.push_byte(&b, 125u8)
-            lbase += t.nlev[j]
+        } else if k == 2u8 {
+            let _ = str.push(&b, " string")
+        } else if k == 3u8 {
+            let _ = str.push(&b, " date \"yyyy-MM-dd\"")
+        } else if k == 4u8 {
+            let _ = str.push(&b, " date \"yyyy-MM-dd HH:mm:ss\"")
         } else {
             let _ = str.push(&b, " numeric")
         }
-        let _ = str.push_byte(&b, 10u8)
+        if k == 1u8 || k == 2u8 { lbase += t.nlev[j] }
+        if k == 4u8 {
+            var allmid = true
+            var allsec = true
+            var r = 0usize
+            while r < t.nrows {
+                let v = t.values[r * t.ncols + j]
+                if v == v {
+                    let s = i64(math_floor(v))
+                    if s % 86400i64 != 0i64 { allmid = false }
+                    if s % 60i64 != 0i64 { allsec = false }
+                }
+                r += 1usize
+            }
+            pfmt[j] = 2u8
+            if allmid { pfmt[j] = 0u8 }
+        }
+        let _ = str.push(&b, eol)
         j += 1usize
     }
     let _ = str.push(&b, "@data\n")
@@ -510,20 +801,227 @@ fn write(a: *mem.Arena, relation: str, names: []const str, levels: []const str, 
         while j < t.ncols {
             if j > 0usize { let _ = str.push_byte(&b, 44u8) }
             let v = t.values[r * t.ncols + j]
+            let k = t.kind[j]
             if v != v {
                 let _ = str.push_byte(&b, 63u8)
-            } else if t.kind[j] == 1u8 {
+            } else if k == 1u8 || k == 2u8 {
                 quote_level(&b, levels[base2 + usize(v) - 1usize])
+            } else if k == 3u8 {
+                let _ = str.push_byte(&b, 39u8)
+                push_date(&b, i64(math_floor(v)))
+                let _ = str.push_byte(&b, 39u8)
+            } else if k == 4u8 {
+                let s = i64(math_floor(v))
+                var days = s / 86400i64
+                var rem = s % 86400i64
+                if rem < 0i64 {
+                    rem += 86400i64
+                    days -= 1i64
+                }
+                let _ = str.push_byte(&b, 39u8)
+                push_date(&b, days)
+                if pfmt[j] >= 1u8 {
+                    let _ = str.push_byte(&b, 32u8)
+                    push2(&b, rem / 3600i64)
+                    let _ = str.push_byte(&b, 58u8)
+                    push2(&b, rem / 60i64 % 60i64)
+                    if pfmt[j] == 2u8 {
+                        let _ = str.push_byte(&b, 58u8)
+                        push2(&b, rem % 60i64)
+                    }
+                }
+                let _ = str.push_byte(&b, 39u8)
+            } else if k == 5u8 {
+                if v != 0.0f64 { let _ = str.push(&b, "TRUE") } else { let _ = str.push(&b, "FALSE") }
+            } else if k == 6u8 {
+                let _ = str.push_i64(&b, i64(v))
             } else {
-                let _ = str.push_f64(&b, v)
+                let pe2 = push_r15(a, &b, sig, v)
+                if pe2 != ok { ret ("", pe2) }
             }
-            if t.kind[j] == 1u8 { base2 += t.nlev[j] }
+            if k == 1u8 || k == 2u8 { base2 += t.nlev[j] }
             j += 1usize
         }
-        let _ = str.push_byte(&b, 10u8)
+        let _ = str.push(&b, eol)
         r += 1usize
     }
     ret (str.done(&b), ok)
+}
+
+fn math_floor(v: f64) -> f64 {
+    let t = f64(i64(v))
+    if t > v { ret t - 1.0f64 }
+    ret t
+}
+
+fn push2(b: *str.Builder, v: i64) {
+    if v < 10i64 { let _ = str.push_byte(b, 48u8) }
+    let _ = str.push_i64(b, v)
+}
+
+// yyyy-MM-dd of a day number (the year as R's format prints it: at least four digits)
+fn push_date(b: *str.Builder, days: i64) {
+    let (y, m, d) = time.civil_from_days(days)
+    if y >= 0i64 && y < 1000i64 { let _ = str.push_byte(b, 48u8) }
+    if y >= 0i64 && y < 100i64 { let _ = str.push_byte(b, 48u8) }
+    if y >= 0i64 && y < 10i64 { let _ = str.push_byte(b, 48u8) }
+    let _ = str.push_i64(b, y)
+    let _ = str.push_byte(b, 45u8)
+    push2(b, m)
+    let _ = str.push_byte(b, 45u8)
+    push2(b, d)
+}
+
+// spquote: an X in front of a name that does not start with a letter, double quotes around one with a blank
+fn push_spquote(b: *str.Builder, s: str) {
+    var quote = false
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 32u8 { quote = true }
+        i += 1usize
+    }
+    var x = true
+    if s.len > 0usize {
+        let c = s[0usize]
+        if (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) { x = false }
+    }
+    if x { quote = false }
+    if x {
+        // the blank test is on the prefixed text, which has the same blanks
+        i = 0usize
+        while i < s.len {
+            if s[i] == 32u8 { quote = true }
+            i += 1usize
+        }
+    }
+    if quote { let _ = str.push_byte(b, 34u8) }
+    if x { let _ = str.push_byte(b, 88u8) }
+    let _ = str.push(b, s)
+    if quote { let _ = str.push_byte(b, 34u8) }
+}
+
+// a double as write.table prints it, digits = 15: the fewest significant digits (at most 15) that show the value rounded to 15, in fixed notation unless scientific is narrower
+fn push_r15(a: *mem.Arena, b: *str.Builder, sig: []u8, v: f64) -> err {
+    if v == 0.0f64 {
+        let _ = str.push_byte(b, 48u8)
+        ret ok
+    }
+    var x = v
+    if v < 0.0f64 { x = 0.0f64 - v }
+    if x > 1.0e300f64 {
+        if x > 1.7976931348623157e308f64 {
+            if v < 0.0f64 { let _ = str.push_byte(b, 45u8) }
+            let _ = str.push(b, "Inf")
+            ret ok
+        }
+        ret str.push_f64(b, v)
+    }
+    if x < 1.0e-80f64 { ret str.push_f64(b, v) }
+    let start = mem.mark(a)
+    let (bb, be) = str.builder(a, 512usize)
+    if be != ok { ret be }
+    var w = bb
+    let fe = str.push_f64_fixed(&w, x, 99u8)
+    if fe != ok { ret fe }
+    let txt = str.done(&w)
+    let (dg, de) = mem.alloc[u8](a, txt.len + 20usize)
+    if de != ok { ret de }
+    var n = 0usize
+    var intlen = 0usize
+    var seen_point = false
+    var i = 0usize
+    while i < txt.len {
+        if txt[i] == 46u8 {
+            seen_point = true
+        } else {
+            dg[n] = txt[i] - 48u8
+            n += 1usize
+            if !seen_point { intlen += 1usize }
+        }
+        i += 1usize
+    }
+    var z = 0usize
+    while z < 20usize {
+        dg[n + z] = 0u8
+        z += 1usize
+    }
+    var fnz = 0usize
+    while fnz < n && dg[fnz] == 0u8 { fnz += 1usize }
+    var e10 = i64(intlen) - 1i64 - i64(fnz)
+    var q = 0usize
+    while q < 15usize {
+        sig[q] = dg[fnz + q]
+        q += 1usize
+    }
+    let next = dg[fnz + 15usize]
+    var rest = false
+    q = fnz + 16usize
+    while q < n {
+        if dg[q] != 0u8 { rest = true }
+        q += 1usize
+    }
+    var up = false
+    if next > 5u8 { up = true }
+    if next == 5u8 && (rest || sig[14usize] % 2u8 == 1u8) { up = true }
+    if up {
+        var c = 14i64
+        var carry = true
+        while carry && c >= 0i64 {
+            if sig[usize(c)] == 9u8 {
+                sig[usize(c)] = 0u8
+                c -= 1i64
+            } else {
+                sig[usize(c)] += 1u8
+                carry = false
+            }
+        }
+        if carry {
+            sig[0usize] = 1u8
+            e10 += 1i64
+        }
+    }
+    var nsig = 15usize
+    while nsig > 1usize && sig[nsig - 1usize] == 0u8 { nsig -= 1usize }
+    mem.reset(a, start)
+    var neg = 0i64
+    if v < 0.0f64 { neg = 1i64 }
+    var left = 1i64
+    if e10 >= 0i64 { left = e10 + 1i64 }
+    var rgt = i64(nsig) - e10 - 1i64
+    if rgt < 0i64 { rgt = 0i64 }
+    var wf = neg + left
+    if rgt > 0i64 { wf += rgt + 1i64 }
+    var expw = 2i64
+    if e10 >= 100i64 || e10 <= -100i64 { expw = 3i64 }
+    var ws = neg + 1i64 + expw + 2i64
+    if nsig > 1usize { ws += i64(nsig) }
+    if v < 0.0f64 { let _ = str.push_byte(b, 45u8) }
+    if wf <= ws {
+        // sprintf("%.*f"): the value itself to rgt decimals, so a number past 15 digits shows its true digits
+        let fe2 = str.push_f64_fixed(b, x, u8(rgt))
+        if fe2 != ok { ret fe2 }
+    } else {
+        let _ = str.push_byte(b, 48u8 + sig[0usize])
+        if nsig > 1usize {
+            let _ = str.push_byte(b, 46u8)
+            var p = 1usize
+            while p < nsig {
+                let _ = str.push_byte(b, 48u8 + sig[p])
+                p += 1usize
+            }
+        }
+        let _ = str.push_byte(b, 101u8)
+        var ae = e10
+        if e10 < 0i64 {
+            let _ = str.push_byte(b, 45u8)
+            ae = 0i64 - e10
+        } else {
+            let _ = str.push_byte(b, 43u8)
+        }
+        if ae < 10i64 { let _ = str.push_byte(b, 48u8) }
+        let _ = str.push_i64(b, ae)
+    }
+    ret ok
 }
 
 fn quote_level(b: *str.Builder, s: str) {

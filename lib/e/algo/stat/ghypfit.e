@@ -7,6 +7,8 @@ use e.algo.stat.ghyp as gh
 use e.algo.stat.ghypmore as gm
 use e.algo.stat.gslfns as gs
 use e.algo.stat.lbfgsb as lb
+use e.algo.stat.nlm as nlmm
+use e.algo.stat.nlminb as nlb
 use e.algo.stat.rbfgs as bf
 use e.algo.stat.rnm as rn
 use e.math
@@ -182,6 +184,33 @@ fn fit_optim(a: *mem.Arena, c: *FitC, start: []const f64, method: usize, maxit: 
     }
     c.nfn = 0usize
     c.ngr = 0usize
+    if method == 5usize {
+        // nlminb(start, llfunc, NULL, lower = c(-Inf, eps, -Inf, eps)): eps is 1e-10 for hyperbFit and 0 for nigFit; the answer is the PORT convergence (0 when it stopped on a tolerance)
+        c.counting = false
+        var lo5: [8]f64 = zero
+        var hi5: [8]f64 = zero
+        var j = 0usize
+        while j < n {
+            lo5[j] = lo[j]
+            hi5[j] = 1.0e300f64 * 10.0f64
+            j += 1usize
+        }
+        lo5[1usize] = 0.0000000001f64
+        lo5[3usize] = 0.0000000001f64
+        if c.fam == 1usize {
+            lo5[1usize] = 0.0f64
+            lo5[3usize] = 0.0f64
+        }
+        let r5 = nlb.nlminb_bounded[FitC](a, c, fit_nll, fit_grad, false, out, start[0usize..0usize], lo5[0usize..n], hi5[0usize..n])
+        var cv5 = 1i64
+        if r5.code >= 3i64 && r5.code <= 6i64 { cv5 = 0i64 }
+        ret (r5.objective, usize(cv5), 0i64)
+    }
+    if method == 4usize {
+        c.counting = false
+        let r = nlmm.nlm[FitC](a, c, fit_nll, out, 1500usize)
+        ret (r.fv, r.iters, r.code)
+    }
     if method == 1usize {
         c.counting = true
         let fv = bf.vmmin[FitC](a, c, fit_nll, fit_grad_count, out, 0.0000000149011611938f64, maxit)
@@ -252,6 +281,11 @@ fn smedian(a: *mem.Arena, x: []const f64) -> f64 {
 // ---- hist(x, right = FALSE) with Sturges breaks: pretty(range(x), nclass, min.n = 1), counts on the fuzzed breaks; the density is NaN where the count is zero (the
 // package's empDens). Returns the number of cells; breaks has nb + 1 entries, mids and dens nb.
 fn fit_hist(a: *mem.Arena, x: []const f64, mids: *[]f64, dens: *[]f64) -> usize {
+    ret fit_hist_n(a, x, i64(ci.nclass_sturges(x.len)), mids, dens)
+}
+
+// hist(x, breaks = nclass, right = FALSE, plot = FALSE) with the cell count a rule gives (pretty(range(x), n, min.n = 1), the package's fuzz)
+fn fit_hist_n(a: *mem.Arena, x: []const f64, nclass: i64, mids: *[]f64, dens: *[]f64) -> usize {
     let n = x.len
     var lo = x[0usize]
     var hi = x[0usize]
@@ -261,7 +295,6 @@ fn fit_hist(a: *mem.Arena, x: []const f64, mids: *[]f64, dens: *[]f64) -> usize 
         if x[i] > hi { hi = x[i] }
         i += 1usize
     }
-    let nclass = i64(math.ceil[f64](math.log2[f64](f64(n)) + 1.0f64))
     let (br, e) = sc.pretty(a, lo, hi, nclass)
     if e != ok { ret 0usize }
     let nb = br.len - 1usize
@@ -593,7 +626,7 @@ fn fit_family(a: *mem.Arena, x: []const f64, fam: usize, kind: usize, start_meth
     if !fit_start(a, &c, kind, start_method, us, st[0usize..4usize]) { ret false }
     var pz: [2]f64 = zero
     gm.hyperb_change_pars(2usize, 1usize, st[1usize], st[2usize], st[3usize], pz[0usize..2usize])
-    c.raw = method >= 2usize
+    c.raw = method == 2usize || method == 3usize || method == 5usize
     var p0: [4]f64 = zero
     p0[0usize] = st[0usize]
     p0[1usize] = st[1usize]

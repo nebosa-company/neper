@@ -197,7 +197,7 @@ fn gig_start_gamma_ig(a: *mem.Arena, x: []const f64, out: []f64) -> bool {
 
 // gigFit: kind 0 LM, 1 GammaIG, 2 US; out[0..3] chi, psi, lambda; out[3] the maximised log-likelihood; out[4] convergence; out[5] the function count; out[6..9] the
 // start on the log scale (log chi, log psi, lambda)
-fn gig_fit(a: *mem.Arena, x0: []const f64, kind: usize, us: []const f64, stand: bool, out: []f64) -> bool {
+fn gig_fit(a: *mem.Arena, x0: []const f64, kind: usize, us: []const f64, stand: bool, method: usize, out: []f64) -> bool {
     var sx = 1.0f64
     if stand { sx = math.sqrt[f64](gf.svar(x0)) }
     let (x, e) = mem.alloc[f64](a, x0.len)
@@ -228,7 +228,7 @@ fn gig_fit(a: *mem.Arena, x0: []const f64, kind: usize, us: []const f64, stand: 
     let (bp, e2) = mem.alloc[f64](a, 3usize)
     if e2 != ok { ret false }
     var lo: [3]f64 = zero
-    let (fv, cnt, fl) = gf.fit_optim(a, &c, p0[0usize..3usize], 0usize, 1000usize, lo[0usize..3usize], bp)
+    let (fv, cnt, fl) = gf.fit_optim(a, &c, p0[0usize..3usize], method, 1000usize, lo[0usize..3usize], bp)
     if stand {
         out[0usize] = sx * math.exp[f64](bp[0usize])
         out[1usize] = math.exp[f64](bp[1usize]) / sx

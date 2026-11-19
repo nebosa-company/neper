@@ -1,0 +1,7 @@
+@relation t
+@attribute f {a,b,c,zz}
+@attribute n numeric
+@data
+a,1
+b,2
+a,3

@@ -1,0 +1,4 @@
+@relation t
+@attribute n integer
+@data
+1

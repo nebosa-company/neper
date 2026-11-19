@@ -1,0 +1,13 @@
+@relation a.b
+@attribute V1 date "yyyy-MM-dd"
+@attribute X2nd string
+@attribute "a b" numeric
+@attribute x.y date "yyyy-MM-dd HH:mm:ss"
+@attribute X_z {'q\'r\\s','L1','it\'s','a\\b'}
+@attribute Q numeric
+@data
+'2031-09-02','x y',-1e+22,'1999-06-09 01:57:00','q\'r\\s',?
+'1990-05-17','plain',?,'1998-11-30 19:27:00','a\\b',TRUE
+'1987-07-17','Z9',99999,'2026-07-06 08:54:00','it\'s',FALSE
+?,'q\'r\\s',0.333333333333333,?,'it\'s',TRUE
+'1987-05-10',?,25,'2042-09-10 06:44:00',?,FALSE

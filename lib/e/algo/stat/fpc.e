@@ -454,6 +454,54 @@ fn compare(a: *mem.Arena, c1: []const usize, k1: usize, c2: []const usize, k2: u
 
 // ---- discrcoord: fpc's discriminant coordinates. tdecomp(m) is t(V diag(sqrt(lambda))) of the symmetric eigen decomposition of m, with eigenvalues
 // below 1e-6 raised to 1e-6, and the eigenvectors in R's order (decreasing eigenvalues; LAPACK gives them ascending).
+// R's cov (cov.c) sums in long double: the mean is refined by a second pass and every sum of products is carried in 64 bits, then rounded to double.
+// A double-double carries at least as many bits, so rounding it to double agrees with R's long double result except where the two differ by under
+// 2^-64 relative and a double rounding falls between them.
+fn dd_two_sum(x: f64, y: f64) -> (f64, f64) {
+    let s = x + y
+    let bb = s - x
+    let e = (x - (s - bb)) + (y - bb)
+    ret (s, e)
+}
+
+fn dd_norm(h: f64, l: f64) -> (f64, f64) {
+    let s = h + l
+    let e = l - (s - h)
+    ret (s, e)
+}
+
+fn dd_add(h: f64, l: f64, vh: f64, vl: f64) -> (f64, f64) {
+    let (s, e) = dd_two_sum(h, vh)
+    let (rh, rl) = dd_norm(s, e + (l + vl))
+    ret (rh, rl)
+}
+
+fn dd_split(x: f64) -> (f64, f64) {
+    let t = 134217729.0f64 * x
+    let hi = t - (t - x)
+    ret (hi, x - hi)
+}
+
+fn dd_mul(ah: f64, al: f64, bh: f64, bl: f64) -> (f64, f64) {
+    let (a1, a2) = dd_split(ah)
+    let (b1, b2) = dd_split(bh)
+    let p = ah * bh
+    let pe = ((a1 * b1 - p) + a1 * b2 + a2 * b1) + a2 * b2
+    let (rh, rl) = dd_norm(p, pe + (ah * bl + al * bh))
+    ret (rh, rl)
+}
+
+fn dd_div(h: f64, l: f64, d: f64) -> (f64, f64) {
+    let q1 = h / d
+    let (ah, al) = dd_split(q1)
+    let (bh, bl) = dd_split(d)
+    let p = q1 * d
+    let pe = ((ah * bh - p) + ah * bl + al * bh) + al * bl
+    let r = ((h - p) - pe) + l
+    let q2 = r / d
+    let (rh, rl) = dd_norm(q1, q2)
+    ret (rh, rl)
+}
 
 // the covariance (n - 1 divisor) of the rows of x (n by p row-major) with the labels cl equal to l; k is the count of those rows; out p by p
 fn cov_rows(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, l: usize, out: []f64) -> (usize, err) {
@@ -465,28 +513,62 @@ fn cov_rows(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize
     }
     let (mu, e1) = mem.alloc[f64](a, p)
     if e1 != ok { ret (k, e1) }
+    let kf = f64(k)
     var j = 0usize
     while j < p {
-        var s = 0.0f64
+        var sh = 0.0f64
+        var sl = 0.0f64
         i = 0usize
         while i < n {
-            if cl[i] == l { s += x[i * p + j] }
+            if cl[i] == l {
+                let (h1, l1) = dd_add(sh, sl, x[i * p + j], 0.0f64)
+                sh = h1
+                sl = l1
+            }
             i += 1usize
         }
-        mu[j] = s / f64(k)
+        let (th, tl) = dd_div(sh, sl, kf)
+        var rh = 0.0f64
+        var rl = 0.0f64
+        i = 0usize
+        while i < n {
+            if cl[i] == l {
+                let (vh, vl) = dd_add(x[i * p + j], 0.0f64, -th, -tl)
+                let (h2, l2) = dd_add(rh, rl, vh, vl)
+                rh = h2
+                rl = l2
+            }
+            i += 1usize
+        }
+        let (qh, ql) = dd_div(rh, rl, kf)
+        let (mh, ml) = dd_add(th, tl, qh, ql)
+        mu[j] = mh + ml
         j += 1usize
     }
     var r = 0usize
     while r < p {
         var c = 0usize
         while c < p {
-            var s = 0.0f64
+            var sh = 0.0f64
+            var sl = 0.0f64
             i = 0usize
             while i < n {
-                if cl[i] == l { s += (x[i * p + r] - mu[r]) * (x[i * p + c] - mu[c]) }
+                if cl[i] == l {
+                    let (dxh, dxl) = dd_two_sum(x[i * p + r], -mu[r])
+                    let (dyh, dyl) = dd_two_sum(x[i * p + c], -mu[c])
+                    let (th, tl) = dd_mul(dxh, dxl, dyh, dyl)
+                    let (h1, l1) = dd_add(sh, sl, th, tl)
+                    sh = h1
+                    sl = l1
+                }
                 i += 1usize
             }
-            out[r * p + c] = s / f64(k - 1usize)
+            if k < 2usize {
+                out[r * p + c] = 0.0f64 / 0.0f64
+            } else {
+                let (qh, ql) = dd_div(sh, sl, f64(k - 1usize))
+                out[r * p + c] = qh + ql
+            }
             c += 1usize
         }
         r += 1usize
@@ -581,6 +663,8 @@ fn discrcoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usi
     let (tb, e10) = mem.alloc[f64](a, p * p)
     let (zm, e11) = mem.alloc[f64](a, p * p)
     if e10 != ok || e11 != ok { ret Malformed }
+    // Z = (t(Tinv) B) Tinv, the left product first as R evaluates it; LAPACK reads the lower triangle of the column-major matrix, which is the upper
+    // triangle of this row-major one, so the other half is made equal to R's lower triangle
     var r = 0usize
     while r < p {
         var c = 0usize
@@ -588,7 +672,7 @@ fn discrcoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usi
             var s = 0.0f64
             var q = 0usize
             while q < p {
-                s += bm[r * p + q] * tinv[q * p + c]
+                s += tinv[q * p + r] * bm[q * p + c]
                 q += 1usize
             }
             tb[r * p + c] = s
@@ -603,10 +687,19 @@ fn discrcoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usi
             var s = 0.0f64
             var q = 0usize
             while q < p {
-                s += tinv[q * p + r] * tb[q * p + c]
+                s += tb[r * p + q] * tinv[q * p + c]
                 q += 1usize
             }
             zm[r * p + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < p {
+        var c = r + 1usize
+        while c < p {
+            zm[r * p + c] = zm[c * p + r]
             c += 1usize
         }
         r += 1usize
@@ -1131,7 +1224,9 @@ fn ncoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, 
                 sc = s2
                 r += 1usize
             }
-            mi[j] = (s + sc) / f64(nn)
+            let (m1, m2) = dd_norm(s, sc)
+            let (m3, m4) = dd_div(m1, m2, f64(nn))
+            mi[j] = m3 + m4
             j += 1usize
         }
         var c = 0usize
@@ -1162,7 +1257,9 @@ fn ncoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, 
                         }
                         r += 1usize
                     }
-                    v[j] = (s + sc) / f64(nj) - mi[j]
+                    let (m1, m2) = dd_norm(s, sc)
+                    let (m3, m4) = dd_div(m1, m2, f64(nj))
+                    v[j] = (m3 + m4) - mi[j]
                     j += 1usize
                 }
             }
@@ -1361,10 +1458,11 @@ fn zconfusion(z: []const f64, n: usize, k: usize, probs: []const f64, i: usize, 
     ret s / (f64(n) * probs[j])
 }
 
+// nstop > 0 is numberstop (the caller passes cutoff 0): merging stops at that many live components.
 // mergenormals(xdata, clustering, probs, muarray, Sigmaarray, z, method = "bhat" or (demp = true) "demp", cutoff): merge Gaussian mixture components while the largest exp(-Bhattacharyya distance) among the live pairs reaches the cutoff.
 // x is n by d (row-major), mu is k by d (row j the mean of component j), sg is k blocks of d by d, z is n by k; probs, mu, sg and z are updated in place by the merges (mergeparameters: summed z weights, weighted ML mean and covariance of the data).
 // map receives mergedtonumbers (1-based, renumbered to 1..m in increasing order of the surviving numbers, as renumber = TRUE does when every component owns some data) and vals the decision values valuemerged; the answer is how many values.
-fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs: []f64, mu: []f64, sg: []f64, z: []f64, cutoff: f64, map: []usize, vals: []f64, demp: bool) -> (usize, err) {
+fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs: []f64, mu: []f64, sg: []f64, z: []f64, cutoff: f64, map: []usize, vals: []f64, demp: bool, nstop: usize) -> (usize, err) {
     let (bm, e0) = mem.alloc[f64](a, k * k)
     let (dead, e1) = mem.alloc[bool](a, k)
     let (dec, e2) = mem.alloc[f64](a, k * k)
@@ -1376,6 +1474,7 @@ fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs
         i += 1usize
     }
     var nv = 0usize
+    var nmerged = 0usize
     var all = true
     var upi = 0usize
     var loop = true
@@ -1426,7 +1525,8 @@ fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs
         }
         vals[nv] = best
         nv += 1usize
-        if !any { break }
+        if !any || (nstop > 0usize && nstop == k - nmerged) { break }
+        nmerged += 1usize
         // merge component bj into bi
         dead[bj] = true
         i = 0usize
@@ -1469,6 +1569,7 @@ fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs
             r2 += 1usize
         }
         upi = bi
+        if nstop > 0usize && nstop == k - nmerged { break }
     }
     // renumber the surviving numbers to 1 .. m in increasing order
     var cln = 1usize
@@ -1547,6 +1648,612 @@ fn varwise_counts(a: *mem.Arena, x: []const f64, clustering: []const usize, ncl:
         }
         out[(clustering[i] - 1usize) * cats + cat - 1usize] += 1.0f64
         i += 1usize
+    }
+    ret ok
+}
+
+// ---- small exports: calinhara, neginc, cov.wml, cweight, clujaccard, cmahal, confusion
+
+// det(m) of the n by n row-major m by dgetrf2's LU
+fn lu_det(a: *mem.Arena, m: []const f64, n: usize) -> (f64, err) {
+    let (aa, e0) = mem.alloc[f64](a, n * n)
+    let (ipiv, e2) = mem.alloc[usize](a, n)
+    if e0 != ok || e2 != ok { ret (0.0f64, mem.Full) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            aa[i + j * n] = m[i * n + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    lu_getrf2(aa, n, 0usize, n, n, ipiv, 0usize)
+    var d = 1.0f64
+    i = 0usize
+    while i < n {
+        d = d * aa[i + i * n]
+        if ipiv[i] != i { d = -d }
+        i += 1usize
+    }
+    ret (d, ok)
+}
+
+// the trace of the covariance of the rows of x with label l, and their count
+fn cov_trace(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, l: usize) -> (f64, usize, err) {
+    let (c, e1) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret (0.0f64, 0usize, e1) }
+    let (k, e2) = cov_rows(a, x, n, p, cl, l, c)
+    var t = 0.0f64
+    var i = 0usize
+    while i < p {
+        t += c[i * p + i]
+        i += 1usize
+    }
+    ret (t, k, e2)
+}
+
+// calinhara(x, clustering, cn): labels 1..cn
+fn calinhara(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, cn: usize) -> (f64, err) {
+    let (zlab, e0) = mem.alloc[usize](a, n)
+    if e0 != ok { ret (0.0f64, e0) }
+    var i = 0usize
+    while i < n {
+        zlab[i] = 0usize
+        i += 1usize
+    }
+    let (ts, _, e1) = cov_trace(a, x, n, p, zlab, 0usize)
+    if e1 != ok { ret (0.0f64, e1) }
+    var tw = 0.0f64
+    var l = 1usize
+    while l <= cn {
+        let (t, k, e2) = cov_trace(a, x, n, p, cl, l)
+        if e2 != ok { ret (0.0f64, e2) }
+        if k >= 2usize { tw += f64(k - 1usize) * t }
+        l += 1usize
+    }
+    let tb = f64(n - 1usize) * ts - tw
+    ret (f64(n - cn) * tb / (f64(cn - 1usize) * tw), ok)
+}
+
+// neginc(x, clustering): labels 1..cn
+fn neginc(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usize, cn: usize) -> (f64, err) {
+    let (c, e1) = mem.alloc[f64](a, p * p)
+    let (zlab, e0) = mem.alloc[usize](a, n)
+    if e1 != ok || e0 != ok { ret (0.0f64, mem.Full) }
+    var i = 0usize
+    while i < n {
+        zlab[i] = 0usize
+        i += 1usize
+    }
+    let (_, e2) = cov_rows(a, x, n, p, zlab, 0usize, c)
+    if e2 != ok { ret (0.0f64, e2) }
+    let (dall, e3) = lu_det(a, c, p)
+    if e3 != ok { ret (0.0f64, e3) }
+    var s = 0.0f64
+    var l = 1usize
+    while l <= cn {
+        let (k, e4) = cov_rows(a, x, n, p, cl, l, c)
+        if e4 != ok { ret (0.0f64, e4) }
+        var dl = 0.0f64
+        if k >= 2usize {
+            let (dd, e5) = lu_det(a, c, p)
+            if e5 != ok { ret (0.0f64, e5) }
+            dl = dd
+        }
+        let pri = f64(k) / f64(n)
+        s += pri * math.log[f64](dl) * 0.5f64 - pri * math.log[f64](pri)
+        l += 1usize
+    }
+    ret (s - 0.5f64 * math.log[f64](dall), ok)
+}
+
+// cov.wml(x, wt, center = TRUE)$cov element (r, c): weights normalised to sum 1 (x n by p row-major)
+fn cov_wml(x: []const f64, n: usize, p: usize, wt: []const f64, r: usize, c: usize) -> f64 {
+    var sw = 0.0f64
+    var i = 0usize
+    while i < n {
+        sw += wt[i]
+        i += 1usize
+    }
+    var mr = 0.0f64
+    var mc = 0.0f64
+    i = 0usize
+    while i < n {
+        mr += wt[i] / sw * x[i * p + r]
+        mc += wt[i] / sw * x[i * p + c]
+        i += 1usize
+    }
+    var s = 0.0f64
+    i = 0usize
+    while i < n {
+        let w = wt[i] / sw
+        s += math.sqrt[f64](w) * (x[i * p + r] - mr) * (math.sqrt[f64](w) * (x[i * p + c] - mc))
+        i += 1usize
+    }
+    ret s
+}
+
+fn cweight(x: f64, ca: f64) -> f64 {
+    var out = 1.0f64
+    if x > ca { out = ca / x }
+    ret out
+}
+
+// clujaccard of two logical vectors given as 0/1; a zlab union answers zero_by_zero
+fn clujaccard(c1: []const f64, c2: []const f64, n: usize, zero_by_zero: f64) -> f64 {
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var both = 0.0f64
+    var i = 0usize
+    while i < n {
+        if c1[i] != 0.0f64 { s1 += 1.0f64 }
+        if c2[i] != 0.0f64 { s2 += 1.0f64 }
+        if c1[i] != 0.0f64 && c2[i] != 0.0f64 { both += 1.0f64 }
+        i += 1usize
+    }
+    if s1 + s2 - both == 0.0f64 { ret zero_by_zero }
+    ret both / (s1 + s2 - both)
+}
+
+// cmahal(n, p, nmin, cmin, nc1, c1, q)[pos] (pos 1-based); R's loop reassignment of i does not stop the loop, and neither does this
+fn cmahal(a: *mem.Arena, n: usize, p: f64, nmin: usize, cmin: f64, nc1: usize, c1: f64, q: f64, pos: usize) -> (f64, err) {
+    var len = n
+    if nc1 > len { len = nc1 }
+    let (cs, e1) = mem.alloc[f64](a, len + 2usize)
+    if e1 != ok { ret (0.0f64, e1) }
+    var i = 0usize
+    while i < len + 2usize {
+        cs[i] = c1
+        i += 1usize
+    }
+    i = nc1 - 1usize
+    while i >= nmin {
+        cs[i] = cs[i + 1usize] + q * (cs[i + 1usize] - p) / (f64(i) + 1.0f64 - q)
+        i -= 1usize
+    }
+    i = 1usize
+    while i < nmin {
+        cs[i] = cs[nmin]
+        i += 1usize
+    }
+    if n > nc1 {
+        i = nc1 + 1usize
+        while i <= n {
+            cs[i] = cs[i - 1usize] - q * (cs[i - 1usize] - p) / f64(i)
+            if cs[i] <= cmin { cs[i] = cmin }
+            i += 1usize
+        }
+    }
+    ret (cs[pos], ok)
+}
+
+// confusion(z, pro, i, j): z n by k row-major, i and j 1-based
+fn confusion(z: []const f64, n: usize, k: usize, pro: []const f64, i: usize, j: usize) -> f64 {
+    var s = 0.0f64
+    var r = 0usize
+    while r < n {
+        // which.max picks the first of a tie, cluster i
+        if z[r * k + j - 1usize] <= z[r * k + i - 1usize] { s += z[r * k + j - 1usize] }
+        r += 1usize
+    }
+    ret s / (f64(n) * pro[j - 1usize])
+}
+
+// ---- cluster.stats in full: noise cluster (the last label), every vector and matrix output.
+// out layout (cn = number of clusters): 0 average.between 1 average.within 2 max.diameter 3 min.separation 4 within.cluster.ss 5 avg.silwidth
+// 6 g2 7 g3 8 pearsongamma 9 dunn 10 dunn2 11 entropy 12 wb.ratio 13 ch 14 widestgap 15 sindex 16 corrected.rand 17 vi 18 n.between 19 n.within
+// 20 min.cluster.size 21 noisen 22 ave.within.cluster.ss; vectors of length cn from 24 + j * cn: 0 cluster.size 1 diameter 2 average.distance
+// 3 median.distance 4 separation 5 average.toother 6 clus.avg.silwidths 7 cwidegap; then separation.matrix and ave.between.matrix (cn by cn).
+// flags: 1 silhouette 2 G2 4 G3 8 wgap 16 sepindex. A value R leaves NA or NULL is NaN here.
+fn cs_len(cn: usize) -> usize { ret 24usize + 8usize * cn + 2usize * cn * cn }
+
+fn cs_sort(v: []f64, m: usize) {
+    var i = 1usize
+    while i < m {
+        let t = v[i]
+        var j = i
+        while j > 0usize && v[j - 1usize] > t {
+            v[j] = v[j - 1usize]
+            j -= 1usize
+        }
+        v[j] = t
+        i += 1usize
+    }
+}
+
+fn cstats(a: *mem.Arena, d: []const f64, n: usize, cl: []const usize, cn: usize, noise: bool, flags: usize, sepwn: bool, sepprob: f64, out: []f64) -> err {
+    let nan = 0.0f64 / 0.0f64
+    var cwn = cn
+    var noisen = 0usize
+    var i = 0usize
+    while i < cs_len(cn) {
+        out[i] = nan
+        i += 1usize
+    }
+    let vb = 24usize
+    let mb = 24usize + 8usize * cn
+    let pairs = n * (n - 1usize) / 2usize
+    let (size, e1) = mem.alloc[f64](a, cn)
+    let (wd, e2) = mem.alloc[f64](a, pairs + 1usize)
+    let (bd, e3) = mem.alloc[f64](a, pairs + 1usize)
+    let (tmp, e4) = mem.alloc[f64](a, pairs + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    i = 0usize
+    while i < cn {
+        size[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        size[cl[i] - 1usize] += 1.0f64
+        i += 1usize
+    }
+    if noise {
+        cwn = cn - 1usize
+        noisen = usize(size[cn - 1usize])
+    }
+    var h1 = 0.0f64
+    i = 0usize
+    while i < cn {
+        let p = size[i] / f64(n)
+        if p > 0.0f64 { h1 -= p * math.log[f64](p) }
+        out[vb + i] = size[i]
+        i += 1usize
+    }
+    out[11usize] = h1
+    var tot2 = 0.0f64
+    var nn2 = 0.0f64
+    var nnn = 0.0f64
+    i = 0usize
+    while i < n {
+        if cl[i] <= cwn { nnn += 1.0f64 }
+        var j = i + 1usize
+        while j < n {
+            tot2 += d[i * n + j] * d[i * n + j]
+            if cl[i] <= cwn && cl[j] <= cwn { nn2 += d[i * n + j] * d[i * n + j] }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let overall = tot2 / f64(n)
+    var nonnoise = overall
+    if noise { nonnoise = nn2 / nnn }
+    var nw = 0usize
+    var nb = 0usize
+    var wcss = 0.0f64
+    var avw_num = 0.0f64
+    var avw_den = 0.0f64
+    var c = 0usize
+    while c < cn {
+        var m = 0usize
+        var sd = 0.0f64
+        var sd2 = 0.0f64
+        var mx = 0.0f64
+        var j = 0usize
+        while j < n {
+            if cl[j] - 1usize == c {
+                var k = j + 1usize
+                while k < n {
+                    if cl[k] - 1usize == c {
+                        let v = d[j * n + k]
+                        tmp[m] = v
+                        m += 1usize
+                        sd += v
+                        sd2 += v * v
+                        if v > mx { mx = v }
+                        if c < cwn {
+                            wd[nw] = v
+                            nw += 1usize
+                        }
+                    }
+                    k += 1usize
+                }
+            }
+            j += 1usize
+        }
+        if c < cwn { wcss += sd2 / size[c] }
+        if m > 0usize {
+            out[vb + 1usize * cn + c] = mx
+            out[vb + 2usize * cn + c] = sd / f64(m)
+            cs_sort(tmp, m)
+            var md = tmp[m / 2usize]
+            if m % 2usize == 0usize { md = (tmp[m / 2usize - 1usize] + tmp[m / 2usize]) / 2.0f64 }
+            out[vb + 3usize * cn + c] = md
+            avw_num += (sd / f64(m)) * size[c]
+            avw_den += size[c]
+        }
+        var bmin = 1.0e300f64
+        var bs = 0.0f64
+        var bc = 0.0f64
+        var c2 = 0usize
+        while c2 < cn {
+            if c2 != c {
+                var smin = 1.0e300f64
+                var ssum = 0.0f64
+                var scnt = 0.0f64
+                j = 0usize
+                while j < n {
+                    if cl[j] - 1usize == c {
+                        var k = 0usize
+                        while k < n {
+                            if cl[k] - 1usize == c2 {
+                                let v = d[j * n + k]
+                                if v < smin { smin = v }
+                                ssum += v
+                                scnt += 1.0f64
+                                if c < c2 && c2 < cwn {
+                                    bd[nb] = v
+                                    nb += 1usize
+                                }
+                            }
+                            k += 1usize
+                        }
+                    }
+                    j += 1usize
+                }
+                if smin < bmin { bmin = smin }
+                bs += ssum
+                bc += scnt
+                if c < c2 {
+                    out[mb + c * cn + c2] = smin
+                    out[mb + c2 * cn + c] = smin
+                    out[mb + cn * cn + c * cn + c2] = ssum / scnt
+                    out[mb + cn * cn + c2 * cn + c] = ssum / scnt
+                }
+            }
+            c2 += 1usize
+        }
+        out[vb + 4usize * cn + c] = bmin
+        out[vb + 5usize * cn + c] = bs / bc
+        c += 1usize
+    }
+    c = 0usize
+    while c < cn {
+        out[mb + c * cn + c] = 0.0f64
+        out[mb + cn * cn + c * cn + c] = 0.0f64
+        c += 1usize
+    }
+    var sbw = 0.0f64
+    i = 0usize
+    while i < nb {
+        sbw += bd[i]
+        i += 1usize
+    }
+    var swd = 0.0f64
+    i = 0usize
+    while i < nw {
+        swd += wd[i]
+        i += 1usize
+    }
+    let ave_b = sbw / f64(nb)
+    let ave_w = avw_num / avw_den
+    out[0usize] = ave_b
+    out[1usize] = ave_w
+    out[4usize] = wcss
+    out[12usize] = ave_w / ave_b
+    out[13usize] = (nonnoise - wcss) * (f64(n) - f64(noisen) - f64(cwn)) / (wcss * (f64(cwn) - 1.0f64))
+    out[18usize] = f64(nb)
+    out[19usize] = f64(nw)
+    out[22usize] = wcss / (f64(n) - f64(noisen))
+    var maxd = -1.0e300f64
+    var minsz = 1.0e300f64
+    var mins = 1.0e300f64
+    var minsall = 1.0e300f64
+    var maxavg = -1.0e300f64
+    var mindiff = 1.0e300f64
+    c = 0usize
+    while c < cn {
+        if out[vb + 4usize * cn + c] < minsall { minsall = out[vb + 4usize * cn + c] }
+        if c < cwn {
+            if out[vb + 1usize * cn + c] > maxd { maxd = out[vb + 1usize * cn + c] }
+            if size[c] < minsz { minsz = size[c] }
+            if out[vb + 4usize * cn + c] < mins { mins = out[vb + 4usize * cn + c] }
+            if out[vb + 2usize * cn + c] > maxavg { maxavg = out[vb + 2usize * cn + c] }
+            var c3 = c + 1usize
+            while c3 < cwn {
+                if out[mb + cn * cn + c * cn + c3] < mindiff { mindiff = out[mb + cn * cn + c * cn + c3] }
+                c3 += 1usize
+            }
+        }
+        c += 1usize
+    }
+    out[2usize] = maxd
+    out[20usize] = minsz
+    out[21usize] = f64(noisen)
+    if sepwn {
+        out[3usize] = minsall
+    } else {
+        out[3usize] = mins
+    }
+    out[9usize] = mins / maxd
+    out[10usize] = mindiff / maxavg
+    let nt = f64(nw + nb)
+    var sxx = 0.0f64
+    i = 0usize
+    while i < nw {
+        sxx += wd[i] * wd[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < nb {
+        sxx += bd[i] * bd[i]
+        i += 1usize
+    }
+    let sx = swd + sbw
+    out[8usize] = (sbw - sx * f64(nb) / nt) / math.sqrt[f64]((sxx - sx * sx / nt) * (f64(nb) - f64(nb) * f64(nb) / nt))
+    if (flags / 2usize) % 2usize == 1usize {
+        var splus = 0.0f64
+        var sminus = 0.0f64
+        i = 0usize
+        while i < nw {
+            var j = 0usize
+            while j < nb {
+                if wd[i] < bd[j] { splus += 1.0f64 }
+                if wd[i] > bd[j] { sminus += 1.0f64 }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        out[6usize] = (splus - sminus) / (splus + sminus)
+    }
+    if (flags / 4usize) % 2usize == 1usize {
+        let (all, e6) = mem.alloc[f64](a, pairs + 1usize)
+        if e6 != ok { ret mem.Full }
+        i = 0usize
+        while i < nw {
+            all[i] = wd[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < nb {
+            all[nw + i] = bd[i]
+            i += 1usize
+        }
+        cs_sort(all, nw + nb)
+        var dmin = 0.0f64
+        var dmax = 0.0f64
+        i = 0usize
+        while i < nw {
+            dmin += all[i]
+            dmax += all[nw + nb - 1usize - i]
+            i += 1usize
+        }
+        out[7usize] = (swd - dmin) / (dmax - dmin)
+    }
+    if flags % 2usize == 1usize {
+        var tot = 0.0f64
+        var totn = 0.0f64
+        let (cs_sum, e7) = mem.alloc[f64](a, cn)
+        let (cs_cnt, e8) = mem.alloc[f64](a, cn)
+        if e7 != ok || e8 != ok { ret mem.Full }
+        c = 0usize
+        while c < cn {
+            cs_sum[c] = 0.0f64
+            cs_cnt[c] = 0.0f64
+            c += 1usize
+        }
+        i = 0usize
+        while i < n {
+            let ci = cl[i] - 1usize
+            var s = 0.0f64
+            if size[ci] > 1.0f64 {
+                var ai = 0.0f64
+                var j = 0usize
+                while j < n {
+                    if j != i && cl[j] - 1usize == ci { ai += d[i * n + j] }
+                    j += 1usize
+                }
+                ai = ai / (size[ci] - 1.0f64)
+                var bi = 1.0e300f64
+                var c2 = 0usize
+                while c2 < cn {
+                    if c2 != ci {
+                        var sm = 0.0f64
+                        j = 0usize
+                        while j < n {
+                            if cl[j] - 1usize == c2 { sm += d[i * n + j] }
+                            j += 1usize
+                        }
+                        if sm / size[c2] < bi { bi = sm / size[c2] }
+                    }
+                    c2 += 1usize
+                }
+                var mxab = ai
+                if bi > mxab { mxab = bi }
+                s = (bi - ai) / mxab
+            }
+            cs_sum[ci] += s
+            cs_cnt[ci] += 1.0f64
+            if !noise || ci < cwn {
+                tot += s
+                totn += 1.0f64
+            }
+            i += 1usize
+        }
+        c = 0usize
+        while c < cn {
+            out[vb + 6usize * cn + c] = cs_sum[c] / cs_cnt[c]
+            c += 1usize
+        }
+        out[5usize] = tot / totn
+    }
+    if (flags / 8usize) % 2usize == 1usize {
+        var worst = 0.0f64
+        c = 0usize
+        while c < cwn {
+            var cw = 0.0f64
+            if size[c] > 1.0f64 {
+                let (inn, e9) = mem.alloc[bool](a, n)
+                let (best, e10) = mem.alloc[f64](a, n)
+                if e9 != ok || e10 != ok { ret mem.Full }
+                var start = n
+                i = 0usize
+                while i < n {
+                    inn[i] = false
+                    best[i] = 1.0e300f64
+                    if cl[i] - 1usize == c && start == n { start = i }
+                    i += 1usize
+                }
+                var cur = start
+                var added = 1usize
+                inn[cur] = true
+                while added < usize(size[c]) {
+                    var j = 0usize
+                    while j < n {
+                        if cl[j] - 1usize == c && !inn[j] && d[cur * n + j] < best[j] { best[j] = d[cur * n + j] }
+                        j += 1usize
+                    }
+                    var pick = n
+                    var pv = 1.0e300f64
+                    j = 0usize
+                    while j < n {
+                        if cl[j] - 1usize == c && !inn[j] && best[j] < pv {
+                            pv = best[j]
+                            pick = j
+                        }
+                        j += 1usize
+                    }
+                    if pv > cw { cw = pv }
+                    inn[pick] = true
+                    cur = pick
+                    added += 1usize
+                }
+            }
+            out[vb + 7usize * cn + c] = cw
+            if cw > worst { worst = cw }
+            c += 1usize
+        }
+        out[14usize] = worst
+    }
+    if (flags / 16usize) % 2usize == 1usize {
+        let (ps, e11) = mem.alloc[f64](a, n)
+        if e11 != ok { ret mem.Full }
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if sepwn || !noise || cl[i] <= cwn {
+                var mm = 1.0e300f64
+                var j = 0usize
+                while j < n {
+                    if cl[j] != cl[i] && (sepwn || !noise || cl[j] <= cwn) && d[i * n + j] < mm { mm = d[i * n + j] }
+                    j += 1usize
+                }
+                ps[m] = mm
+                m += 1usize
+            }
+            i += 1usize
+        }
+        cs_sort(ps, m)
+        var take = usize(math.floor[f64](f64(m) * sepprob))
+        if take == 0usize { take = 1usize }
+        var sm = 0.0f64
+        i = 0usize
+        while i < take {
+            sm += ps[i]
+            i += 1usize
+        }
+        out[15usize] = sm / f64(take)
     }
     ret ok
 }

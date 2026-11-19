@@ -1,0 +1,13 @@
+@relation df
+@attribute V1 numeric
+@attribute X2nd numeric
+@attribute "a b" string
+@attribute x.y numeric
+@attribute X_z numeric
+@data
+TRUE,TRUE,'plain',?,?
+TRUE,FALSE,'Z9',TRUE,1.5e-10
+FALSE,TRUE,'q\'r\\s',TRUE,1e-04
+?,FALSE,'L1',TRUE,99999
+TRUE,FALSE,?,TRUE,-0.5
+TRUE,?,'a\\b',TRUE,1234567890123456

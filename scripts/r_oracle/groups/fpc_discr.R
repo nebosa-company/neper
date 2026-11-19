@@ -1,8 +1,8 @@
 # fpc::discrcoord. Args: (n, p, K, pool, cl[n], x[n p] row-major, which): pool 0 "n", 1 "equal"; which 0 sum of the eigenvalues, 1 sum of the projections,
-# 2 sum of index * projection (row-major), 3 sum of W, 4 sum of index * W (row-major), with W the pooled within-group covariance.
+# 8 signed index-weighted sum of units, 9 of the projections (row-major); 2 sum of index * projection (row-major), 3 sum of W, 4 sum of index * W (row-major), with W the pooled within-group covariance.
 suppressMessages(library(fpc))
 cases <- list()
-add <- function(fn, args, want, rel = 1e-7, abs = 1e-9) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
+add <- function(fn, args, want, rel = 1e-9, abs = 1e-10) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
 set.seed(20261237)
 flat <- function(m) as.vector(t(unclass(m)))
 for (rep in 1:12) {
@@ -20,5 +20,7 @@ for (rep in 1:12) {
   add("dc", c(base, 4), sum(seq_along(flat(d$W)) * flat(d$W)))
   add("dc", c(base, 5), sum(d$proj[, 1]^2)); add("dc", c(base, 6), sum(d$proj[, p]^2))
   add("dc", c(base, 7), sum(abs(d$units)))
+  add("dc", c(base, 8), sum(seq_along(flat(d$units)) * flat(d$units)))
+  add("dc", c(base, 9), sum(seq_along(flat(d$proj)) * flat(d$proj)))
 }
 emit("fpc_discr", "fpc", list(cases))
