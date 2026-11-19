@@ -1132,3 +1132,91 @@ fn tobit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lo: 
     out[m] = 0.0f64 - tob_f(&c, par)
     ret true
 }
+
+type BbCtx = struct { x: []const f64, y: []const f64, m: []const f64, n: usize, p: usize, q: []f64 }
+
+fn lbeta2(u: f64, v: f64) -> f64 { ret nm.lgammafn(u) + nm.lgammafn(v) - nm.lgammafn(u + v) }
+
+// minus the beta-binomial log-likelihood at (beta: logit mu = x' beta, then the logit of rho)
+fn bb_f(c: *BbCtx, par: []const f64) -> f64 {
+    let p = c.p
+    let rho = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - par[p]))
+    let s = (1.0f64 - rho) / rho
+    var ll = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        var eta = 0.0f64
+        var t = 0usize
+        while t < p {
+            eta += c.x[i * p + t] * par[t]
+            t += 1usize
+        }
+        let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
+        let al = mu * s
+        let be = (1.0f64 - mu) * s
+        let y = c.y[i]
+        let m = c.m[i]
+        ll += nm.lgammafn(m + 1.0f64) - nm.lgammafn(y + 1.0f64) - nm.lgammafn(m - y + 1.0f64) + lbeta2(y + al, m - y + be) - lbeta2(al, be)
+        i += 1usize
+    }
+    ret 0.0f64 - ll
+}
+
+fn bb_g(c: *BbCtx, par: []const f64, g: []f64) {
+    let mm = par.len
+    var i = 0usize
+    while i < mm {
+        c.q[i] = par[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < mm {
+        let h = 1.0e-6f64
+        c.q[i] = par[i] + h
+        let fp = bb_f(c, c.q[0usize..mm])
+        c.q[i] = par[i] - h
+        let fm = bb_f(c, c.q[0usize..mm])
+        c.q[i] = par[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// vglm(cbind(y, m - y) ~ x, betabinomial): logit mu = x' beta (x with its intercept column) and a constant logit rho; out: beta (p), the logit of rho, the log-likelihood
+fn betabinomial(a: *mem.Arena, x: []const f64, y: []const f64, m: []const f64, n: usize, p: usize, out: []f64) -> bool {
+    let mm = p + 1usize
+    let (par, e1) = mem.alloc[f64](a, mm)
+    let (qq, e2) = mem.alloc[f64](a, mm)
+    let (scr, e3) = mem.alloc[f64](a, mm * mm + 6usize * mm + 16usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    var t = 0usize
+    while t < mm {
+        par[t] = 0.0f64
+        t += 1usize
+    }
+    var sy = 0.0f64
+    var sm = 0.0f64
+    var i = 0usize
+    while i < n {
+        sy += y[i]
+        sm += m[i]
+        i += 1usize
+    }
+    let pr = sy / sm
+    par[0usize] = math.log[f64](pr / (1.0f64 - pr))
+    par[p] = math.log[f64](0.1f64 / 0.9f64)
+    var c = BbCtx { x: x, y: y, m: m, n: n, p: p, q: qq }
+    var round = 0usize
+    while round < 2usize {
+        let (r, e4) = opt.bfgs[BbCtx](&c, bb_f, bb_g, par, 1.0e-11f64, 300u32, scr)
+        if e4 != ok { ret false }
+        round += 1usize
+    }
+    t = 0usize
+    while t < mm {
+        out[t] = par[t]
+        t += 1usize
+    }
+    out[mm] = 0.0f64 - bb_f(&c, par)
+    ret true
+}

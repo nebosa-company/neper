@@ -4540,4 +4540,5 @@ D7714	1354	pcubature in two and more dimensions
 D7715	1258	the pcubature maxEval rule
 D7642	869	VGAM: zero-inflated Poisson regression
 D7716	1383	segmented() for one breakpoint
-D7643	768	VGAM: Tobit regression
+D7643	769	VGAM: Tobit regression
+D7644	838	VGAM: beta-binomial regression
