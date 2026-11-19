@@ -22,4 +22,11 @@ for (rep in 1:30) {
   eq <- equivalence_test(x, range = r, ci = ci, ci_method = me, verbose = FALSE)
   add("equiv", c(ci, mi, r, n, x, 0), match(eq$ROPE_Equivalence, c("Rejected", "Accepted", "Undecided")) - 1)
 }
+# map_estimate (kernel, Sheather-Jones): "map" (0, which 0 estimate 1 density, n, x...)
+for (rep in 1:20) {
+  n <- sample(80:400, 1); x <- round(if (rep %% 3 == 0) rgamma(n, 2, 1) else rnorm(n, runif(1, -1, 1), runif(1, 0.5, 2)), 5)
+  m <- suppressWarnings(map_estimate(x, verbose = FALSE))
+  cases[[length(cases) + 1]] <- case("map", c(0, 0, n, x), as.numeric(m), rel = 1e-6, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("map", c(0, 1, n, x), as.numeric(attr(m, "MAP_density")), rel = 1e-6, abs = 1e-9)
+}
 emit("bayestestr", "bayestestR", list(cases))

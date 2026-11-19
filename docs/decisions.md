@@ -50485,3 +50485,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `performancepkg.std_params_lm` z-scores the response and the numeric predictors and fits least squares, returning the slopes and their t intervals at the asked level; for an lm with numeric predictors the refit, basic and posthoc methods all give these slopes.
 
 **Result.** `oracle_performancepkg` (1188 cases, 114 new) equals `parameters::standardize_parameters` on Windows to 1e-8. Linux pending. L339 stays partial: factor predictors and the interaction-aware methods, bayestestR map_estimate, si and bayesfactor_savagedickey (they need R's density()), Nakagawa R2 and icc (mixed models), other outlier methods.
+
+## D7332 — bayestestR: map_estimate
+
+**Decision.** `bayestestr.map_estimate` evaluates R's `density` (Gaussian kernel, the Sheather-Jones bandwidth of `bwsel.bw_sj`) at 1024 points between min(x) and max(x), as `estimate_density(method = "kernel", precision = 2^10, bw = "SJ")` does, and returns the first point of the highest density with that density.
+
+**Result.** `oracle_bayestestr` (440 cases, 40 new) equals bayestestR on Windows to 1e-6 for samples up to 400 values (the bandwidth port is the n <= 500 one). Linux pending. L339 stays partial: si and bayesfactor_savagedickey, factor predictors in standardize_parameters, Nakagawa R2 and icc (mixed models), other outlier methods.

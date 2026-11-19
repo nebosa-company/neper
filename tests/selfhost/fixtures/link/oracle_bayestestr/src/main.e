@@ -20,6 +20,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     let n = usize(x[2usize])
     let s = x[3usize..3usize + n]
+    if str.eq(c.name, "map") {
+        // args (0, which 0 the estimate 1 its density, n, x...)
+        let mn = usize(x[2usize])
+        var mo: [2]f64 = zero
+        if bt.map_estimate(a, x[3usize..3usize + mn], mo[0usize..2usize]) != ok { ret 0.0f64 / 0.0f64 }
+        ret mo[usize(x[1usize])]
+    }
     if str.eq(c.name, "hdi") { ret bt.hdi(a, s, x[0usize], usize(x[1usize])) }
     if str.eq(c.name, "eti") { ret bt.eti(a, s, x[0usize], usize(x[1usize])) }
     if str.eq(c.name, "pd") { ret bt.p_direction(s) }
