@@ -145,3 +145,64 @@ fn msprep(a: *mem.Arena, k: usize, n: usize, trans: []const usize, time: []const
     }
     ret (rows, ok)
 }
+
+// msfit for the model with no covariates (coxph(Surv(Tstart, Tstop, status) ~ strata(trans)), Breslow): the Nelson-Aalen cumulative hazard of each transition at the unique times
+// of the status-1 rows (over all transitions) and the largest follow-up time (survfit includes it). rows is the msprep output (7 values a row); times receives the unique event times and cum (trans-major, ntrans by the count) the
+// cumulative hazards; the answer is the number of unique times. A transition with nobody at risk at a time adds nothing.
+fn msfit_nelson_aalen(a: *mem.Arena, nrows: usize, rows: []const f64, ntrans: usize, times: []f64, cum: []f64) -> usize {
+    var mx = 0.0f64
+    var r0 = 0usize
+    while r0 < nrows {
+        if rows[r0 * 7usize + 5usize] > mx { mx = rows[r0 * 7usize + 5usize] }
+        r0 += 1usize
+    }
+    var cnt = 0usize
+    var r = 0usize
+    while r < nrows {
+        var tmax = rows[r * 7usize + 6usize] != 0.0f64
+        if rows[r * 7usize + 5usize] == mx { tmax = true }
+        if tmax {
+            let v = rows[r * 7usize + 5usize]
+            var j = cnt
+            var dup = false
+            var q = 0usize
+            while q < cnt {
+                if times[q] == v { dup = true }
+                q += 1usize
+            }
+            if !dup {
+                while j > 0usize && times[j - 1usize] > v {
+                    times[j] = times[j - 1usize]
+                    j -= 1usize
+                }
+                times[j] = v
+                cnt += 1usize
+            }
+        }
+        r += 1usize
+    }
+    var k = 0usize
+    while k < ntrans {
+        var acc = 0.0f64
+        var t = 0usize
+        while t < cnt {
+            var dd = 0.0f64
+            var nr = 0.0f64
+            r = 0usize
+            while r < nrows {
+                if usize(rows[r * 7usize + 3usize]) == k + 1usize {
+                    if rows[r * 7usize + 4usize] < times[t] && times[t] <= rows[r * 7usize + 5usize] {
+                        nr += 1.0f64
+                        if rows[r * 7usize + 5usize] == times[t] && rows[r * 7usize + 6usize] != 0.0f64 { dd += 1.0f64 }
+                    }
+                }
+                r += 1usize
+            }
+            if nr > 0.0f64 { acc += dd / nr }
+            cum[k * cnt + t] = acc
+            t += 1usize
+        }
+        k += 1usize
+    }
+    ret cnt
+}
