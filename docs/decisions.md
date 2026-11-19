@@ -50833,3 +50833,6 @@ R's cluster(data, c("a", "b"), ...) stops with "there are too many specified var
 
 ## D7456 — lpSolve sensitivity output
 `lp_sens` returns lp(compute.sens = 1): duals (constraint prices, then the reduced costs c_j - sum y_i a_ij), the right-hand-side ranges of the binding constraints and the value ranges of the nonbasic variables (+-1e30 where lpSolve reports none), and the objective coefficient ranges (basic variables by the ratio test over the nonbasic reduced costs, nonbasic ones from the reduced cost, one-sided). It reads the final tableau of the maximisation form of `opt.simplex` (min negates c, a >= row is negated) and maps the signs back. Equal to lpSolve on 60 bounded random programs, max with <= rows and min with >= rows (1487 values in oracle_lpsolve_sens); equality and mixed rows and degenerate ties are not covered. Open for L367: lpSolveAPI, the other clue methods and consensus.
+
+## D7457 — lpSolve sensitivity with mixed row directions
+The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is negated into the maximisation form), equal to lpSolve on 60 further random programs (3117 values in oracle_lpsolve_sens in all). Equality rows and degenerate ties are still not covered. Open for L367: those, lpSolveAPI, the other clue methods and consensus.
