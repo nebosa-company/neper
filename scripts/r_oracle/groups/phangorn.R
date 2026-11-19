@@ -81,4 +81,13 @@ for (rep in 1:60) {
   # internal node numbers keep their order after nt, so they stay valid; the tips now use the first tree's numbering
   cases[[length(cases) + 1]] <- case("rfdist", c(nt, nrow(t1$edge), nrow(e2), t1$edge[, 1] - 1, t1$edge[, 2] - 1, e2[, 1] - 1, e2[, 2] - 1), as.numeric(RF.dist(t1, t2)), rel = 0, abs = 1e-9)
 }
+# optim.pml(pml(tree, data, model = "JC"), optEdge = TRUE): the maximised log-likelihood ("optedge": nt, ns, ne, parent, child, starting edge lengths, data); data simulated on the tree so that the optimum is interior
+for (rep in 1:6) {
+  nt <- sample(5:7, 1); ns <- sample(100:200, 1)
+  tr <- reorder(rtree(nt), "cladewise"); tr$edge.length <- round(runif(nrow(tr$edge), 0.05, 0.4), 4)
+  d <- simSeq(tr, l = ns, type = "DNA"); M <- as.character(d)
+  tr0 <- tr; tr0$edge.length <- rep(0.1, nrow(tr$edge))
+  fit <- optim.pml(pml(tr0, d, model = "JC"), optEdge = TRUE, control = pml.control(trace = 0, epsilon = 1e-12))
+  cases[[length(cases) + 1]] <- case("optimedgesjc", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, tr0$edge.length, as.vector(t(matrix(bits[as.vector(M[tr$tip.label, ])], nt, ns)))), as.numeric(fit$logLik), rel = 1e-6, abs = 1e-4)
+}
 emit("phangorn", "phangorn", list(cases))

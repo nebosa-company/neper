@@ -5,6 +5,7 @@
 
 use e.math
 use e.math.nmath as nm
+use e.math.opt as opt
 use e.mem
 
 fn fitch(a: *mem.Arena, par: []const f64, chd: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize) -> f64 {
@@ -528,4 +529,70 @@ fn rf_dist(a: *mem.Arena, par1: []const f64, chd1: []const f64, ne1: usize, par2
         i += 1usize
     }
     ret f64(n1 + n2 - 2usize * common)
+}
+
+type EdgeCtx = struct { a: *mem.Arena, par: []const f64, chd: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bl: []f64, q: []f64 }
+
+// minus the Jukes-Cantor log-likelihood at the log edge lengths x
+fn edge_f(c: *EdgeCtx, x: []const f64) -> f64 {
+    let start = mem.mark(c.a)
+    var k = 0usize
+    while k < c.ne {
+        c.bl[k] = math.exp[f64](x[k])
+        k += 1usize
+    }
+    let ll = jc_loglik(c.a, c.par, c.chd, c.bl, c.ne, c.nt, c.data, c.ns)
+    mem.reset(c.a, start)
+    ret 0.0f64 - ll
+}
+
+fn edge_g(c: *EdgeCtx, x: []const f64, g: []f64) {
+    let m = x.len
+    var i = 0usize
+    while i < m {
+        c.q[i] = x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        let h = 1.0e-6f64
+        c.q[i] = x[i] + h
+        let fp = edge_f(c, c.q[0usize..m])
+        c.q[i] = x[i] - h
+        let fm = edge_f(c, c.q[0usize..m])
+        c.q[i] = x[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// optim.pml(pml(tree, data), optEdge = TRUE) under Jukes-Cantor: the edge lengths bl (starting values on entry, optimised on exit) maximising the likelihood, by BFGS on their logarithms; returns the log-likelihood there
+fn optim_edges_jc(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []f64, ne: usize, nt: usize, data: []const f64, ns: usize) -> f64 {
+    let (x, e1) = mem.alloc[f64](a, ne)
+    let (qq, e2) = mem.alloc[f64](a, ne)
+    let (scr, e3) = mem.alloc[f64](a, ne * ne + 6usize * ne + 16usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    while k < ne {
+        x[k] = math.log[f64](bl[k])
+        k += 1usize
+    }
+    var c = EdgeCtx { a: a, par: par, chd: chd, ne: ne, nt: nt, data: data, ns: ns, bl: bl, q: qq }
+    var round = 0usize
+    while round < 2usize {
+        let (r, e4) = opt.bfgs[EdgeCtx](&c, edge_f, edge_g, x, 1.0e-10f64, 400u32, scr)
+        if e4 != ok { ret 0.0f64 / 0.0f64 }
+        k = 0usize
+        while k < ne {
+            if x[k] < -18.0f64 { x[k] = -18.0f64 }
+            k += 1usize
+        }
+        round += 1usize
+    }
+    k = 0usize
+    while k < ne {
+        bl[k] = math.exp[f64](x[k])
+        k += 1usize
+    }
+    ret 0.0f64 - edge_f(&c, x)
 }

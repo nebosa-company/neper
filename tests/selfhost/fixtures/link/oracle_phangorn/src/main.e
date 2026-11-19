@@ -30,6 +30,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nt = usize(z[0usize])
     let ns = usize(z[1usize])
     let ne = usize(z[2usize])
+    if c.name.len == 12usize {
+        let (bl, be) = mem.alloc[f64](a, ne)
+        if be != ok { ret 0.0f64 / 0.0f64 }
+        var k = 0usize
+        while k < ne {
+            bl[k] = z[3usize + 2usize * ne + k]
+            k += 1usize
+        }
+        ret pg.optim_edges_jc(a, z[3usize..3usize + ne], z[3usize + ne..3usize + 2usize * ne], bl, ne, nt, z[3usize + 3usize * ne..3usize + 3usize * ne + nt * ns], ns)
+    }
     if c.name.len == 10usize {
         let o = 3usize + 3usize * ne
         ret pg.gtr_loglik_gamma(a, z[3usize..3usize + ne], z[3usize + ne..3usize + 2usize * ne], z[3usize + 2usize * ne..o], ne, nt, z[o + 13usize..o + 13usize + nt * ns], ns, z[o..o + 4usize], z[o + 4usize..o + 10usize], z[o + 10usize], usize(z[o + 11usize]), z[o + 12usize])
