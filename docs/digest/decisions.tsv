@@ -4262,4 +4262,5 @@ D7353	538	gamlss.dist: WEI and EXP random numbers
 D7354	820	performance: performance_pcp and r2_mckelvey
 D7355	636	performance: r2_kullback
 D7356	756	performance: performance_score
-D7357	646	performance: performance_score for Poisson regression
+D7357	647	performance: performance_score for Poisson regression
+D7358	819	survival: Schoenfeld residuals

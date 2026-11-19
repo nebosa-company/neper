@@ -58,6 +58,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let cfe = cs.coxph_cp(a, x[3usize..3usize + cn], x[3usize + cn..3usize + 2usize * cn], x[3usize + 2usize * cn..3usize + 3usize * cn], cg, x[3usize + 4usize * cn..3usize + 4usize * cn + cn * cpp], cn, cpp, usize(x[2usize]), ccf, cse, cll, cvo)
         if cfe != ok { ret 0.0f64 / 0.0f64 }
         let cqq = usize(x[3usize + 4usize * cn + cn * cpp])
+        if cqq >= 200usize {
+            let (qs, qse) = mem.alloc[f64](a, cpp)
+            let (qm, qme) = mem.alloc[f64](a, cpp)
+            if qse != ok || qme != ok { ret 0.0f64 / 0.0f64 }
+            let _nd = cs.coxph_cp_schoenfeld(a, x[3usize..3usize + cn], x[3usize + cn..3usize + 2usize * cn], x[3usize + 2usize * cn..3usize + 3usize * cn], cg, x[3usize + 4usize * cn..3usize + 4usize * cn + cn * cpp], cn, cpp, ccf, qs, qm)
+            ret qs[cqq - 200usize]
+        }
         if cqq >= 100usize {
             // robust variance (Breslow): q 100 + j standard error j, every row its own cluster
             var ri = 0usize

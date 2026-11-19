@@ -946,3 +946,64 @@ fn coxph_cp_robust(a: *mem.Arena, start: []const f64, stop: []const f64, status:
     }
     ret ok
 }
+
+// the Schoenfeld residuals of a Breslow counting-process fit at coef: one row per death, x_i - xbar(t_i) with xbar the weighted mean of the covariates over the risk set {start < t <= stop} of its stratum.
+// sumsq[j] receives the sum of squares of column j and sums[j] the column sum (which is the score, zero at the maximum); nd the number of deaths
+fn coxph_cp_schoenfeld(a: *mem.Arena, start: []const f64, stop: []const f64, status: []const f64, strat: []const usize, x: []const f64, n: usize, p: usize, coef: []const f64, sumsq: []f64, sums: []f64) -> usize {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (s1, e2) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok { ret 0usize }
+    var i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        var j = 0usize
+        while j < p {
+            eta += x[j * n + i] * coef[j]
+            j += 1usize
+        }
+        w[i] = math.exp[f64](eta)
+        i += 1usize
+    }
+    var j0 = 0usize
+    while j0 < p {
+        sumsq[j0] = 0.0f64
+        sums[j0] = 0.0f64
+        j0 += 1usize
+    }
+    var nd = 0usize
+    i = 0usize
+    while i < n {
+        if status[i] > 0.5f64 && start[i] < stop[i] {
+            let t = stop[i]
+            let sg = strat[i]
+            var s0 = 0.0f64
+            var j = 0usize
+            while j < p {
+                s1[j] = 0.0f64
+                j += 1usize
+            }
+            var k = 0usize
+            while k < n {
+                if strat[k] == sg && start[k] < t && stop[k] >= t {
+                    s0 += w[k]
+                    j = 0usize
+                    while j < p {
+                        s1[j] += w[k] * x[j * n + k]
+                        j += 1usize
+                    }
+                }
+                k += 1usize
+            }
+            j = 0usize
+            while j < p {
+                let r = x[j * n + i] - s1[j] / s0
+                sumsq[j] += r * r
+                sums[j] += r
+                j += 1usize
+            }
+            nd += 1usize
+        }
+        i += 1usize
+    }
+    ret nd
+}

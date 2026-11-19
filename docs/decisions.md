@@ -50662,3 +50662,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `performancepkg.poisson_score` takes p_y = dpois(y, mu) at the fitted means of a Poisson regression and forms the logarithmic, quadratic and spherical scores as for the binomial model.
 
 **Result.** `oracle_performancepkg` (1543 cases, 75 on 25 models) equals performance on Windows to 1e-7. Linux pending. L339 stays partial: scores for negative binomial and zero-inflated models, bayesfactor_savagedickey and si (they need the uninstalled logspline package), factor predictors in standardize_parameters, Nakagawa R2 and icc (mixed models), other outlier methods.
+
+## D7358 — survival: Schoenfeld residuals
+
+**Decision.** `coxext.coxph_cp_schoenfeld` gives the Schoenfeld residuals of a Breslow counting-process fit: for each death, its covariates less the weighted mean over its risk set {start < t <= stop} in its stratum; the function returns the column sums of squares and the column sums (the score, zero at the maximum) and the number of deaths.
+
+**Result.** `oracle_coxph` (1122 cases, 26 new) equals `residuals(f, type = "schoenfeld")` on Windows to 1e-6, compared as the sum of squares of each column (the rows are in survival's sorted order, the sums do not depend on it). Linux pending. L311 stays partial: Schoenfeld residuals for Efron ties and scaled residuals, robust variance for Efron and exact fits and by shared ids, frailty, tmerge, interval and left censoring.
