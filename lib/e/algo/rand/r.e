@@ -291,3 +291,86 @@ fn rbinom_inv(r: *Rng, n: f64, pp: f64) -> f64 {
     if pp > 0.5f64 { ix = nn - ix }
     ret ix
 }
+
+// rgamma(a, scale) for a >= 1 as R's nmath rgamma.c does (Ahrens and Dieter 1982, algorithm GD): the same steps and constants, so the stream matches R's. a < 1 (algorithm GS) is not here and answers NaN.
+fn rgamma(r: *Rng, a: f64, scale: f64) -> f64 {
+    if a != a || scale != scale { ret special.nan() }
+    if a < 1.0f64 { ret special.nan() }
+    let sqrt32 = 5.656854f64
+    let q1 = 0.04166669f64
+    let q2 = 0.02083148f64
+    let q3 = 0.00801191f64
+    let q4 = 0.00144121f64
+    let q5 = -7.388e-5f64
+    let q6 = 2.4511e-4f64
+    let q7 = 2.424e-4f64
+    let a1 = 0.3333333f64
+    let a2 = -0.250003f64
+    let a3 = 0.2000062f64
+    let a4 = -0.1662921f64
+    let a5 = 0.1423657f64
+    let a6 = -0.1367177f64
+    let a7 = 0.1233795f64
+    let s2 = a - 0.5f64
+    let s = math.sqrt[f64](s2)
+    let d = sqrt32 - s * 12.0f64
+    var t = norm(r)
+    var x = s + 0.5f64 * t
+    let ret_val = x * x
+    if t >= 0.0f64 { ret scale * ret_val }
+    var u = unif(r)
+    if d * u <= t * t * t { ret scale * ret_val }
+    let rr = 1.0f64 / a
+    let q0 = ((((((q7 * rr + q6) * rr + q5) * rr + q4) * rr + q3) * rr + q2) * rr + q1) * rr
+    var b = 0.0f64
+    var si = 0.0f64
+    var c = 0.0f64
+    if a <= 3.686f64 {
+        b = 0.463f64 + s + 0.178f64 * s2
+        si = 1.235f64
+        c = 0.195f64 / s - 0.079f64 + 0.16f64 * s
+    } else if a <= 13.022f64 {
+        b = 1.654f64 + 0.0076f64 * s2
+        si = 1.68f64 / s + 0.275f64
+        c = 0.062f64 / s + 0.024f64
+    } else {
+        b = 1.77f64
+        si = 0.75f64
+        c = 0.1515f64 / s
+    }
+    if x > 0.0f64 {
+        let v = t / (s + s)
+        var q = 0.0f64
+        if math.abs[f64](v) <= 0.25f64 {
+            q = q0 + 0.5f64 * t * t * ((((((a7 * v + a6) * v + a5) * v + a4) * v + a3) * v + a2) * v + a1) * v
+        } else {
+            q = q0 - s * t + 0.25f64 * t * t + (s2 + s2) * math.log[f64](1.0f64 + v)
+        }
+        if math.log[f64](1.0f64 - u) <= q { ret scale * ret_val }
+    }
+    var done = false
+    while !done {
+        let e = exp_unit(r)
+        u = unif(r)
+        u = u + u - 1.0f64
+        if u < 0.0f64 { t = b - si * e } else { t = b + si * e }
+        if t >= -0.71874483771719f64 {
+            let v = t / (s + s)
+            var q = 0.0f64
+            if math.abs[f64](v) <= 0.25f64 {
+                q = q0 + 0.5f64 * t * t * ((((((a7 * v + a6) * v + a5) * v + a4) * v + a3) * v + a2) * v + a1) * v
+            } else {
+                q = q0 - s * t + 0.25f64 * t * t + (s2 + s2) * math.log[f64](1.0f64 + v)
+            }
+            if q > 0.0f64 {
+                let w = math.exp[f64](q) - 1.0f64
+                if c * math.abs[f64](u) <= w * math.exp[f64](e - 0.5f64 * t * t) { done = true }
+            }
+        }
+    }
+    x = s + 0.5f64 * t
+    ret scale * x * x
+}
+
+// rchisq(1, df) = rgamma(df / 2, 2)
+fn rchisq(r: *Rng, df: f64) -> f64 { ret rgamma(r, df / 2.0f64, 2.0f64) }

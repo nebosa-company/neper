@@ -549,3 +549,4 @@ oracle_pmcmr_siegel
 oracle_pmcmr_exact
 oracle_pmcmr_ns
 oracle_pmcmr_steelk
+oracle_rgamma
