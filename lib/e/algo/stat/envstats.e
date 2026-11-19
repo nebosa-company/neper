@@ -1584,3 +1584,68 @@ fn e_gamma(y: []const f64, method: usize, out: []f64) {
     out[0usize] = shape
     out[1usize] = m / shape
 }
+
+// elnorm(x, method): meanlog and sdlog of log(x) by the minimum variance unbiased estimator (0, divisor n - 1) or maximum likelihood (1, divisor n); out = (meanlog, sdlog)
+fn e_lnorm(x: []const f64, method: usize, out: []f64) {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        m += math.log[f64](x[i])
+        i += 1usize
+    }
+    m = m / n
+    var ss = 0.0f64
+    i = 0usize
+    while i < x.len {
+        let d = math.log[f64](x[i]) - m
+        ss += d * d
+        i += 1usize
+    }
+    var den = n - 1.0f64
+    if method == 1usize { den = n }
+    out[0usize] = m
+    out[1usize] = math.sqrt[f64](ss / den)
+}
+
+// eweibull(x, method = "mle"): the shape k solves sum(x^k log x) / sum(x^k) - 1 / k = mean(log x) (Newton from the moment start), scale (sum(x^k) / n)^(1 / k); out = (shape, scale)
+fn e_weibull(x: []const f64, out: []f64) {
+    let n = f64(x.len)
+    var ml = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        ml += math.log[f64](x[i])
+        i += 1usize
+    }
+    ml = ml / n
+    var k = 1.0f64
+    var it = 0usize
+    while it < 200usize {
+        var s0 = 0.0f64
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        i = 0usize
+        while i < x.len {
+            let lx = math.log[f64](x[i])
+            let xk = math.exp[f64](k * lx)
+            s0 += xk
+            s1 += xk * lx
+            s2 += xk * lx * lx
+            i += 1usize
+        }
+        let f = s1 / s0 - 1.0f64 / k - ml
+        let df = (s2 * s0 - s1 * s1) / (s0 * s0) + 1.0f64 / (k * k)
+        var step = f / df
+        if k - step <= 0.0f64 { step = k / 2.0f64 }
+        k -= step
+        if math.abs[f64](step) < 1.0e-14f64 * k { it = 200usize } else { it += 1usize }
+    }
+    var s0 = 0.0f64
+    i = 0usize
+    while i < x.len {
+        s0 += math.exp[f64](k * math.log[f64](x[i]))
+        i += 1usize
+    }
+    out[0usize] = k
+    out[1usize] = math.exp[f64](math.log[f64](s0 / n) / k)
+}

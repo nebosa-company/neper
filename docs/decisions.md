@@ -50311,3 +50311,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7392 — EnvStats egamma
 `e_gamma` reuses the gamma maximum likelihood shape (Newton on log s - digamma(s) = log(mean) - mean(log y)); the bias-corrected estimate is shape ((n - 3) shape + 2 n / 3) / n ... in the form (n - 3) shape / n + 2 / (3 n), recovered from R's numbers, with scale mean / shape; the method of moments uses the divisor-n variance (shape mean^2 / v, scale v / mean). Equal to EnvStats to 1e-5 on 30 samples (the maximum likelihood fit is iterative on both sides). L466 stays at 0.3.
+
+## D7393 — EnvStats eweibull and elnorm
+`e_weibull` solves the Weibull likelihood equation sum(x^k log x) / sum(x^k) - 1 / k = mean(log x) by Newton on the shape with scale (sum(x^k) / n)^(1 / k); `e_lnorm` is mean and sd of log(x) with divisor n - 1 (mvue) or n (mle). Equal to EnvStats to 1e-5 on 30 samples (R's eweibull optimises numerically and warns on NaN evaluations along the way; its answer is the same maximum). L466 stays at 0.3.
