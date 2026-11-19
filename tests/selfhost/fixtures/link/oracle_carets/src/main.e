@@ -189,6 +189,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "vip") {
+        let n = usize(z[0usize])
+        let p = usize(z[1usize])
+        let (o, e) = mem.alloc[f64](a, p)
+        if e != ok { ret nan }
+        if ct.var_imp_pois(a, z[3usize..3usize + n * p], n, p, z[3usize + n * p..3usize + n * p + n], o) != ok { ret nan }
+        ret o[usize(z[2usize])]
+    }
     if str.eq(c.name, "vig") {
         // (n, p, index, X[n p] intercept first, y[n]): varImp of a logistic glm
         let n = usize(z[0usize])

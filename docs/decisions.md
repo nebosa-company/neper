@@ -50905,3 +50905,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7478 — caret createMultiFolds for a numeric response
 `create_multi_folds_numeric` repeats `create_folds_numeric` from the one generator, as createMultiFolds calls createFolds times times; equal to caret under set.seed on 30 numeric responses (k 2 to 6, 1 to 4 repeats; the fold assignment of each repeat, weighted by repeat and position) in oracle_carets_cfn. Open for L519: preProcess method ica (fastICA with its seeded start), varImp for glm families beyond binomial and for tree and neural models.
+
+## D7479 — caret varImp for a Poisson glm
+`var_imp_pois` is varImp(glm(family = poisson)): the logistic routine with the log link (start eta = log(y + 0.1), mu = exp(eta), weight mu, working response eta + (y - mu) / mu, deviance 2 (y log(y / mu) - (y - mu)), the same stopping rule and (X'WX)^-1 from the last iteration); the importance is the absolute z value of each non-intercept coefficient. Equal to caret on 15 Poisson fits (about 45 values added to oracle_carets). Open for L519: preProcess method ica, varImp for the Gaussian-identity, Gamma and other glm families and for tree and neural models.

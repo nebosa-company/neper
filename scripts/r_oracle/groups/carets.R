@@ -108,4 +108,11 @@ for (rep in 1:25) {
   d <- as.data.frame(X); pr <- preProcess(d, method = "pca", thresh = th); sc <- as.matrix(predict(pr, d)); k <- ncol(sc); sdv <- prcomp(d, scale. = TRUE)$sdev
   add("pca", c(th, 0, n, p, X), k, 1e-12); for (j in 1:p) add("pca", c(th, j, n, p, X), sdv[j], 1e-9); for (j in 1:k) add("pca", c(th, p + j, n, p, X), sum(abs(sc[, j])), 1e-8)
 }
+# varImp(glm poisson): "vip" (n, p, index, X[n p] intercept first, y)
+set.seed(20262401)
+for (rep in 1:15) {
+  n <- sample(60:150, 1); k <- sample(2:4, 1); Xm <- matrix(round(rnorm(n * k), 3), n, k); y <- rpois(n, exp(0.3 + Xm %*% c(0.4, -0.3, 0.2, 0.1)[1:k]))
+  d <- data.frame(y = y, Xm); m <- glm(y ~ ., poisson, d); vi <- varImp(m)$Overall
+  for (j in seq_along(vi)) add("vip", c(n, k + 1, j - 1, cbind(1, Xm), y), vi[j], 1e-6)
+}
 emit("carets", "caret", list(cases))
