@@ -851,3 +851,127 @@ fn design_lattice(a: *mem.Arena, rng: *rr.Rng, k: usize, r: usize, out: []usize)
     let _ = r
     ret ok
 }
+
+// design.alpha(trt, k, r) for ntr treatments in blocks of k (ntr a multiple of k, k at least 3) and r replicates from agricolae's four alpha-generator series (I: r = 2;
+// II: r = 3 with an odd number of blocks; III: r = 3 with an even number; IV: r = 4 with an odd number not divisible by 3): out holds the 0-based treatment codes of the
+// r * ntr plots, replicate by replicate, block by block. Answers NotAvailable-like failure (a non-ok error) when no series applies.
+error NoSeries
+
+fn design_alpha(a: *mem.Arena, rng: *rr.Rng, ntr: usize, k: usize, r: usize, out: []usize) -> err {
+    let s = ntr / k
+    if ntr % k != 0usize || k < 3usize { ret NoSeries }
+    let (al, e0) = mem.alloc[usize](a, k * r)
+    if e0 != ok { ret e0 }
+    var i = 0usize
+    while i < k * r {
+        al[i] = 0usize
+        i += 1usize
+    }
+    // al[row * r + m]
+    var series = 0usize
+    if r == 2usize && k <= s { series = 1usize }
+    if r == 3usize && s % 2usize != 0usize && k <= s { series = 2usize }
+    if r == 3usize && s % 2usize == 0usize && k < s { series = 3usize }
+    if r == 4usize && s % 2usize != 0usize && s % 3usize != 0usize && k <= s { series = 4usize }
+    if series == 0usize { ret NoSeries }
+    al[1usize * r + 1usize] = 1usize
+    if series == 2usize || series == 4usize { al[1usize * r + 2usize] = s - 1usize }
+    if series == 3usize { al[1usize * r + 2usize] = s / 2usize }
+    if series == 4usize { al[1usize * r + 3usize] = (s + 1usize) / 2usize }
+    i = 2usize
+    while i < k {
+        al[i * r + 1usize] = al[(i - 1usize) * r + 1usize] + 1usize
+        if series == 2usize || series == 4usize { al[i * r + 2usize] = al[(i - 1usize) * r + 2usize] - 1usize }
+        if series == 3usize { al[i * r + 2usize] = al[(i - 2usize) * r + 2usize] + 1usize }
+        if series == 4usize { al[i * r + 3usize] = al[(i - 2usize) * r + 3usize] + 1usize }
+        i += 1usize
+    }
+    // cc[(m * s + col) * k + row]
+    let (cc, e1) = mem.alloc[usize](a, r * s * k)
+    let (tmp, e2) = mem.alloc[usize](a, k)
+    let (tmp2, e3) = mem.alloc[usize](a, s * k)
+    if e1 != ok || e2 != ok || e3 != ok { ret e1 }
+    var m = 0usize
+    while m < r {
+        var j = 0usize
+        while j < k {
+            cc[(m * s + 0usize) * k + j] = al[j * r + m]
+            var c = 1usize
+            while c < s {
+                var v = cc[(m * s + c - 1usize) * k + j] + 1usize
+                if v >= s { v = 0usize }
+                cc[(m * s + c) * k + j] = v
+                c += 1usize
+            }
+            j += 1usize
+        }
+        m += 1usize
+    }
+    m = 0usize
+    while m < r {
+        var j = 0usize
+        while j < k {
+            var c = 0usize
+            while c < s {
+                cc[(m * s + c) * k + j] += j * s
+                c += 1usize
+            }
+            j += 1usize
+        }
+        m += 1usize
+    }
+    // within each block of each replicate the rows are permuted by sample(1:k, k)
+    m = 0usize
+    while m < r {
+        var c = 0usize
+        while c < s {
+            let (pm, e4) = rr.sample_int(a, rng, i64(k), i64(k), false)
+            if e4 != ok { ret e4 }
+            var j = 0usize
+            while j < k {
+                tmp[j] = cc[(m * s + c) * k + usize(pm[j]) - 1usize]
+                j += 1usize
+            }
+            j = 0usize
+            while j < k {
+                cc[(m * s + c) * k + j] = tmp[j]
+                j += 1usize
+            }
+            c += 1usize
+        }
+        m += 1usize
+    }
+    // then the blocks of each replicate by sample(1:s, s)
+    m = 0usize
+    while m < r {
+        let (pb, e5) = rr.sample_int(a, rng, i64(s), i64(s), false)
+        if e5 != ok { ret e5 }
+        var c = 0usize
+        while c < s {
+            var j = 0usize
+            while j < k {
+                tmp2[c * k + j] = cc[(m * s + usize(pb[c]) - 1usize) * k + j]
+                j += 1usize
+            }
+            c += 1usize
+        }
+        var q = 0usize
+        while q < s * k {
+            cc[m * s * k + q] = tmp2[q]
+            q += 1usize
+        }
+        m += 1usize
+    }
+    let (bp, e6) = rr.sample_int(a, rng, i64(ntr), i64(ntr), false)
+    if e6 != ok { ret e6 }
+    m = 0usize
+    while m < r {
+        var q = 0usize
+        while q < ntr {
+            out[m * ntr + q] = usize(bp[cc[m * s * k + q]]) - 1usize
+            q += 1usize
+        }
+        m += 1usize
+    }
+    ret ok
+}

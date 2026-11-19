@@ -117,4 +117,13 @@ invisible(capture.output(suppressMessages({
     for (i in seq_len(nrow(bk))) cases[[length(cases) + 1]] <- case("lt", c(16, seed, sd, k, r, i - 1), match(as.character(bk[[4]][i]), trt) - 1, rel = 0, abs = 0)
   }
 })))
+# design.alpha: op 17 (17, seed, sd, ntr, k, r, idx) fn "ab" the treatment code at book row idx (the r replicates in turn, each block by block)
+invisible(capture.output(suppressMessages({
+  for (cfg in list(c(12, 3, 2), c(15, 3, 3), c(24, 4, 3), c(20, 4, 4), c(30, 5, 2), c(18, 3, 2))) for (sd in 0:1) {
+    ntr <- cfg[1]; k <- cfg[2]; r <- cfg[3]; seed <- 1100 + ntr + k + r + 100 * sd; trt <- sprintf("T%02d", 1:ntr)
+    bk <- tryCatch(design.alpha(trt, k, r, serie = 2, seed = seed, kinds = if (sd == 1) "Super-Duper" else "Mersenne-Twister")$book, error = function(e) NULL)
+    if (is.null(bk)) next
+    for (i in seq_len(nrow(bk))) cases[[length(cases) + 1]] <- case("ab", c(17, seed, sd, ntr, k, r, i - 1), match(as.character(bk[[4]][i]), trt) - 1, rel = 0, abs = 0)
+  }
+})))
 emit("agricolae_groups", "agricolae", list(cases))
