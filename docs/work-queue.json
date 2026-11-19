@@ -1164,7 +1164,7 @@
       "group": "CRAN parity",
       "order": 816,
       "title": "phangorn: phylogenetic inference",
-      "score": 0.04,
+      "score": 0.2,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Started (D7630 to D7639: the Robinson-Foulds distance of two trees, optimised edge lengths under Jukes-Cantor (optim.pml optEdge), the Jukes-Cantor and general time-reversible (with discrete gamma rates and invariant sites) (F81, K80, HKY, GTR by their rates and frequencies) log-likelihood of a tree (pml), Fitch parsimony score of a binary tree on a DNA alignment with ambiguity codes, Sankoff parsimony with a cost matrix on any tree, upgma and wpgma merge heights and tree length, and dist.hamming and the Jukes-Cantor dist.ml of unambiguous DNA, equal to phangorn on Windows; oracle_phangorn, 1791 values; Linux pending). Open: pratchet and the search, estimating the substitution model parameters, optim.pml, modelTest, bootstrap. Was: Open (CRAN rank 666). Large. Needs L350. Acceptance, equal to phangorn: parsimony and pratchet, pml with JC, F81, K80, HKY, GTR and Gamma and invariant-site rate models, optim.pml, bootstrap.pml, modelTest, NJ and UPGMA from distances, tree and network operations."
@@ -1263,10 +1263,10 @@
       "group": "CRAN parity",
       "order": 825,
       "title": "VGAM: vector generalized linear and additive models",
-      "score": 0.05,
+      "score": 0.12,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Started (D7625 to D7628: cumulative logit, probit and cloglog links with parallel slopes, the multinomial logit, and the non-parallel cumulative model (log-likelihood only), coefficients, log-likelihood and standard errors equal to vglm on Windows; oracle_vgam_cum, oracle_vgam_multinom and oracle_vgam_cum_np; Linux pending). Open: the other families and links, non-parallel odds, factors, weights, vgam smoothers. Very large (about 150k lines upstream). Acceptance, equal to VGAM: vglm and vgam for the multinomial, cumulative, acat, sratio, zero-inflated, beta-binomial, Tobit and extreme-value families with their link functions."
+      "evidence": "Started (D7625 to D7640: cumulative logit, probit and cloglog links with parallel slopes, the multinomial logit, the adjacent categories model (acat, parallel), and the non-parallel cumulative model (log-likelihood only), coefficients, log-likelihood and standard errors equal to vglm on Windows; oracle_vgam_cum, oracle_vgam_multinom, oracle_vgam_cum_np and oracle_vgam_acat; Linux pending). Open: the other families and links, non-parallel odds, factors, weights, vgam smoothers. Very large (about 150k lines upstream). Acceptance, equal to VGAM: vglm and vgam for the multinomial, cumulative, acat, sratio, zero-inflated, beta-binomial, Tobit and extreme-value families with their link functions."
     },
     {
       "id": "L383",

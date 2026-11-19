@@ -591,3 +591,4 @@ oracle_phangorn
 oracle_tsne
 oracle_ncdf4
 oracle_gamlss_mom
+oracle_vgam_acat

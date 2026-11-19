@@ -573,3 +573,171 @@ fn cum_np(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, jn:
     out[q] = ll
     ret true
 }
+
+// vglm(y ~ x, acat(parallel = TRUE)) (loglink: P(Y = j + 1) / P(Y = j) = exp(alpha_j + x' beta)): the unnormalised log probability of class c is u_c = sum over l < c of (alpha_l + x' beta), so its derivative is 1 for each
+// alpha_l with l < c and c x for beta. An exponential family, so Newton on the exact information (the covariance of that derivative under the class probabilities) is Fisher scoring. out: alpha (jn - 1), beta (p), the
+// log-likelihood, then the standard errors in the same order; false when singular
+fn acat_par(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, jn: usize, out: []f64) -> bool {
+    let na = jn - 1usize
+    let q = na + p
+    let (par, e1) = mem.alloc[f64](a, q)
+    let (gr, e2) = mem.alloc[f64](a, q)
+    let (info, e3) = mem.alloc[f64](a, q * q)
+    let (mat, e4) = mem.alloc[f64](a, q * q)
+    let (step, e5) = mem.alloc[f64](a, q)
+    let (pr, e6) = mem.alloc[f64](a, jn)
+    let (dm, e7) = mem.alloc[f64](a, jn * q)
+    let (mean, e8) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret false }
+    var t = 0usize
+    while t < q {
+        par[t] = 0.0f64
+        t += 1usize
+    }
+    var ll = 0.0f64 - 1.0e300f64
+    var it = 0usize
+    while it < 100usize {
+        t = 0usize
+        while t < q * q {
+            info[t] = 0.0f64
+            t += 1usize
+        }
+        t = 0usize
+        while t < q {
+            gr[t] = 0.0f64
+            t += 1usize
+        }
+        var cur = 0.0f64
+        var i = 0usize
+        while i < n {
+            var eta = 0.0f64
+            t = 0usize
+            while t < p {
+                eta += x[i * p + t] * par[na + t]
+                t += 1usize
+            }
+            var u = 0.0f64
+            var mx = 0.0f64
+            var c = 0usize
+            while c < jn {
+                if c > 0usize { u += par[c - 1usize] + eta }
+                pr[c] = u
+                if u > mx { mx = u }
+                c += 1usize
+            }
+            var sm = 0.0f64
+            c = 0usize
+            while c < jn {
+                pr[c] = math.exp[f64](pr[c] - mx)
+                sm += pr[c]
+                c += 1usize
+            }
+            c = 0usize
+            while c < jn {
+                pr[c] = pr[c] / sm
+                var l = 0usize
+                while l < na {
+                    dm[c * q + l] = 0.0f64
+                    if l < c { dm[c * q + l] = 1.0f64 }
+                    l += 1usize
+                }
+                t = 0usize
+                while t < p {
+                    dm[c * q + na + t] = f64(c) * x[i * p + t]
+                    t += 1usize
+                }
+                c += 1usize
+            }
+            t = 0usize
+            while t < q {
+                mean[t] = 0.0f64
+                t += 1usize
+            }
+            c = 0usize
+            while c < jn {
+                t = 0usize
+                while t < q {
+                    mean[t] += pr[c] * dm[c * q + t]
+                    t += 1usize
+                }
+                c += 1usize
+            }
+            let yc = usize(y[i])
+            cur += math.log[f64](pr[yc])
+            t = 0usize
+            while t < q {
+                gr[t] += dm[yc * q + t] - mean[t]
+                t += 1usize
+            }
+            c = 0usize
+            while c < jn {
+                var u1 = 0usize
+                while u1 < q {
+                    var u2 = 0usize
+                    while u2 < q {
+                        info[u1 * q + u2] += pr[c] * dm[c * q + u1] * dm[c * q + u2]
+                        u2 += 1usize
+                    }
+                    u1 += 1usize
+                }
+                c += 1usize
+            }
+            var u1 = 0usize
+            while u1 < q {
+                var u2 = 0usize
+                while u2 < q {
+                    info[u1 * q + u2] -= mean[u1] * mean[u2]
+                    u2 += 1usize
+                }
+                u1 += 1usize
+            }
+            i += 1usize
+        }
+        if it > 0usize && math.abs[f64](cur - ll) < 1.0e-13f64 * (1.0f64 + math.abs[f64](cur)) {
+            ll = cur
+            break
+        }
+        ll = cur
+        t = 0usize
+        while t < q * q {
+            mat[t] = info[t]
+            t += 1usize
+        }
+        t = 0usize
+        while t < q {
+            step[t] = gr[t]
+            t += 1usize
+        }
+        if !qrb.solve_dense(mat, step, q) { ret false }
+        t = 0usize
+        while t < q {
+            par[t] += step[t]
+            t += 1usize
+        }
+        it += 1usize
+    }
+    var cc = 0usize
+    while cc < q {
+        t = 0usize
+        while t < q * q {
+            mat[t] = info[t]
+            t += 1usize
+        }
+        t = 0usize
+        while t < q {
+            step[t] = 0.0f64
+            t += 1usize
+        }
+        step[cc] = 1.0f64
+        if !qrb.solve_dense(mat, step, q) { ret false }
+        out[q + 1usize + cc] = math.sqrt[f64](step[cc])
+        cc += 1usize
+    }
+    t = 0usize
+    while t < q {
+        out[t] = par[t]
+        t += 1usize
+    }
+    out[q] = ll
+    ret true
+}

@@ -4524,4 +4524,5 @@ D7701	1347	netCDF classic reader (ncdf4)
 D7702	595	netCDF classic attributes
 D7703	752	gamlss.dist family mean and variance
 D7639	779	phangorn: edge length optimisation
-D7704	798	gamlss.dist family moments, second set
+D7704	799	gamlss.dist family moments, second set
+D7640	817	VGAM: adjacent categories model
