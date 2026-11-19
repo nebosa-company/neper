@@ -11,6 +11,7 @@ use e.math.nmath as nm
 use e.math.dist as dsa
 use e.math.nmath_beta as nb
 use e.algo.linalg.mexp as mexp
+use e.algo.stat.gparot as gp
 use e.mem
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
@@ -444,4 +445,57 @@ fn rowsum(t: []const f64, m: usize, i: usize) -> f64 {
         j += 1usize
     }
     ret s
+}
+
+// actuar mphtype: the raw moment of integer order k, k! pi (-T)^(-k) 1
+fn ph_moment(a: *mem.Arena, prob: []const f64, t: []const f64, m: usize, k: usize) -> f64 {
+    let (neg, e1) = mem.alloc[f64](a, m * m)
+    let (v, e2) = mem.alloc[f64](a, m)
+    let (nv, e3) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok { ret nan() }
+    var i = 0usize
+    while i < m * m {
+        neg[i] = 0.0f64 - t[i]
+        i += 1usize
+    }
+    let (inv, ei) = gp.invert(a, neg, m)
+    if ei != ok { ret nan() }
+    i = 0usize
+    while i < m {
+        v[i] = 1.0f64
+        i += 1usize
+    }
+    var s = 0usize
+    while s < k {
+        i = 0usize
+        while i < m {
+            var acc = 0.0f64
+            var j = 0usize
+            while j < m {
+                acc += inv[i * m + j] * v[j]
+                j += 1usize
+            }
+            nv[i] = acc
+            i += 1usize
+        }
+        i = 0usize
+        while i < m {
+            v[i] = nv[i]
+            i += 1usize
+        }
+        s += 1usize
+    }
+    var r = 0.0f64
+    i = 0usize
+    while i < m {
+        r += prob[i] * v[i]
+        i += 1usize
+    }
+    var f = 1.0f64
+    s = 2usize
+    while s <= k {
+        f *= f64(s)
+        s += 1usize
+    }
+    ret f * r
 }

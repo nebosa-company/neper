@@ -95,6 +95,10 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         if usize(x[2usize + mp + mp * mp]) == 0usize { ret dd }
         ret sv
     }
+    if str.eq(c.name, "pm") {
+        let mq = usize(x[0usize])
+        ret ac.ph_moment(ar, x[1usize..1usize + mq], x[1usize + mq..1usize + mq + mq * mq], mq, usize(x[1usize + mq + mq * mq]))
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])

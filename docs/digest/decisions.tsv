@@ -4393,4 +4393,5 @@ D7534	1002	actuar grouped data: ogive, emm and elev
 D7535	442	actuar discretize, unbiased method
 D7536	635	actuar cm: Buhlmann-Straub credibility
 D7537	476	actuar ruin, exponential claims and waiting times
-D7538	540	actuar phase-type density and survival
+D7538	541	actuar phase-type density and survival
+D7539	315	actuar phase-type moments

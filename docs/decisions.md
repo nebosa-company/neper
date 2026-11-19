@@ -51109,3 +51109,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7538 — actuar phase-type density and survival
 `ph_dens_surv` answers dphtype and the upper tail of pphtype for initial probabilities and a sub-intensity matrix, through e.algo.linalg.mexp.expm: density pi exp(T x) (-T 1), survival pi exp(T x) 1 (an initial mass below one is the atom at zero, as in actuar). Equal to actuar on 40 random phase-type laws of 1 to 4 phases (88 values added to oracle_actuar, 3879 in all). The oracle fixture's answer now takes the arena. Phase-type moments, the generators and phase-type ruin stay open.
+
+## D7539 — actuar phase-type moments
+`ph_moment` answers mphtype: k! pi (-T)^(-k) 1 by repeated multiplication with the inverse of -T (gparot.invert). Equal to actuar on 30 random phase-type laws, orders 1 to 4 (29 values added to oracle_actuar, 3908 in all). The generator rphtype and phase-type ruin stay open.
