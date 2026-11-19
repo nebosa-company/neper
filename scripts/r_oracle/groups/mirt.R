@@ -12,4 +12,13 @@ for (rep in 1:5) {
   v <- c(as.vector(t(cf[, c("a1", "d")])), as.numeric(logLik(f)))
   for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("tpl", c(N, J, as.vector(t(Y)), k - 1), as.numeric(v[k]), rel = if (k == length(v)) 1e-6 else 1e-2, abs = if (k == length(v)) 1e-4 else 5e-3)
 }
+# itemtype = "Rasch": "rasch" args (n, j, y[n * j], k) k 0 .. j - 1 the intercepts, j the latent variance, j + 1 the log-likelihood
+for (rep in 1:4) {
+  N <- sample(300:500, 1); J <- sample(4:6, 1); th <- rnorm(N, 0, runif(1, 0.8, 1.6)); d <- rnorm(J, 0, 0.8)
+  Y <- sapply(1:J, function(j) rbinom(N, 1, plogis(th + d[j]))); colnames(Y) <- paste0("i", 1:J)
+  f <- tryCatch(mirt(Y, 1, itemtype = "Rasch", verbose = FALSE, TOL = 1e-9), error = function(e) NULL)
+  if (is.null(f) || !f@OptimInfo$converged) next
+  cf <- coef(f, simplify = TRUE); v <- c(cf$items[, "d"], cf$cov[1, 1], as.numeric(logLik(f)))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("rasch", c(N, J, as.vector(t(Y)), k - 1), as.numeric(v[k]), rel = if (k == length(v)) 1e-6 else 1e-2, abs = if (k == length(v)) 1e-4 else 5e-3)
+}
 emit("mirt", "mirt", list(cases))

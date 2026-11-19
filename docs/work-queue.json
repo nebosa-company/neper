@@ -1189,7 +1189,7 @@
       "score": 0.04,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Started (D7653: the unidimensional 2PL model on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows; oracle_mirt, 33 values; Linux pending). Open: Rasch, 3PL and 4PL, graded response, partial credit, generalized partial credit and nominal items, several factors, a free latent variance, missing data, standard errors, scores (EAP, MAP), item and person fit, DIF, multiple groups. Was: Open (CRAN rank 841). Large. Acceptance, equal to mirt: mirt for Rasch, 1PL to 4PL, graded response, generalized partial credit, nominal and multidimensional models by EM, itemfit, personfit, fscores, multipleGroup, DIF, anova and the fit statistics M2 and C2."
+      "evidence": "Started (D7653, D7654: the unidimensional 2PL and Rasch (free latent variance) models on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows; oracle_mirt, 60 values; Linux pending). Open: 3PL and 4PL, graded response, partial credit, generalized partial credit and nominal items, several factors, a free latent variance, missing data, standard errors, scores (EAP, MAP), item and person fit, DIF, multiple groups. Was: Open (CRAN rank 841). Large. Acceptance, equal to mirt: mirt for Rasch, 1PL to 4PL, graded response, generalized partial credit, nominal and multidimensional models by EM, itemfit, personfit, fscores, multipleGroup, DIF, anova and the fit statistics M2 and C2."
     },
     {
       "id": "L496",

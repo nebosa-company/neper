@@ -161,3 +161,117 @@ fn tpl(a: *mem.Arena, y: []const f64, n: usize, j: usize, out: []f64) -> bool {
     out[m] = 0.0f64 - tpl_f(&c, par)
     ret true
 }
+
+type RasCtx = struct { c: *TplCtx, full: []f64 }
+
+// the Rasch model as a 2PL with every slope the latent standard deviation s = exp(par[j]) (theta = s q on the standard normal quadrature) and the intercepts par[0 .. j - 1]
+fn ras_f(r: *RasCtx, par: []const f64) -> f64 {
+    let j = r.c.j
+    let s = math.exp[f64](par[j])
+    var jj = 0usize
+    while jj < j {
+        r.full[2usize * jj] = s
+        r.full[2usize * jj + 1usize] = par[jj]
+        jj += 1usize
+    }
+    ret tpl_f(r.c, r.full[0usize..2usize * j])
+}
+
+type RasGrad = struct { r: *RasCtx, x: []f64 }
+
+fn ras_fw(t: *RasGrad, par: []const f64) -> f64 { ret ras_f(t.r, par) }
+
+fn ras_g(t: *RasGrad, par: []const f64, g: []f64) {
+    let m = par.len
+    var i = 0usize
+    while i < m {
+        t.x[i] = par[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        let h = 1.0e-6f64
+        t.x[i] = par[i] + h
+        let fp = ras_f(t.r, t.x[0usize..m])
+        t.x[i] = par[i] - h
+        let fm = ras_f(t.r, t.x[0usize..m])
+        t.x[i] = par[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// mirt(data, 1, itemtype = "Rasch"): unit slopes, free intercepts and a free latent variance; out = d_1 .. d_j, the latent variance, the log-likelihood
+fn rasch(a: *mem.Arena, y: []const f64, n: usize, j: usize, out: []f64) -> bool {
+    let nq = 61usize
+    let m = j + 1usize
+    let (q, e1) = mem.alloc[f64](a, nq)
+    let (w, e2) = mem.alloc[f64](a, nq)
+    let (lp, e3) = mem.alloc[f64](a, nq * j)
+    let (lq, e4) = mem.alloc[f64](a, nq * j)
+    let (gg, e5) = mem.alloc[f64](a, nq)
+    let (par, e6) = mem.alloc[f64](a, m)
+    let (xx, e7) = mem.alloc[f64](a, m)
+    let (scr, e8) = mem.alloc[f64](a, m * m + 6usize * m + 16usize)
+    let (cnt, e10) = mem.alloc[f64](a, n)
+    let (full, e11) = mem.alloc[f64](a, 2usize * j)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e10 != ok || e11 != ok { ret false }
+    var sw = 0.0f64
+    var k = 0usize
+    while k < nq {
+        q[k] = 0.0f64 - 6.0f64 + 12.0f64 * f64(k) / 60.0f64
+        w[k] = math.exp[f64](0.0f64 - q[k] * q[k] / 2.0f64)
+        sw += w[k]
+        k += 1usize
+    }
+    k = 0usize
+    while k < nq {
+        w[k] = w[k] / sw
+        k += 1usize
+    }
+    var pi = 0usize
+    while pi < n {
+        cnt[pi] = 1.0f64
+        var qi = 0usize
+        while qi < pi {
+            if cnt[qi] > 0.0f64 {
+                var same = true
+                var jx = 0usize
+                while jx < j {
+                    if y[qi * j + jx] != y[pi * j + jx] { same = false }
+                    jx += 1usize
+                }
+                if same {
+                    cnt[qi] += 1.0f64
+                    cnt[pi] = 0.0f64
+                    break
+                }
+            }
+            qi += 1usize
+        }
+        pi += 1usize
+    }
+    var jj = 0usize
+    while jj < j {
+        par[jj] = 0.0f64
+        jj += 1usize
+    }
+    par[j] = 0.0f64
+    var c = TplCtx { y: y, cnt: cnt, n: n, j: j, q: q, w: w, nq: nq, lp: lp, lq: lq, g: gg }
+    var r = RasCtx { c: &c, full: full }
+    var t = RasGrad { r: &r, x: xx }
+    var round = 0usize
+    while round < 2usize {
+        let (rr, e9) = opt.bfgs[RasGrad](&t, ras_fw, ras_g, par, 1.0e-9f64, 120u32, scr)
+        if e9 != ok { ret false }
+        round += 1usize
+    }
+    k = 0usize
+    while k < j {
+        out[k] = par[k]
+        k += 1usize
+    }
+    out[j] = math.exp[f64](2.0f64 * par[j])
+    out[j + 1usize] = 0.0f64 - ras_f(&r, par)
+    ret true
+}
