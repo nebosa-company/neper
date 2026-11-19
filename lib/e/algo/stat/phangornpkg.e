@@ -181,3 +181,56 @@ fn sankoff(a: *mem.Arena, par: []const f64, chd: []const f64, ne: usize, nt: usi
     }
     ret total
 }
+
+// the log-likelihood phangorn::pml(tree, data) gives for a tree with edge lengths bl under the Jukes-Cantor model (equal base frequencies, one rate), by Felsenstein pruning; ambiguity codes are the states they allow
+fn jc_loglik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize) -> f64 {
+    let nn = ne + 1usize
+    let (lv, e1) = mem.alloc[f64](a, nn * 4usize)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var ll = 0.0f64
+    var s = 0usize
+    while s < ns {
+        var i = 0usize
+        while i < nn {
+            var st = 0usize
+            while st < 4usize {
+                lv[i * 4usize + st] = 1.0f64
+                if i < nt {
+                    let m = u32(data[i * ns + s])
+                    if (m & (1u32 << u32(st))) == 0u32 { lv[i * 4usize + st] = 0.0f64 }
+                }
+                st += 1usize
+            }
+            i += 1usize
+        }
+        var k = ne
+        while k > 0usize {
+            k -= 1usize
+            let p = usize(par[k])
+            let c = usize(chd[k])
+            let ex = math.exp[f64](0.0f64 - 4.0f64 * bl[k] / 3.0f64)
+            let same = 0.25f64 + 0.75f64 * ex
+            let diff = 0.25f64 - 0.25f64 * ex
+            var tot = 0.0f64
+            var t = 0usize
+            while t < 4usize {
+                tot += lv[c * 4usize + t]
+                t += 1usize
+            }
+            var st = 0usize
+            while st < 4usize {
+                lv[p * 4usize + st] = lv[p * 4usize + st] * (diff * tot + (same - diff) * lv[c * 4usize + st])
+                st += 1usize
+            }
+        }
+        var site = 0.0f64
+        var st = 0usize
+        while st < 4usize {
+            site += 0.25f64 * lv[nt * 4usize + st]
+            st += 1usize
+        }
+        ll += math.log[f64](site)
+        s += 1usize
+    }
+    ret ll
+}

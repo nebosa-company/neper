@@ -42,4 +42,14 @@ for (rep in 1:30) {
   sc <- as.numeric(parsimony(tr, d, method = "sankoff", cost = Cm))
   cases[[length(cases) + 1]] <- case("sankoff", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, as.vector(Cm), as.vector(t(matrix(bits[M], nt, ns)))), sc, rel = 0, abs = 1e-9)
 }
+# pml(tree, data) log-likelihood under JC ("jcll": nt, ns, ne, parent, child, edge length, data row-major bit masks); trees binary or multifurcating
+for (rep in 1:30) {
+  nt <- sample(4:12, 1); ns <- sample(10:80, 1)
+  tr <- reorder(rtree(nt), "cladewise"); tr$edge.length <- round(runif(nrow(tr$edge), 0.01, 0.6), 4)
+  M <- matrix(sample(codes, nt * ns, TRUE), nt, ns, dimnames = list(tr$tip.label, NULL))
+  amb <- sample(length(M), max(1, length(M) %/% 25)); M[amb] <- sample(c("n", "r", "y"), length(amb), TRUE)
+  d <- phyDat(M, type = "DNA")
+  ll <- pml(tr, d, model = "JC")$logLik
+  cases[[length(cases) + 1]] <- case("jcloglik", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, tr$edge.length, as.vector(t(matrix(bits[M], nt, ns)))), as.numeric(ll), rel = 1e-9, abs = 1e-9)
+}
 emit("phangorn", "phangorn", list(cases))

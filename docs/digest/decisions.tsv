@@ -4499,4 +4499,5 @@ D7630	587	phangorn: Fitch parsimony
 D7631	495	phangorn: upgma and wpgma
 D7685	781	segmented pscore.test for a linear model
 D7632	525	phangorn: Hamming and Jukes-Cantor distances
-D7633	609	phangorn: Sankoff parsimony
+D7633	610	phangorn: Sankoff parsimony
+D7634	552	phangorn: Jukes-Cantor tree likelihood
