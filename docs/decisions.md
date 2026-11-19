@@ -50092,3 +50092,9 @@ lpSolve's own integer answers turned out to be unreliable: on 3 of 60 random mix
 `e.algo.stat.lpsolvepkg` gains `transport`: the transportation problem over m supply rows and n demand columns with per-row and per-column signs (<=, >=, =), minimising or maximising the cost, solved as a linear program by the simplex of `e.math.opt` (an equality is a <= row and a negated >= row). It answers the optimal cost and the shipments.
 
 **Result.** `oracle_lpsolve_int` now includes 30 transportation problems (balanced with equalities, supply-limited and demand-covering, minimising and maximising) whose optimal values equal `lp.transport` on Windows. Linux pending. L367 stays partial: sensitivity output, lpSolveAPI model building and the other clue methods remain.
+
+## D7313 — betareg: identity and sqrt precision links
+
+**Decision.** `fit_var` and `fit_se_var` take the precision link (0 log, 1 identity, 2 sqrt) through `phi_inv`, `phi_fun` and `phi_deriv`; a non-positive phi is an infinite penalty. Under the sqrt link u and -u give the same phi, so the fixture and oracle both report the gamma with a positive intercept.
+
+**Result.** `oracle_betareg` (741 cases, 72 new) equals betareg on Windows for the three precision links. Linux pending. L451 stays partial: bias correction and bias reduction, sweighted2.

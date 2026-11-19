@@ -133,7 +133,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let vq = usize(x[2usize])
             let vrefit = !vhave || vprev.len != x.len || !same_but(vprev, x, 4usize)
             if vrefit {
-                let (vf, ve) = br.fit_var(a, x[5usize + vn..5usize + vn + vn * vp], x[5usize + vn + vn * vp..5usize + vn + vn * vp + vn * vq], x[5usize..5usize + vn], vn, vp, vq, usize(x[3usize]))
+                let (vf, ve) = br.fit_var(a, x[5usize + vn..5usize + vn + vn * vp], x[5usize + vn + vn * vp..5usize + vn + vn * vp + vn * vq], x[5usize..5usize + vn], vn, vp, vq, usize(x[3usize]) % 10usize, usize(x[3usize]) / 10usize)
                 if ve != ok { os.exit(11) }
                 vcur = vf
                 vprev = x
@@ -143,10 +143,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var vgot = vcur.ll
             if vw < 10usize { vgot = vcur.par[vw] }
             if vw >= 10usize && vw < 30usize { vgot = vcur.par[vp + vw - 10usize] }
+            if vw >= 10usize && vw < 30usize && usize(x[3usize]) / 10usize == 2usize && vcur.par[vp] < 0.0f64 { vgot = 0.0f64 - vgot }
             if vw >= 40usize {
                 let (vse, vee) = mem.alloc[f64](a, vp + vq)
                 if vee != ok { os.exit(12) }
-                if !br.fit_se_var(a, x[5usize + vn..5usize + vn + vn * vp], x[5usize + vn + vn * vp..5usize + vn + vn * vp + vn * vq], x[5usize..5usize + vn], vn, vp, vq, usize(x[3usize]), &vcur, vse) { os.exit(13) }
+                if !br.fit_se_var(a, x[5usize + vn..5usize + vn + vn * vp], x[5usize + vn + vn * vp..5usize + vn + vn * vp + vn * vq], x[5usize..5usize + vn], vn, vp, vq, usize(x[3usize]) % 10usize, usize(x[3usize]) / 10usize, &vcur, vse) { os.exit(13) }
                 if vw < 60usize { vgot = vse[vw - 40usize] } else { vgot = vse[vp + vw - 60usize] }
             }
             if !oracle.agrees(vgot, c) {

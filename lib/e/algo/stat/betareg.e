@@ -333,7 +333,26 @@ fn lrtest(ll1: f64, npar1: usize, ll0: f64, npar0: usize, out: []f64) {
     out[2usize] = nm.pchisq(stat, df, false, false)
 }
 
-type VData = struct { x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize }
+// the precision link: 0 log, 1 identity, 2 sqrt (phi = exp(u), u, u^2), its inverse and d phi / d u
+fn phi_inv(u: f64, k: usize) -> f64 {
+    if k == 0usize { ret math.exp[f64](u) }
+    if k == 1usize { ret u }
+    ret u * u
+}
+
+fn phi_fun(phi: f64, k: usize) -> f64 {
+    if k == 0usize { ret math.log[f64](phi) }
+    if k == 1usize { ret phi }
+    ret math.sqrt[f64](phi)
+}
+
+fn phi_deriv(u: f64, k: usize) -> f64 {
+    if k == 0usize { ret math.exp[f64](u) }
+    if k == 1usize { ret 1.0f64 }
+    ret 2.0f64 * u
+}
+
+type VData = struct { x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize, plink: usize }
 
 fn negll_var(d: *VData, a: []const f64) -> f64 {
     var s = 0.0f64
@@ -351,7 +370,8 @@ fn negll_var(d: *VData, a: []const f64) -> f64 {
             u += d.z[i * d.q + j] * a[d.p + j]
             j += 1usize
         }
-        let phi = math.exp[f64](u)
+        let phi = phi_inv(u, d.plink)
+        if phi <= 0.0f64 { ret 1.0e30f64 }
         let mu = linkinv(t, d.link)
         let yi = d.y[i]
         s += nm.lgammafn(phi) - nm.lgammafn(mu * phi) - nm.lgammafn((1.0f64 - mu) * phi) + (mu * phi - 1.0f64) * math.log[f64](yi) + ((1.0f64 - mu) * phi - 1.0f64) * math.log[f64](1.0f64 - yi)
@@ -362,10 +382,10 @@ fn negll_var(d: *VData, a: []const f64) -> f64 {
 }
 
 // betareg(y ~ x | z, link.phi = "log"): the precision phi_i = exp(z_i' gamma), z n by q row-major with an intercept first. par holds beta (p) then gamma (q); started from the constant-precision fit
-fn fit_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize) -> (Fit, err) {
+fn fit_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize, plink: usize) -> (Fit, err) {
     let (f0, e0) = fit_link(a, x, y, n, p, link)
     if e0 != ok { ret (zero, e0) }
-    var d = VData { x: x, z: z, y: y, n: n, p: p, q: q, link: link }
+    var d = VData { x: x, z: z, y: y, n: n, p: p, q: q, link: link, plink: plink }
     let m = p + q
     let (par, e1) = mem.alloc[f64](a, m)
     if e1 != ok { ret (zero, e1) }
@@ -379,7 +399,7 @@ fn fit_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usi
         par[i] = f0.par[i]
         i += 1usize
     }
-    par[p] = f0.par[p]
+    par[p] = phi_fun(f0.phi, plink)
     let (scr, e2) = mem.alloc[f64](a, (m + 1usize) * (m + 1usize) + 4usize * m)
     if e2 != ok { ret (zero, e2) }
     var round = 0usize
@@ -393,12 +413,12 @@ fn fit_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usi
         last = r.value
         round += 1usize
     }
-    ret (Fit { par: par, phi: math.exp[f64](par[p]), ll: 0.0f64 - best }, ok)
+    ret (Fit { par: par, phi: f0.phi, ll: 0.0f64 - best }, ok)
 }
 
 // the standard errors of `fit_var` from the Fisher information: K_bb = X' diag(phi^2 w) X, K_bg = X' diag(c phi / g') Z, K_gg = Z' diag(d phi^2) Z with the log precision link (dphi / dgamma = phi z);
 // w, c, d as in `fit_se`. se[0..p] the mean coefficients, se[p..p+q] the precision coefficients; false when singular
-fn fit_se_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize, f: *const Fit, se: []f64) -> bool {
+fn fit_se_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, link: usize, plink: usize, f: *const Fit, se: []f64) -> bool {
     let m = p + q
     let (kk, e1) = mem.alloc[f64](a, m * m)
     let (col, e2) = mem.alloc[f64](a, m)
@@ -423,7 +443,8 @@ fn fit_se_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: 
             u += z[i * q + j] * f.par[p + j]
             j += 1usize
         }
-        let phi = math.exp[f64](u)
+        let phi = phi_inv(u, plink)
+        let dph = phi_deriv(u, plink)
         let mu = linkinv(t, link)
         var omu = 1.0f64 - mu
         var gp = gprime(mu, link)
@@ -450,7 +471,7 @@ fn fit_se_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: 
             }
             k = 0usize
             while k < q {
-                let v = x[i * p + j] * cc / gp * phi * z[i * q + k]
+                let v = x[i * p + j] * cc / gp * dph * z[i * q + k]
                 kk[j * m + p + k] += v
                 kk[(p + k) * m + j] += v
                 k += 1usize
@@ -461,7 +482,7 @@ fn fit_se_var(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: 
         while j < q {
             var k = 0usize
             while k < q {
-                kk[(p + j) * m + p + k] += dd * phi * phi * z[i * q + j] * z[i * q + k]
+                kk[(p + j) * m + p + k] += dd * dph * dph * z[i * q + j] * z[i * q + k]
                 k += 1usize
             }
             j += 1usize
