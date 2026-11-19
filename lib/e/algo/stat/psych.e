@@ -19,6 +19,7 @@ use e.algo.linalg.lapack_syevr as sy
 use e.algo.stat.fdrtool as fd
 use e.algo.stat.pbivnorm as pbv
 use e.math.opt as opt
+use e.math.nmath as nmx
 
 // column-major n by p
 fn colmean(x: []const f64, n: usize, j: usize) -> f64 {
@@ -1527,4 +1528,17 @@ fn fa_resid(a: *mem.Arena, r: []const f64, p: usize, q: usize, fm: usize, out: [
         k += 1usize
     }
     ret true
+}
+
+// the test statistics psych::fa reports for a maximum likelihood fit of q factors to the correlation matrix of n observations of p variables, from psych's objective, the sum over the p - q smallest eigenvalues e of Psi^(-1/2) R Psi^(-1/2) of (e - log e - 1), which is `fa_ml`'s value (factanal's) less 2 (p - q): STATISTIC = (n - 1 - (2 p + 5) / 6 - 2 q / 3) objective, dof = ((p - q)^2 - (p + q)) / 2,
+// its upper chi-square p value and BIC = STATISTIC - dof log n; out = those four
+fn fa_ml_stats(objective: f64, n: f64, p: usize, q: usize, out: []f64) {
+    let pf = f64(p)
+    let qf = f64(q)
+    let stat = (n - 1.0f64 - (2.0f64 * pf + 5.0f64) / 6.0f64 - 2.0f64 * qf / 3.0f64) * objective
+    let dof = ((pf - qf) * (pf - qf) - (pf + qf)) / 2.0f64
+    out[0usize] = stat
+    out[1usize] = dof
+    out[2usize] = nmx.pgamma(stat, dof / 2.0f64, 2.0f64, false, false)
+    out[3usize] = stat - dof * math.log[f64](n)
 }

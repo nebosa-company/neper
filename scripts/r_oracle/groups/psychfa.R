@@ -68,4 +68,13 @@ for (rep in 1:8) {
     if (rot == 2) { Ph <- f$Phi; for (kk in 1:q) for (ll in 1:q) cases[[length(cases) + 1]] <- case("farotmin", c(p, q, rot, as.vector(t(R)), p + p * q + q * q + (kk - 1) * q + (ll - 1)), as.numeric(Ph[kk, ll]), rel = 1e-2, abs = 4e-3) }
   }
 }
+# the fit statistics of the maximum likelihood fit: "famlstat" args (p, q, n, r[p * p], k) k 0 objective, 1 STATISTIC, 2 dof, 3 PVAL, 4 BIC
+for (rep in 1:12) {
+  p <- sample(6:9, 1); q <- sample(1:3, 1); N <- sample(200:500, 1)
+  L <- matrix(runif(p * q, 0.3, 0.8), p, q); Fm <- matrix(rnorm(N * q), N, q); X <- Fm %*% t(L) + matrix(rnorm(N * p, 0, 0.7), N, p); R <- cor(X)
+  f <- tryCatch(suppressWarnings(fa(R, nfactors = q, n.obs = N, fm = "ml", rotate = "none")), error = function(e) NULL)
+  if (is.null(f) || any(f$uniquenesses < 0.02) || f$dof < 1) next
+  v <- c(f$objective, f$STATISTIC, f$dof, f$PVAL, f$BIC)
+  for (k in 1:5) cases[[length(cases) + 1]] <- case("famlstatistics", c(p, q, N, as.vector(t(R)), k - 1), as.numeric(v[k]), rel = 1e-3, abs = 1e-5)
+}
 emit("psychfa", "psych", list(cases))
