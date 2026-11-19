@@ -51064,3 +51064,6 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7523 — marginaleffects hypotheses with equality constraints
 `lin_hypothesis` is hypotheses(model, "r'b = q") of a glm for a linear combination of the coefficients: the estimate r'b - q (marginaleffects reports the left side minus the right side), the standard error sqrt(r' V r), the z statistic and the two-sided normal p-value; equal to marginaleffects on 30 gaussian glms with random integer combinations and right-hand sides (120 values added to oracle_margeff, 504 in all). Open for L415: hypotheses on predictions and comparisons rather than coefficients, comparisons for factors and other contrasts, conditional effects, other links.
+
+## D7524 — marginaleffects unit-change comparisons
+`glm_avg` kind 2 is avg_comparisons(model, variables = list(v = 1)) for a continuous variable: the mean of mu(eta + b_j) - mu(eta) over the sample with its delta-method standard error (the Jacobian mu'(eta + b_j)(x + e_j) - mu'(eta) x averaged), for all seven links; equal to marginaleffects at 1e-5 on 21 glms (42 values added to oracle_margeff, 546 in all). Open for L415: comparisons for factors and other contrasts (ratio, lift), hypotheses on predictions and comparisons, conditional effects, the effects and ggeffects tables.

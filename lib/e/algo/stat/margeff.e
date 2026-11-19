@@ -46,7 +46,7 @@ fn mu_d(link: usize, eta: f64, out: []f64) {
     }
 }
 
-// x is n by p column-major (an intercept column included), beta and vcov (p by p, column-major) from the fit. kind 0: the slope of column j, or the average prediction when j >= p; kind 1: the average comparison of the 0 / 1 column j.
+// x is n by p column-major (an intercept column included), beta and vcov (p by p, column-major) from the fit. kind 0: the slope of column j, or the average prediction when j >= p; kind 1: the average comparison of the 0 / 1 column j; kind 2: the average comparison of column j raised by one unit.
 // out = (estimate, standard error)
 fn glm_avg(a: *mem.Arena, link: usize, kind: usize, x: []const f64, beta: []const f64, vcov: []const f64, n: usize, p: usize, j: usize, out: []f64) {
     let nf = f64(n)
@@ -89,6 +89,17 @@ fn glm_avg(a: *mem.Arena, link: usize, kind: usize, x: []const f64, beta: []cons
                     x0 = 0.0f64
                 }
                 jac[k] += (m1[1usize] * x1 - m0[1usize] * x0) / nf
+                k += 1usize
+            }
+        } else if kind == 2usize {
+            // a unit increase of column j (avg_comparisons(variables = list(v = 1)))
+            mu_d(link, eta + beta[j], m1)
+            est += (m1[0usize] - m0[0usize]) / nf
+            k = 0usize
+            while k < p {
+                var x1 = x[k * n + i]
+                if k == j { x1 += 1.0f64 }
+                jac[k] += (m1[1usize] * x1 - m0[1usize] * x[k * n + i]) / nf
                 k += 1usize
             }
         } else if j >= p {
