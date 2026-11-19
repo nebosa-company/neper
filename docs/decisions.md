@@ -50227,3 +50227,6 @@ kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and una
 
 ## D7366 — pscl standard errors
 `standard_errors` inverts minus the exact Hessian already used by the Newton fit, at the fitted parameters: one (p + q) block for zeroinfl, two separate blocks for the hurdle (truncated count part, zero part), as vcov of a hurdle fit is block diagonal. R takes a numeric Hessian from optim, so the oracle compares the position-weighted sums of the standard errors to 2e-3 relative, not 1e-4. Equal on 24 fits. L412 at 0.35.
+
+## D7367 — pscl predict types
+`predict` answers the fitted-row predictions: zeroinfl response (1 - pi) mu, count mu, zero pi; hurdle response pi mu / (1 - exp(-mu)), count mu, and zero pi / (1 - exp(-mu)), which is not the raw logistic probability (the first run disagreed until the factor was found by comparing against predict(type = "zero")). Position-weighted sums equal pscl on 24 fits. L412 at 0.4.

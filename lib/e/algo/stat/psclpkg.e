@@ -1,6 +1,6 @@
 // R pscl: zero-inflated Poisson (zeroinfl, logit zero part) and the Poisson hurdle model (hurdle, zero-truncated count part and logit zero part), fitted by Newton's method with step halving on the exact Hessian (R uses BFGS from glm starting values; the likelihood optimum is what is compared). Matrices are row-major with their own constant columns.
 //
-// Not here: negative binomial and geometric counts, the other zero links, offsets and weights, predictions.
+// Not here: negative binomial and geometric counts, the other zero links, offsets and weights, prediction types beyond response, count and zero.
 
 use e.algo.stat.gparot as gp
 use e.math
@@ -316,4 +316,38 @@ fn standard_errors(a: *mem.Arena, kind: usize, x: []const f64, z: []const f64, y
         b += 1usize
     }
     ret ok
+}
+
+// predict at the fitted rows (type 0 response, 1 count, 2 zero). zeroinfl: count mu = exp(x beta), zero pi = logistic(z gamma), response (1 - pi) mu. hurdle (pscl's
+// definitions): count mu, zero pi / (1 - exp(-mu)) with pi the logistic part (the zero-hurdle probability of a positive count), response pi mu / (1 - exp(-mu)).
+fn predict(kind: usize, x: []const f64, z: []const f64, n: usize, p: usize, q: usize, par: []const f64, ptype: usize, out: []f64) {
+    var r = 0usize
+    while r < n {
+        var eta = 0.0f64
+        var j = 0usize
+        while j < p {
+            eta += x[r * p + j] * par[j]
+            j += 1usize
+        }
+        var zeta = 0.0f64
+        j = 0usize
+        while j < q {
+            zeta += z[r * q + j] * par[p + j]
+            j += 1usize
+        }
+        let mu = math.exp[f64](eta)
+        let pi = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - zeta))
+        var v = 0.0f64
+        if kind == 0usize {
+            if ptype == 0usize { v = (1.0f64 - pi) * mu }
+            if ptype == 1usize { v = mu }
+            if ptype == 2usize { v = pi }
+        } else {
+            if ptype == 0usize { v = pi * mu / (1.0f64 - math.exp[f64](0.0f64 - mu)) }
+            if ptype == 1usize { v = mu }
+            if ptype == 2usize { v = pi / (1.0f64 - math.exp[f64](0.0f64 - mu)) }
+        }
+        out[r] = v
+        r += 1usize
+    }
 }

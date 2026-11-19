@@ -20,6 +20,7 @@ for (rep in 1:24) {
   a <- c(n, p, q, kind, y, as.vector(t(x)), as.vector(t(z)))
   cc <- coef(f, "count"); zc <- coef(f, "zero")
   add("ll", a, as.numeric(logLik(f))); add("count", a, sum(cc * seq_along(cc))); add("zero", a, sum(zc * seq_along(zc)))
+  for (ty in 0:2) { pr <- predict(f, type = c("response", "count", "zero")[ty + 1]); cases[[length(cases) + 1]] <- case(paste0("pred", ty), a, sum(pr * seq_along(pr)), rel = 1e-4, abs = 1e-6) }
   sv <- sqrt(diag(vcov(f))); ns <- names(sv); sc <- sv[grepl("^count_", ns)]; sz <- sv[grepl("^zero_", ns)]
   cases[[length(cases) + 1]] <- case("secount", a, sum(sc * seq_along(sc)), rel = 2e-3, abs = 1e-6); cases[[length(cases) + 1]] <- case("sezero", a, sum(sz * seq_along(sz)), rel = 2e-3, abs = 1e-6)
 }
