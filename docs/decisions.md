@@ -51106,3 +51106,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7537 — actuar ruin, exponential claims and waiting times
 `ruin_exp_exp` is the closed form psi(u) = lambda / (c beta) exp(-(beta - lambda / c) u) that actuar's ruin() returns for exponential claims and exponential waiting times; equal to actuar on 40 parameter sets (30 values added to oracle_actuar, 3791 in all, the net profit condition holding). The general phase-type and Erlang-mixture claim and waiting laws of ruin() stay open with the phase-type distributions.
+
+## D7538 — actuar phase-type density and survival
+`ph_dens_surv` answers dphtype and the upper tail of pphtype for initial probabilities and a sub-intensity matrix, through e.algo.linalg.mexp.expm: density pi exp(T x) (-T 1), survival pi exp(T x) 1 (an initial mass below one is the atom at zero, as in actuar). Equal to actuar on 40 random phase-type laws of 1 to 4 phases (88 values added to oracle_actuar, 3879 in all). The oracle fixture's answer now takes the arena. Phase-type moments, the generators and phase-type ruin stay open.

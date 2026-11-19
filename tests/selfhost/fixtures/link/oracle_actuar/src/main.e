@@ -8,7 +8,7 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
-fn answer(c: *const oracle.Case) -> f64 {
+fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "gg") {
         let rg = usize(x[0usize])
@@ -89,6 +89,12 @@ fn answer(c: *const oracle.Case) -> f64 {
         ret w0 / (w0 + ov[2usize])
     }
     if str.eq(c.name, "rx") { ret ac.ruin_exp_exp(x[3usize], x[0usize], x[1usize], x[2usize]) }
+    if str.eq(c.name, "ph") {
+        let mp = usize(x[0usize])
+        let (dd, sv) = ac.ph_dens_surv(ar, x[1usize..1usize + mp], x[1usize + mp..1usize + mp + mp * mp], mp, x[1usize + mp + mp * mp])
+        if usize(x[2usize + mp + mp * mp]) == 0usize { ret dd }
+        ret sv
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])
@@ -173,7 +179,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
-        let got = answer(c)
+        let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

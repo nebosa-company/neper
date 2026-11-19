@@ -10,6 +10,8 @@ use e.math
 use e.math.nmath as nm
 use e.math.dist as dsa
 use e.math.nmath_beta as nb
+use e.algo.linalg.mexp as mexp
+use e.mem
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -397,4 +399,49 @@ fn cm_buhlmann_straub(ns: []const usize, x: []const f64, w: []const f64, out: []
 // actuar ruin() with exponential claims (rate beta) and exponential waiting times (rate lambda) at premium rate c: the Cramer-Lundberg ruin probability psi(u) = lambda / (c beta) exp(-(beta - lambda / c) u)
 fn ruin_exp_exp(u: f64, beta: f64, lambda: f64, c: f64) -> f64 {
     ret lambda / (c * beta) * math.exp[f64](0.0f64 - (beta - lambda / c) * u)
+}
+
+// actuar phase-type distribution with initial probabilities prob[m] and sub-intensity matrix t (m x m, row-major): the density pi exp(T x) (-T 1) and the survival pi exp(T x) 1 at x >= 0, answered as (d, sf)
+fn ph_dens_surv(a: *mem.Arena, prob: []const f64, t: []const f64, m: usize, x: f64) -> (f64, f64) {
+    let (sx, e1) = mem.alloc[f64](a, m * m)
+    let (ex, e2) = mem.alloc[f64](a, m * m)
+    if e1 != ok || e2 != ok { ret (nan(), nan()) }
+    var i = 0usize
+    while i < m * m {
+        sx[i] = t[i] * x
+        i += 1usize
+    }
+    let ee = mexp.expm(a, sx, m, ex)
+    if ee != ok { ret (nan(), nan()) }
+    var d = 0.0f64
+    var sf = 0.0f64
+    i = 0usize
+    while i < m {
+        var rs = 0.0f64
+        var j = 0usize
+        while j < m {
+            rs += ex[i * m + j]
+            j += 1usize
+        }
+        var pe = 0.0f64
+        j = 0usize
+        while j < m {
+            pe += ex[i * m + j] * (0.0f64 - rowsum(t, m, j))
+            j += 1usize
+        }
+        d += prob[i] * pe
+        sf += prob[i] * rs
+        i += 1usize
+    }
+    ret (d, sf)
+}
+
+fn rowsum(t: []const f64, m: usize, i: usize) -> f64 {
+    var s = 0.0f64
+    var j = 0usize
+    while j < m {
+        s += t[i * m + j]
+        j += 1usize
+    }
+    ret s
 }

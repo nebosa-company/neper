@@ -4392,4 +4392,5 @@ D7533	684	actuar aggregateDist normal and Normal Power
 D7534	1002	actuar grouped data: ogive, emm and elev
 D7535	442	actuar discretize, unbiased method
 D7536	635	actuar cm: Buhlmann-Straub credibility
-D7537	475	actuar ruin, exponential claims and waiting times
+D7537	476	actuar ruin, exponential claims and waiting times
+D7538	540	actuar phase-type density and survival

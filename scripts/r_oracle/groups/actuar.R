@@ -106,6 +106,13 @@ for (rep in 1:40) {
   f <- ruin(claims = "exponential", par.claims = list(rate = b), wait = "exponential", par.wait = list(rate = l), premium.rate = cc)
   cases[[length(cases) + 1]] <- case("rx", c(b, l, cc, u), f(u), rel = 1e-9, abs = 1e-13)
 }
+# dphtype / pphtype: "ph" args (m, prob[m], T[m m] row-major, x, stat 0 density 1 survival)
+for (rep in 1:40) {
+  m <- sample(1:4, 1); pr <- runif(m); pr <- pr / sum(pr) * runif(1, 0.8, 1)
+  T <- matrix(runif(m * m, 0, 1.5), m); diag(T) <- 0; ex <- runif(m, 0.2, 2); diag(T) <- -(rowSums(T) + ex); x <- runif(1, 0.05, 4)
+  cases[[length(cases) + 1]] <- case("ph", c(m, pr, as.vector(t(T)), x, 0), dphtype(x, pr, T), rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("ph", c(m, pr, as.vector(t(T)), x, 1), pphtype(x, pr, T, lower.tail = FALSE), rel = 1e-8, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)
