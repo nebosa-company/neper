@@ -200,8 +200,10 @@ fn pzinbf(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
 fn qzinbf(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     var pnew = (p - tau) / (1.0f64 - tau)
     if pnew < 0.0f64 { pnew = 0.0f64 }
-    ret fin(p, qnbf(pnew, mu, sigma, nu), 0.0f64, inf())
+    ret qzinbf_pn(p, pnew, mu, sigma, nu)
 }
+
+fn qzinbf_pn(p: f64, pnew: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret fin(p, qnbf(pnew, mu, sigma, nu), 0.0f64, inf()) }
 
 // GPO: the package sums dGPO over 0 .. floor(q) and answers log(ppois) when sigma < 1e-4
 fn pgpo(q: f64, mu: f64, sigma: f64) -> f64 {
@@ -363,8 +365,11 @@ fn qzabnb(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64, max_value: f64) -> f64
 fn qzibnb(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64, max_value: f64) -> f64 {
     var pnew = (p - tau) / (1.0f64 - tau)
     if pnew < 0.0f64 { pnew = 0.0f64 }
-    ret fin(p, qbnb(pnew, mu, sigma, nu, max_value), 0.0f64, inf())
+    ret qzibnb_pn(p, pnew, mu, sigma, nu, max_value)
 }
+
+// the tail of qZIBNB for a given pnew (the vector form of the package re-assigns pnew, see e.algo.stat.gamlssr)
+fn qzibnb_pn(p: f64, pnew: f64, mu: f64, sigma: f64, nu: f64, max_value: f64) -> f64 { ret fin(p, qbnb(pnew, mu, sigma, nu, max_value), 0.0f64, inf()) }
 
 fn qzapig(p: f64, mu: f64, sigma: f64, nu: f64, max_value: f64) -> f64 {
     let pnew = (p - nu) / (1.0f64 - nu) - 1.0e-10f64
