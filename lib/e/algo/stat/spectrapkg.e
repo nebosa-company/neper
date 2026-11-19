@@ -5,6 +5,7 @@
 use e.algo.linalg.decomp as dc
 use e.algo.rand.r as rr
 use e.algo.linalg.matrix as mx
+use e.algo.linalg.sparse as sp
 use e.math
 use e.mem
 
@@ -379,4 +380,65 @@ fn prcomp_irlba(a: *mem.Arena, x: []const f64, m: usize, n: usize, k: usize, cen
     }
     *totalvar = tv
     ret ok
+}
+
+// RSpectra::svds on a sparse matrix (compressed-column, as Matrix::dgCMatrix stores it): the k largest singular values as the square roots of the k largest eigenvalues of the Gram matrix A'A
+// (formed by sparse products, then the dense symmetric eigensolver); d receives k values. Accurate for the leading values, which is what svds returns
+fn svds_sparse(a: *mem.Arena, m: sp.Csc, k: usize, d: []f64) -> err {
+    let (at, e0) = sp.transpose(a, m)
+    if e0 != ok { ret e0 }
+    let (g, e1) = sp.multiply(a, at, m)
+    if e1 != ok { ret e1 }
+    let n = m.ncol
+    let (dense, e2) = mem.alloc[f64](a, n * n)
+    let (vals, e3) = mem.alloc[f64](a, k)
+    let (vecs, e4) = mem.alloc[f64](a, n * k)
+    if e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n * n {
+        dense[i] = 0.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < n {
+        var p = g.colptr[c]
+        while p < g.colptr[c + 1usize] {
+            dense[g.rowidx[p] * n + c] = g.val[p]
+            p += 1usize
+        }
+        c += 1usize
+    }
+    let e = eigs_sym(a, dense, n, k, 1usize, 0.0f64, vals, vecs)
+    if e != ok { ret e }
+    var j = 0usize
+    while j < k {
+        var v = vals[j]
+        if v < 0.0f64 { v = 0.0f64 }
+        d[j] = math.sqrt[f64](v)
+        j += 1usize
+    }
+    ret ok
+}
+
+// RSpectra::eigs_sym on a sparse symmetric matrix (both triangles stored): the dense copy goes through eigs_sym; which and sigma as there
+fn eigs_sym_sparse(a: *mem.Arena, m: sp.Csc, k: usize, which: usize, sigma: f64, vals: []f64) -> err {
+    let n = m.ncol
+    let (dense, e0) = mem.alloc[f64](a, n * n)
+    let (vecs, e1) = mem.alloc[f64](a, n * k)
+    if e0 != ok || e1 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n * n {
+        dense[i] = 0.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < n {
+        var p = m.colptr[c]
+        while p < m.colptr[c + 1usize] {
+            dense[m.rowidx[p] * n + c] = m.val[p]
+            p += 1usize
+        }
+        c += 1usize
+    }
+    ret eigs_sym(a, dense, n, k, which, sigma, vals, vecs)
 }

@@ -556,3 +556,4 @@ oracle_lavaan_cfa
 oracle_spectra_gen
 oracle_spectra_svdr
 oracle_spectra_prcomp
+oracle_spectra_sparse
