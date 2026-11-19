@@ -1,5 +1,6 @@
 // tm stopwords("english") (the SMART-free Snowball list tm ships), generated from tm and sorted: is_stopword_en answers by binary search.
 
+use e.mem
 use e.str
 
 const STOP_EN_N = 174usize
@@ -192,4 +193,25 @@ fn is_stopword_en(w: str) -> bool {
         if c < 0i32 { lo = mid + 1usize } else { hi = mid }
     }
     ret false
+}
+
+// tm removePunctuation(x): gsub("[[:punct:]]+", "", x) for ASCII text, the characters ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~ removed
+fn is_ascii_punct(b: u8) -> bool {
+    ret (b >= 33u8 && b <= 47u8) || (b >= 58u8 && b <= 64u8) || (b >= 91u8 && b <= 96u8) || (b >= 123u8 && b <= 126u8)
+}
+
+fn remove_punctuation(a: *mem.Arena, s: str) -> (str, err) {
+    let (bld, eb) = str.builder(a, s.len + 1usize)
+    if eb != ok { ret ("", eb) }
+    var bd = bld
+    var i = 0usize
+    while i < s.len {
+        let c = s[i]
+        if !is_ascii_punct(c) {
+            let e = str.push_byte(&bd, c)
+            if e != ok { ret ("", e) }
+        }
+        i += 1usize
+    }
+    ret (str.done(&bd), ok)
 }

@@ -51031,3 +51031,6 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7514 — tm stopwords("english")
 `e.algo.stat.tmstop` holds the 174 words of tm stopwords("english"), generated from tm and sorted, with `is_stopword_en` answering by binary search on `str.compare`; the fixture checks all 174 and 16 non-members and near-misses (the, i'm without its apostrophe, mustn't, also, would) against tm (190 membership answers in oracle_tm_stop). Other languages are not generated. Open for L380: the other stopword lists, removePunctuation, tokenisation, stemming, corpora, tidytext unnest_tokens, topic models.
+
+## D7515 — tm removePunctuation
+`remove_punctuation` drops the ASCII punctuation characters (the codes 33-47, 58-64, 91-96, 123-126 of [[:punct:]]) from a string, as tm removePunctuation(x) does with its default arguments (neither intra-word contractions nor dashes preserved); equal to tm on 60 random strings of letters, digits, spaces and every punctuation character (result length and position-weighted character-code sum, 120 values added to oracle_tm_stop, 310 in all). Non-ASCII punctuation and the preserve_* options are not covered. Open for L380: the other stopword languages, those options, tokenisation, stemming, corpora, tidytext unnest_tokens, topic models.

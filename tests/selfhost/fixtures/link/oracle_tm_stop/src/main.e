@@ -18,6 +18,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     let w = str.done(&bd)
+    if str.eq(c.name, "rpn") || str.eq(c.name, "rps") {
+        let (r, er) = ts.remove_punctuation(a, w)
+        if er != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(c.name, "rpn") { ret f64(r.len) }
+        var sm = 0.0f64
+        var k = 0usize
+        while k < r.len {
+            sm += f64(r[k]) * f64(k + 1usize)
+            k += 1usize
+        }
+        ret sm
+    }
     if ts.is_stopword_en(w) { ret 1.0f64 }
     ret 0.0f64
 }
