@@ -5,6 +5,7 @@
 // calibration and the joint inclusion probabilities.
 
 use e.algo.rand.r as rr
+use e.algo.stat.gparot as gp
 use e.math
 use e.mem
 
@@ -784,4 +785,147 @@ fn cluster(a: *mem.Arena, g: *rr.Rng, label: []const f64, pik: []const f64, size
         c += 1usize
     }
     ret (cnt, ok)
+}
+
+// calib(Xs, d, total, q, method) for the linear (0) and raking (1) methods: the calibration g-weights into g. xs is n by p row-major; linear solves
+// (X' diag(d q) X) lambda = total - X' d and g = 1 + q X lambda; raking iterates the Newton step on w = d exp(q X lambda) until max |X' w - total| / total < 1e-6 (500 iterations at most)
+// and g = w / d. The answer is the iteration count (1 for linear, 0 when raking fails to converge).
+fn calib(a: *mem.Arena, xs: []const f64, d: []const f64, total: []const f64, q: []const f64, n: usize, p: usize, method: usize, g: []f64) -> usize {
+    let (am, e0) = mem.alloc[f64](a, p * p)
+    let (rhs, e1) = mem.alloc[f64](a, p)
+    let (lam, e2) = mem.alloc[f64](a, p)
+    let (w, e3) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret 0usize }
+    var j = 0usize
+    while j < p {
+        lam[j] = 0.0f64
+        j += 1usize
+    }
+    if method == 0usize {
+        var r = 0usize
+        while r < p {
+            var c = 0usize
+            while c < p {
+                var v = 0.0f64
+                var i = 0usize
+                while i < n {
+                    v += xs[i * p + r] * d[i] * q[i] * xs[i * p + c]
+                    i += 1usize
+                }
+                am[r * p + c] = v
+                c += 1usize
+            }
+            var t = total[r]
+            var i = 0usize
+            while i < n {
+                t -= d[i] * xs[i * p + r]
+                i += 1usize
+            }
+            rhs[r] = t
+            r += 1usize
+        }
+        let (inv, ie) = gp.invert(a, am, p)
+        if ie != ok { ret 0usize }
+        r = 0usize
+        while r < p {
+            var v = 0.0f64
+            var c = 0usize
+            while c < p {
+                v += inv[r * p + c] * rhs[c]
+                c += 1usize
+            }
+            lam[r] = v
+            r += 1usize
+        }
+        var i = 0usize
+        while i < n {
+            var e = 0.0f64
+            r = 0usize
+            while r < p {
+                e += xs[i * p + r] * lam[r]
+                r += 1usize
+            }
+            g[i] = 1.0f64 + q[i] * e
+            i += 1usize
+        }
+        ret 1usize
+    }
+    var i = 0usize
+    while i < n {
+        w[i] = d[i]
+        i += 1usize
+    }
+    var l = 1usize
+    while l <= 500usize {
+        var r = 0usize
+        while r < p {
+            var c = 0usize
+            while c < p {
+                var v = 0.0f64
+                i = 0usize
+                while i < n {
+                    v += xs[i * p + r] * w[i] * xs[i * p + c]
+                    i += 1usize
+                }
+                am[r * p + c] = v
+                c += 1usize
+            }
+            var t = 0.0f64
+            i = 0usize
+            while i < n {
+                t += xs[i * p + r] * w[i]
+                i += 1usize
+            }
+            rhs[r] = t - total[r]
+            r += 1usize
+        }
+        let (inv, ie) = gp.invert(a, am, p)
+        if ie != ok { ret 0usize }
+        r = 0usize
+        while r < p {
+            var v = 0.0f64
+            var c = 0usize
+            while c < p {
+                v += inv[r * p + c] * rhs[c]
+                c += 1usize
+            }
+            lam[r] = lam[r] - v
+            r += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var e = 0.0f64
+            r = 0usize
+            while r < p {
+                e += xs[i * p + r] * lam[r]
+                r += 1usize
+            }
+            w[i] = d[i] * math.exp[f64](e * q[i])
+            if w[i] != w[i] || w[i] > 1.0e300f64 { ret 0usize }
+            i += 1usize
+        }
+        var worst = 0.0f64
+        r = 0usize
+        while r < p {
+            var tr = 0.0f64
+            i = 0usize
+            while i < n {
+                tr += xs[i * p + r] * w[i]
+                i += 1usize
+            }
+            let dv = math.abs[f64](tr - total[r]) / total[r]
+            if dv > worst { worst = dv }
+            r += 1usize
+        }
+        if worst < 1.0e-6f64 {
+            i = 0usize
+            while i < n {
+                g[i] = w[i] / d[i]
+                i += 1usize
+            }
+            ret l
+        }
+        l += 1usize
+    }
+    ret 0usize
 }
