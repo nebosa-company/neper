@@ -1089,3 +1089,62 @@ fn tmerge_rows(a: *mem.Arena, futime: []const f64, sid: []const usize, tm: []con
     }
     ret nr
 }
+
+// survival::concordance(Surv(time, status) ~ x) by the pair count: out = concordant, discordant, tied in x (different times), tied in time with different x (both events), tied in both, then the concordance
+// (concordant + tied x / 2) / (concordant + discordant + tied x). A pair is comparable when its earlier member is an event; at equal times an event comes before a censored observation, two events are tied in time
+// and two censored are not comparable. A larger x is concordant with a longer time.
+fn concordance(time: []const f64, status: []const f64, x: []const f64, n: usize, out: []f64) {
+    var conc = 0.0f64
+    var disc = 0.0f64
+    var tx = 0.0f64
+    var ty = 0.0f64
+    var txy = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = i + 1usize
+        while j < n {
+            var e = n
+            var l = n
+            var skip = false
+            if time[i] < time[j] {
+                e = i
+                l = j
+                if status[i] < 0.5f64 { skip = true }
+            } else if time[j] < time[i] {
+                e = j
+                l = i
+                if status[j] < 0.5f64 { skip = true }
+            } else {
+                if status[i] > 0.5f64 && status[j] > 0.5f64 {
+                    if x[i] == x[j] { txy += 1.0f64 } else { ty += 1.0f64 }
+                    skip = true
+                } else if status[i] > 0.5f64 {
+                    e = i
+                    l = j
+                } else if status[j] > 0.5f64 {
+                    e = j
+                    l = i
+                } else {
+                    skip = true
+                }
+            }
+            if !skip {
+                if x[e] < x[l] {
+                    conc += 1.0f64
+                } else if x[e] > x[l] {
+                    disc += 1.0f64
+                } else {
+                    tx += 1.0f64
+                }
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    out[0usize] = conc
+    out[1usize] = disc
+    out[2usize] = tx
+    out[3usize] = ty
+    out[4usize] = txy
+    out[5usize] = (conc + tx / 2.0f64) / (conc + disc + tx)
+}

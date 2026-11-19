@@ -4555,4 +4555,5 @@ D7654	825	mirt: Rasch with a free latent variance
 D7655	1070	mirt: graded response model
 D7656	654	queue scores re-set for the CRAN items started this session
 D7657	873	mirt: analytic 2PL gradient, smaller fixture
-D7658	489	mirt: analytic Rasch gradient
+D7658	490	mirt: analytic Rasch gradient
+D7659	1010	survival: concordance by pair counts
