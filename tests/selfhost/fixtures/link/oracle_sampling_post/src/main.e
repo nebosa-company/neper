@@ -5,12 +5,17 @@ use e.algo.stat.sampling as sp
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let n = usize(x[0usize])
     let k = usize(x[1usize])
+    if str.eq(c.name, "pw") {
+        let h = usize(x[2usize])
+        ret sp.post_estimator2(x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 3usize * n..3usize + 4usize * n], x[3usize + 2usize * n..3usize + 3usize * n], x[3usize + 4usize * n..3usize + 4usize * n + h * k], h, k)
+    }
     ret sp.post_estimator(x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n], x[2usize + 3usize * n..2usize + 3usize * n + k])
 }
 

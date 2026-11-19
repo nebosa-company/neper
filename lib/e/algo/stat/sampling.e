@@ -1936,3 +1936,191 @@ fn up_maxentropy(g: *rr.Rng, a: *mem.Arena, pik: []const f64, s: []f64) -> err {
     }
     ret ok
 }
+
+// UPMEpik2frompikw(pik, w): the joint inclusion matrix of the maximum entropy design from the first-order probabilities and odds; m is N by N row-major
+fn me_pik2_from_pikw(pik: []const f64, w: []const f64, m: []f64) {
+    let nn = pik.len
+    var tot = 0.0f64
+    var k = 0usize
+    while k < nn {
+        tot += pik[k]
+        k += 1usize
+    }
+    let n = math.floor[f64](tot + 0.5f64)
+    k = 0usize
+    while k < nn {
+        var l = 0usize
+        while l < nn {
+            if pik[k] != pik[l] && k != l {
+                m[k * nn + l] = (pik[k] * w[l] - pik[l] * w[k]) / (w[l] - w[k])
+            } else {
+                m[k * nn + l] = -1.0f64
+            }
+            l += 1usize
+        }
+        k += 1usize
+    }
+    k = 0usize
+    while k < nn {
+        m[k * nn + k] = pik[k]
+        k += 1usize
+    }
+    k = 0usize
+    while k < nn {
+        var tt = 0.0f64
+        var comp = 0.0f64
+        var l = 0usize
+        while l < nn {
+            if m[k * nn + l] != -1.0f64 { tt += m[k * nn + l] } else { comp += 1.0f64 }
+            l += 1usize
+        }
+        let cc = (n * pik[k] - tt) / comp
+        l = 0usize
+        while l < nn {
+            if m[k * nn + l] == -1.0f64 { m[k * nn + l] = cc }
+            l += 1usize
+        }
+        k += 1usize
+    }
+}
+
+// UPmaxentropypi2(pik): the joint inclusion probabilities of UPmaxentropy; pi2 is N by N row-major
+fn up_maxentropy_pi2(a: *mem.Arena, pik: []const f64, pi2: []f64) -> err {
+    let nt = pik.len
+    var tot = 0.0f64
+    var i = 0usize
+    while i < nt {
+        tot += pik[i]
+        i += 1usize
+    }
+    let n = usize(math.floor[f64](tot + 0.5f64))
+    i = 0usize
+    while i < nt * nt {
+        pi2[i] = 0.0f64
+        i += 1usize
+    }
+    if n == 1usize {
+        i = 0usize
+        while i < nt {
+            pi2[i * nt + i] = pik[i]
+            i += 1usize
+        }
+    }
+    if n < 2usize { ret ok }
+    var m2 = 0usize
+    i = 0usize
+    while i < nt {
+        if pik[i] > 0.0f64 && pik[i] < 1.0f64 { m2 += 1usize }
+        i += 1usize
+    }
+    let (idx, e0) = mem.alloc[usize](a, m2)
+    let (p2, e1) = mem.alloc[f64](a, m2)
+    let (pt, e2) = mem.alloc[f64](a, m2)
+    let (w, e3) = mem.alloc[f64](a, m2)
+    let (mm, e4) = mem.alloc[f64](a, m2 * m2)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var c = 0usize
+    i = 0usize
+    while i < nt {
+        if pik[i] > 0.0f64 && pik[i] < 1.0f64 {
+            idx[c] = i
+            p2[c] = pik[i]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    let ep = me_pikt_from_pik(a, p2, pt)
+    if ep != ok { ret ep }
+    i = 0usize
+    while i < m2 {
+        w[i] = pt[i] / (1.0f64 - pt[i])
+        i += 1usize
+    }
+    me_pik2_from_pikw(p2, w, mm)
+    i = 0usize
+    while i < m2 {
+        var j = 0usize
+        while j < m2 {
+            pi2[idx[i] * nt + idx[j]] = mm[i * m2 + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // the columns of the certain units hold pik, and so do their rows
+    var j = 0usize
+    while j < nt {
+        if pik[j] == 1.0f64 {
+            i = 0usize
+            while i < nt {
+                pi2[i * nt + j] = pik[i]
+                i += 1usize
+            }
+        }
+        j += 1usize
+    }
+    i = 0usize
+    while i < nt {
+        if pik[i] == 1.0f64 {
+            j = 0usize
+            while j < nt {
+                pi2[i * nt + j] = pik[j]
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// postest with a Stratum column: for each post-stratum j (order of first appearance) Ng = the column sum of NG (rows are the known strata by post-strata counts, ng is row-major rows by ngc);
+// for each stratum with a non-empty intersection the running sums t1 = sum(y / pik) and t2 = sum(1 / pik) over the intersections so far add Ng t1 / t2 to the total, as sampling does
+fn post_estimator2(y: []const f64, pik: []const f64, stratum: []const f64, post: []const f64, ng: []const f64, nrows: usize, ngc: usize) -> f64 {
+    let n = y.len
+    var total = 0.0f64
+    var j = 0usize
+    var i = 0usize
+    while i < n {
+        var firstp = true
+        var q = 0usize
+        while q < i {
+            if post[q] == post[i] { firstp = false }
+            q += 1usize
+        }
+        if firstp {
+            var ngsum = 0.0f64
+            var r = 0usize
+            while r < nrows {
+                ngsum += ng[r * ngc + j]
+                r += 1usize
+            }
+            var t1 = 0.0f64
+            var t2 = 0.0f64
+            var k = 0usize
+            while k < n {
+                var firsts = true
+                q = 0usize
+                while q < k {
+                    if stratum[q] == stratum[k] { firsts = false }
+                    q += 1usize
+                }
+                if firsts {
+                    var any = false
+                    q = 0usize
+                    while q < n {
+                        if stratum[q] == stratum[k] && post[q] == post[i] {
+                            any = true
+                            t1 += y[q] / pik[q]
+                            t2 += 1.0f64 / pik[q]
+                        }
+                        q += 1usize
+                    }
+                    if any { total += ngsum * t1 / t2 }
+                }
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret total
+}
