@@ -19,9 +19,10 @@ for (rep in 1:25) {
   add(15, base, r$wald.strata.or$test.statistic); add(16, base, r$wald.strata.or$p.value.2s)
   add(17, base, r$chi2.strata.uncor$test.statistic); add(18, base, r$chi2.strata.uncor$p.value.2s)
   add(19, base, r$chi2.strata.yates$test.statistic); add(20, base, r$chi2.strata.yates$p.value.2s)
-  # 21..23 score risk ratio, 33..35 attributable fraction in the exposed
+  # 21..23 score risk ratio, 33..35 attributable fraction in the exposed, 36..38 Koopman risk ratio
   for (i in 1:3) add(20 + i, base, unlist(r$RR.strata.score[1, ])[i])
   for (i in 1:3) add(32 + i, base, unlist(r$AFRisk.strata.wald[1, ])[i])
+  for (i in 1:3) add(35 + i, base, unlist(r$RR.strata.koopman[1, ])[i])
   # 24..26 population attributable fraction, 27..29 population attributable risk (Wald), 30..32 (Pirikahu)
   {
     for (i in 1:3) add(23 + i, base, unlist(r$PAFRisk.strata.wald[1, ])[i])

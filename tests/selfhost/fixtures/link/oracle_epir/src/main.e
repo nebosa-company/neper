@@ -107,6 +107,13 @@ fn answer(c: *const oracle.Case) -> f64 {
     let t = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
     let units = x[4usize]
     let w = usize(x[5usize])
+    if w >= 36usize {
+        let (ke, kl, kh) = ep.rr_koopman(t, 0.95f64)
+        let rk = (w - 36usize) % 3usize
+        if rk == 0usize { ret ke }
+        if rk == 1usize { ret kl }
+        ret kh
+    }
     if w >= 33usize || (w >= 21usize && w < 24usize) {
         var xe = 0.0f64
         var xl = 0.0f64

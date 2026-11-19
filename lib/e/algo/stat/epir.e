@@ -9,6 +9,7 @@ use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
+use e.algo.stat.pwr as pw
 
 // the table is exposed with outcome (a), exposed without (b), unexposed with (c), unexposed without (d); units scales the risk difference
 type Table2 = struct { a: f64, b: f64, c: f64, d: f64 }
@@ -809,4 +810,27 @@ fn breslow_day(a: []const f64, b: []const f64, c: []const f64, d: []const f64) -
         i += 1usize
     }
     ret s
+}
+
+type KoopCtx = struct { m: f64, n: f64, x: f64, y: f64, x2: f64 }
+
+fn koop_u(c: *KoopCtx, a: f64) -> f64 {
+    let t = a * (c.m + c.y) + c.x + c.n
+    let p = (t - math.sqrt[f64](t * t - 4.0f64 * a * (c.m + c.n) * (c.x + c.y))) / (2.0f64 * (c.m + c.n))
+    ret ((c.x - c.m * p) * (c.x - c.m * p)) / (c.m * p * (1.0f64 - p)) * (1.0f64 + c.m * (a - p) / (c.n * (1.0f64 - p))) - c.x2
+}
+
+// epiR zRRkoopman for an interior table (0 < a < a + b, 0 < c < c + d): the Koopman score interval of the risk ratio, each end the root (R's uniroot, tolerance eps^0.25) of the score
+// statistic minus the chi-squared quantile on a bracket built from the log-scale standard error; (est, lower, upper)
+fn rr_koopman(t: Table2, level: f64) -> (f64, f64, f64) {
+    let z = z_of(level)
+    var c = KoopCtx { m: t.a + t.c, n: t.b + t.d, x: t.a, y: t.b, x2: nm.qchisq(level, 1.0f64, true, false) }
+    let est = (c.x / c.m) / (c.y / c.n)
+    let varhat = 1.0f64 / c.x - 1.0f64 / c.m + 1.0f64 / c.y - 1.0f64 / c.n
+    let la = est * math.exp[f64](0.0f64 - z * math.sqrt[f64](varhat)) / 4.0f64
+    let hb = est * math.exp[f64](z * math.sqrt[f64](varhat)) * 4.0f64
+    let tol = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    let lo = pw.zeroin[KoopCtx](&c, koop_u, la, est, tol, 1000i64)
+    let hi = pw.zeroin[KoopCtx](&c, koop_u, est, hb, tol, 1000i64)
+    ret (est, lo, hi)
 }
