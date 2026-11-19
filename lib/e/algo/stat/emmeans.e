@@ -12,6 +12,8 @@ use e.math
 use e.math.nmath_beta as nb
 use e.mem
 use e.algo.stat.flexmixpkg as fxg
+use e.math.dist as dist
+use e.math.nmath as nmx
 
 type Lm = struct { beta: []f64, cov: []f64, df: f64, p: usize }
 
@@ -606,4 +608,67 @@ fn contrast_oneway(a: *mem.Arena, grp: []const f64, y: []const f64, xc: []const 
         j += 1usize
     }
     ret m
+}
+
+// Dunnett's adjusted two-sided p of the many-to-one comparisons of a one-way layout: with the control sample size n0 and the treatment sizes ns[i], the t statistics are multivariate t with the one-factor correlation lambda_i lambda_j,
+// lambda_i = sqrt(n_i / (n_i + n0)), so P(all |T_i| < t) is the double integral over the scale s = sqrt(chi^2 / df) and a normal z of the product of Phi((lambda_i z + t s) / sqrt(1 - lambda_i^2)) - Phi((lambda_i z - t s) / ...); integrated by
+// composite Simpson rules (the outer on the density of s, the inner on [-9, 9]), accurate to well below emmeans' simulation error. Returns 1 - that probability.
+fn dunnett_p(t: f64, n0: f64, ns: []const f64, df: f64) -> f64 {
+    let m = ns.len
+    var lam: [32]f64 = zero
+    var sc: [32]f64 = zero
+    var i = 0usize
+    while i < m {
+        lam[i] = math.sqrt[f64](ns[i] / (ns[i] + n0))
+        sc[i] = math.sqrt[f64](1.0f64 - lam[i] * lam[i])
+        i += 1usize
+    }
+    let ta = math.abs[f64](t)
+    let sd = 1.0f64 / math.sqrt[f64](2.0f64 * df)
+    var smax = 1.0f64 + 10.0f64 * sd
+    var smin = 1.0f64 - 10.0f64 * sd
+    if smin < 1.0e-6f64 { smin = 1.0e-6f64 }
+    let ns_pts = 600usize
+    let nz = 400usize
+    let lg = 0.5f64 * df * math.log[f64](df) - (0.5f64 * df - 1.0f64) * math.log[f64](2.0f64) - nmx.lgammafn(0.5f64 * df)
+    var total = 0.0f64
+    var a = 0usize
+    while a <= ns_pts {
+        let s = smin + (smax - smin) * f64(a) / f64(ns_pts)
+        let ws = lg + (df - 1.0f64) * math.log[f64](s) - 0.5f64 * df * s * s
+        let wa = if_simpson(a, ns_pts)
+        var inner = 0.0f64
+        var b = 0usize
+        while b <= nz {
+            let z = 0.0f64 - 9.0f64 + 18.0f64 * f64(b) / f64(nz)
+            var prod = math.exp[f64](0.0f64 - 0.5f64 * z * z) / 2.5066282746310002f64
+            var j = 0usize
+            while j < m {
+                prod = prod * (dist.pnorm((lam[j] * z + ta * s) / sc[j], 0.0f64, 1.0f64, true, false) - dist.pnorm((lam[j] * z - ta * s) / sc[j], 0.0f64, 1.0f64, true, false))
+                j += 1usize
+            }
+            inner += if_simpson(b, nz) * prod
+            b += 1usize
+        }
+        total += wa * math.exp[f64](ws) * inner * (18.0f64 / f64(nz)) / 3.0f64
+        a += 1usize
+    }
+    total = total * (smax - smin) / f64(ns_pts) / 3.0f64
+    ret 1.0f64 - total
+}
+
+// Simpson weight of node i of n + 1
+fn if_simpson(i: usize, n: usize) -> f64 {
+    if i == 0usize || i == n { ret 1.0f64 }
+    if i % 2usize == 1usize { ret 4.0f64 }
+    ret 2.0f64
+}
+
+// adjust = "dunnettx" (the default for trt.vs.ctrl): emmeans' approximation to Dunnett's p for m comparisons, 1 - (w ptukey(sqrt 2 |t|, (1 + sqrt(1 + 8 m)) / 2, df) + (1 - w) pf(t^2, 1, df)^m) with w = (m - 1) / m
+fn p_dunnettx(t: f64, m: f64, df: f64) -> f64 {
+    let x = math.abs[f64](t)
+    let tk = nb.ptukey(x * math.sqrt[f64](2.0f64), 1.0f64, (1.0f64 + math.sqrt[f64](1.0f64 + 8.0f64 * m)) / 2.0f64, df, true, false)
+    let sd = math.pow[f64](nb.pf(x * x, 1.0f64, df, true, false), m)
+    let w = (m - 1.0f64) / m
+    ret 1.0f64 - (w * tk + (1.0f64 - w) * sd)
 }
