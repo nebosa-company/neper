@@ -151,20 +151,28 @@ fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
     ret dev + 2.0f64 * decay * pen
 }
 
-// nnet() for a single linear response with one hidden layer of logistic units (linout = TRUE, no skip-layer): sum of squares plus decay times the squared weights, fitted by optim's BFGS
-// (nnet's own vmmin is that algorithm: verified against optim(method = "BFGS") to 1e-12 in R) from weights given by the caller (R draws runif(nwts, -rang, rang)). The weights run unit by unit,
-// each hidden unit as bias then the p inputs, then the output as bias, the hidden units and (with skip) the p inputs; the hidden activation is clamped at +-15 as nnet's C code does.
-type NetCtx = struct { x: []const f64, y: []const f64, w: []const f64, n: usize, p: usize, h: usize, decay: f64, skip: bool }
+// nnet() with one hidden layer of logistic units and k outputs: mode 0 linear outputs with squared error (linout = TRUE), 1 logistic outputs with squared error, 2 logistic outputs with
+// the cross-entropy (entropy = TRUE), 3 softmax outputs with the cross-entropy; optional skip-layer connections, case weights and decay times the squared weights. The fit is optim's BFGS
+// (nnet's own vmmin is that algorithm: verified against optim(method = "BFGS") to 1e-12 in R) from weights given by the caller (R draws runif(nwts, -rang, rang)). The weights run unit by unit:
+// each hidden unit as bias then the p inputs, then each output unit as bias, the hidden units and (with skip) the p inputs. The hidden activation is clamped at +-15 as nnet's C code does.
+type NetCtx = struct { x: []const f64, y: []const f64, w: []const f64, n: usize, p: usize, h: usize, k: usize, mode: usize, decay: f64, skip: bool }
 
-fn net_hidden(c: *NetCtx, wts: []const f64, t: usize, hid: []f64) -> f64 {
+fn net_out_size(c: *NetCtx) -> usize {
+    var s = 1usize + c.h
+    if c.skip { s += c.p }
+    ret s
+}
+
+// the k outputs (after the output activation) of observation t into out; hid receives the hidden activations
+fn net_forward(c: *NetCtx, wts: []const f64, t: usize, hid: []f64, out: []f64) {
     var j = 0usize
     while j < c.h {
         let base = j * (c.p + 1usize)
         var s = wts[base]
-        var k = 0usize
-        while k < c.p {
-            s += wts[base + 1usize + k] * c.x[t * c.p + k]
-            k += 1usize
+        var q = 0usize
+        while q < c.p {
+            s += wts[base + 1usize + q] * c.x[t * c.p + q]
+            q += 1usize
         }
         var sg = 1.0f64
         if s < -15.0f64 { sg = 0.0f64 } else if s <= 15.0f64 { sg = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - s)) }
@@ -172,30 +180,72 @@ fn net_hidden(c: *NetCtx, wts: []const f64, t: usize, hid: []f64) -> f64 {
         j += 1usize
     }
     let ob = c.h * (c.p + 1usize)
-    var o = wts[ob]
-    let hoff = ob + 1usize
-    j = 0usize
-    while j < c.h {
-        o += wts[hoff + j] * hid[j]
-        j += 1usize
+    let os = net_out_size(c)
+    var mx = -1.0e300f64
+    var o = 0usize
+    while o < c.k {
+        let b = ob + o * os
+        var v = wts[b]
+        j = 0usize
+        while j < c.h {
+            v += wts[b + 1usize + j] * hid[j]
+            j += 1usize
+        }
+        if c.skip {
+            var q = 0usize
+            while q < c.p {
+                v += wts[b + 1usize + c.h + q] * c.x[t * c.p + q]
+                q += 1usize
+            }
+        }
+        out[o] = v
+        if v > mx { mx = v }
+        o += 1usize
     }
-    if c.skip {
-        var k = 0usize
-        while k < c.p {
-            o += wts[hoff + c.h + k] * c.x[t * c.p + k]
-            k += 1usize
+    if c.mode == 3usize {
+        var sum = 0.0f64
+        o = 0usize
+        while o < c.k {
+            out[o] = math.exp[f64](out[o] - mx)
+            sum += out[o]
+            o += 1usize
+        }
+        o = 0usize
+        while o < c.k {
+            out[o] = out[o] / sum
+            o += 1usize
+        }
+    } else if c.mode != 0usize {
+        o = 0usize
+        while o < c.k {
+            var sg = 1.0f64
+            let v = out[o]
+            if v < -15.0f64 { sg = 0.0f64 } else if v <= 15.0f64 { sg = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - v)) }
+            out[o] = sg
+            o += 1usize
         }
     }
-    ret o
 }
 
 fn net_f(c: *NetCtx, wts: []const f64) -> f64 {
     var hid: [64]f64 = zero
+    var out: [16]f64 = zero
     var e = 0.0f64
     var t = 0usize
     while t < c.n {
-        let o = net_hidden(c, wts, t, hid[0usize..64usize])
-        e += c.w[t] * (o - c.y[t]) * (o - c.y[t])
+        net_forward(c, wts, t, hid[0usize..64usize], out[0usize..16usize])
+        var o = 0usize
+        while o < c.k {
+            let tg = c.y[t * c.k + o]
+            if c.mode <= 1usize {
+                e += c.w[t] * (out[o] - tg) * (out[o] - tg)
+            } else if c.mode == 2usize {
+                e -= c.w[t] * (tg * math.log[f64](out[o]) + (1.0f64 - tg) * math.log[f64](1.0f64 - out[o]))
+            } else {
+                e -= c.w[t] * tg * math.log[f64](out[o])
+            }
+            o += 1usize
+        }
         t += 1usize
     }
     var pen = 0.0f64
@@ -209,35 +259,76 @@ fn net_f(c: *NetCtx, wts: []const f64) -> f64 {
 
 fn net_g(c: *NetCtx, wts: []const f64, g: []f64) {
     var hid: [64]f64 = zero
+    var out: [16]f64 = zero
+    var dl: [16]f64 = zero
     var i = 0usize
     while i < wts.len {
         g[i] = 2.0f64 * c.decay * wts[i]
         i += 1usize
     }
     let ob = c.h * (c.p + 1usize)
-    let hoff = ob + 1usize
+    let os = net_out_size(c)
     var t = 0usize
     while t < c.n {
-        let o = net_hidden(c, wts, t, hid[0usize..64usize])
-        let d = 2.0f64 * c.w[t] * (o - c.y[t])
-        g[ob] += d
-        if c.skip {
-            var k = 0usize
-            while k < c.p {
-                g[hoff + c.h + k] += d * c.x[t * c.p + k]
-                k += 1usize
+        net_forward(c, wts, t, hid[0usize..64usize], out[0usize..16usize])
+        var o = 0usize
+        while o < c.k {
+            let tg = c.y[t * c.k + o]
+            if c.mode == 0usize {
+                dl[o] = 2.0f64 * c.w[t] * (out[o] - tg)
+            } else if c.mode == 1usize {
+                dl[o] = 2.0f64 * c.w[t] * (out[o] - tg) * out[o] * (1.0f64 - out[o])
+            } else {
+                dl[o] = c.w[t] * (out[o] - tg)
             }
+            o += 1usize
+        }
+        if c.mode == 3usize {
+            var st = 0.0f64
+            o = 0usize
+            while o < c.k {
+                st += c.y[t * c.k + o]
+                o += 1usize
+            }
+            o = 0usize
+            while o < c.k {
+                dl[o] = c.w[t] * (out[o] * st - c.y[t * c.k + o])
+                o += 1usize
+            }
+        }
+        o = 0usize
+        while o < c.k {
+            let b = ob + o * os
+            g[b] += dl[o]
+            var j = 0usize
+            while j < c.h {
+                g[b + 1usize + j] += dl[o] * hid[j]
+                j += 1usize
+            }
+            if c.skip {
+                var q = 0usize
+                while q < c.p {
+                    g[b + 1usize + c.h + q] += dl[o] * c.x[t * c.p + q]
+                    q += 1usize
+                }
+            }
+            o += 1usize
         }
         var j = 0usize
         while j < c.h {
-            g[hoff + j] += d * hid[j]
-            let dh = d * wts[hoff + j] * hid[j] * (1.0f64 - hid[j])
+            var back = 0.0f64
+            o = 0usize
+            while o < c.k {
+                back += dl[o] * wts[ob + o * os + 1usize + j]
+                o += 1usize
+            }
+            let dh = back * hid[j] * (1.0f64 - hid[j])
             let base = j * (c.p + 1usize)
             g[base] += dh
-            var k = 0usize
-            while k < c.p {
-                g[base + 1usize + k] += dh * c.x[t * c.p + k]
-                k += 1usize
+            var q = 0usize
+            while q < c.p {
+                g[base + 1usize + q] += dh * c.x[t * c.p + q]
+                q += 1usize
             }
             j += 1usize
         }
@@ -245,14 +336,20 @@ fn net_g(c: *NetCtx, wts: []const f64, g: []f64) {
     }
 }
 
-// fit: wts holds the start values and receives the solution; the answer is the objective value; fitted receives the outputs
-fn nnet_fit(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usize, p: usize, h: usize, skip: bool, decay: f64, maxit: usize, reltol: f64, abstol: f64, wts: []f64, fitted: []f64) -> f64 {
-    var c = NetCtx { x: x, y: y, w: w, n: n, p: p, h: h, decay: decay, skip: skip }
+// fit: wts holds the start values and receives the solution; the answer is the objective value; fitted (n by k, row-major) receives the outputs
+fn nnet_fit(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usize, p: usize, h: usize, k: usize, mode: usize, skip: bool, decay: f64, maxit: usize, reltol: f64, abstol: f64, wts: []f64, fitted: []f64) -> f64 {
+    var c = NetCtx { x: x, y: y, w: w, n: n, p: p, h: h, k: k, mode: mode, decay: decay, skip: skip }
     let v = bf.vmmin_abs[NetCtx](a, &c, net_f, net_g, wts, reltol, maxit, abstol)
     var hid: [64]f64 = zero
+    var out: [16]f64 = zero
     var t = 0usize
     while t < n {
-        fitted[t] = net_hidden(&c, wts, t, hid[0usize..64usize])
+        net_forward(&c, wts, t, hid[0usize..64usize], out[0usize..16usize])
+        var o = 0usize
+        while o < k {
+            fitted[t * k + o] = out[o]
+            o += 1usize
+        }
         t += 1usize
     }
     ret v

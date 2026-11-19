@@ -15,26 +15,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let nn_ = usize(z[0usize])
         let pp = usize(z[1usize])
         let hh = usize(z[2usize])
-        let skp = z[5usize] > 0.5f64
-        var nw = hh * (pp + 1usize) + hh + 1usize
-        if skp { nw += pp }
+        let kk = usize(z[3usize])
+        let md = usize(z[4usize])
+        let skp = z[7usize] > 0.5f64
+        var nw = hh * (pp + 1usize) + kk * (1usize + hh)
+        if skp { nw += kk * pp }
         let (wv, ew) = mem.alloc[f64](a, nw)
-        let (fit, ef) = mem.alloc[f64](a, nn_)
+        let (fit, ef) = mem.alloc[f64](a, nn_ * kk)
         if ew != ok || ef != ok { ret nan }
         var q = 0usize
         while q < nw {
-            wv[q] = z[6usize + q]
+            wv[q] = z[8usize + q]
             q += 1usize
         }
-        let xo = 6usize + nw
+        let xo = 8usize + nw
         let yo = xo + nn_ * pp
-        let wo = yo + nn_
-        let val = nn.nnet_fit(a, z[xo..yo], z[yo..wo], z[wo..wo + nn_], nn_, pp, hh, skp, z[3usize], usize(z[4usize]), 1.0e-8f64, 1.0e-4f64, wv, fit)
+        let wo = yo + nn_ * kk
+        let val = nn.nnet_fit(a, z[xo..yo], z[yo..wo], z[wo..wo + nn_], nn_, pp, hh, kk, md, skp, z[5usize], usize(z[6usize]), 1.0e-8f64, 1.0e-4f64, wv, fit)
         if str.eq(c.name, "netv") { ret val }
         var sm = 0.0f64
         q = 0usize
         if str.eq(c.name, "nets") {
-            while q < nn_ {
+            while q < nn_ * kk {
                 sm += fit[q]
                 q += 1usize
             }

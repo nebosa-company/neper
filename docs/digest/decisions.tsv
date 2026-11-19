@@ -4478,4 +4478,5 @@ D7620	1283	actuar regression credibility (Hachemeister, hache.origin)
 D7621	592	sm.density variability band
 D7622	1379	nnet hidden-layer regression network
 D7376	1269	mediation: quasi-Bayesian mediate for linear models
-D7623	697	nnet skip-layer connections
+D7623	698	nnet skip-layer connections
+D7624	1187	nnet with several outputs, logistic, entropy and softmax
