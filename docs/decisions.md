@@ -50779,3 +50779,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7438 — RSpectra eigs with a general operator
 `eigs_op` recovers a general real matrix from its operator and calls `eigs_general`, so the operator forms of eigs, eigs_sym and svds are all covered by recovery plus the dense solvers; equal to RSpectra::eigs(function, k, n, which) for the five which options on 25 random matrices (values, draws where the cut splits a conjugate pair skipped as before). L334 at 0.75.
+
+## D7439 — sm h.select with the cross-validation criterion
+`hselect_cv` is h.select(x, method = "cv") for one unbinned variable: R's optimise (the existing Brent minimiser in e.algo.stat.fdrtool) of the density cross-validation score over log(start / 8) to log(start * 4), start = sd / 2. Equal to sm on 30 samples (oracle_sm_hsel) at rel 1e-7, not 1e-9: one sample differed by 1.2e-9 because the score is flat near its minimum and the matrix-order sum in R rounds differently. Open: the regression, df and aicc criteria, binning above 100 observations, 2-d structures.

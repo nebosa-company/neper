@@ -4280,4 +4280,13 @@ D7369	915	lavaan: one-factor confirmatory factor analysis
 D7370	711	lavaan: standard errors of the one-factor fit
 D7428	978	pscl hurdle with weights, offsets, a zero link and standard errors
 D7429	695	pscl standard errors of the negative binomial and geometric hurdles
-D7430	1088	L412 closed: vuong between the Poisson models, and the acceptance list is met
+D7430	1089	L412 closed: vuong between the Poisson models, and the acceptance list is met
+D7431	976	RSpectra eigs for general real matrices
+D7432	854	irlba svdr
+D7433	704	irlba prcomp_irlba
+D7434	611	RSpectra on sparse input
+D7435	570	RSpectra eigs for general matrices: eigenvector moduli
+D7436	593	RSpectra eigs_sym with an operator
+D7437	436	RSpectra svds with an operator
+D7438	421	RSpectra eigs with a general operator
+D7439	572	sm h.select with the cross-validation criterion

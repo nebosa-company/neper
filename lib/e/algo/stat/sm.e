@@ -5,6 +5,7 @@
 
 use e.math
 use e.mem
+use e.algo.stat.fdrtool as fd
 
 fn sd_of(x: []const f64) -> f64 {
     var m = 0.0f64
@@ -249,4 +250,19 @@ fn hsj(a: *mem.Arena, x: []const f64) -> (f64, err) {
         guard += 1usize
     }
     ret (h0 + (h1 - h0) * math.abs[f64](v0) / (math.abs[f64](v0) + math.abs[f64](v1)), ok)
+}
+
+type CvCtx = struct { x: []const f64 }
+
+fn cv_log(c: *CvCtx, lh: f64) -> f64 {
+    let v = cv_density(c.x, math.exp[f64](lh))
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+// h.select(x, method = "cv") for one unbinned variable: R's optimise of the density cross-validation score over log(start / 8) .. log(start * 4), start = sd / 2
+fn hselect_cv(x: []const f64) -> f64 {
+    let start = sd_of(x) / 2.0f64
+    var c = CvCtx { x: x }
+    ret math.exp[f64](fd.brent_min[CvCtx](&c, cv_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
 }

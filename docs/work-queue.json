@@ -199,7 +199,7 @@
       "score": 0.35,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows; oracle_sm; Linux pending). D6874: hcv (one variable, density and regression) equals sm. hsj (the Sheather-Jones bandwidth, unbinned) equals sm on 30 samples (oracle_sm_sj). Open: h.select dispatch, bands, sm.ancova, sm.survival, sm.options, binning above 100 observations. Was: Open (CRAN rank 954). Small to mid. Acceptance, equal to sm: sm.density in one and two dimensions with the bandwidths hnorm, hcv and h.select, sm.regression with its bands, sm.ancova, sm.survival, sm.options."
+      "evidence": "Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows; oracle_sm; Linux pending). D6874: hcv (one variable, density and regression) equals sm. hsj (the Sheather-Jones bandwidth, unbinned) equals sm on 30 samples (oracle_sm_sj). D7439: h.select(method=\"cv\") one-variable density equals sm (oracle_sm_hsel). Open: h.select regression/df/aicc criteria, bands, sm.ancova, sm.survival, sm.options, binning above 100 observations. Was: Open (CRAN rank 954). Small to mid. Acceptance, equal to sm: sm.density in one and two dimensions with the bandwidths hnorm, hcv and h.select, sm.regression with its bands, sm.ancova, sm.survival, sm.options."
     },
     {
       "id": "L306",
