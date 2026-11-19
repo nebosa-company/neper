@@ -622,3 +622,8 @@ oracle_gslbessel
 oracle_gsldilog
 oracle_gslzeta
 oracle_irlba_defl
+oracle_gslbj
+oracle_gslerf
+oracle_gslpsi
+oracle_gslint
+oracle_gsldebye
