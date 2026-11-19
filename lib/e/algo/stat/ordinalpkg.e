@@ -7,7 +7,7 @@ use e.math
 use e.math.dist as dist
 use e.mem
 
-// F, f and f' of the link at a (0 logit, 1 probit, 2 cloglog)
+// F, f and f' of the link at a (0 logit, 1 probit, 2 cloglog, 3 loglog, 4 cauchit)
 fn link3(link: usize, a: f64) -> (f64, f64, f64) {
     if link == 0usize {
         let f0 = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - a))
@@ -17,6 +17,17 @@ fn link3(link: usize, a: f64) -> (f64, f64, f64) {
     if link == 1usize {
         let d = dist.dnorm(a, 0.0f64, 1.0f64, false)
         ret (dist.pnorm(a, 0.0f64, 1.0f64, true, false), d, 0.0f64 - a * d)
+    }
+    if link == 3usize {
+        let em = math.exp[f64](0.0f64 - a)
+        let f3 = math.exp[f64](0.0f64 - em)
+        let d3 = em * f3
+        ret (f3, d3, d3 * (em - 1.0f64))
+    }
+    if link == 4usize {
+        let pi_ = 3.141592653589793238462643383279f64
+        let q = 1.0f64 + a * a
+        ret (0.5f64 + math.atan[f64](a) / pi_, 1.0f64 / (pi_ * q), 0.0f64 - 2.0f64 * a / (pi_ * q * q))
     }
     let ea = math.exp[f64](a)
     let d = ea * math.exp[f64](0.0f64 - ea)
@@ -139,6 +150,8 @@ fn clm(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: 
         if link == 0usize { par[k] = math.log[f64](pq / (1.0f64 - pq)) }
         if link == 1usize { par[k] = dist.qnorm(pq, 0.0f64, 1.0f64, true, false) }
         if link == 2usize { par[k] = math.log[f64](0.0f64 - math.log[f64](1.0f64 - pq)) }
+        if link == 3usize { par[k] = 0.0f64 - math.log[f64](0.0f64 - math.log[f64](pq)) }
+        if link == 4usize { par[k] = math.tan[f64](3.141592653589793238462643383279f64 * (pq - 0.5f64)) }
         k += 1usize
     }
     var j = 0usize

@@ -18,4 +18,18 @@ for (rep in 1:24) {
   a <- c(n, p, K, lk, y, as.vector(t(x)))
   add("ll", a, as.numeric(logLik(f))); add("theta", a, sum(f$alpha * seq_along(f$alpha))); add("beta", a, sum(f$beta * seq_along(f$beta)))
 }
+# loglog (link 3); cauchit (link 4) has several local maxima and R and the port reach different ones, see D7508
+set.seed(20262480)
+for (rep in 1:16) {
+  n <- sample(150:300, 1); p <- sample(1:3, 1); K <- sample(3:5, 1); lk <- 3
+  x <- matrix(rnorm(n * p), n); b <- rnorm(p) * 0.7; th <- sort(rnorm(K - 1)) * 1.2
+  eta <- as.vector(x %*% b); u <- -log(-log(runif(n)))
+  y <- findInterval(eta + u, th)
+  if (length(unique(y)) < K) next
+  d <- as.data.frame(x); names(d) <- paste0("v", seq_len(p)); d$y <- factor(y, ordered = TRUE)
+  f <- tryCatch(clm(y ~ ., data = d, link = "loglog", control = clm.control(gradTol = 1e-10, maxIter = 500)), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, p, K, lk, y, as.vector(t(x)))
+  add("ll", a, as.numeric(logLik(f))); add("theta", a, sum(f$alpha * seq_along(f$alpha))); add("beta", a, sum(f$beta * seq_along(f$beta)))
+}
 emit("ordinal", "ordinal", list(cases))
