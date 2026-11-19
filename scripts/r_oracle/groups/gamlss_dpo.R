@@ -35,4 +35,12 @@ for (rep in 1:40) {
   mu2 <- runif(1, 0.5, 6); sg2 <- runif(1, 0.3, 2); nu2 <- runif(1, -1.5, 1); t2 <- runif(1, 0.05, 0.6); xi <- rpois(1, mu2)
   add("dp", c(11, mu2, sg2, xi, nu2, t2), dZASICHEL(xi, mu = mu2, sigma = sg2, nu = nu2, tau = t2), 1e-7, 1e-12)
 }
+# DEL (Delaporte; fn 12 d, 13 p, 14 q; mu, sigma, nu, x)
+for (rep in 1:40) {
+  mu <- runif(1, 0.5, 8); sg <- runif(1, 0.2, 2); nu <- runif(1, 0.05, 0.95); x <- rpois(1, mu)
+  add("dp", c(12, mu, sg, x, nu), dDEL(x, mu = mu, sigma = sg, nu = nu), 1e-7, 1e-12)
+  add("dp", c(13, mu, sg, x, nu), pDEL(x, mu = mu, sigma = sg, nu = nu), 1e-7, 1e-12)
+  pr <- runif(1, 0.02, 0.98)
+  add("dp", c(14, mu, sg, pr, nu), qDEL(pr, mu = mu, sigma = sg, nu = nu), 0, 0)
+}
 emit("gamlss_dpo", "gamlss.dist", list(cases))

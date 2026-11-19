@@ -2288,3 +2288,40 @@ fn dzasichel(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if x == 0.0f64 { ret tau }
     ret (1.0f64 - tau) * dsichel(x, mu, sigma, nu) / (1.0f64 - dsichel(0.0f64, mu, sigma, nu))
 }
+
+// the Delaporte DEL of gamlss.dist (mean mu, dispersion sigma, nu in (0, 1)): a Poisson of mean mu nu plus an independent negative binomial of mean mu (1 - nu) and size 1 / sigma, so the mass is their convolution
+// (the package sums the same series in compiled code); the Poisson alone for sigma <= 1e-4
+fn ddel(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if sigma <= 1.0e-4f64 { ret nm.dpois(x, mu, false) }
+    var s = 0.0f64
+    var k = 0.0f64
+    while k <= x {
+        s += nm.dpois(k, mu * nu, false) * nb.dnbinom_mu(x - k, 1.0f64 / sigma, mu * (1.0f64 - nu), false)
+        k += 1.0f64
+    }
+    ret s
+}
+
+fn pdel(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var y = 0.0f64
+    while y <= math.floor[f64](q) {
+        s += ddel(y, mu, sigma, nu)
+        y += 1.0f64
+    }
+    ret s
+}
+
+fn qdel(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p + 1.0e-9f64 >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var j = 0.0f64
+    var res = 0.0f64
+    while j <= 10000.0f64 {
+        res = j
+        if p <= pdel(j, mu, sigma, nu) { ret res }
+        j += 1.0f64
+    }
+    ret res
+}

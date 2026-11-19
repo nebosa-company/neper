@@ -4250,4 +4250,5 @@ D7344	766	poLCA: missing responses
 D7423	560	pscl zeroinfl weights and offsets
 D7424	548	pscl pR2 for zeroinfl
 D7425	224	pscl pR2 for the hurdle
-D7345	1180	poLCA: latent class regression
+D7345	1181	poLCA: latent class regression
+D7346	639	gamlss.dist: DEL

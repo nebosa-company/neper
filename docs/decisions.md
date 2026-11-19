@@ -50590,3 +50590,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `polcapkg.em_reg` fits `poLCA(cbind(...) ~ x1 + ... + xq)`: the class prior of a case is the multinomial logit exp(x' b_r) / (1 + sum exp(x' b)) with class 1 as the reference, as `poLCA.updatePrior` codes it; each EM round updates the response probabilities by the posterior weights and the coefficients by one Newton step with the expected score and information, and the log-likelihood is taken after the update.
 
 **Result.** `oracle_polca` (354 cases, 38 new on 14 data sets with one or two covariates and two classes) equals poLCA on Windows: log-likelihood to 1e-6, the sum of squares of the response probabilities to 1e-4 and of the coefficients to 1e-3. The signs of the coefficients are not compared: in my runs the printed `coeff` of poLCA came out with the opposite sign to this coding on the same fits (equal log-likelihoods and probabilities) and I did not find the reason, so the check is the sum of squares. Linux pending. L512 stays partial: the sign convention of the coefficients, three or more classes with covariates, standard errors of the regression, the generalised inverse for singular information.
+
+## D7346 — gamlss.dist: DEL
+
+**Decision.** `gamlssdist.ddel`, `pdel`, `qdel` take the Delaporte mass as the convolution of a Poisson of mean mu nu and a negative binomial of mean mu (1 - nu) and size 1/sigma (the package sums the same series in compiled code), the Poisson alone for sigma <= 1e-4; the distribution is the running sum and the quantile the first point reaching p.
+
+**Result.** `oracle_gamlss_dpo` (600 cases, 120 new) equals gamlss.dist on Windows: d and p to 1e-7, q exactly. Linux pending. L464 stays partial: SI, MN3-5, ST3C, SEP and ZASICHEL p and q, ZISICHEL p and q, the remaining random-number generators, moments.
