@@ -10,6 +10,24 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "cv") {
+        let mc = usize(x[0usize])
+        let npc = usize(x[1usize + mc])
+        let nnc = usize(x[2usize + mc + npc])
+        var fsc: [64]f64 = zero
+        var wk: [128]f64 = zero
+        ac.aggregate_convolution(x[2usize + mc..2usize + mc + npc], x[1usize..1usize + mc], nnc, fsc[0usize..64usize], wk[0usize..128usize])
+        var run = 0.0f64
+        var sm = 0.0f64
+        var j = 0usize
+        while j <= nnc {
+            run += fsc[j]
+            sm += run * f64(j + 1usize)
+            j += 1usize
+        }
+        if usize(x[3usize + mc + npc]) == 0usize { ret run }
+        ret sm
+    }
     if str.eq(c.name, "dz") {
         let nd = usize(x[1usize])
         var dv: [64]f64 = zero

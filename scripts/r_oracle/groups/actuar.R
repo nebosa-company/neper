@@ -78,4 +78,13 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("dz", c(md, n, ff, 0), length(d), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("dz", c(md, n, ff, 1), sum(d * seq_along(d)), rel = 1e-9, abs = 1e-13)
 }
+# aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
+for (rep in 1:40) {
+  m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)
+  F <- aggregateDist("convolution", model.freq = pn, model.sev = fx, x.scale = 1)
+  v <- F(0:nn)
+  if (any(!is.finite(v))) next
+  cases[[length(cases) + 1]] <- case("cv", c(m, fx, np, pn, nn, 0), v[nn + 1], rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("cv", c(m, fx, np, pn, nn, 1), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
+}
 emit("actuar", "actuar", list(cases))

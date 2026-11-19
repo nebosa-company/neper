@@ -194,3 +194,41 @@ fn discretize_cdf(method: usize, ff: []const f64, n: usize, out: []f64) -> usize
     }
     ret n
 }
+
+// actuar aggregateDist("convolution"): the aggregate probabilities fs[0 .. nn] = sum_n pn[n] f^(*n) with pn the frequency probabilities (n = 0 .. pn.len - 1) and f the discretised severity fx (mass at 0, 1, 2 ...); work (2 * (nn + 1) floats) is scratch
+fn aggregate_convolution(pn: []const f64, fx: []const f64, nn: usize, fs: []f64, work: []f64) {
+    var x = 0usize
+    while x <= nn {
+        fs[x] = 0.0f64
+        work[x] = 0.0f64
+        x += 1usize
+    }
+    // work holds f^(*n), starting with the point mass at 0
+    work[0usize] = 1.0f64
+    var n = 0usize
+    while n < pn.len {
+        x = 0usize
+        while x <= nn {
+            fs[x] += pn[n] * work[x]
+            x += 1usize
+        }
+        // work <- work * fx, into the second half of the scratch and back
+        x = 0usize
+        while x <= nn {
+            var s = 0.0f64
+            var y = 0usize
+            while y <= x && y < fx.len {
+                s += fx[y] * work[x - y]
+                y += 1usize
+            }
+            work[nn + 1usize + x] = s
+            x += 1usize
+        }
+        x = 0usize
+        while x <= nn {
+            work[x] = work[nn + 1usize + x]
+            x += 1usize
+        }
+        n += 1usize
+    }
+}
