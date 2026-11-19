@@ -96,7 +96,7 @@ L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
 L349	library	0.15	743	vegan: community ecology	Partial (D6627).
 L350	library	0.1	706	ape: phylogenetic trees	Partial (D6628).
 L351	library	0.15	680	survey: design-based inference	Partial (D6626).
-L352	library	0	306	ncdf4: NetCDF and HDF5 files	Open (CRAN rank 237).
+L352	library	0.15	636	ncdf4: NetCDF and HDF5 files	Partial (D7701): e.fmt.netcdf reads netCDF classic CDF-1 and CDF-2 files (dimensions, variables, record variables) and gives every variable as doubles;
 L371	library	0.15	866	coin: conditional and permutation tests	Partial (D6625).
 L373	library	0.15	662	bnlearn: Bayesian network learning	Partial (D6630).
 L374	library	0.2	759	rms: regression modelling strategies	Partial (D6629).

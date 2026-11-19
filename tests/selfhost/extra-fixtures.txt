@@ -589,3 +589,4 @@ oracle_vgam_multinom
 oracle_vgam_cum_np
 oracle_phangorn
 oracle_tsne
+oracle_ncdf4
