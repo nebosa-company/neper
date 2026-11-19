@@ -51202,3 +51202,6 @@ The cross-sectional design reports the cohort.count measures under the prevalenc
 
 ## D7569 — epiR crude estimates of a stratified table
 epi.2by2 on a stack of strata also reports the estimates of the collapsed (crude) table; the existing cohort functions (risk_ratio, odds_ratio, risk_difference, rr_score, chi2 without correction) equal RR.crude.wald, OR.crude.wald, ARisk.crude.wald, RR.crude.score and chi2.crude.uncor on 20 stacks summed over strata (280 values added to oracle_epir, 5525 in all), with no new code. The crude Yates statistic differs from the single-table one (epiR corrects it differently on a stack) and is not ported.
+
+## D7570 — actuar rinvtrgamma under set.seed
+`rand_draw` kind 6 is rinvtrgamma, scale times rgamma(shape1)^(-1/shape2); an earlier probe (D7550) had tried scale divided by the root, which is not the same thing. Equal to actuar on 10 seeded runs added to the 70 of the generator block (5201 cases in all). rgenpareto, rtrbeta, rgenbeta, rinvweibull and rinvexp stay open.
