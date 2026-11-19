@@ -1252,10 +1252,10 @@
       "group": "CRAN parity",
       "order": 815,
       "title": "msm and mstate: multi-state models",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN ranks 642, 679). Large. Needs L311. Acceptance, equal to R: msm for continuous-time Markov models with misclassification and hidden Markov outcomes, pmatrix.msm, qmatrix.msm, sojourn times, covariate effects, pearson.msm; mstate msprep, msfit, probtrans, and the competing-risks utilities."
+      "evidence": "Partial (D7352). mstate probtrans forward without variance (the Aalen-Johansen product of I + dA after predt) equals R on Windows (oracle_mstate, 496 values, hand-built msfit; Linux pending). Open: msm, msprep, msfit, the variance and fixedhorizon forms, competing-risks utilities. Was: Open (CRAN ranks 642, 679). Large. Needs L311. Acceptance, equal to R: msm for continuous-time Markov models with misclassification and hidden Markov outcomes, pmatrix.msm, qmatrix.msm, sojourn times, covariate effects, pearson.msm; mstate msprep, msfit, probtrans, and the competing-risks utilities."
     },
     {
       "id": "L442",

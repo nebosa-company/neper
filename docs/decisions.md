@@ -50182,3 +50182,6 @@ New `e.algo.stat.mgcvpkg` starts the mgcv item with the `bs = "cr"` smooth: `pla
 
 ## D7351 — mgcv REML selection of two smoothing parameters
 `gam_gcv_select2` takes a `reml` flag: the objective is the REML score 0.5 (Dp/phi + (n-Mp) log(2 pi phi) + log|X'X+S| - log|S|+) with phi = Dp/(n-Mp), Mp = 1 + the summed null-space dimensions of the two absorbed penalties, and log|S|+ = sum(rank_i rho_i + log|S_i|+) because the blocks are disjoint. The same 25 by 25 grid and Nelder-Mead search finds the optimum. The oracle compares total edf and fitted values at 3e-3, not the score, because gam stops at a score tolerance. L353 stays partial: ML, REML with more smooths, te smooths, non-Gaussian families and anova remain.
+
+## D7352 — mstate probtrans (forward, no variance)
+`probtrans_forward` multiplies I + dA over the event times after predt, with dA built per transition from increments of the cumulative hazard (taken over all times before the time filter, as R does) and the diagonal reduced by each increment in turn. The oracle builds the msfit by hand since probtrans reads only `$Haz` and `$trans`, and compares the pstate matrix at every other row for six random acyclic four-state models, with predt zero and a positive time. L441 opens at 0.1: msm, msprep, msfit, the variance forms and fixedhorizon remain.
