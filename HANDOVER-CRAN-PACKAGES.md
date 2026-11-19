@@ -76,3 +76,11 @@ Other sessions (same git user, same working tree) commit to master concurrently 
 - Linux: run all new fixtures (`oracle_lapack_exact`, `oracle_glmnet_ext`, `oracle_mclust2..20`, `oracle_metafor*`, `oracle_nlminb`, ...) in the Linux batch; none has been run there.
 - Reopen the caveated items above (most valuable: L348 EVE/VVE, L411 n = 61..99) or accept them?
 - Whether to keep the slow fixtures (`oracle_imputets` about 45 s, `oracle_sn_selm` about 2 min, `oracle_glmnet_ext` about 20 s) in the regular suite.
+
+## Update 2026-11-19: Workflow round and merged increments
+
+Closed since the first handover: L464 (D7715). A 9-item Workflow round (81 agents, worktree implementers, two adversarial verifiers each, three repair rounds) closed nothing: every verifier still found gaps. Increments for L417 gsl, L407 GeneralizedHyperbolic, L367 lpSolve/clue, L468 fpc, L332 foreign, L409 arm, L413 flexmix and L306 MASS are merged on master (29ec799f5, 55585ba0c); 70 fixtures pass on Windows, none run on Linux. L334 produced nothing new.
+
+The remaining-gap list for each of those items is in its `evidence` field in `docs/work-queue.json` (text after "Workflow round 2026-11-19"). Scores were not changed. Status: 134 CRAN-parity items done, 123 open (20 at score 0, 103 partial).
+
+Lessons: a verifier finds new gaps every round, so give the next round only the listed gaps; a fresh git worktree outside `.claude/worktrees` makes the compiler fail with `e.os.Denied`; a background `for` loop that reads stdin stops after one command (use a script with `</dev/null`); `extra-fixtures.txt` in the working tree still holds another session's uncommitted edits.
