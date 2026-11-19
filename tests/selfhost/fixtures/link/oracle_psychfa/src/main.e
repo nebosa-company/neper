@@ -23,6 +23,12 @@ fn fit_case(a: *mem.Arena, c: *const oracle.Case, cached: []f64) -> bool {
         cached[2usize] = st[1usize]
         cached[3usize] = st[2usize]
         cached[4usize] = st[3usize]
+        var ix: [4]f64 = zero
+        ps.fa_ml_indices(obj, 0.0f64 - ps.logdet(a, z[3usize..3usize + p * p], p), z[2usize], p, q, ix[0usize..4usize])
+        cached[5usize] = ix[0usize]
+        cached[6usize] = ix[1usize]
+        cached[7usize] = ix[2usize]
+        cached[8usize] = ix[3usize]
         ret true
     }
     if c.name.len == 8usize {

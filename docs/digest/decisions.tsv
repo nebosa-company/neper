@@ -4580,4 +4580,5 @@ D7679	918	mirt, unmarked and VGAM beta-binomial: the cut data sets restored
 D7680	1310	psych: minres, uls and ols factor analysis
 D7681	522	psych: loadings of the minres, uls and ols fits
 D7682	943	psych: rotations of the minres fit
-D7683	1004	psych: fit statistics of the maximum likelihood fit
+D7683	1008	psych: fit statistics of the maximum likelihood fit
+D7684	889	psych: RMSEA, TLI, CFI and the null chi-square

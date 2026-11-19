@@ -1542,3 +1542,23 @@ fn fa_ml_stats(objective: f64, n: f64, p: usize, q: usize, out: []f64) {
     out[2usize] = nmx.pgamma(stat, dof / 2.0f64, 2.0f64, false, false)
     out[3usize] = stat - dof * math.log[f64](n)
 }
+
+// the indices psych::fa.stats adds for a maximum likelihood fit, with f0 = -log det R the null model's objective: out = the null chi-square f0 (n - 1 - (2 p + 5) / 6), RMSEA = sqrt(max(STATISTIC / (dof n) - 1 / (n - 1), 0)),
+// TLI = (M0 - Mm) / (M0 - 1 / nm) with M0 = 2 f0 / (p (p - 1)), Mm = objective / dof and nm = n - 1 - (2 p + 5) / 6 - 2 q / 3, and CFI = (max(null - null dof, 0) - max(STATISTIC - dof, 0)) / max(null - null dof, 0)
+fn fa_ml_indices(objective: f64, f0: f64, n: f64, p: usize, q: usize, out: []f64) {
+    let pf = f64(p)
+    let qf = f64(q)
+    let nm = n - 1.0f64 - (2.0f64 * pf + 5.0f64) / 6.0f64 - 2.0f64 * qf / 3.0f64
+    let stat = nm * objective
+    let dof = ((pf - qf) * (pf - qf) - (pf + qf)) / 2.0f64
+    let nullc = f0 * (n - 1.0f64 - (2.0f64 * pf + 5.0f64) / 6.0f64)
+    let nulld = pf * (pf - 1.0f64) / 2.0f64
+    let m0 = f0 * 2.0f64 / (pf * (pf - 1.0f64))
+    let mm = objective / dof
+    var rm = stat / (dof * n) - 1.0f64 / (n - 1.0f64)
+    if rm < 0.0f64 { rm = 0.0f64 }
+    out[0usize] = nullc
+    out[1usize] = math.sqrt[f64](rm)
+    out[2usize] = (m0 - mm) / (m0 - 1.0f64 / nm)
+    out[3usize] = (math.max[f64](nullc - nulld, 0.0f64) - math.max[f64](stat - dof, 0.0f64)) / math.max[f64](nullc - nulld, 0.0f64)
+}
