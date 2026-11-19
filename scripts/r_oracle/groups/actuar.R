@@ -78,6 +78,16 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("dz", c(md, n, ff, 0), length(d), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("dz", c(md, n, ff, 1), sum(d * seq_along(d)), rel = 1e-9, abs = 1e-13)
 }
+# discretize(method = "unbiased"): "du" args (n, h, F(from), F(to), lev at from + k h [n + 1], stat); the answer is the first mass or the position-weighted sum
+for (rep in 1:40) {
+  n <- sample(4:20, 1); h <- runif(1, 0.3, 2); from <- runif(1, 0, 2); to <- from + n * h
+  a <- runif(1, 1.5, 4); s <- runif(1, 0.3, 1.5)
+  d <- discretize(pgamma(x, a, s), method = "unbiased", lev = levgamma(x, a, s), from = from, to = to, step = h)
+  ex <- levgamma(from + (0:n) * h, a, s)
+  cs <- c(n, h, pgamma(from, a, s), pgamma(to, a, s), ex)
+  cases[[length(cases) + 1]] <- case("du", c(cs, 0), d[1], rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("du", c(cs, 1), sum(d * seq_along(d)), rel = 1e-9, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

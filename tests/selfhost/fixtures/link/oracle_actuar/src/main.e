@@ -53,6 +53,19 @@ fn answer(c: *const oracle.Case) -> f64 {
         }
         ret sd
     }
+    if str.eq(c.name, "du") {
+        let nd = usize(x[0usize])
+        var dv: [64]f64 = zero
+        let cnt = ac.discretize_unbiased(x[4usize..5usize + nd], nd, x[1usize], x[2usize], x[3usize], dv[0usize..64usize])
+        if usize(x[5usize + nd]) == 0usize { ret dv[0usize] }
+        var sd = 0.0f64
+        var k = 0usize
+        while k < cnt {
+            sd += dv[k] * f64(k + 1usize)
+            k += 1usize
+        }
+        ret sd
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])

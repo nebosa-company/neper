@@ -4389,4 +4389,5 @@ D7530	761	actuar aggregateDist recursive (Panjer)
 D7531	832	actuar discretize (upper, lower, rounding)
 D7532	698	actuar aggregateDist convolution
 D7533	684	actuar aggregateDist normal and Normal Power
-D7534	1001	actuar grouped data: ogive, emm and elev
+D7534	1002	actuar grouped data: ogive, emm and elev
+D7535	441	actuar discretize, unbiased method

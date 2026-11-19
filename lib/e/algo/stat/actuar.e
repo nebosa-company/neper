@@ -302,3 +302,15 @@ fn grouped_elev(cj: []const f64, nj: []const f64, x: f64) -> f64 {
     }
     ret s / tot
 }
+
+// actuar discretize(method = "unbiased"): ex = the limited expected value at from + k h (k = 0 .. n), f0 and f1 the cdf at from and to; out receives the n + 1 masses (the first at from, the last at to)
+fn discretize_unbiased(ex: []const f64, n: usize, h: f64, f0: f64, f1: f64, out: []f64) -> usize {
+    out[0usize] = 0.0f64 - (ex[1usize] - ex[0usize]) / h + 1.0f64 - f0
+    var j = 1usize
+    while j < n {
+        out[j] = (2.0f64 * ex[j] - ex[j - 1usize] - ex[j + 1usize]) / h
+        j += 1usize
+    }
+    out[n] = (ex[n] - ex[n - 1usize]) / h - 1.0f64 + f1
+    ret n + 1usize
+}
