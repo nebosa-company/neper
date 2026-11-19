@@ -241,3 +241,25 @@ fn epi_tests(t: Table2, level: f64, stat: usize) -> (f64, f64, f64) {
     let s = z * math.sqrt[f64](se / (m1 * (1.0f64 - se)) + (1.0f64 - sp) / (m0 * sp))
     ret (l, math.exp[f64](math.log[f64](l) - s), math.exp[f64](math.log[f64](l) + s))
 }
+
+// epi.conf for a proportion x / n: method 0 exact (Clopper-Pearson), 1 Wilson, 2 Agresti-Coull (the estimate is the adjusted proportion), 3 Jeffreys: (est, lower, upper)
+fn prop_ci(x: f64, n: f64, level: f64, method: usize) -> (f64, f64, f64) {
+    if method == 0usize {
+        let (e0, l0, u0) = exact_prop(x, n, level)
+        ret (e0, l0, u0)
+    }
+    let z = z_of(level)
+    let p = x / n
+    if method == 1usize {
+        let lim = z * math.sqrt[f64]((p * (1.0f64 - p) + z * z / (4.0f64 * n)) / n) / (1.0f64 + z * z / n)
+        let pest = (p + z * z / (2.0f64 * n)) / (1.0f64 + z * z / n)
+        ret (p, pest - lim, pest + lim)
+    }
+    if method == 2usize {
+        let pa = (x + z * z / 2.0f64) / (n + z * z)
+        let h = z * math.sqrt[f64](pa * (1.0f64 - pa) / (n + z * z))
+        ret (pa, pa - h, pa + h)
+    }
+    let al = 1.0f64 - level
+    ret (p, nb.qbeta(al / 2.0f64, x + 0.5f64, n - x + 0.5f64, true, false), nb.qbeta(1.0f64 - al / 2.0f64, x + 0.5f64, n - x + 0.5f64, true, false))
+}

@@ -37,4 +37,13 @@ for (rep in 1:25) {
   nm <- c("ap", "tp", "se", "sp", "diag.ac", "diag.or", "nndx", "youden", "pv.pos", "pv.neg", "lr.pos", "lr.neg")
   for (i in seq_along(nm)) { row <- r[r$statistic == nm[i], ]; for (j in 1:3) cases[[length(cases) + 1]] <- case("dt", c(a, b, cc, d, (i - 1) * 3 + j - 1), as.numeric(row[1, j + 1]), rel = 1e-8, abs = 1e-12) }
 }
+# epi.conf proportions: "pc" args (x, n, method 0 exact 1 wilson 2 agresti 3 jeffreys, part 0 est 1 lower 2 upper)
+for (rep in 1:30) {
+  n <- sample(10:500, 1); x <- sample(1:(n - 1), 1)
+  for (mi in 0:3) {
+    r <- epi.conf(as.matrix(cbind(x, n)), ctype = "prevalence", method = c("exact", "wilson", "agresti", "jeffreys")[mi + 1], conf.level = 0.95)
+    v <- c(r$est, r$lower, r$upper)
+    for (pt in 0:2) cases[[length(cases) + 1]] <- case("pc", c(x, n, mi, pt), v[pt + 1], rel = 1e-8, abs = 1e-12)
+  }
+}
 emit("epir", "epiR", list(cases))

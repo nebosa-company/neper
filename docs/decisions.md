@@ -51154,3 +51154,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7553 — epiR epi.tests with exact intervals
 `epi_tests` answers the twelve statistics of epi.tests for a 2 by 2 table of test against disease with the exact method: apparent and true prevalence, sensitivity, specificity, diagnostic accuracy and the predictive values from Clopper-Pearson intervals, the diagnostic odds ratio and the likelihood ratios with log-scale Wald intervals, and the number needed to diagnose and Youden's index from the interval ends of sensitivity and specificity (min and max of the two). Equal to epiR on 25 tables (900 values added to oracle_epir, 1800 in all). The Wilson, Agresti, Jeffreys and Clopper-Pearson-only methods, the post-test probabilities and the confidence-level argument stay open.
+
+## D7554 — epiR epi.conf proportion intervals
+`prop_ci` gives the interval of a proportion x / n by method: exact (Clopper-Pearson), Wilson, Agresti-Coull (the estimate is the adjusted proportion, as in epiR) and Jeffreys (beta quantiles at x + 1/2, n - x + 1/2). Equal to epi.conf(ctype = "prevalence") on 30 draws in the four methods (360 values added to oracle_epir, 2160 in all). The other ctypes (incidence, odds, ratios), the design effect and the standard errors stay open.

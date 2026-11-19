@@ -10,6 +10,12 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "pc") {
+        let (e8, l8, h8) = ep.prop_ci(x[0usize], x[1usize], 0.95f64, usize(x[2usize]))
+        if usize(x[3usize]) == 0usize { ret e8 }
+        if usize(x[3usize]) == 1usize { ret l8 }
+        ret h8
+    }
     if str.eq(c.name, "dt") {
         let td = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
         let code = usize(x[4usize])

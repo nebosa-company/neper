@@ -4408,4 +4408,5 @@ D7549	589	actuar random generators under set.seed
 D7550	527	actuar transformed beta generators under set.seed
 D7551	755	epiR population attributable fraction and risk
 D7552	646	epiR score risk-ratio interval and attributable fraction in the exposed
-D7553	732	epiR epi.tests with exact intervals
+D7553	733	epiR epi.tests with exact intervals
+D7554	483	epiR epi.conf proportion intervals
