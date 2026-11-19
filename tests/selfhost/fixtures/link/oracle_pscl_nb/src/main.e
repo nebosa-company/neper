@@ -17,6 +17,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = usize(z[2usize])
     let (par, e1) = mem.alloc[f64](a, p + q + 1usize)
     if e1 != ok { ret nan }
+    if str.eq(c.name, "lkll") || str.eq(c.name, "lkz") {
+        let lnk = usize(z[3usize])
+        let hm = usize(z[4usize]) == 1usize
+        let y2 = z[5usize..5usize + n]
+        let x2 = z[5usize + n..5usize + n + n * p]
+        let z2 = z[5usize + n + n * p..5usize + n + n * p + n * q]
+        let l2 = ps.zero_link_fit(a, x2, z2, y2, n, p, q, lnk, hm, par)
+        if str.eq(c.name, "lkll") { ret l2 }
+        ret par[p] + 2.0f64 * par[p + 1usize]
+    }
     let y = z[3usize..3usize + n]
     let x = z[3usize + n..3usize + n + n * p]
     let zz = z[3usize + n + n * p..3usize + n + n * p + n * q]

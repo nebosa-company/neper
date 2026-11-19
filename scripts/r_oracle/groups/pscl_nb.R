@@ -36,4 +36,15 @@ for (rep in 1:6) {
   if (!is.null(f1)) { a <- c(n, 2, 2, y, as.vector(t(x)), as.vector(t(z))); add("gzll", a, as.numeric(logLik(f1))); add("gzc", a, sum(coef(f1, "count") * 1:2)) }
   if (!is.null(f2)) { a <- c(n, 2, 2, y2, as.vector(t(x)), as.vector(t(z))); add("ghll", a, as.numeric(logLik(f2))); add("ghc", a, sum(coef(f2, "count") * 1:2)) }
 }
+# zero links: zeroinfl and hurdle with Poisson counts and a probit, cloglog or cauchit zero part: "lkll" (log-likelihood) and "lkz" (the zero coefficients weighted by position, 2e-3). Args: (n, p, q, link 1 probit 2 cloglog 3 cauchit, hurdle 0/1, y, x, z).
+for (rep in 1:12) {
+  n <- sample(250:400, 1); x <- cbind(1, rnorm(n)); z <- cbind(1, rnorm(n)); link <- 1 + (rep - 1) %% 3; hm <- (rep - 1) %/% 3 %% 2
+  b <- c(0.7, rnorm(1, 0, .3)); g <- c(-0.5, rnorm(1, 0, .5)); lam <- exp(as.vector(x %*% b)); pz <- plogis(as.vector(z %*% g))
+  y <- if (hm == 0) ifelse(runif(n) < pz, 0, rpois(n, lam)) else { yy <- rpois(n, lam); yy[runif(n) < pz] <- 0; yy }
+  d <- data.frame(y = y, x1 = x[, 2], z1 = z[, 2]); lk <- c("probit", "cloglog", "cauchit")[link]
+  f <- tryCatch(suppressWarnings(if (hm == 0) zeroinfl(y ~ x1 | z1, data = d, link = lk, control = zeroinfl.control(reltol = 1e-12, maxit = 5000)) else hurdle(y ~ x1 | z1, data = d, zero.dist = "binomial", link = lk, control = hurdle.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
+  if (is.null(f)) next
+  a <- c(n, 2, 2, link, hm, y, as.vector(t(x)), as.vector(t(z))); zc <- coef(f, "zero")
+  cases[[length(cases) + 1]] <- case("lkll", a, as.numeric(logLik(f)), rel = 2e-3, abs = 2e-3); cases[[length(cases) + 1]] <- case("lkz", a, sum(zc * 1:2), rel = 5e-3, abs = 5e-3)
+}
 emit("pscl_nb", "pscl", list(cases))
