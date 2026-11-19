@@ -1357,10 +1357,9 @@ fn varimax_stats(a: *mem.Arena, x0: []const f64, p: usize, k: usize, normalize: 
 }
 
 // stats::promax(x, m): varimax, then the least-squares fit of the power target, columns rescaled to unit variance
-fn promax_stats(a: *mem.Arena, x0: []const f64, p: usize, k: usize, m: f64) -> ([]f64, []f64, err) {
+// the promax step shared by stats::promax and psych::Promax: x the varimax-rotated loadings (p by k row-major) and rot the rotation that produced them; returns the promax loadings and the rotation rot U
+fn promax_tail(a: *mem.Arena, x: []const f64, rot: []const f64, p: usize, k: usize, m: f64) -> ([]f64, []f64, err) {
     var none: []f64 = zero
-    let (x, rot, ve) = varimax_stats(a, x0, p, k, true, 1.0e-5f64)
-    if ve != ok { ret (none, none, ve) }
     let (q, qe) = mem.alloc[f64](a, p * k)
     if qe != ok { ret (none, none, qe) }
     var i = 0usize
@@ -1399,4 +1398,23 @@ fn promax_stats(a: *mem.Arena, x0: []const f64, p: usize, k: usize, m: f64) -> (
     let (um, e9) = matmul(a, rot, u, k, k, k)
     if e9 != ok { ret (none, none, e9) }
     ret (z, um, ok)
+}
+
+fn promax_stats(a: *mem.Arena, x0: []const f64, p: usize, k: usize, m: f64) -> ([]f64, []f64, err) {
+    var none: []f64 = zero
+    let (x, rot, ve) = varimax_stats(a, x0, p, k, true, 1.0e-5f64)
+    if ve != ok { ret (none, none, ve) }
+    let (zt, ut, et) = promax_tail(a, x, rot, p, k, m)
+    ret (zt, ut, et)
+}
+
+// psych::Promax(x, m): the same promax step after GPArotation::Varimax (no Kaiser normalisation, eps 1e-5, 1000 iterations) of x (p by k row-major) instead of stats::varimax, as psych::fa(rotate = "promax") uses; returns the
+// loadings and the rotation matrix
+fn promax_gpa(a: *mem.Arena, x0: []const f64, p: usize, k: usize, m: f64) -> ([]f64, []f64, err) {
+    var none: []f64 = zero
+    var par0: [1]f64 = zero
+    let (r, ve) = gpf_orth(a, x0, p, k, 9u8, par0[0usize..1usize], false, 1.0e-5f64, 1000usize)
+    if ve != ok { ret (none, none, ve) }
+    let (zg, ug, eg) = promax_tail(a, r.loadings, r.th, p, k, m)
+    ret (zg, ug, eg)
 }

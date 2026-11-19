@@ -1232,3 +1232,32 @@ fn fa_ml_varimax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) 
     }
     ret true
 }
+
+// psych::fa(r, nfactors = q, fm = "ml", rotate = "promax") for q >= 2 (power 4): the loadings of `fa_ml` through psych::Promax (GPArotation::Varimax then the promax step), columns ordered and signed by `rot_sort`;
+// out = the p uniquenesses, then the p q loadings (item i, factor k at p + i + k p), then the q by q rotation matrix
+fn fa_ml_promax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool {
+    let (ml, e1) = mem.alloc[f64](a, p + 1usize + p * q)
+    let (xr, e2) = mem.alloc[f64](a, p * q)
+    let (srt, e3) = mem.alloc[f64](a, p * q + q * q)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    if !fa_ml(a, r, p, q, ml) { ret false }
+    var i = 0usize
+    while i < p {
+        var k = 0usize
+        while k < q {
+            xr[i * q + k] = ml[p + 1usize + i + k * p]
+            k += 1usize
+        }
+        out[i] = ml[i]
+        i += 1usize
+    }
+    let (z, um, e4) = gp.promax_gpa(a, xr, p, q, 4.0f64)
+    if e4 != ok { ret false }
+    if rot_sort(a, z, um, p, q, srt) != ok { ret false }
+    i = 0usize
+    while i < p * q + q * q {
+        out[p + i] = srt[i]
+        i += 1usize
+    }
+    ret true
+}

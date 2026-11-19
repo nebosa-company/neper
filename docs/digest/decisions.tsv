@@ -4560,4 +4560,5 @@ D7659	1011	survival: concordance by pair counts
 D7660	901	survival: survSplit
 D7661	944	psych: maximum likelihood factor analysis
 D7662	619	psych: maximum likelihood loadings
-D7663	864	psych: varimax rotation of the maximum likelihood fit
+D7663	919	psych: varimax rotation of the maximum likelihood fit
+D7664	1076	psych: Promax rotation of the maximum likelihood fit
