@@ -627,3 +627,8 @@ oracle_gslerf
 oracle_gslpsi
 oracle_gslint
 oracle_gsldebye
+oracle_ghyp2
+oracle_ghypfit
+oracle_ghyphess
+oracle_ghypmisc
+oracle_ghypdata
