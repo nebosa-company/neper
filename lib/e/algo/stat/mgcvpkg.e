@@ -5,6 +5,7 @@
 
 use e.algo.linalg.lapack_syevr as sy
 use e.math
+use e.math.opt as opt
 use e.math.nmath_beta as nbt
 use e.mem
 
@@ -1041,4 +1042,86 @@ fn gam_summary(a: *mem.Arena, dm: []const f64, n: usize, p: usize, pen: []const 
     o.rsq = 1.0f64 - vr * (nf - 1.0f64) / (vy * resdf)
     o.devexpl = 1.0f64 - rss / tss
     ret (o, ok)
+}
+
+// ---- GCV selection of two smoothing parameters (an additive model of two smooths, each absorbed and scaled): the GCV score n rss / (n - edf)^2 minimised over (log sp1, log sp2)
+// by a 25 by 25 grid over [-12, 12]^2 followed by Nelder-Mead from the best grid point; mgcv stops at a score tolerance, so the oracle compares the score tightly and the
+// fits loosely.
+type Gcv2 = struct { a: *mem.Arena, dm: []const f64, n: usize, p: usize, q1: usize, q2: usize, s1: []const f64, s2: []const f64, y: []const f64, coef: []f64, fit: []f64, pen: []f64 }
+
+fn gcv2_value(c: *Gcv2, rho: []const f64) -> f64 {
+    let sp1 = math.exp[f64](rho[0usize])
+    let sp2 = math.exp[f64](rho[1usize])
+    let p = c.p
+    var i = 0usize
+    while i < p * p {
+        c.pen[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < c.q1 {
+        var j = 0usize
+        while j < c.q1 {
+            c.pen[(1usize + i) * p + 1usize + j] = sp1 * c.s1[i * c.q1 + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < c.q2 {
+        var j = 0usize
+        while j < c.q2 {
+            c.pen[(1usize + c.q1 + i) * p + 1usize + c.q1 + j] = sp2 * c.s2[i * c.q2 + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let m = mem.mark(c.a)
+    let (edf, rss, e) = pls_fit(c.a, c.dm, c.n, p, c.pen, c.y, c.coef, c.fit)
+    mem.reset(c.a, m)
+    if e != ok { ret 1.0e300f64 }
+    let nf = f64(c.n)
+    ret nf * rss / ((nf - edf) * (nf - edf))
+}
+
+// answers (sp1, sp2)
+fn gam_gcv_select2(a: *mem.Arena, dm: []const f64, n: usize, q1: usize, s1: []const f64, q2: usize, s2: []const f64, y: []const f64, coef: []f64, fit: []f64, rho: []f64) -> err {
+    let p = 1usize + q1 + q2
+    let (pen, e0) = mem.alloc[f64](a, p * p)
+    if e0 != ok { ret e0 }
+    var c = Gcv2 { a: a, dm: dm, n: n, p: p, q1: q1, q2: q2, s1: s1, s2: s2, y: y, coef: coef, fit: fit, pen: pen }
+    var best = 1.0e300f64
+    var b1 = 0.0f64
+    var b2 = 0.0f64
+    var tr: [2]f64 = zero
+    var i = 0usize
+    while i < 25usize {
+        var j = 0usize
+        while j < 25usize {
+            tr[0usize] = 0.0f64 - 12.0f64 + f64(i)
+            tr[1usize] = 0.0f64 - 12.0f64 + f64(j)
+            let v = gcv2_value(&c, tr[0usize..2usize])
+            if v < best {
+                best = v
+                b1 = tr[0usize]
+                b2 = tr[1usize]
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    rho[0usize] = b1
+    rho[1usize] = b2
+    let (scr, e1) = mem.alloc[f64](a, 3usize * 3usize + 4usize * 2usize)
+    if e1 != ok { ret e1 }
+    var round = 0usize
+    var last = 1.0e300f64
+    while round < 20usize {
+        let (r, e2) = opt.nelder_mead[Gcv2](&c, gcv2_value, rho, 0.5f64, 1.0e-16f64, 5000u32, scr)
+        if e2 != ok { ret e2 }
+        if math.abs[f64](last - r.value) < 1.0e-14f64 * (1.0f64 + math.abs[f64](r.value)) && round > 1usize { break }
+        last = r.value
+        round += 1usize
+    }
+    ret ok
 }

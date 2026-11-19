@@ -508,3 +508,4 @@ oracle_mgcv_reml
 oracle_mgcv_add
 oracle_mgcv_predict
 oracle_mgcv_summary
+oracle_mgcv_gcv2

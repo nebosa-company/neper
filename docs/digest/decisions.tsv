@@ -4141,4 +4141,5 @@ D7344	1055	mgcv: GCV smoothing-parameter selection
 D7345	1113	mgcv: REML smoothing-parameter selection
 D7346	1250	mgcv: an additive model of several smooths (fixed smoothing parameters)
 D7347	954	mgcv: predict.gam with standard errors
-D7348	1155	mgcv: summary.gam parametric table and fit statistics
+D7348	1156	mgcv: summary.gam parametric table and fit statistics
+D7349	1220	mgcv: GCV selection of two smoothing parameters
