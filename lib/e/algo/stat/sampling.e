@@ -9,6 +9,7 @@ use e.algo.stat.gparot as gp
 use e.math
 use e.math.nmath as nm
 use e.mem
+use e.algo.stat.mass as mass
 use e.algo.linalg.lapack_gesdd as gesdd
 
 error Malformed
@@ -2467,6 +2468,341 @@ fn fastflightcube(a: *mem.Arena, r: *rr.Rng, x: []const f64, pik: []f64, n: usiz
         } else {
             go = false
         }
+    }
+    ret ok
+}
+
+// ---- the landing phase and samplecube (method 1). The samples that keep the totals are enumerated (all sets of size trunc(sum) and trunc(sum) + 1 of the remaining units, in the
+// lexicographic order of combn), each costed by the quadratic form of its balancing deviation under ginv(A'A); the linear program of lpSolve (minimise the cost, the sample
+// probabilities summing to the remaining inclusion probabilities) is solved by enumerating its basic feasible solutions, and one uniform draw picks a sample from the optimum.
+fn cube_next_comb(c: []usize, k: usize, n: usize) -> bool {
+    var i = k
+    while i > 0usize {
+        let t = i - 1usize
+        if c[t] < n - k + t {
+            c[t] += 1usize
+            var j = t + 1usize
+            while j < k {
+                c[j] = c[j - 1usize] + 1usize
+                j += 1usize
+            }
+            ret true
+        }
+        i -= 1usize
+    }
+    ret false
+}
+
+// the rows of writesample(k, n) for k and k + 1 (both when two is set) into rows (each row n entries of 0 or 1), the number of rows
+fn cube_samples(a: *mem.Arena, k: usize, n: usize, two: bool, rows: []f64) -> usize {
+    var cnt = 0usize
+    var kk = k
+    var rounds = 1usize
+    if two { rounds = 2usize }
+    var rd = 0usize
+    while rd < rounds {
+        let (c, e) = mem.alloc[usize](a, k + 2usize)
+        if e != ok { ret cnt }
+        var i = 0usize
+        while i < kk {
+            c[i] = i
+            i += 1usize
+        }
+        var more = true
+        if kk > n { more = false }
+        while more {
+            var j = 0usize
+            while j < n {
+                rows[cnt * n + j] = 0.0f64
+                j += 1usize
+            }
+            j = 0usize
+            while j < kk {
+                rows[cnt * n + c[j]] = 1.0f64
+                j += 1usize
+            }
+            cnt += 1usize
+            if kk == 0usize { more = false } else { more = cube_next_comb(c, kk, n) }
+        }
+        kk += 1usize
+        rd += 1usize
+    }
+    ret cnt
+}
+
+// landingcube: x is n by p (row-major); pikstar the flight result, pik the original probabilities; pikfin receives the 0/1 sample
+fn landingcube(a: *mem.Arena, r: *rr.Rng, x: []const f64, pikstar: []const f64, pik: []const f64, n: usize, p: usize, pikfin: []f64) -> err {
+    let eps = 1.0e-11f64
+    let (liste, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret e1 }
+    var nl = 0usize
+    var i = 0usize
+    while i < n {
+        pikfin[i] = pikstar[i]
+        if pikstar[i] > eps && pikstar[i] < 1.0f64 - eps {
+            liste[nl] = i
+            nl += 1usize
+        }
+        i += 1usize
+    }
+    let (pl, e2) = mem.alloc[f64](a, nl)
+    if e2 != ok { ret e2 }
+    var nsum = 0.0f64
+    i = 0usize
+    while i < nl {
+        pl[i] = pikstar[liste[i]]
+        nsum += pl[i]
+        i += 1usize
+    }
+    let flagi = math.abs[f64](nsum - math.round[f64](nsum)) < eps
+    var kbase = usize(math.floor[f64](nsum))
+    if flagi {
+        let rs = math.round[f64](nsum)
+        i = 0usize
+        while i < nl {
+            pl[i] = rs * pl[i] / nsum
+            i += 1usize
+        }
+        kbase = usize(rs)
+    }
+    // the sample matrix
+    var maxrows = 1usize
+    var cc = 1usize
+    var t = 0usize
+    while t < nl {
+        maxrows = maxrows * 2usize
+        t += 1usize
+    }
+    let (sss, e3) = mem.alloc[f64](a, (maxrows + 2usize) * (nl + 1usize))
+    if e3 != ok { ret e3 }
+    let lll = cube_samples(a, kbase, nl, !flagi, sss)
+    cc = lll
+    // cost of each sample
+    let (ata, e4) = mem.alloc[f64](a, p * p)
+    if e4 != ok { ret e4 }
+    i = 0usize
+    while i < p * p {
+        ata[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if pik[i] > eps {
+            var c1 = 0usize
+            while c1 < p {
+                var c2 = 0usize
+                while c2 < p {
+                    ata[c1 * p + c2] += x[i * p + c1] / pik[i] * (x[i * p + c2] / pik[i])
+                    c2 += 1usize
+                }
+                c1 += 1usize
+            }
+        }
+        i += 1usize
+    }
+    let (gi, ge) = mass.ginv(a, ata, p, p)
+    if ge != ok { ret ge }
+    let (cost, e5) = mem.alloc[f64](a, cc)
+    let (asm, e6) = mem.alloc[f64](a, p)
+    if e5 != ok || e6 != ok { ret e5 }
+    var s = 0usize
+    while s < cc {
+        var c1 = 0usize
+        while c1 < p {
+            var v = 0.0f64
+            var u = 0usize
+            while u < nl {
+                v += x[liste[u] * p + c1] / pik[liste[u]] * (sss[s * nl + u] - pl[u])
+                u += 1usize
+            }
+            asm[c1] = v
+            c1 += 1usize
+        }
+        var q = 0.0f64
+        c1 = 0usize
+        while c1 < p {
+            var c2 = 0usize
+            while c2 < p {
+                q += asm[c1] * gi[c1 * p + c2] * asm[c2]
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        cost[s] = q
+        s += 1usize
+    }
+    // the linear program by its basic feasible solutions: V x = b with V the sample indicators and a row of ones, b the remaining probabilities and 1
+    let m = nl + 1usize
+    let (xs, e7) = mem.alloc[f64](a, cc)
+    let (best, e8) = mem.alloc[f64](a, cc)
+    if e7 != ok || e8 != ok { ret e7 }
+    var bestcost = 1.0e300f64
+    var mask = 1usize
+    var total = 1usize
+    t = 0usize
+    while t < cc {
+        total = total * 2usize
+        t += 1usize
+    }
+    while mask < total {
+        let start = mem.mark(a)
+        var cnt = 0usize
+        t = 0usize
+        while t < cc {
+            if ((mask >> t) & 1usize) == 1usize { cnt += 1usize }
+            t += 1usize
+        }
+        if cnt <= m {
+            let (vm, f1) = mem.alloc[f64](a, cnt * cnt)
+            let (rhs, f2) = mem.alloc[f64](a, cnt)
+            if f1 != ok || f2 != ok { ret f1 }
+            // the normal equations V_S' V_S x = V_S' b
+            var col = 0usize
+            let (idx, f3) = mem.alloc[usize](a, cnt)
+            if f3 != ok { ret f3 }
+            t = 0usize
+            while t < cc {
+                if ((mask >> t) & 1usize) == 1usize {
+                    idx[col] = t
+                    col += 1usize
+                }
+                t += 1usize
+            }
+            var c1 = 0usize
+            while c1 < cnt {
+                var c2 = 0usize
+                while c2 < cnt {
+                    var v = 1.0f64
+                    var rw = 0usize
+                    while rw < nl {
+                        v += sss[idx[c1] * nl + rw] * sss[idx[c2] * nl + rw]
+                        rw += 1usize
+                    }
+                    vm[c1 * cnt + c2] = v
+                    c2 += 1usize
+                }
+                var rv = 1.0f64
+                var rw2 = 0usize
+                while rw2 < nl {
+                    rv += sss[idx[c1] * nl + rw2] * pl[rw2]
+                    rw2 += 1usize
+                }
+                rhs[c1] = rv
+                c1 += 1usize
+            }
+            let (vi, ve) = gp.invert(a, vm, cnt)
+            if ve == ok {
+                var feasible = true
+                var sol: [64]f64 = zero
+                c1 = 0usize
+                while c1 < cnt {
+                    var v = 0.0f64
+                    var c2 = 0usize
+                    while c2 < cnt {
+                        v += vi[c1 * cnt + c2] * rhs[c2]
+                        c2 += 1usize
+                    }
+                    sol[c1] = v
+                    if v < -1.0e-9f64 { feasible = false }
+                    c1 += 1usize
+                }
+                if feasible {
+                    // residual of V x = b
+                    var rw = 0usize
+                    while rw < m {
+                        var lhs = 0.0f64
+                        var bv = 1.0f64
+                        if rw < nl { bv = pl[rw] }
+                        c1 = 0usize
+                        while c1 < cnt {
+                            var cf = 1.0f64
+                            if rw < nl { cf = sss[idx[c1] * nl + rw] }
+                            lhs += cf * sol[c1]
+                            c1 += 1usize
+                        }
+                        if math.abs[f64](lhs - bv) > 1.0e-8f64 { feasible = false }
+                        rw += 1usize
+                    }
+                }
+                if feasible {
+                    var cs = 0.0f64
+                    c1 = 0usize
+                    while c1 < cnt {
+                        cs += cost[idx[c1]] * sol[c1]
+                        c1 += 1usize
+                    }
+                    if cs < bestcost - 1.0e-12f64 {
+                        bestcost = cs
+                        t = 0usize
+                        while t < cc {
+                            best[t] = 0.0f64
+                            t += 1usize
+                        }
+                        c1 = 0usize
+                        while c1 < cnt {
+                            best[idx[c1]] = sol[c1]
+                            c1 += 1usize
+                        }
+                    }
+                }
+            }
+        }
+        mem.reset(a, start)
+        mask += 1usize
+    }
+    let uu = rr.unif(r)
+    var chosen = 0usize
+    var cum = 0.0f64
+    while cum < uu && chosen < cc {
+        cum += best[chosen]
+        chosen += 1usize
+    }
+    if chosen > 0usize { chosen -= 1usize }
+    let _ = xs
+    i = 0usize
+    while i < nl {
+        pikfin[liste[i]] = sss[chosen * nl + i]
+        i += 1usize
+    }
+    ret ok
+}
+
+// samplecube(X, pik, order, method = 1): flight phase then landing phase when probabilities stay fractional; the 0/1 sample goes into out
+fn samplecube(a: *mem.Arena, r: *rr.Rng, x: []const f64, pik: []const f64, n: usize, p: usize, order: usize, out: []f64) -> err {
+    let eps = 1.0e-11f64
+    let (ps, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    var any = false
+    var i = 0usize
+    while i < n {
+        ps[i] = pik[i]
+        if pik[i] > eps && pik[i] < 1.0f64 - eps { any = true }
+        i += 1usize
+    }
+    if any {
+        let fe = fastflightcube(a, r, x, ps, n, p, order)
+        if fe != ok { ret fe }
+    }
+    var frac2 = false
+    i = 0usize
+    while i < n {
+        if ps[i] > eps && ps[i] < 1.0f64 - eps { frac2 = true }
+        i += 1usize
+    }
+    if frac2 {
+        let le = landingcube(a, r, x, ps, pik, n, p, out)
+        if le != ok { ret le }
+    } else {
+        i = 0usize
+        while i < n {
+            out[i] = ps[i]
+            i += 1usize
+        }
+    }
+    i = 0usize
+    while i < n {
+        out[i] = math.round[f64](out[i])
+        i += 1usize
     }
     ret ok
 }

@@ -21,6 +21,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     var g: rr.Rng = zero
     rr.seed(&g, i64(z[3usize]))
+    if c.name[0usize] == 115u8 {
+        let (outv, oe) = mem.alloc[f64](a, n)
+        if oe != ok { os.exit(6) }
+        let se = sp.samplecube(a, &g, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], n, p, usize(z[2usize]), outv)
+        if se != ok { os.exit(7) }
+        var ws = 0.0f64
+        var ns = 0.0f64
+        var q = 0usize
+        while q < n {
+            ws += outv[q] * f64(q + 1usize)
+            ns += outv[q]
+            q += 1usize
+        }
+        if str.eq(c.name, "ss") { ret ws }
+        ret ns
+    }
     let fe = sp.fastflightcube(a, &g, z[4usize + n..4usize + n + n * p], pk, n, p, usize(z[2usize]))
     if fe != ok { os.exit(5) }
     var s = 0.0f64
