@@ -5,6 +5,7 @@
 
 use e.math
 use e.mem
+use e.math.nmath as nm
 use e.algo.stat.fdrtool as fd
 
 fn sd_of(x: []const f64) -> f64 {
@@ -612,4 +613,201 @@ fn bin_reg_log(c: *BinRegCtx, lh: f64) -> f64 {
 fn hselect_bin_reg(x: []const f64, y: []const f64, f: []const f64, dv: []const f64, kind: usize, df: f64, start: f64) -> f64 {
     var c = BinRegCtx { x: x, y: y, f: f, dv: dv, kind: kind, df: df }
     ret math.exp[f64](fd.brent_min[BinRegCtx](&c, bin_reg_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+}
+
+fn mm(c: []f64, l: []const f64, r: []const f64, n: usize) {
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var v = 0.0f64
+            var k = 0usize
+            while k < n {
+                v += l[i * n + k] * r[k * n + j]
+                k += 1usize
+            }
+            c[i * n + j] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+fn trace(m: []const f64, n: usize) -> f64 {
+    var t = 0.0f64
+    var i = 0usize
+    while i < n {
+        t += m[i * n + i]
+        i += 1usize
+    }
+    ret t
+}
+
+// the local-linear smoothing matrix of the points xs at bandwidth h, written into the block at offset o of the big matrix smx (stride nt)
+fn smooth_block(smx: []f64, nt: usize, o: usize, xs: []const f64, h: f64) {
+    let n = xs.len
+    var i = 0usize
+    while i < n {
+        var s0 = 0.0f64
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        var j = 0usize
+        while j < n {
+            let wd = xs[i] - xs[j]
+            let w = math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+            s0 += w
+            s1 += w * wd
+            s2 += w * wd * wd
+            j += 1usize
+        }
+        j = 0usize
+        while j < n {
+            let wd = xs[i] - xs[j]
+            let w = math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+            smx[(o + i) * nt + o + j] = w * (s2 - wd * s1) / (s2 * s0 - s1 * s1)
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// sm.ancova(x, y, group, h, model = "equal") for one covariate, unbinned, unit weights: the p-value of the test of equal regression curves; rows are ordered by group then x as R does
+fn ancova_equal(a: *mem.Arena, x: []const f64, y: []const f64, group: []const f64, h: f64) -> (f64, err) {
+    let n = x.len
+    let (ord, e0) = mem.alloc[usize](a, n)
+    if e0 != ok { ret (0.0f64, e0) }
+    var i = 0usize
+    while i < n {
+        ord[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let v = ord[i]
+        var j = i
+        while j > 0usize && (group[ord[j - 1usize]] > group[v] || (group[ord[j - 1usize]] == group[v] && x[ord[j - 1usize]] > x[v])) {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = v
+        i += 1usize
+    }
+    let nn = n * n
+    let (xs, e1) = mem.alloc[f64](a, n)
+    let (ys, e2) = mem.alloc[f64](a, n)
+    let (gs, e3) = mem.alloc[f64](a, n)
+    let (sd, e4) = mem.alloc[f64](a, nn)
+    let (ss, e5) = mem.alloc[f64](a, nn)
+    let (bm, e6) = mem.alloc[f64](a, nn)
+    let (q, e7) = mem.alloc[f64](a, nn)
+    let (q2, e8) = mem.alloc[f64](a, nn)
+    let (t1, e9) = mem.alloc[f64](a, nn)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret (0.0f64, mem.Full) }
+    i = 0usize
+    while i < n {
+        xs[i] = x[ord[i]]
+        ys[i] = y[ord[i]]
+        gs[i] = group[ord[i]]
+        i += 1usize
+    }
+    i = 0usize
+    while i < nn {
+        sd[i] = 0.0f64
+        ss[i] = 0.0f64
+        bm[i] = 0.0f64
+        i += 1usize
+    }
+    var st = 0usize
+    while st < n {
+        var en = st
+        while en < n && gs[en] == gs[st] { en += 1usize }
+        smooth_block(sd, n, st, xs[st..en], h)
+        // sm.sigweight: t(R) R with the second-difference rows of the block
+        let m = en - st
+        var r = 1usize
+        while r + 1usize < m {
+            let x0 = xs[st + r - 1usize]
+            let x1 = xs[st + r]
+            let x2 = xs[st + r + 1usize]
+            var aa = (x2 - x1) / (x2 - x0)
+            var bb = (x1 - x0) / (x2 - x0)
+            if x2 == x0 {
+                aa = 0.5f64
+                bb = 0.5f64
+            }
+            let cc = math.sqrt[f64](aa * aa + bb * bb + 1.0f64)
+            var rowv: [3]f64 = zero
+            rowv[0usize] = aa / cc
+            rowv[1usize] = 0.0f64 - 1.0f64 / cc
+            rowv[2usize] = bb / cc
+            var u = 0usize
+            while u < 3usize {
+                var v = 0usize
+                while v < 3usize {
+                    bm[(st + r - 1usize + u) * n + st + r - 1usize + v] += rowv[u] * rowv[v]
+                    v += 1usize
+                }
+                u += 1usize
+            }
+            r += 1usize
+        }
+        st = en
+    }
+    smooth_block(ss, n, 0usize, xs, h)
+    var sig2 = 0.0f64
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            sig2 += ys[i] * bm[i * n + j] * ys[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < nn {
+        t1[i] = sd[i] - ss[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var v = 0.0f64
+            var k = 0usize
+            while k < n {
+                v += t1[k * n + i] * t1[k * n + j]
+                k += 1usize
+            }
+            q[i * n + j] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var obs = 0.0f64
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            obs += ys[i] * q[i * n + j] * ys[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    obs = obs / sig2
+    // p.quad.moment(Q - B obs, I, obs, 0)
+    i = 0usize
+    while i < nn {
+        q[i] = q[i] - bm[i] * obs
+        i += 1usize
+    }
+    mm(q2, q, q, n)
+    mm(t1, q2, q, n)
+    let k1 = trace(q, n)
+    let k2 = 2.0f64 * trace(q2, n)
+    let k3 = 8.0f64 * trace(t1, n)
+    let aa = math.abs[f64](k3 / (4.0f64 * k2))
+    let bb = 8.0f64 * k2 * k2 * k2 / (k3 * k3)
+    let cc = k1 - aa * bb
+    ret (1.0f64 - nm.pchisq(0.0f64 - cc / aa, bb, true, false), ok)
 }

@@ -50836,3 +50836,6 @@ R's cluster(data, c("a", "b"), ...) stops with "there are too many specified var
 
 ## D7457 — lpSolve sensitivity with mixed row directions
 The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is negated into the maximisation form), equal to lpSolve on 60 further random programs (3117 values in oracle_lpsolve_sens in all). Equality rows and degenerate ties are still not covered. Open for L367: those, lpSolveAPI, the other clue methods and consensus.
+
+## D7458 — sm.ancova test of equality
+`ancova_equal` is the p-value of sm.ancova(x, y, group, h, model = "equal") for one covariate, unbinned, unit weights: rows ordered by group then x, the block-diagonal within-group local-linear smoother Sd, the pooled smoother Ss, B the block-diagonal second-difference matrix of sm.sigweight, sigma^2 = y'By, obs = y'(Sd - Ss)'(Sd - Ss)y / sigma^2, and the three-moment chi-square approximation of p.quad.moment (traces of powers of Q - B obs); equal to sm on 20 two-group samples (null and shifted) in oracle_sm_hsel. Open for L505: model "parallel", the reference bands, 2-d, sm.survival, sm.options.

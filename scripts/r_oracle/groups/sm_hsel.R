@@ -62,4 +62,11 @@ for (rep in 1:10) {
     if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case(paste0("hbr", m), c(n, nb, x, y), r, rel = 1e-6, abs = 1e-12)
   }
 }
+# hanc (n, h, x[n], y[n], group[n]): the p-value of sm.ancova(model = "equal") on one covariate
+for (rep in 1:20) {
+  n <- sample(20:50, 1); x <- runif(n, 0, 10); gr <- sample(1:2, n, TRUE); if (length(unique(gr)) < 2) next
+  y <- sin(x) + 0.3 * (gr - 1) * (rep %% 2) + rnorm(n, 0, 0.3); h <- runif(1, 0.6, 1.5)
+  r <- tryCatch(sm.ancova(x, y, gr, h = h, model = "equal", display = "none", verbose = 0)$p, error = function(e) NULL)
+  if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hanc", c(n, h, x, y, gr), r, rel = 1e-7, abs = 1e-10)
+}
 emit("sm_hsel", "sm", list(cases))
