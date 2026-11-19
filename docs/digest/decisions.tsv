@@ -4357,4 +4357,5 @@ D7500	502	systemfit W2SLS
 D7501	1084	systemfit SUR with linear restrictions
 D7502	614	systemfit 3SLS with per-equation instruments
 D7503	795	systemfit iterated 3SLS
-D7504	723	systemfit linear hypothesis (Wald) tests
+D7504	724	systemfit linear hypothesis (Wald) tests
+D7505	920	systemfit 3SLS with linear restrictions

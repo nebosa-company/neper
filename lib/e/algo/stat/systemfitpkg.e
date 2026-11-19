@@ -451,11 +451,12 @@ fn twosls(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usiz
 // estimator on the projected regressors, beta = [X_hat'(S^-1 x I)X_hat]^-1 X_hat'(S^-1 x I) y; xs and y are laid out as for `sur` (equation after equation); coef and se hold sum(ks) values
 fn threesls_z(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64, qs: []const usize, y: []const f64, n: usize, m: usize, coef: []f64, se: []f64) -> err {
     var itn: [1]usize = zero
-    ret threesls_it(a, xs, ks, zs, qs, y, n, m, 1usize, 0.0f64 - 1.0f64, itn[0usize..1usize], coef, se)
+    var nul: [1]f64 = zero
+    ret threesls_it(a, xs, ks, zs, qs, y, n, m, 1usize, 0.0f64 - 1.0f64, nul[0usize..1usize], nul[0usize..1usize], 0usize, itn[0usize..1usize], coef, se)
 }
 
 // iterated 3SLS (control maxiter, tol): passes GLS steps at most, the residual covariance of each step taken from the previous coefficients (the 2SLS ones for the first), stopping once the relative change sqrt(sum((b - b_old)^2) / sum(b_old^2)) is at most tol (tol < 0 never stops early); itn[0] receives the passes made
-fn threesls_it(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64, qs: []const usize, y: []const f64, n: usize, m: usize, passes: usize, tol: f64, itn: []usize, coef: []f64, se: []f64) -> err {
+fn threesls_it(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64, qs: []const usize, y: []const f64, n: usize, m: usize, passes: usize, tol: f64, rr: []const f64, qq: []const f64, nr: usize, itn: []usize, coef: []f64, se: []f64) -> err {
     var kt = 0usize
     var e = 0usize
     while e < m {
@@ -477,6 +478,28 @@ fn threesls_it(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f6
     e = 0usize
     while e < m {
         off[e + 1usize] = off[e] + ks[e]
+        e += 1usize
+    }
+    let (kd, ekd) = mem.alloc[usize](a, m)
+    if ekd != ok { ret ekd }
+    e = 0usize
+    while e < m {
+        kd[e] = ks[e]
+        var u0 = 0usize
+        while u0 < nr {
+            var inside = true
+            var any = false
+            var w0 = 0usize
+            while w0 < kt {
+                if rr[u0 * kt + w0] != 0.0f64 {
+                    any = true
+                    if w0 < off[e] || w0 >= off[e + 1usize] { inside = false }
+                }
+                w0 += 1usize
+            }
+            if any && inside { kd[e] -= 1usize }
+            u0 += 1usize
+        }
         e += 1usize
     }
     var xoff = 0usize
@@ -558,6 +581,92 @@ fn threesls_it(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f6
         zoff += n * q
         e += 1usize
     }
+    if nr > 0usize {
+        // restricted two-stage least squares as the first step: restricted OLS on the projected regressors, its residuals (from the actual regressors) giving the first residual covariance
+        let (g0, e30) = mem.alloc[f64](a, kt * kt)
+        let (gi0, e31) = mem.alloc[f64](a, kt * kt)
+        let (b0, e32) = mem.alloc[f64](a, kt)
+        let (se0, e33) = mem.alloc[f64](a, kt)
+        if e30 != ok || e31 != ok || e32 != ok || e33 != ok { ret mem.Full }
+        var u1 = 0usize
+        while u1 < kt {
+            var v1 = 0usize
+            while v1 < kt {
+                g0[u1 * kt + v1] = 0.0f64
+                gi0[u1 * kt + v1] = 0.0f64
+                v1 += 1usize
+            }
+            gi0[u1 * kt + u1] = 1.0f64
+            u1 += 1usize
+        }
+        var eq0 = 0usize
+        while eq0 < m {
+            var a0 = 0usize
+            while a0 < ks[eq0] {
+                var b1 = 0usize
+                while b1 < ks[eq0] {
+                    var sv = 0.0f64
+                    var i0 = 0usize
+                    while i0 < n {
+                        sv += xh[i0 * kt + off[eq0] + a0] * xh[i0 * kt + off[eq0] + b1]
+                        i0 += 1usize
+                    }
+                    g0[(off[eq0] + a0) * kt + off[eq0] + b1] = sv
+                    b1 += 1usize
+                }
+                var sy = 0.0f64
+                var i1 = 0usize
+                while i1 < n {
+                    sy += xh[i1 * kt + off[eq0] + a0] * y[eq0 * n + i1]
+                    i1 += 1usize
+                }
+                b0[off[eq0] + a0] = sy
+                a0 += 1usize
+            }
+            eq0 += 1usize
+        }
+        gj_solve(g0, kt, gi0, kt)
+        var u2 = 0usize
+        while u2 < kt {
+            var sv = 0.0f64
+            var v2 = 0usize
+            while v2 < kt {
+                sv += gi0[u2 * kt + v2] * b0[v2]
+                v2 += 1usize
+            }
+            se0[u2] = sv
+            u2 += 1usize
+        }
+        var ii = 0usize
+        while ii < kt {
+            b0[ii] = se0[ii]
+            ii += 1usize
+        }
+        let er0 = restrict_adjust(a, gi0, b0, se0, rr, qq, nr, kt)
+        if er0 != ok { ret er0 }
+        var xo0 = 0usize
+        eq0 = 0usize
+        while eq0 < m {
+            var t0 = 0usize
+            while t0 < n {
+                var f0 = 0.0f64
+                var j0 = 0usize
+                while j0 < ks[eq0] {
+                    f0 += xs[xo0 + t0 * ks[eq0] + j0] * b0[off[eq0] + j0]
+                    j0 += 1usize
+                }
+                res[eq0 * n + t0] = y[eq0 * n + t0] - f0
+                t0 += 1usize
+            }
+            xo0 += n * ks[eq0]
+            eq0 += 1usize
+        }
+        ii = 0usize
+        while ii < kt {
+            old[ii] = b0[ii]
+            ii += 1usize
+        }
+    }
     var pass3 = 0usize
     while pass3 < passes {
         var p1 = 0usize
@@ -570,7 +679,7 @@ fn threesls_it(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f6
                     s += res[p1 * n + i] * res[p2 * n + i]
                     i += 1usize
                 }
-                sg[p1 * m + p2] = s / math.sqrt[f64](f64(n - ks[p1]) * f64(n - ks[p2]))
+                sg[p1 * m + p2] = s / math.sqrt[f64](f64(n - kd[p1]) * f64(n - kd[p2]))
                 sgi[p1 * m + p2] = 0.0f64
                 p2 += 1usize
             }
@@ -638,6 +747,10 @@ fn threesls_it(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f6
             coef[q2] = s
             se[q2] = math.sqrt[f64](gi[q2 * kt + q2])
             q2 += 1usize
+        }
+        if nr > 0usize {
+            let er = restrict_adjust(a, gi, coef, se, rr, qq, nr, kt)
+            if er != ok { ret er }
         }
 
         // residuals from the new coefficients, and the change of the coefficient vector
@@ -860,5 +973,79 @@ fn wald_test(a: *mem.Arena, b: []const f64, v: []const f64, rr: []const f64, qq:
     out[0usize] = wst
     out[1usize] = nmg.pchisq(wst, f64(nr), false, false)
     out[2usize] = nbg.pf(wst / f64(nr), f64(nr), df2, false, false)
+    ret ok
+}
+
+// the restricted GLS correction of a solved system: coef <- coef - gi R'(R gi R')^-1 (R coef - q), se from gi - gi R'(R gi R')^-1 R gi (gi the kt by kt unrestricted covariance, row-major)
+fn restrict_adjust(a: *mem.Arena, gi: []const f64, coef: []f64, se: []f64, rr: []const f64, qq: []const f64, nr: usize, kt: usize) -> err {
+    // restricted GLS: beta_r = beta - gi R' (R gi R')^-1 (R beta - q), covariance gi - gi R' (R gi R')^-1 R gi
+    let (rg, er1) = mem.alloc[f64](a, nr * kt)
+    let (dm, er2) = mem.alloc[f64](a, nr * nr)
+    let (lam, er3) = mem.alloc[f64](a, nr * (kt + 1usize))
+    if er1 != ok || er2 != ok || er3 != ok { ret mem.Full }
+    var u = 0usize
+    while u < nr {
+        var v = 0usize
+        while v < kt {
+            var t = 0.0f64
+            var w = 0usize
+            while w < kt {
+                t += rr[u * kt + w] * gi[w * kt + v]
+                w += 1usize
+            }
+            rg[u * kt + v] = t
+            v += 1usize
+        }
+        u += 1usize
+    }
+    u = 0usize
+    while u < nr {
+        var v = 0usize
+        while v < nr {
+            var t = 0.0f64
+            var w = 0usize
+            while w < kt {
+                t += rg[u * kt + w] * rr[v * kt + w]
+                w += 1usize
+            }
+            dm[u * nr + v] = t
+            v += 1usize
+        }
+        var rb = 0.0f64
+        var w2 = 0usize
+        while w2 < kt {
+            rb += rr[u * kt + w2] * coef[w2]
+            w2 += 1usize
+        }
+        lam[u * (kt + 1usize)] = rb - qq[u]
+        var w3 = 0usize
+        while w3 < kt {
+            lam[u * (kt + 1usize) + 1usize + w3] = rg[u * kt + w3]
+            w3 += 1usize
+        }
+        u += 1usize
+    }
+    // solve dm [lambda | rg] = [R beta - q | R gi]
+    gj_solve(dm, nr, lam, kt + 1usize)
+    var w4 = 0usize
+    while w4 < kt {
+        var db = 0.0f64
+        var cv = 0.0f64
+        var u2 = 0usize
+        while u2 < nr {
+            db += rg[u2 * kt + w4] * lam[u2 * (kt + 1usize)]
+            u2 += 1usize
+        }
+        coef[w4] = coef[w4] - db
+        var vv = 0.0f64
+        u2 = 0usize
+        while u2 < nr {
+            vv += rg[u2 * kt + w4] * lam[u2 * (kt + 1usize) + 1usize + w4]
+            u2 += 1usize
+        }
+        cv = gi[w4 * kt + w4] - vv
+        se[w4] = math.sqrt[f64](cv)
+        w4 += 1usize
+    }
     ret ok
 }
