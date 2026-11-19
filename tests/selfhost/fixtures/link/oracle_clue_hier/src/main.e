@@ -32,6 +32,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (t1, e1) = hc.hclust(a, dmat(a, z[4usize..4usize + 2usize * n], n), n, usize(z[2usize]))
     let (t2, e2) = hc.hclust(a, dmat(a, z[4usize + 2usize * n..4usize + 4usize * n], n), n, usize(z[3usize]))
     if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    if usize(z[0usize]) >= 5usize {
+        let (va, ea) = cl.hier_agreement(a, &t1, &t2, n, usize(z[0usize]))
+        if ea != ok { ret 0.0f64 / 0.0f64 }
+        ret va
+    }
     let (v, e) = cl.hier_dissimilarity(a, &t1, &t2, n, usize(z[0usize]))
     if e != ok { ret 0.0f64 / 0.0f64 }
     ret v

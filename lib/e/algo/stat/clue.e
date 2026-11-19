@@ -422,3 +422,121 @@ fn hier_dissimilarity(a: *mem.Arena, t1: *const hc.Tree, t2: *const hc.Tree, n: 
     }
     ret (2.0f64 * disc / (f64(m) * (f64(m) - 1.0f64) / 2.0f64), ok)
 }
+
+// the cl_agreement of two hclust trees: kind 5 cophenetic (the correlation of the ultrametrics), 6 angle (their cosine), 7 gamma (one minus the gamma dissimilarity), 8 euclidean and 9 manhattan (1 / (1 + the dissimilarity)); kind 10 is the symmetric
+// difference dissimilarity, the classes (one per merge) of the two trees counted that are in only one of them
+fn hier_agreement(a: *mem.Arena, t1: *const hc.Tree, t2: *const hc.Tree, n: usize, kind: usize) -> (f64, err) {
+    if kind == 10usize {
+        let m1 = n - 1usize
+        let (c1, e0) = mem.alloc[bool](a, m1 * n)
+        let (c2, e1) = mem.alloc[bool](a, m1 * n)
+        if e0 != ok || e1 != ok { ret (0.0f64, mem.Full) }
+        var tr = 0usize
+        while tr < 2usize {
+            var i = 0usize
+            while i < m1 {
+                var j = 0usize
+                while j < n {
+                    if tr == 0usize { c1[i * n + j] = false } else { c2[i * n + j] = false }
+                    j += 1usize
+                }
+                var side = 0usize
+                while side < 2usize {
+                    var code = t1.merge_a[i]
+                    if tr == 0usize {
+                        if side == 1usize { code = t1.merge_b[i] }
+                    } else {
+                        code = t2.merge_a[i]
+                        if side == 1usize { code = t2.merge_b[i] }
+                    }
+                    if code < 0i32 {
+                        let o = usize(0i32 - code) - 1usize
+                        if tr == 0usize { c1[i * n + o] = true } else { c2[i * n + o] = true }
+                    } else {
+                        let r = usize(code) - 1usize
+                        j = 0usize
+                        while j < n {
+                            if tr == 0usize {
+                                if c1[r * n + j] { c1[i * n + j] = true }
+                            } else {
+                                if c2[r * n + j] { c2[i * n + j] = true }
+                            }
+                            j += 1usize
+                        }
+                    }
+                    side += 1usize
+                }
+                i += 1usize
+            }
+            tr += 1usize
+        }
+        var common = 0usize
+        var i2 = 0usize
+        while i2 < m1 {
+            var k = 0usize
+            var found = false
+            while k < m1 && !found {
+                var same = true
+                var j2 = 0usize
+                while j2 < n {
+                    if c1[i2 * n + j2] != c2[k * n + j2] { same = false }
+                    j2 += 1usize
+                }
+                if same { found = true }
+                k += 1usize
+            }
+            if found { common += 1usize }
+            i2 += 1usize
+        }
+        ret (f64(2usize * m1 - 2usize * common), ok)
+    }
+    if kind == 8usize || kind == 9usize {
+        let (d, e) = hier_dissimilarity(a, t1, t2, n, kind - 8usize)
+        ret (1.0f64 / (1.0f64 + d), e)
+    }
+    if kind == 7usize {
+        let (d, e) = hier_dissimilarity(a, t1, t2, n, 3usize)
+        ret (1.0f64 - d, e)
+    }
+    let m = n * (n - 1usize) / 2usize
+    let (u, e0) = mem.alloc[f64](a, m)
+    let (v, e1) = mem.alloc[f64](a, m)
+    if e0 != ok || e1 != ok { ret (0.0f64, mem.Full) }
+    var q = 0usize
+    var i3 = 0usize
+    while i3 + 1usize < n {
+        var j3 = i3 + 1usize
+        while j3 < n {
+            u[q] = hc.cophenetic(a, t1, n, i3, j3)
+            v[q] = hc.cophenetic(a, t2, n, i3, j3)
+            q += 1usize
+            j3 += 1usize
+        }
+        i3 += 1usize
+    }
+    var mu = 0.0f64
+    var mv = 0.0f64
+    var k2 = 0usize
+    while k2 < m {
+        mu += u[k2]
+        mv += v[k2]
+        k2 += 1usize
+    }
+    mu = mu / f64(m)
+    mv = mv / f64(m)
+    if kind == 6usize {
+        mu = 0.0f64
+        mv = 0.0f64
+    }
+    var suv = 0.0f64
+    var suu = 0.0f64
+    var svv = 0.0f64
+    k2 = 0usize
+    while k2 < m {
+        suv += (u[k2] - mu) * (v[k2] - mv)
+        suu += (u[k2] - mu) * (u[k2] - mu)
+        svv += (v[k2] - mv) * (v[k2] - mv)
+        k2 += 1usize
+    }
+    ret (suv / math.sqrt[f64](suu * svv), ok)
+}
