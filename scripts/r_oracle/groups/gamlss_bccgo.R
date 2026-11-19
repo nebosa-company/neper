@@ -17,4 +17,10 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("s3p", c(mu, sg, nu, tau, x), pST3C(x, mu, sg, nu, tau), rel = 1e-9, abs = 1e-13)
   cases[[length(cases) + 1]] <- case("s3q", c(mu, sg, nu, tau, p), qST3C(p, mu, sg, nu, tau), rel = 1e-8, abs = 1e-10)
 }
+# SI: "sid" / "sip" (mu, sigma, nu, y)
+for (rep in 1:50) {
+  mu <- runif(1, 0.3, 8); sg <- runif(1, 0.1, 2); nu <- runif(1, -2, 2); y <- sample(0:25, 1)
+  cases[[length(cases) + 1]] <- case("sid", c(mu, sg, nu, y), dSI(y, mu, sg, nu), rel = 1e-8, abs = 1e-14)
+  cases[[length(cases) + 1]] <- case("sip", c(mu, sg, nu, y), pSI(y, mu, sg, nu), rel = 1e-8, abs = 1e-12)
+}
 emit("gamlss_bccgo", "gamlss.dist", list(cases))

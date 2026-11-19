@@ -2478,3 +2478,25 @@ fn qbccgo(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     if nu != 0.0f64 { ret mu * math.pow[f64](nu * sigma * z + 1.0f64, 1.0f64 / nu) }
     ret mu * math.exp[f64](sigma * z)
 }
+
+// SI, the original Sichel parametrisation: f(y) = exp(-lgamma(y + 1) - nu log(sigma alpha) + y log(mu / (sigma alpha)) + log K_{y + nu}(alpha) - log K_nu(1 / sigma)), alpha = sqrt(1 + 2 sigma mu) / sigma
+fn dsi(y: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if y < 0.0f64 || y != math.floor[f64](y) { ret 0.0f64 }
+    let al = math.sqrt[f64](1.0f64 + 2.0f64 * sigma * mu) / sigma
+    var ord = y + nu
+    if ord < 0.0f64 { ord = 0.0f64 - ord }
+    var o0 = nu
+    if o0 < 0.0f64 { o0 = 0.0f64 - o0 }
+    ret math.exp[f64](0.0f64 - sp.lgamma(y + 1.0f64) - nu * math.log[f64](sigma * al) + y * math.log[f64](mu / (sigma * al)) + math.log[f64](gs.bessel_knu(ord, al)) - math.log[f64](gs.bessel_knu(o0, 1.0f64 / sigma)))
+}
+
+fn psi_cdf(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var y = 0.0f64
+    while y <= math.floor[f64](q) {
+        s += dsi(y, mu, sigma, nu)
+        y += 1.0f64
+    }
+    ret s
+}

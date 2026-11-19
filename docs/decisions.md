@@ -50950,3 +50950,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7491 — gamlss.dist ST3C
 ST3C is the compiled-code implementation of ST3 (dST3C, pST3C and qST3C return exactly the values of dST3, pST3 and qST3: differences of 0 on a probe, and the integral of dST3C has the ST3 mean and variance, not a re-centred one), so the existing `dst3`, `pst3` and `qst3` are its port; 40 draws of each added to oracle_gamlss_bccgo (300 cases in all) equal gamlss.dist ST3C. Of the 116 families only MN3, MN4, MN5 (multinomials) and SI now lack a density. Open for L464: SI (a Bessel-K sum in compiled code), the multinomials, r, moments, links.
+
+## D7492 — gamlss.dist SI
+`dsi` is the Sichel probability function in the original parametrisation, found by fitting the closed form to dSI rather than porting its compiled recursion: exp(-lgamma(y + 1) - nu log(sigma alpha) + y log(mu / (sigma alpha)) + log K_{y + nu}(alpha) - log K_nu(1 / sigma)) with alpha = sqrt(1 + 2 sigma mu) / sigma (K of the absolute order); `psi_cdf` sums it, as pSI sums its recursion. Equal to gamlss.dist on 50 draws each (mu 0.3 to 8, sigma 0.1 to 2, nu -2 to 2, y 0 to 25; 100 values added to oracle_gamlss_bccgo, 400 in all). Every gamlss.dist family but the multinomials MN3, MN4, MN5 now has a density. Open for L464: qSI, the multinomials, r, moments, links.
