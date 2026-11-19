@@ -24,6 +24,9 @@ for (rep in 1:20) {
   hh <- c(0.1, 0.15, 0.3)[(n %% 3) + 1]
   em <- efp(y ~ x - 1, type = "OLS-MOSUM", h = hh); sm <- sctest(em)
   add("mos", c(a, hh), unname(sm$statistic)); add("mosp", c(a, hh), unname(sm$p.value))
+  hr <- c(0.1, 0.2, 0.3)[(n %% 3) + 1]
+  rm <- efp(y ~ x - 1, type = "Rec-MOSUM", h = hr); sq <- sctest(rm)
+  add("rmo", c(a, hr), unname(sq$statistic)); add("rmop", c(a, hr), unname(sq$p.value))
   er <- efp(y ~ x - 1, type = "Rec-CUSUM"); sr <- sctest(er)
   add("rec", a, unname(sr$statistic)); add("recp", a, unname(sr$p.value))
   add("rss", a, summary(b)$RSS["RSS", m + 1]); add("bp", a, sum(bm$breakpoints * seq_along(bm$breakpoints)))

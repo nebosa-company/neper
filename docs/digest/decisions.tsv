@@ -4442,4 +4442,5 @@ D7583	548	strucchange efp OLS-CUSUM with sctest
 D7584	689	strucchange efp Rec-CUSUM with sctest
 D7585	1009	strucchange sctest(Fstats): statistics and p values
 D7586	508	strucchange Fstats p values for up to forty regressors
-D7587	919	strucchange efp OLS-MOSUM with sctest
+D7587	920	strucchange efp OLS-MOSUM with sctest
+D7588	821	strucchange efp Rec-MOSUM with sctest

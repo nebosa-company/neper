@@ -220,20 +220,14 @@ fn ols_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) 
     ret (peak, pv)
 }
 
-// strucchange efp(type = "Rec-CUSUM") with sctest: the recursive residuals w_r = (y_r - x_r b_(r-1)) / sqrt(1 + x_r (X'X)_(r-1)^-1 x_r), r = p + 1 .. n, scaled by their
-// standard deviation (n - p - 1 degrees of freedom) and sqrt(n - p); the statistic is the largest |W_j| / (1 + 2 j / (n - p)) and the p value is the Brownian-motion
-// boundary formula; (statistic, p)
-fn rec_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) -> (f64, f64) {
-    let nan = 0.0f64 / 0.0f64
-    let m = n - p
-    let (w, e0) = mem.alloc[f64](a, m)
-    if e0 != ok { ret (nan, nan) }
+// the recursive residuals w_r = (y_r - x_r b_(r-1)) / sqrt(1 + x_r (X'X)_(r-1)^-1 x_r), r = p + 1 .. n, into w (length n - p); false when a design is singular
+fn rec_resid(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize, w: []f64) -> bool {
     var r = p
     while r < n {
         let start = mem.mark(a)
         let (g, e1) = mem.alloc[f64](a, p * p)
         let (rv, e2) = mem.alloc[f64](a, p)
-        if e1 != ok || e2 != ok { ret (nan, nan) }
+        if e1 != ok || e2 != ok { ret false }
         var i = 0usize
         while i < p * p {
             g[i] = 0.0f64
@@ -259,7 +253,7 @@ fn rec_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) 
             t += 1usize
         }
         let (inv, ie) = gp.invert(a, g, p)
-        if ie != ok { ret (nan, nan) }
+        if ie != ok { ret false }
         var pred = 0.0f64
         var quad = 0.0f64
         var c = 0usize
@@ -280,6 +274,18 @@ fn rec_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) 
         mem.reset(a, start)
         r += 1usize
     }
+    ret true
+}
+
+// strucchange efp(type = "Rec-CUSUM") with sctest: the recursive residuals w_r = (y_r - x_r b_(r-1)) / sqrt(1 + x_r (X'X)_(r-1)^-1 x_r), r = p + 1 .. n, scaled by their
+// standard deviation (n - p - 1 degrees of freedom) and sqrt(n - p); the statistic is the largest |W_j| / (1 + 2 j / (n - p)) and the p value is the Brownian-motion
+// boundary formula; (statistic, p)
+fn rec_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let m = n - p
+    let (w, e0) = mem.alloc[f64](a, m)
+    if e0 != ok { ret (nan, nan) }
+    if !rec_resid(a, y, x, n, p, w) { ret (nan, nan) }
     var mean = 0.0f64
     var i2 = 0usize
     while i2 < m {
@@ -488,4 +494,72 @@ fn ols_mosum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize, 
         cidx += 1usize
     }
     ret (peak, approx_rule2(pgrid[0usize..5usize], tp[0usize..5usize], peak))
+}
+
+// strucchange efp(type = "Rec-MOSUM", h) with sctest: the largest absolute moving sum of nh = floor((n - p) h) recursive residuals over sigma sqrt(n - p), sigma^2 being the centred sum of
+// squares of the residuals over n - 2p degrees of freedom; the p value interpolates the Brownian-motion-increments table (columns p = 0.2 .. 0.01, scaled by sqrt(h) per row) in h
+// and then the statistic; (statistic, p)
+fn rec_mosum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize, h: f64) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let m = n - p
+    let (w, e0) = mem.alloc[f64](a, m)
+    if e0 != ok { ret (nan, nan) }
+    if !rec_resid(a, y, x, n, p, w) { ret (nan, nan) }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < m {
+        mean += w[i]
+        i += 1usize
+    }
+    mean = mean / f64(m)
+    var ss = 0.0f64
+    i = 0usize
+    while i < m {
+        ss += (w[i] - mean) * (w[i] - mean)
+        i += 1usize
+    }
+    let sg = math.sqrt[f64](ss / f64(m - p))
+    let nh = usize(math.floor[f64](f64(m) * h))
+    var win = 0.0f64
+    i = 0usize
+    while i < nh {
+        win += w[i]
+        i += 1usize
+    }
+    var peak = math.abs[f64](win)
+    i = nh
+    while i < m {
+        win += w[i] - w[i - nh]
+        if math.abs[f64](win) > peak { peak = math.abs[f64](win) }
+        i += 1usize
+    }
+    peak = peak / (sg * math.sqrt[f64](f64(m)))
+    var tableh: [10]f64 = zero
+    var q = 0usize
+    while q < 10usize {
+        tableh[q] = 0.05f64 * f64(q + 1usize)
+        q += 1usize
+    }
+    let crit = tb.sc_rm()
+    var col: [10]f64 = zero
+    var grid: [7]f64 = zero
+    var tp: [7]f64 = zero
+    tp[0usize] = 1.0f64
+    tp[1usize] = 0.2f64
+    tp[2usize] = 0.15f64
+    tp[3usize] = 0.1f64
+    tp[4usize] = 0.05f64
+    tp[5usize] = 0.025f64
+    tp[6usize] = 0.01f64
+    var cidx = 0usize
+    while cidx < 6usize {
+        q = 0usize
+        while q < 10usize {
+            col[q] = table_value(crit, q * 6usize + cidx) * math.sqrt[f64](tableh[q])
+            q += 1usize
+        }
+        grid[cidx + 1usize] = approx_rule2(tableh[0usize..10usize], col[0usize..10usize], h)
+        cidx += 1usize
+    }
+    ret (peak, approx_rule2(grid[0usize..7usize], tp[0usize..7usize], peak))
 }
