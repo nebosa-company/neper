@@ -1253,3 +1253,19 @@ fn hselect_cv_2d(x1: []const f64, x2: []const f64, which: usize) -> f64 {
     if which == 0usize { ret f * c.s1 }
     ret f * c.s2
 }
+
+type Cv2cCtx = struct { x1: []const f64, x2: []const f64 }
+
+fn cv2c_log(c: *Cv2cCtx, lh: f64) -> f64 {
+    let h = math.exp[f64](lh)
+    let v = cv_density_2d(c.x1, c.x2, h, h)
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+// the common structure (structure.2d = "common"): one bandwidth for both variables, start mean(sd / 2)
+fn hselect_cv_2d_common(x1: []const f64, x2: []const f64) -> f64 {
+    var c = Cv2cCtx { x1: x1, x2: x2 }
+    let start = (sd_of(x1) / 2.0f64 + sd_of(x2) / 2.0f64) / 2.0f64
+    ret math.exp[f64](fd.brent_min[Cv2cCtx](&c, cv2c_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+}

@@ -50851,3 +50851,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7462 — sm h.select cv for two variables
 `hselect_cv_2d` is h.select(cbind(x, y), method = "cv") with the default scaled structure and no binning (n <= 100): the factor minimising the two-variable density cross-validation score (the product of the Gaussian kernels in each term, `cv_density_2d`) over log(0.5 / 8) to log(0.5 * 4), times the two standard deviations. Equal to sm on 20 samples, both bandwidths, in oracle_sm_hsel. Open for L505: the common and separate structures, 2-d binned and 2-d regression criteria, 2-d and binned ancova, band curves, sm.options.
+
+## D7463 — sm h.select cv, common 2-d structure
+`hselect_cv_2d_common` is h.select(cbind(x, y), method = "cv", structure.2d = "common"): one bandwidth for both variables, start mean(sd / 2), the same optimise; equal to sm on 20 samples in oracle_sm_hsel. Open for L505: the separate structure (R optim Nelder-Mead on two log bandwidths), 2-d regression criteria, 2-d and binned ancova, band curves, sm.options.

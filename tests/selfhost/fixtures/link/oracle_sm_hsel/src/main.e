@@ -62,6 +62,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "hc2c") {
+            let hv3 = sm.hselect_cv_2d_common(c.args[2usize..2usize + n], c.args[2usize + n..2usize + 2usize * n])
+            if !oracle.agrees(hv3, c) {
+                failures += 1usize
+                let _ = io.print(oracle.describe(a, c, hv3))
+                let _ = io.print("\n")
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "hc2") {
             let hv2 = sm.hselect_cv_2d(c.args[2usize..2usize + n], c.args[2usize + n..2usize + 2usize * n], usize(c.args[1usize]))
             if !oracle.agrees(hv2, c) {
