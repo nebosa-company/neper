@@ -1,7 +1,9 @@
 // e.algo.stat.arm against arm. tests/oracle/arm.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R arm`; the layout is at the top of scripts/r_oracle/groups/arm.R.
 
+use e.algo.rand.r as rng
 use e.algo.stat.arm as arm
+use e.algo.stat.carlmtest as ols
 use e.io
 use e.mem
 use e.os
@@ -22,6 +24,29 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
     if str.eq(k, "logit") { ret arm.logit(x[0usize]) }
+    if str.eq(k, "simlm") {
+        let ns = usize(x[1usize])
+        let n = usize(x[2usize])
+        let q = usize(x[3usize])
+        let (sg, e1) = mem.alloc[f64](a, ns)
+        let (bt, e2) = mem.alloc[f64](a, ns * q)
+        if e1 != ok || e2 != ok { os.exit(30) }
+        var g: rng.Rng = zero
+        rng.seed(&g, i64(x[0usize]))
+        if arm.sim_lm(a, &g, x[4usize + n..4usize + n + n * q], x[4usize..4usize + n], n, q, ns, sg, bt) != ok { os.exit(31) }
+        let at = usize(x[4usize + n + n * q + 1usize])
+        if x[4usize + n + n * q] == 0.0f64 { ret sg[at] }
+        let (ff, fe) = ols.ols(a, x[4usize + n..4usize + n + n * q], x[4usize..4usize + n], n, q)
+        if fe != ok { os.exit(32) }
+        var dev = 0.0f64
+        var j = 0usize
+        while j < q {
+            let dj = bt[at * q + j] - ff.beta[j]
+            dev += dj * dj
+            j += 1usize
+        }
+        ret dev
+    }
     if str.eq(k, "invlogit") { ret arm.invlogit(x[0usize]) }
     if str.eq(k, "stdlm") { ret stdlm_answer(a, c) }
     if str.eq(k, "stdglm") {

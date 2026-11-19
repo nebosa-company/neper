@@ -103,4 +103,15 @@ for (rep in 1:12) {
   if (is.null(f)) next
   for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm3", c(n, k, fam, as.vector(t(X)), y, j, c(0, pm), c(1, pd), c(10, psc)), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
 }
+# sim(lm): "simlm" args (seed, nsims, n, k, y[n], x[n*k] row-major, which, s) with which 0 sigma[s], 1 sum((beta[s, ] - beta.hat)^2): a sum of squares does not depend on the sign or the basis of the
+# eigenvectors mvrnorm uses (a LAPACK build may flip one), so it checks the draws without fixing the signs
+for (rep in 1:14) {
+  n <- sample(15:50, 1); k <- sample(2:4, 1); X <- matrix(round(rnorm(n * k), 4), n, k); X[, 1] <- 1; y <- round(rnorm(n, X %*% rnorm(k)), 4)
+  fit <- lm(y ~ X - 1); sd0 <- sample(1:100000, 1); ns <- 6
+  set.seed(sd0); s <- sim(fit, ns)
+  for (i in 1:ns) {
+    cases[[length(cases) + 1]] <- case("simlm", c(sd0, ns, n, k, y, as.vector(t(X)), 0, i - 1), s@sigma[i], rel = 1e-9, abs = 1e-12)
+    cases[[length(cases) + 1]] <- case("simlm", c(sd0, ns, n, k, y, as.vector(t(X)), 1, i - 1), sum((s@coef[i, ] - coef(fit))^2), rel = 1e-8, abs = 1e-10)
+  }
+}
 emit("arm", "arm", list(cases))

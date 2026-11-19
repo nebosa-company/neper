@@ -4506,4 +4506,5 @@ D7635	695	phangorn: general time-reversible tree likelihood
 D7636	677	phangorn: discrete gamma rates
 D7687	894	segmented pscore.test for a weighted linear model
 D7637	584	phangorn: invariant sites
-D7638	644	phangorn: Robinson-Foulds distance
+D7638	645	phangorn: Robinson-Foulds distance
+D7688	1029	arm sim for a linear model

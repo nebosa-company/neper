@@ -2,7 +2,10 @@
 //
 // rescale (the numeric core of standardize) is here. Not here: sim, discrete, corrplot data and the model refit of standardize.
 
+use e.algo.rand.rdist as rd
+use e.algo.rand.r as rng
 use e.algo.stat.carlmtest as ols
+use e.algo.stat.mass as ms
 use e.algo.stat.desctools as dt
 use e.algo.stat.gparot as gp
 use e.math
@@ -585,4 +588,40 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
         iter += 1usize
     }
     ret 25usize
+}
+
+// arm::sim for an lm (n.sims draws): sigma[s] = sigma.hat sqrt((n - k) / rchisq(1, n - k)), then beta[s, ] = mvrnorm(1, beta.hat, (X'X)^-1 sigma[s]^2), in that order per draw so one R stream gives
+// the same numbers; x is n by k row-major; beta is nsims by k row-major
+fn sim_lm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, k: usize, nsims: usize, sigma: []f64, beta: []f64) -> err {
+    let (f, e) = ols.ols(a, x, y, n, k)
+    if e != ok { ret e }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f.resid[i] * f.resid[i]
+        i += 1usize
+    }
+    let df = f64(n - k)
+    let sh = math.sqrt[f64](rss / df)
+    let (cv, e1) = mem.alloc[f64](a, k * k)
+    let (dr, e2) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok { ret e1 }
+    var s = 0usize
+    while s < nsims {
+        sigma[s] = sh * math.sqrt[f64](df / rd.rchisq(g, df))
+        i = 0usize
+        while i < k * k {
+            cv[i] = f.xtx_inv[i] * sigma[s] * sigma[s]
+            i += 1usize
+        }
+        let me = ms.mvrnorm(a, g, 1usize, k, f.beta, cv, dr)
+        if me != ok { ret me }
+        i = 0usize
+        while i < k {
+            beta[s * k + i] = dr[i]
+            i += 1usize
+        }
+        s += 1usize
+    }
+    ret ok
 }
