@@ -594,3 +594,4 @@ oracle_gamlss_mom
 oracle_vgam_acat
 oracle_vgam_cr
 oracle_vgam_zip
+oracle_vgam_tobit

@@ -1033,3 +1033,102 @@ fn zipoisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     out[m] = 0.0f64 - zip_f(&c, par)
     ret true
 }
+
+type TobCtx = struct { x: []const f64, y: []const f64, n: usize, p: usize, lo: f64 }
+
+// minus the log-likelihood of the Tobit model with left censoring at lo (observations at or below lo are censored) at (beta, log sd)
+fn tob_f(c: *TobCtx, par: []const f64) -> f64 {
+    let p = c.p
+    let sd = math.exp[f64](par[p])
+    var ll = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        var mu = 0.0f64
+        var t = 0usize
+        while t < p {
+            mu += c.x[i * p + t] * par[t]
+            t += 1usize
+        }
+        if c.y[i] <= c.lo {
+            ll += dist.pnorm((c.lo - mu) / sd, 0.0f64, 1.0f64, true, true)
+        } else {
+            let z = (c.y[i] - mu) / sd
+            ll += dist.dnorm(z, 0.0f64, 1.0f64, true) - par[p]
+        }
+        i += 1usize
+    }
+    ret 0.0f64 - ll
+}
+
+fn tob_g(c: *TobCtx, par: []const f64, g: []f64) {
+    let p = c.p
+    let sd = math.exp[f64](par[p])
+    var t = 0usize
+    while t <= p {
+        g[t] = 0.0f64
+        t += 1usize
+    }
+    var i = 0usize
+    while i < c.n {
+        var mu = 0.0f64
+        t = 0usize
+        while t < p {
+            mu += c.x[i * p + t] * par[t]
+            t += 1usize
+        }
+        var dm = 0.0f64
+        var ds = 0.0f64
+        if c.y[i] <= c.lo {
+            let a = (c.lo - mu) / sd
+            let r = math.exp[f64](dist.dnorm(a, 0.0f64, 1.0f64, true) - dist.pnorm(a, 0.0f64, 1.0f64, true, true))
+            dm = 0.0f64 - r / sd
+            ds = 0.0f64 - a * r
+        } else {
+            let z = (c.y[i] - mu) / sd
+            dm = z / sd
+            ds = z * z - 1.0f64
+        }
+        t = 0usize
+        while t < p {
+            g[t] += 0.0f64 - dm * c.x[i * p + t]
+            t += 1usize
+        }
+        g[p] += 0.0f64 - ds
+        i += 1usize
+    }
+}
+
+// vglm(y ~ x, tobit(Lower = lo, Upper = Inf)): the mean x' beta (x with its intercept column) and a constant log sd, by BFGS on the analytic gradient from the least-squares fit of the uncensored scale; out: beta (p), log sd, the log-likelihood
+fn tobit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lo: f64, out: []f64) -> bool {
+    let m = p + 1usize
+    let (par, e1) = mem.alloc[f64](a, m)
+    let (scr, e3) = mem.alloc[f64](a, m * m + 6usize * m + 16usize)
+    if e1 != ok || e3 != ok { ret false }
+    var t = 0usize
+    while t < m {
+        par[t] = 0.0f64
+        t += 1usize
+    }
+    var sy = 0.0f64
+    var i = 0usize
+    while i < n {
+        sy += y[i]
+        i += 1usize
+    }
+    par[0usize] = sy / f64(n)
+    par[p] = 0.0f64
+    var c = TobCtx { x: x, y: y, n: n, p: p, lo: lo }
+    var round = 0usize
+    while round < 2usize {
+        let (r, e4) = opt.bfgs[TobCtx](&c, tob_f, tob_g, par, 1.0e-11f64, 300u32, scr)
+        if e4 != ok { ret false }
+        round += 1usize
+    }
+    t = 0usize
+    while t < m {
+        out[t] = par[t]
+        t += 1usize
+    }
+    out[m] = 0.0f64 - tob_f(&c, par)
+    ret true
+}
