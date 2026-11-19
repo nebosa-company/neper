@@ -57,6 +57,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret math.exp[f64](par[p + q])
     }
     let ll = ps.zeroinfl_nb(a, x, zz, y, n, p, q, par)
+    if str.eq(c.name, "nbse") || str.eq(c.name, "nbsetheta") {
+        let (se, e6) = mem.alloc[f64](a, p + q + 1usize)
+        if e6 != ok { ret nan }
+        if ps.zeroinfl_nb_se(a, x, zz, y, n, p, q, par, se) != ok { ret nan }
+        if str.eq(c.name, "nbsetheta") { ret se[p + q] }
+        var t = 0.0f64
+        var u = 0usize
+        while u < p + q {
+            t += se[u] * f64(u + 1usize)
+            u += 1usize
+        }
+        ret t
+    }
     if str.eq(c.name, "nbll") { ret ll }
     ret math.exp[f64](par[p + q])
 }

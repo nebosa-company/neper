@@ -12,7 +12,7 @@ for (rep in 1:8) {
   f <- tryCatch(suppressWarnings(zeroinfl(y ~ x1 | z1, data = d, dist = "negbin", control = zeroinfl.control(reltol = 1e-12, maxit = 5000))), error = function(e) NULL)
   if (is.null(f) || !is.finite(f$theta) || f$theta > 1e3) next
   a <- c(n, p, q, y, as.vector(t(x)), as.vector(t(z)))
-  add("nbll", a, as.numeric(logLik(f))); add("nbtheta", a, f$theta)
+  add("nbll", a, as.numeric(logLik(f))); add("nbtheta", a, f$theta); sv <- sqrt(diag(vcov(f))); cases[[length(cases) + 1]] <- case("nbse", a, sum(sv * seq_along(sv)), rel = 1e-2, abs = 1e-3); cases[[length(cases) + 1]] <- case("nbsetheta", a, unname(summary(f)$coefficients$count["Log(theta)", 2]), rel = 1e-2, abs = 1e-3)
 }
 # hurdle with a negative binomial count: "hnbll" (the total log-likelihood) and "hnbtheta".
 for (rep in 1:6) {

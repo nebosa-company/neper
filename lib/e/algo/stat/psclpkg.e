@@ -844,3 +844,66 @@ fn pr2_hurdle(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: 
     out[5usize] = ml / (1.0f64 - math.exp[f64](2.0f64 * l0 / nf))
     ret ok
 }
+
+// the standard errors of the zero-inflated negative binomial fit in par (beta, gamma, log theta): the square roots of the diagonal of the inverse of the central-difference Hessian of the
+// negative log-likelihood (R's optim hessian is numeric as well); se receives p + q + 1 values
+fn zeroinfl_nb_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []const f64, se: []f64) -> err {
+    let m = p + q + 1usize
+    if m > 32usize { ret mem.Full }
+    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: q, geom: false }
+    let (h, e0) = mem.alloc[f64](a, m * m)
+    if e0 != ok { ret e0 }
+    var w: [32]f64 = zero
+    var i = 0usize
+    while i < m {
+        w[i] = par[i]
+        i += 1usize
+    }
+    var step: [32]f64 = zero
+    i = 0usize
+    while i < m {
+        step[i] = 1.0e-4f64 * (1.0f64 + math.abs[f64](par[i]))
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        var j = i
+        while j < m {
+            var v = 0.0f64
+            if i == j {
+                w[i] = par[i] + step[i]
+                let fp = nb_neg(&c, w[0usize..m])
+                w[i] = par[i] - step[i]
+                let fm = nb_neg(&c, w[0usize..m])
+                w[i] = par[i]
+                let f0 = nb_neg(&c, w[0usize..m])
+                v = (fp - 2.0f64 * f0 + fm) / (step[i] * step[i])
+            } else {
+                w[i] = par[i] + step[i]
+                w[j] = par[j] + step[j]
+                let fpp = nb_neg(&c, w[0usize..m])
+                w[j] = par[j] - step[j]
+                let fpm = nb_neg(&c, w[0usize..m])
+                w[i] = par[i] - step[i]
+                let fmm = nb_neg(&c, w[0usize..m])
+                w[j] = par[j] + step[j]
+                let fmp = nb_neg(&c, w[0usize..m])
+                w[i] = par[i]
+                w[j] = par[j]
+                v = (fpp - fpm - fmp + fmm) / (4.0f64 * step[i] * step[j])
+            }
+            h[i * m + j] = v
+            h[j * m + i] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (inv, ie) = gp.invert(a, h, m)
+    if ie != ok { ret ie }
+    i = 0usize
+    while i < m {
+        se[i] = math.sqrt[f64](inv[i * m + i])
+        i += 1usize
+    }
+    ret ok
+}
