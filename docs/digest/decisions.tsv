@@ -4602,4 +4602,5 @@ D7701	1025	unmarked: Royle-Nichols occupancy
 D7702	467	unmarked: standard errors for occuRN
 D7703	931	bayestestR: p_map and p_significance
 D7704	683	bayestestR: the bias-corrected and accelerated interval
-D7705	968	performance: check_outliers by IQR; L339 re-scored
+D7705	969	performance: check_outliers by IQR; L339 re-scored
+D7706	1044	psych: splitHalf

@@ -1587,3 +1587,102 @@ fn fa_rms(r: []const f64, ld: []const f64, p: usize, q: usize, dof: f64, out: []
     out[0usize] = math.sqrt[f64](s / (f64(p) * (f64(p) - 1.0f64)))
     out[1usize] = math.sqrt[f64](s / (2.0f64 * dof))
 }
+
+// psych::splitHalf(r, brute = TRUE) for an even number of items p (at most 16) from their correlation matrix: every split of the items into two halves of p / 2 gives Guttman's lambda4 = 4 (sum of the cross correlations) / (sum of all
+// entries of r), and out = the maximum, the minimum, the mean (equal to the standardised alpha) over all C(p, p / 2) splits, then the median of the inter-item correlations (psych's med.r), then Guttman's lambda6 = 1 - sum(1 / diag(r^-1)) / sum(r)
+fn split_half(a: *mem.Arena, r: []const f64, p: usize, out: []f64) -> bool {
+    let half = p / 2usize
+    let total = 1usize << p
+    var tot = 0.0f64
+    var i = 0usize
+    while i < p * p {
+        tot += r[i]
+        i += 1usize
+    }
+    let (raw, e1) = mem.alloc[f64](a, total)
+    let (ri, e2) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok { ret false }
+    var cnt = 0usize
+    var mask = 0usize
+    while mask < total {
+        var pc = 0usize
+        var t = mask
+        while t > 0usize {
+            pc += t & 1usize
+            t = t >> 1usize
+        }
+        if pc == half {
+            var cab = 0.0f64
+            i = 0usize
+            while i < p {
+                if ((mask >> i) & 1usize) == 1usize {
+                    var j = 0usize
+                    while j < p {
+                        if ((mask >> j) & 1usize) == 0usize { cab += r[i * p + j] }
+                        j += 1usize
+                    }
+                }
+                i += 1usize
+            }
+            raw[cnt] = 4.0f64 * cab / tot
+            cnt += 1usize
+        }
+        mask += 1usize
+    }
+    // insertion sort of the cnt values
+    i = 1usize
+    while i < cnt {
+        let v = raw[i]
+        var j = i
+        while j > 0usize && raw[j - 1usize] > v {
+            raw[j] = raw[j - 1usize]
+            j -= 1usize
+        }
+        raw[j] = v
+        i += 1usize
+    }
+    var sm = 0.0f64
+    i = 0usize
+    while i < cnt {
+        sm += raw[i]
+        i += 1usize
+    }
+    out[0usize] = raw[cnt - 1usize]
+    out[1usize] = raw[0usize]
+    out[2usize] = sm / f64(cnt)
+    // psych's med.r is the median of the inter-item correlations (the lower triangle of r), not of the split values
+    let (lo, e3) = mem.alloc[f64](a, p * p)
+    if e3 != ok { ret false }
+    var nl = 0usize
+    i = 1usize
+    while i < p {
+        var j = 0usize
+        while j < i {
+            lo[nl] = r[i * p + j]
+            nl += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 1usize
+    while i < nl {
+        let v = lo[i]
+        var j = i
+        while j > 0usize && lo[j - 1usize] > v {
+            lo[j] = lo[j - 1usize]
+            j -= 1usize
+        }
+        lo[j] = v
+        i += 1usize
+    }
+    if nl % 2usize == 1usize { out[3usize] = lo[nl / 2usize] } else { out[3usize] = (lo[nl / 2usize - 1usize] + lo[nl / 2usize]) / 2.0f64 }
+    if !invert(a, r, p, ri) { ret false }
+    var s2 = 0.0f64
+    i = 0usize
+    while i < p {
+        s2 += 1.0f64 / ri[i * p + i]
+        i += 1usize
+    }
+    out[4usize] = 1.0f64 - s2 / tot
+    ret true
+}
