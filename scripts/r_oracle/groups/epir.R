@@ -29,4 +29,12 @@ for (rep in 1:25) {
   for (i in 1:3) add(26 + i, base, unlist(r$PARisk.strata.wald[1, ])[i])
   for (i in 1:3) add(29 + i, base, unlist(r$PARisk.strata.piri[1, ])[i])
 }
+# epi.tests (exact intervals): fn "dt" args (a, b, c, d, stat * 3 + part): stat 0 ap, 1 tp, 2 se, 3 sp, 4 diag.ac, 5 diag.or, 6 nndx, 7 youden, 8 pv.pos, 9 pv.neg, 10 lr.pos, 11 lr.neg; part 0 est 1 lower 2 upper
+for (rep in 1:25) {
+  a <- sample(20:400, 1); b <- sample(10:300, 1); cc <- sample(5:150, 1); d <- sample(30:600, 1)
+  dat <- as.table(matrix(c(a, b, cc, d), 2, byrow = TRUE))
+  r <- epi.tests(dat, conf.level = 0.95)$detail
+  nm <- c("ap", "tp", "se", "sp", "diag.ac", "diag.or", "nndx", "youden", "pv.pos", "pv.neg", "lr.pos", "lr.neg")
+  for (i in seq_along(nm)) { row <- r[r$statistic == nm[i], ]; for (j in 1:3) cases[[length(cases) + 1]] <- case("dt", c(a, b, cc, d, (i - 1) * 3 + j - 1), as.numeric(row[1, j + 1]), rel = 1e-8, abs = 1e-12) }
+}
 emit("epir", "epiR", list(cases))

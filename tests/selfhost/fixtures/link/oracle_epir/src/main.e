@@ -5,10 +5,19 @@ use e.algo.stat.epir as ep
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "dt") {
+        let td = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
+        let code = usize(x[4usize])
+        let (e7, l7, h7) = ep.epi_tests(td, 0.95f64, code / 3usize)
+        if code % 3usize == 0usize { ret e7 }
+        if code % 3usize == 1usize { ret l7 }
+        ret h7
+    }
     let t = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
     let units = x[4usize]
     let w = usize(x[5usize])

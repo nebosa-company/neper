@@ -174,3 +174,70 @@ fn af_risk(t: Table2, level: f64) -> (f64, f64, f64) {
     let f2 = (hi - 1.0f64) / hi
     ret ((rr - 1.0f64) / rr, math.min[f64](f1, f2), math.max[f64](f1, f2))
 }
+
+// epi.tests with the exact method for a table with test positive and disease positive a, test positive and disease negative b, test negative
+// and disease positive c, test negative and disease negative d; stat 0 apparent prevalence, 1 true prevalence, 2 sensitivity, 3 specificity,
+// 4 diagnostic accuracy, 5 diagnostic odds ratio, 6 number needed to diagnose, 7 Youden's index, 8 positive predictive value, 9 negative
+// predictive value, 10 positive likelihood ratio, 11 negative likelihood ratio: (est, lower, upper)
+fn epi_tests(t: Table2, level: f64, stat: usize) -> (f64, f64, f64) {
+    let a = t.a
+    let b = t.b
+    let c = t.c
+    let d = t.d
+    let n = a + b + c + d
+    let m1 = a + c
+    let m0 = b + d
+    let z = z_of(level)
+    if stat == 0usize {
+        let (pe0, pl0, pu0) = exact_prop(a + b, n, level)
+        ret (pe0, pl0, pu0)
+    }
+    if stat == 1usize {
+        let (pe1, pl1, pu1) = exact_prop(a + c, n, level)
+        ret (pe1, pl1, pu1)
+    }
+    if stat == 2usize {
+        let (pe2, pl2, pu2) = exact_prop(a, m1, level)
+        ret (pe2, pl2, pu2)
+    }
+    if stat == 3usize {
+        let (pe3, pl3, pu3) = exact_prop(d, m0, level)
+        ret (pe3, pl3, pu3)
+    }
+    if stat == 4usize {
+        let (pe4, pl4, pu4) = exact_prop(a + d, n, level)
+        ret (pe4, pl4, pu4)
+    }
+    if stat == 8usize {
+        let (pe8, pl8, pu8) = exact_prop(a, a + b, level)
+        ret (pe8, pl8, pu8)
+    }
+    if stat == 9usize {
+        let (pe9, pl9, pu9) = exact_prop(d, c + d, level)
+        ret (pe9, pl9, pu9)
+    }
+    let (se, sel, seu) = exact_prop(a, m1, level)
+    let (sp, spl, spu) = exact_prop(d, m0, level)
+    if stat == 5usize {
+        let o = a * d / (b * c)
+        let s = z * math.sqrt[f64](1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d)
+        ret (o, math.exp[f64](math.log[f64](o) - s), math.exp[f64](math.log[f64](o) + s))
+    }
+    if stat == 6usize || stat == 7usize {
+        let j = se - (1.0f64 - sp)
+        let j1 = sel - (1.0f64 - spl)
+        let j2 = seu - (1.0f64 - spu)
+        if stat == 7usize { ret (j, math.min[f64](j1, j2), math.max[f64](j1, j2)) }
+        let k1 = 1.0f64 / j1
+        let k2 = 1.0f64 / j2
+        ret (1.0f64 / j, math.min[f64](k1, k2), math.max[f64](k1, k2))
+    }
+    if stat == 10usize {
+        let l = (a / m1) / (1.0f64 - d / m0)
+        let s = z * math.sqrt[f64]((1.0f64 - se) / (m1 * se) + sp / (m0 * (1.0f64 - sp)))
+        ret (l, math.exp[f64](math.log[f64](l) - s), math.exp[f64](math.log[f64](l) + s))
+    }
+    let l = (1.0f64 - a / m1) / (d / m0)
+    let s = z * math.sqrt[f64](se / (m1 * (1.0f64 - se)) + (1.0f64 - sp) / (m0 * sp))
+    ret (l, math.exp[f64](math.log[f64](l) - s), math.exp[f64](math.log[f64](l) + s))
+}
