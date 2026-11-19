@@ -50314,3 +50314,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7393 — EnvStats eweibull and elnorm
 `e_weibull` solves the Weibull likelihood equation sum(x^k log x) / sum(x^k) - 1 / k = mean(log x) by Newton on the shape with scale (sum(x^k) / n)^(1 / k); `e_lnorm` is mean and sd of log(x) with divisor n - 1 (mvue) or n (mle). Equal to EnvStats to 1e-5 on 30 samples (R's eweibull optimises numerically and warns on NaN evaluations along the way; its answer is the same maximum). L466 stays at 0.3.
+
+## D7394 — EnvStats eqnorm and eqlnorm
+`e_qnorm` is the mvue quantile mean + qnorm(p) sd with the exact limits mean + sd qnt(., n - 1, qnorm(p) sqrt(n)) / sqrt(n) (alpha / 2 and 1 - alpha / 2, or alpha for the one-sided types); the lognormal version works on log(x) and exponentiates the estimate and the limits. Equal to EnvStats to 1e-8 on 40 samples across p in {0.1, 0.5, 0.9, 0.95} and confidence 0.9 and 0.95. L466 stays at 0.3.

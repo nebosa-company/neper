@@ -1649,3 +1649,49 @@ fn e_weibull(x: []const f64, out: []f64) {
     out[0usize] = k
     out[1usize] = math.exp[f64](math.log[f64](s0 / n) / k)
 }
+
+// eqnorm(x, p, ci = TRUE) (lognormal = false) or eqlnorm (true, on log(x), the results exponentiated): the mvue quantile mean + qnorm(p) sd and its exact limits mean + sd qnt(., n - 1, qnorm(p) sqrt(n)) / sqrt(n);
+// ci_type 0 two-sided, 1 lower (UCL Inf), 2 upper (LCL -Inf); out = (quantile, LCL, UCL)
+fn e_qnorm(x: []const f64, p: f64, conf: f64, ci_type: usize, lognormal: bool, out: []f64) {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        if lognormal { m += math.log[f64](x[i]) } else { m += x[i] }
+        i += 1usize
+    }
+    m = m / n
+    var ss = 0.0f64
+    i = 0usize
+    while i < x.len {
+        var v = x[i]
+        if lognormal { v = math.log[f64](x[i]) }
+        ss += (v - m) * (v - m)
+        i += 1usize
+    }
+    let s = math.sqrt[f64](ss / (n - 1.0f64))
+    let z = dist.qnorm(p, 0.0f64, 1.0f64, true, false)
+    let alpha = 1.0f64 - conf
+    let rn = math.sqrt[f64](n)
+    var q = m + z * s
+    var lcl = 0.0f64
+    var ucl = 0.0f64
+    if ci_type == 0usize {
+        lcl = m + s * qnt(alpha / 2.0f64, n - 1.0f64, z * rn) / rn
+        ucl = m + s * qnt(1.0f64 - alpha / 2.0f64, n - 1.0f64, z * rn) / rn
+    } else if ci_type == 1usize {
+        lcl = m + s * qnt(alpha, n - 1.0f64, z * rn) / rn
+        ucl = math.inf64()
+    } else {
+        lcl = 0.0f64 - math.inf64()
+        ucl = m + s * qnt(1.0f64 - alpha, n - 1.0f64, z * rn) / rn
+    }
+    if lognormal {
+        q = math.exp[f64](q)
+        lcl = math.exp[f64](lcl)
+        ucl = math.exp[f64](ucl)
+    }
+    out[0usize] = q
+    out[1usize] = lcl
+    out[2usize] = ucl
+}
