@@ -56,4 +56,24 @@ for (rep in 1:30) {
   s <- summary(f)$coefficients; pre <- c("mx", "th")[dv - 1]
   add(paste0(pre, "coef"), a, ws(coef(f))); add(paste0(pre, "se"), a, ws(s[, 2])); add(paste0(pre, "sig"), a, ws(as.vector(t(f$residCov))))
 }
+# SUR with linear restrictions R b = q: "rscoef" / "rsse" / "rssig" with args (n, M, passes, dfc, ks, y, x, nr, R[nr * kt] row-major, q[nr]); coefficients are in the equation order
+for (rep in 1:30) {
+  n <- sample(30:80, 1); M <- 2; passes <- sample(1:3, 1); dfc <- rep %% 2
+  ks <- sample(2:4, M, TRUE); rho <- runif(1, 0.2, 0.8)
+  e <- matrix(rnorm(n * M), n) %*% chol(matrix(rho, M, M) + diag(1 - rho, M))
+  X <- lapply(ks, function(k) cbind(1, matrix(rnorm(n * (k - 1)), n)))
+  Y <- sapply(seq_len(M), function(m) as.vector(X[[m]] %*% rnorm(ks[m])) + e[, m])
+  d <- list(); eqs <- list()
+  for (m in seq_len(M)) { for (j in seq_len(ks[m] - 1)) d[[paste0("x", m, "_", j)]] <- X[[m]][, j + 1]; d[[paste0("y", m)]] <- Y[, m] }
+  d <- as.data.frame(d)
+  for (m in seq_len(M)) eqs[[paste0("e", m)]] <- as.formula(paste0("y", m, " ~ ", paste(c("1", if (ks[m] > 1) paste0("x", m, "_", seq_len(ks[m] - 1))), collapse = " + ")))
+  kt <- sum(ks); Rm <- matrix(0, 0, kt); q <- numeric(0)
+  r1 <- numeric(kt); r1[2] <- 1; r1[ks[1] + 2] <- -1; Rm <- rbind(Rm, r1); q <- c(q, 0)
+  if (rep %% 3 == 0) { r2 <- numeric(kt); r2[1] <- 1; Rm <- rbind(Rm, r2); q <- c(q, 0.5) }
+  f <- tryCatch(suppressWarnings(systemfit(eqs, "SUR", data = d, restrict.matrix = Rm, restrict.rhs = q, control = systemfit.control(methodResidCov = if (dfc) "geomean" else "noDfCor", maxiter = passes, tol = 1e-300))), error = function(e) { message(conditionMessage(e)); NULL })
+  if (is.null(f)) next
+  a <- c(n, M, passes, dfc, ks, as.vector(Y), unlist(lapply(X, function(x) as.vector(t(x)))), nrow(Rm), as.vector(t(Rm)), q)
+  s <- summary(f)$coefficients
+  add("rscoef", a, ws(coef(f))); add("rsse", a, ws(s[, 2])); add("rssig", a, ws(as.vector(t(f$residCov))))
+}
 emit("systemfit", "systemfit", list(cases))

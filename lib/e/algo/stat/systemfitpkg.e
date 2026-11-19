@@ -11,11 +11,12 @@ use e.mem
 fn sur(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usize, m: usize, df_cor: bool, passes: usize, coef: []f64, se: []f64, sig: []f64) -> err {
     var dv0 = 0usize
     if df_cor { dv0 = 1usize }
-    ret surm(a, xs, ks, y, n, m, dv0, passes, coef, se, sig)
+    var nul: [1]f64 = zero
+    ret surm(a, xs, ks, y, n, m, dv0, passes, nul[0usize..1usize], nul[0usize..1usize], 0usize, coef, se, sig)
 }
 
 // sur with the residual covariance divisor chosen by div: 0 noDfCor (n), 1 geomean (sqrt((n - k_i)(n - k_j))), 2 max (n - max(k_i, k_j)), 3 Theil (n - k_i - k_j + tr(P_i P_j) with P_i = X_i (X_i'X_i)^-1 X_i')
-fn surm(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usize, m: usize, div: usize, passes: usize, coef: []f64, se: []f64, sig: []f64) -> err {
+fn surm(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: usize, m: usize, div: usize, passes: usize, rr: []const f64, qq: []const f64, nr: usize, coef: []f64, se: []f64, sig: []f64) -> err {
     var kt = 0usize
     var e = 0usize
     while e < m {
@@ -23,6 +24,8 @@ fn surm(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: us
         e += 1usize
     }
     let (off, e0) = mem.alloc[usize](a, m + 1usize)
+    let (kd, ekd) = mem.alloc[usize](a, m)
+    if ekd != ok { ret ekd }
     let (res, e1) = mem.alloc[f64](a, m * n)
     let (g, e2) = mem.alloc[f64](a, kt * kt)
     let (r, e3) = mem.alloc[f64](a, kt)
@@ -36,6 +39,27 @@ fn surm(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: us
     e = 0usize
     while e < m {
         off[e + 1usize] = off[e] + ks[e]
+        e += 1usize
+    }
+    // degrees of freedom per equation: the coefficients less the restrictions that involve that equation alone
+    e = 0usize
+    while e < m {
+        kd[e] = ks[e]
+        var u0 = 0usize
+        while u0 < nr {
+            var inside = true
+            var any = false
+            var w0 = 0usize
+            while w0 < kt {
+                if rr[u0 * kt + w0] != 0.0f64 {
+                    any = true
+                    if w0 < off[e] || w0 >= off[e + 1usize] { inside = false }
+                }
+                w0 += 1usize
+            }
+            if any && inside { kd[e] -= 1usize }
+            u0 += 1usize
+        }
         e += 1usize
     }
     // the design matrix of equation e starts at element n * off[e]
@@ -65,10 +89,10 @@ fn surm(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: us
                         t += 1usize
                     }
                     var dv = f64(n)
-                    if div == 1usize { dv = math.sqrt[f64](f64(n - ks[i]) * f64(n - ks[j])) }
+                    if div == 1usize { dv = math.sqrt[f64](f64(n - kd[i]) * f64(n - kd[j])) }
                     if div == 2usize {
-                        dv = f64(n - ks[i])
-                        if ks[j] > ks[i] { dv = f64(n - ks[j]) }
+                        dv = f64(n - kd[i])
+                        if kd[j] > kd[i] { dv = f64(n - kd[j]) }
                     }
                     if div == 3usize { dv = f64(n) - f64(ks[i]) - f64(ks[j]) + tr_pp(a, xs[n * off[i]..n * off[i] + n * ks[i]], xs[n * off[j]..n * off[j] + n * ks[j]], n, ks[i], ks[j]) }
                     sig[i * m + j] = s / dv
@@ -140,6 +164,77 @@ fn surm(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: us
             se[i] = math.sqrt[f64](gi[i * kt + i])
             i += 1usize
         }
+        if nr > 0usize {
+            // restricted GLS: beta_r = beta - gi R' (R gi R')^-1 (R beta - q), covariance gi - gi R' (R gi R')^-1 R gi
+            let (rg, er1) = mem.alloc[f64](a, nr * kt)
+            let (dm, er2) = mem.alloc[f64](a, nr * nr)
+            let (lam, er3) = mem.alloc[f64](a, nr * (kt + 1usize))
+            if er1 != ok || er2 != ok || er3 != ok { ret mem.Full }
+            var u = 0usize
+            while u < nr {
+                var v = 0usize
+                while v < kt {
+                    var t = 0.0f64
+                    var w = 0usize
+                    while w < kt {
+                        t += rr[u * kt + w] * gi[w * kt + v]
+                        w += 1usize
+                    }
+                    rg[u * kt + v] = t
+                    v += 1usize
+                }
+                u += 1usize
+            }
+            u = 0usize
+            while u < nr {
+                var v = 0usize
+                while v < nr {
+                    var t = 0.0f64
+                    var w = 0usize
+                    while w < kt {
+                        t += rg[u * kt + w] * rr[v * kt + w]
+                        w += 1usize
+                    }
+                    dm[u * nr + v] = t
+                    v += 1usize
+                }
+                var rb = 0.0f64
+                var w2 = 0usize
+                while w2 < kt {
+                    rb += rr[u * kt + w2] * coef[w2]
+                    w2 += 1usize
+                }
+                lam[u * (kt + 1usize)] = rb - qq[u]
+                var w3 = 0usize
+                while w3 < kt {
+                    lam[u * (kt + 1usize) + 1usize + w3] = rg[u * kt + w3]
+                    w3 += 1usize
+                }
+                u += 1usize
+            }
+            // solve dm [lambda | rg] = [R beta - q | R gi]
+            gj_solve(dm, nr, lam, kt + 1usize)
+            var w4 = 0usize
+            while w4 < kt {
+                var db = 0.0f64
+                var cv = 0.0f64
+                var u2 = 0usize
+                while u2 < nr {
+                    db += rg[u2 * kt + w4] * lam[u2 * (kt + 1usize)]
+                    u2 += 1usize
+                }
+                coef[w4] = coef[w4] - db
+                var vv = 0.0f64
+                u2 = 0usize
+                while u2 < nr {
+                    vv += rg[u2 * kt + w4] * lam[u2 * (kt + 1usize) + 1usize + w4]
+                    u2 += 1usize
+                }
+                cv = gi[w4 * kt + w4] - vv
+                se[w4] = math.sqrt[f64](cv)
+                w4 += 1usize
+            }
+        }
         // residuals of this pass
         ei = 0usize
         while ei < m {
@@ -170,10 +265,10 @@ fn surm(a: *mem.Arena, xs: []const f64, ks: []const usize, y: []const f64, n: us
                 t += 1usize
             }
             var dv = f64(n)
-            if div == 1usize { dv = math.sqrt[f64](f64(n - ks[i]) * f64(n - ks[j])) }
+            if div == 1usize { dv = math.sqrt[f64](f64(n - kd[i]) * f64(n - kd[j])) }
             if div == 2usize {
-                dv = f64(n - ks[i])
-                if ks[j] > ks[i] { dv = f64(n - ks[j]) }
+                dv = f64(n - kd[i])
+                if kd[j] > kd[i] { dv = f64(n - kd[j]) }
             }
             if div == 3usize { dv = f64(n) - f64(ks[i]) - f64(ks[j]) + tr_pp(a, xs[n * off[i]..n * off[i] + n * ks[i]], xs[n * off[j]..n * off[j] + n * ks[j]], n, ks[i], ks[j]) }
             sig[i * m + j] = s / dv
