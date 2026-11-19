@@ -50209,3 +50209,6 @@ For `coxph(Surv(Tstart, Tstop, status) ~ strata(trans), method = "breslow")` the
 
 ## D7360 — PMCMRplus Conover many-to-one
 kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and unadjusted p are the all-pairs ones against group 1, and Holm runs over the k - 1 comparisons, so no new library code was needed, only the oracle cases (oracle_pmcmr_many kinds 3 to 5, twelve data sets). L487 at 0.6.
+
+## D7361 — PMCMRplus manyOneUTest
+`manyone_u` ranks groups 0 and j alone, takes the smaller Mann-Whitney U, standardises with the tie-corrected variance n1 n2/(S(S-1)) ((S^3 - S)/12 - sum (t^3 - t)/12) and flips the sign when group 0 has the smaller rank sum; p is the two-sided normal one, Holm over the k - 1 comparisons. Equal to R on twelve random data sets (with and without ties). L487 at 0.65.

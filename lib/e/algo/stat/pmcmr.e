@@ -520,3 +520,62 @@ fn dunn_many(q: Ranks, rbar: []const f64, rn: []const f64, j: usize) -> (f64, f6
     if az < 0.0f64 { az = 0.0f64 - az }
     ret (z, 2.0f64 * dist.pnorm(0.0f64 - az, 0.0f64, 1.0f64, true, false))
 }
+
+// manyOneUTest's statistic of group j against group 0: the Mann-Whitney U (smaller of the two) standardised with the tie-corrected variance, signed negative when the rank sum
+// of group 0 is the smaller (normal approximation, as PMCMRplus). The two-sided p is 2 pnorm(-|z|).
+fn manyone_u(a: *mem.Arena, x: []const f64, grp: []const usize, j: usize) -> (f64, err) {
+    let n = x.len
+    let (sub, e0) = mem.alloc[f64](a, n)
+    let (who, e1) = mem.alloc[usize](a, n)
+    let (r, e2) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0.0f64, mem.Full) }
+    var m = 0usize
+    var t = 0usize
+    while t < n {
+        if grp[t] == 0usize || grp[t] == j {
+            sub[m] = x[t]
+            who[m] = grp[t]
+            m += 1usize
+        }
+        t += 1usize
+    }
+    let er = rank_avg(a, sub[0usize..m], r[0usize..m])
+    if er != ok { ret (0.0f64, er) }
+    var r1 = 0.0f64
+    var r2 = 0.0f64
+    var n1 = 0.0f64
+    var n2 = 0.0f64
+    t = 0usize
+    while t < m {
+        if who[t] == 0usize {
+            r1 += r[t]
+            n1 += 1.0f64
+        } else {
+            r2 += r[t]
+            n2 += 1.0f64
+        }
+        t += 1usize
+    }
+    let u1 = n1 * n2 + n1 * (n1 + 1.0f64) / 2.0f64 - r1
+    let u2 = n1 * n2 + n2 * (n2 + 1.0f64) / 2.0f64 - r2
+    var umn = u1
+    if u2 < umn { umn = u2 }
+    // the tie correction: sum over tied values of (t^3 - t) / 12 on the ranks
+    var ties = 0.0f64
+    t = 0usize
+    while t < m {
+        var cnt = 0.0f64
+        var q = 0usize
+        while q < m {
+            if r[q] == r[t] { cnt += 1.0f64 }
+            q += 1usize
+        }
+        ties += (cnt * cnt * cnt - cnt) / 12.0f64 / cnt
+        t += 1usize
+    }
+    let s = n1 + n2
+    let v = (n1 * n2 / (s * (s - 1.0f64))) * ((s * s * s - s) / 12.0f64 - ties)
+    var z = (umn - n1 * n2 / 2.0f64) / math.sqrt[f64](v)
+    if r1 < r2 { z = 0.0f64 - z }
+    ret (z, ok)
+}
