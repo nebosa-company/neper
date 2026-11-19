@@ -56,4 +56,14 @@ for (rep in 1:30) {
   cases[[length(cases) + 1]] <- case("ps", c(a, 0), unname(r$statistic), rel = 1e-8, abs = 1e-10)
   cases[[length(cases) + 1]] <- case("ps", c(a, 1), r$p.value, rel = 1e-7, abs = 1e-10)
 }
+# pscore.test with n.break = 2: "p2" args as "ps" (alt unused), which 0 the statistic 1 the p value
+for (rep in 1:20) {
+  n <- sample(30:120, 1); x <- sort(round(runif(n, 0, 10), 3)); y <- 1 + 0.3 * x + (x > 4) * (x - 4) * runif(1, -1.5, 1.5) + rnorm(n, 0, 0.6)
+  d <- data.frame(x = x, y = y); assign("d", d, envir = globalenv())
+  r <- tryCatch(suppressWarnings(pscore.test(lm(y ~ x, data = d), ~x, k = 10, n.break = 2)), error = function(e) NULL)
+  if (is.null(r)) next
+  a <- c(n, 2, 0, y, x)
+  cases[[length(cases) + 1]] <- case("p2", c(a, 0), unname(r$statistic), rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("p2", c(a, 1), r$p.value, rel = 1e-7, abs = 1e-10)
+}
 emit("strucchange", "strucchange", list(cases))

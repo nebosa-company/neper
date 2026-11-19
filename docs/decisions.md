@@ -51433,3 +51433,6 @@ L442 starts. `e.algo.stat.phangornpkg.fitch` scores a binary tree (ape's cladewi
 
 ## D7634 — phangorn: Jukes-Cantor tree likelihood
 `phangornpkg.jc_loglik` is Felsenstein pruning on the edge list with the JC transition matrix (stay 1/4 + 3/4 e^(-4t/3), change 1/4 - 1/4 e^(-4t/3)), equal base frequencies at the root, ambiguity codes as the states they allow. Equal to pml(tree, data, model = "JC")$logLik on 30 random trees (4 to 12 tips, random edge lengths, 10 to 80 sites, about 4 percent ambiguous) to 1e-9 (30 values added to oracle_phangorn, 1670 in all). The other models, gamma and invariant sites and optim.pml stay open.
+
+## D7686 — segmented pscore.test with two breaks for a linear model
+`pscore2_lm` adds the n.break = 2 form of pscore.test for an lm: a second term, the mean over the pairs j > l of pmax(z - psi_j, 0) (the sum of (j - 1) pmax(z - psi_j, 0) over k (k - 1) / 2), is projected off the design beside the first; the statistic is sc' V^-1 sc / sigma^2 with sc the two scores and V their 2 by 2 cross-products, and the p value is the chi-square tail with 2 degrees of freedom, exp(-stat / 2). Equal to pscore.test(lm(y ~ x), ~x, k = 10, n.break = 2) on 20 simulated data sets for the statistic and p value (40 values added to oracle_strucchange, 570 in all) on the first run. The glm path, weights, gefp, mefp and segmented() stay open.

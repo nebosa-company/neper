@@ -12,6 +12,21 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "p2") {
+        let nd = usize(z[0usize])
+        let (xr, exr) = mem.alloc[f64](a, nd * 2usize)
+        if exr != ok { ret nan }
+        var qd = 0usize
+        while qd < nd {
+            xr[qd * 2usize] = 1.0f64
+            xr[qd * 2usize + 1usize] = z[3usize + nd + qd]
+            qd += 1usize
+        }
+        var pout: [2]f64 = zero
+        let pe = sc.pscore2_lm(a, z[3usize..3usize + nd], z[3usize + nd..3usize + 2usize * nd], xr, nd, 2usize, 10usize, pout[0usize..2usize])
+        if pe != ok { ret nan }
+        ret pout[usize(z[3usize + 2usize * nd])]
+    }
     if str.eq(c.name, "ps") {
         let nd = usize(z[0usize])
         let (xr, exr) = mem.alloc[f64](a, nd * 2usize)

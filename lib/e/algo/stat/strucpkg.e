@@ -831,3 +831,120 @@ fn pscore_lm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, n
     out[1usize] = pv
     ret ok
 }
+
+// residuals of v on the n by p design xreg given inv = (X'X)^-1
+fn resid_on(inv: []const f64, xreg: []const f64, v: []const f64, n: usize, p: usize, out: []f64) {
+    var xt: [64]f64 = zero
+    var bh: [64]f64 = zero
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xt[c] += xreg[i * p + c] * v[i]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    var c1 = 0usize
+    while c1 < p {
+        var c2 = 0usize
+        while c2 < p {
+            bh[c1] += inv[c1 * p + c2] * xt[c2]
+            c2 += 1usize
+        }
+        c1 += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var fit = 0.0f64
+        var c = 0usize
+        while c < p {
+            fit += bh[c] * xreg[i * p + c]
+            c += 1usize
+        }
+        out[i] = v[i] - fit
+        i += 1usize
+    }
+}
+
+// segmented::pscore.test with n.break = 2 for an lm: the two terms mean_j pmax(z - psi_j, 0) and mean over pairs j > l of pmax(z - psi_j, 0); stat = sc' V^-1 sc / sigma^2 on chi-square(2); out = (stat, p)
+fn pscore2_lm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, n: usize, p: usize, k: usize, out: []f64) -> err {
+    var zmin = z[0usize]
+    var zmax = z[0usize]
+    var i = 0usize
+    while i < n {
+        if z[i] < zmin { zmin = z[i] }
+        if z[i] > zmax { zmax = z[i] }
+        i += 1usize
+    }
+    let (pm1, e0) = mem.alloc[f64](a, n)
+    let (pm2, e1) = mem.alloc[f64](a, n)
+    let (xtx, e2) = mem.alloc[f64](a, p * p)
+    let (ry, e3) = mem.alloc[f64](a, n)
+    let (r1, e4) = mem.alloc[f64](a, n)
+    let (r2, e5) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e0 }
+    let cnt = f64(k) * f64(k - 1usize) / 2.0f64
+    i = 0usize
+    while i < n {
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        var j = 0usize
+        while j < k {
+            let psi = zmin + (zmax - zmin) * f64(j) / f64(k - 1usize)
+            var v = z[i] - psi
+            if v < 0.0f64 { v = 0.0f64 }
+            s1 += v
+            s2 += v * f64(j)
+            j += 1usize
+        }
+        pm1[i] = s1 / f64(k)
+        pm2[i] = s2 / cnt
+        i += 1usize
+    }
+    var r = 0usize
+    while r < p * p {
+        xtx[r] = 0.0f64
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var c1 = 0usize
+        while c1 < p {
+            var c2 = 0usize
+            while c2 < p {
+                xtx[c1 * p + c2] += xreg[i * p + c1] * xreg[i * p + c2]
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        i += 1usize
+    }
+    let (inv, ie) = gp.invert(a, xtx, p)
+    if ie != ok { ret ie }
+    resid_on(inv, xreg, y, n, p, ry)
+    resid_on(inv, xreg, pm1, n, p, r1)
+    resid_on(inv, xreg, pm2, n, p, r2)
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var v11 = 0.0f64
+    var v12 = 0.0f64
+    var v22 = 0.0f64
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        s1 += r1[i] * y[i]
+        s2 += r2[i] * y[i]
+        v11 += r1[i] * pm1[i]
+        v12 += r1[i] * pm2[i]
+        v22 += r2[i] * pm2[i]
+        rss += ry[i] * ry[i]
+        i += 1usize
+    }
+    let sig2 = rss / (f64(n) - f64(p))
+    let det = v11 * v22 - v12 * v12
+    let q = (s1 * s1 * v22 - 2.0f64 * s1 * s2 * v12 + s2 * s2 * v11) / det / sig2
+    out[0usize] = q
+    out[1usize] = math.exp[f64](-q / 2.0f64)
+    ret ok
+}
