@@ -4310,4 +4310,5 @@ D7456	824	lpSolve sensitivity output
 D7457	395	lpSolve sensitivity with mixed row directions
 D7458	645	sm.ancova test of equality
 D7459	756	sm.ancova parallel model, with R's indicator-matrix quirk
-D7460	552	sm.survival
+D7460	553	sm.survival
+D7461	617	sm.regression reference-band tests

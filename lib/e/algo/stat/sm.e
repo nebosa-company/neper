@@ -1097,3 +1097,113 @@ fn survival_at(a: *mem.Arena, x: []const f64, y: []const f64, status: []const f6
     }
     ret (est, ok)
 }
+
+// sm.regression(x, y, h, model = "no.effect" (kind 0) or "linear" (kind 1)) for one covariate, unbinned, unit weights: the p-value of the reference-band test (which = 0) or the q.squared (which = 1)
+fn regression_test(a: *mem.Arena, x: []const f64, y: []const f64, h: f64, kind: usize, which: usize) -> (f64, err) {
+    let n = x.len
+    let nn = n * n
+    let (w, e0) = mem.alloc[f64](a, nn)
+    let (s0, e1) = mem.alloc[f64](a, nn)
+    let (t1, e2) = mem.alloc[f64](a, nn)
+    let (wq, e3) = mem.alloc[f64](a, nn)
+    let (bm, e4) = mem.alloc[f64](a, nn)
+    let (c2, e5) = mem.alloc[f64](a, nn)
+    let (ee, e6) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (0.0f64, mem.Full) }
+    var i = 0usize
+    while i < nn {
+        w[i] = 0.0f64
+        i += 1usize
+    }
+    smooth_block(w, n, 0usize, x, h)
+    var mean = 0.0f64
+    i = 0usize
+    while i < n {
+        mean += x[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    // S0 = I - X (X'X)^-1 X' with X = 1 (no effect) or (1, x - mean)
+    var sxx = 0.0f64
+    i = 0usize
+    while i < n {
+        sxx += (x[i] - mean) * (x[i] - mean)
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var proj = 1.0f64 / f64(n)
+            if kind == 1usize { proj += (x[i] - mean) * (x[j] - mean) / sxx }
+            var d = 0.0f64
+            if i == j { d = 1.0f64 }
+            s0[i * n + j] = d - proj
+            t1[i * n + j] = d - w[i * n + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // W = (I - W0)'(I - W0)
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var v = 0.0f64
+            var k = 0usize
+            while k < n {
+                v += t1[k * n + i] * t1[k * n + j]
+                k += 1usize
+            }
+            wq[i * n + j] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var r0 = 0.0f64
+    var r1 = 0.0f64
+    i = 0usize
+    while i < n {
+        var v = 0.0f64
+        var k = 0usize
+        while k < n {
+            v += s0[i * n + k] * y[k]
+            k += 1usize
+        }
+        ee[i] = v
+        r0 += v * v
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            r1 += ee[i] * wq[i * n + j] * ee[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let ts = (r0 - r1) / r1
+    if which == 1usize { ret ((r0 - r1) / r0, ok) }
+    // p.quad.moment(I - (1 + ts) W, S0, ts, 0)
+    i = 0usize
+    while i < nn {
+        t1[i] = 0.0f64 - (1.0f64 + ts) * wq[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        t1[i * n + i] += 1.0f64
+        i += 1usize
+    }
+    mm(bm, t1, s0, n)
+    mm(c2, bm, bm, n)
+    mm(t1, c2, bm, n)
+    let k1 = trace(bm, n)
+    let k2 = 2.0f64 * trace(c2, n)
+    let k3 = 8.0f64 * trace(t1, n)
+    let aa = math.abs[f64](k3 / (4.0f64 * k2))
+    let bb = 8.0f64 * k2 * k2 * k2 / (k3 * k3)
+    let cc = k1 - aa * bb
+    ret (1.0f64 - nm.pchisq(0.0f64 - cc / aa, bb, true, false), ok)
+}

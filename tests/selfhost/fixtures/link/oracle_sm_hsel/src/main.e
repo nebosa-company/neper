@@ -46,6 +46,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "hnoe") || str.eq(c.name, "hlin") || str.eq(c.name, "hqn") || str.eq(c.name, "hql") {
+            var kd2 = 0usize
+            if str.eq(c.name, "hlin") || str.eq(c.name, "hql") { kd2 = 1usize }
+            var wh = 0usize
+            if str.eq(c.name, "hqn") || str.eq(c.name, "hql") { wh = 1usize }
+            let (tv, et) = sm.regression_test(a, c.args[2usize..2usize + n], c.args[2usize + n..2usize + 2usize * n], c.args[1usize], kd2, wh)
+            if et != ok { os.exit(4) }
+            if !oracle.agrees(tv, c) {
+                failures += 1usize
+                let _ = io.print(oracle.describe(a, c, tv))
+                let _ = io.print("\n")
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "hsv") {
             let (sv, es) = sm.survival_at(a, c.args[5usize..5usize + n], c.args[5usize + n..5usize + 2usize * n], c.args[5usize + 2usize * n..5usize + 3usize * n], 1.0f64, c.args[1usize], c.args[2usize], c.args[3usize], c.args[4usize])
             if es != ok { os.exit(4) }

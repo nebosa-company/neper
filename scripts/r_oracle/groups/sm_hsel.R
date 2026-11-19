@@ -83,4 +83,14 @@ for (rep in 1:30) {
   r <- tryCatch(as.numeric(sm.survival(x, y, status, h = h, hv = hv, p = p, eval.points = e, display = "none")$estimate), error = function(e) NULL)
   if (!is.null(r) && is.finite(r)) cases[[length(cases) + 1]] <- case("hsv", c(n, h, hv, p, e, x, y, status), r, rel = 1e-8, abs = 1e-10)
 }
+# hnoe / hlin / hq0 / hq1 (n, h, x[n], y[n]): the reference-band test of sm.regression, model no.effect (p, q.squared) and linear (p, q.squared)
+for (rep in 1:30) {
+  n <- sample(20:60, 1); x <- runif(n, 0, 10); y <- (rep %% 2) * sin(x) + 0.1 * x + rnorm(n, 0, 0.4); h <- runif(1, 0.6, 1.8)
+  for (m in c("no.effect", "linear")) {
+    r <- tryCatch(sm.regression(x, y, h = h, model = m, display = "none", verbose = 0), error = function(e) NULL)
+    if (is.null(r)) next
+    cases[[length(cases) + 1]] <- case(if (m == "linear") "hlin" else "hnoe", c(n, h, x, y), r$p, rel = 1e-7, abs = 1e-10)
+    cases[[length(cases) + 1]] <- case(if (m == "linear") "hql" else "hqn", c(n, h, x, y), r$q.squared, rel = 1e-9, abs = 1e-12)
+  }
+}
 emit("sm_hsel", "sm", list(cases))

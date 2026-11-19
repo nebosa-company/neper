@@ -50845,3 +50845,6 @@ The same `lp_sens` answers programs whose rows mix <= and >= (each >= row is neg
 
 ## D7460 — sm.survival
 `survival_at` is sm.survival(x, time, status, h, hv, p) at one evaluation point: the Gaussian-kernel weights at the point over the observations ordered by time, each event's hazard share w_i over the reverse cumulative sum, the product-limit mass j_k of the event times, their running sum J, and the local-linear regression of the event times on J - p with bandwidth hv; equal to sm on 30 censored samples (hsv in oracle_sm_hsel). Open for L505: 2-d and binned ancova, the reference bands, 2-d bandwidth selection, sm.options.
+
+## D7461 — sm.regression reference-band tests
+`regression_test` is the model test of sm.regression(model = "no.effect" or "linear") for one covariate, unbinned, unit weights: the residual maker S of the constant or the (1, x - mean) design, W = (I - W0)'(I - W0) of the local-linear smoother, r0 = |S y|^2, r1 = e'We, ts = (r0 - r1) / r1, and p.quad.moment(I - (1 + ts) W, S, ts, 0); also q.squared = (r0 - r1) / r0. Equal to sm on 30 samples per model (p at 1e-7, q.squared at 1e-9) in oracle_sm_hsel. Open for L505: the band itself (se only), 2-d and binned ancova and tests, 2-d bandwidth selection, sm.options.
