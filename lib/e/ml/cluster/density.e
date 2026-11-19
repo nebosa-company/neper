@@ -296,3 +296,96 @@ fn frnn_count(x: []const f64, n: usize, d: usize, row: usize, eps: f64) -> (usiz
     }
     ret (cnt, s)
 }
+
+// sNNclust(x, k, eps, minPts) of dbscan (Jarvis-Patrick shared neighbours, borderPoints = TRUE): two rows are linked when each is among the other's k nearest and they
+// share at least eps neighbours (the common members of the two lists, plus one for the other row itself); DBSCAN with min_points on those links (a row's own count plus one).
+// labels receives a cluster index per row or NOISE; the cluster count is answered. ids is scratch of n * k, adj of n * n, near and queue of n, nd of n.
+fn snn_cluster(x: []const f64, n: usize, d: usize, k: usize, eps: f64, min_points: usize, labels: []usize, ids: []usize, adj: []u8, near: []usize, nd: []f64, queue: []usize) -> usize {
+    var i = 0usize
+    while i < n {
+        knn_list(x, n, d, k, i, near, nd)
+        var c = 0usize
+        while c < k {
+            ids[i * k + c] = near[c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n * n {
+        adj[i] = 0u8
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var a = 0usize
+        while a < k {
+            let j = ids[i * k + a]
+            var mutual = false
+            var common = 0usize
+            var b = 0usize
+            while b < k {
+                if ids[j * k + b] == i { mutual = true }
+                var c = 0usize
+                while c < k {
+                    if ids[i * k + c] == ids[j * k + b] { common += 1usize }
+                    c += 1usize
+                }
+                b += 1usize
+            }
+            if mutual && f64(common + 1usize) >= eps { adj[i * n + j] = 1u8 }
+            a += 1usize
+        }
+        i += 1usize
+    }
+    let unvisited = NOISE - 1usize
+    i = 0usize
+    while i < n {
+        labels[i] = unvisited
+        i += 1usize
+    }
+    var clusters = 0usize
+    i = 0usize
+    while i < n {
+        if labels[i] == unvisited {
+            if adj_count(adj, n, i) + 1usize < min_points {
+                labels[i] = NOISE
+            } else {
+                let cluster = clusters
+                clusters += 1usize
+                labels[i] = cluster
+                var head = 0usize
+                var tail = 1usize
+                queue[0usize] = i
+                while head < tail {
+                    let p = queue[head]
+                    head += 1usize
+                    var j = 0usize
+                    while j < n {
+                        if adj[p * n + j] == 1u8 && (labels[j] == unvisited || labels[j] == NOISE) {
+                            let was_unvisited = labels[j] == unvisited
+                            labels[j] = cluster
+                            if was_unvisited && adj_count(adj, n, j) + 1usize >= min_points {
+                                queue[tail] = j
+                                tail += 1usize
+                            }
+                        }
+                        j += 1usize
+                    }
+                }
+            }
+        }
+        i += 1usize
+    }
+    ret clusters
+}
+
+fn adj_count(adj: []const u8, n: usize, i: usize) -> usize {
+    var c = 0usize
+    var j = 0usize
+    while j < n {
+        if adj[i * n + j] == 1u8 { c += 1usize }
+        j += 1usize
+    }
+    ret c
+}

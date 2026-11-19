@@ -17,4 +17,12 @@ for (rep in 1:15) {
     add("frcount", c(n, d, eps, i - 1, 0, as.vector(t(x))), length(fr$id[[i]])); add("frsum", c(n, d, eps, i - 1, 0, as.vector(t(x))), sum(fr$dist[[i]]))
   }
 }
+# sNNclust: "snnc" (n, d, k, eps, minPts, q, x row-major...) q 0 the sum of (row position) * (cluster id, noise 0), q 1 the number of clusters
+for (rep in 1:30) {
+  n <- sample(40:120, 1); d <- sample(2:3, 1); x <- rbind(matrix(rnorm(n * d / 2 * 2, 0, 0.5), ncol = d), matrix(rnorm(n * d / 2 * 2, 3, 0.5), ncol = d)); x <- round(x[sample(nrow(x), n), , drop = FALSE], 5)
+  k <- sample(5:12, 1); eps <- sample(2:k, 1); mp <- sample(2:k, 1); r <- sNNclust(x, k = k, eps = eps, minPts = mp)
+  a <- c(n, d, k, eps, mp)
+  cases[[length(cases) + 1]] <- case("snnc", c(a, 0, as.vector(t(x))), sum(seq_len(n) * r$cluster), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("snnc", c(a, 1, as.vector(t(x))), max(r$cluster), rel = 0, abs = 0)
+}
 emit("dbscanpkg", "dbscan", list(cases))
