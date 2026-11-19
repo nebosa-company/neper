@@ -4460,4 +4460,5 @@ D7602	1004	energy kgroups equal to R, closing L459
 D7603	1039	sampling fastflightcube (the cube method flight phase)
 D7604	1085	sampling samplecube and landingcube, closing L508
 D7605	950	dagitty localTests (type cis) on data
-D7606	1474	dagitty instrumentalVariables from the JavaScript source, closing L478
+D7606	1475	dagitty instrumentalVariables from the JavaScript source, closing L478
+D7607	766	arm standardize for glm

@@ -163,13 +163,11 @@ fn rescale(x: []const f64, n: usize, mode: usize, out: []f64) {
     }
 }
 
-// standardize(lm(y ~ x)): the model refitted on the rescaled predictors (x is n by q row-major without the intercept; each column by `rescale` with the "center" rule for two-valued inputs);
-// out receives the q + 1 coefficients, the intercept first
-fn standardize_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: usize, out: []f64) -> err {
-    let (d, e1) = mem.alloc[f64](a, n * (q + 1usize))
+// the design of standardize(): a constant column and each of the q predictors (x is n by q row-major) rescaled by `rescale` with the "center" rule for two-valued inputs; d is n by q + 1
+fn std_design(a: *mem.Arena, x: []const f64, n: usize, q: usize, d: []f64) -> err {
     let (col, e2) = mem.alloc[f64](a, n)
     let (sc, e3) = mem.alloc[f64](a, n)
-    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    if e2 != ok || e3 != ok { ret mem.Full }
     var i = 0usize
     while i < n {
         d[i * (q + 1usize)] = 1.0f64
@@ -190,12 +188,112 @@ fn standardize_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: us
         }
         c += 1usize
     }
+    ret ok
+}
+
+// standardize(lm(y ~ x)): the model refitted on the rescaled predictors; out receives the q + 1 coefficients, the intercept first
+fn standardize_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: usize, out: []f64) -> err {
+    let (d, e1) = mem.alloc[f64](a, n * (q + 1usize))
+    if e1 != ok { ret mem.Full }
+    let de = std_design(a, x, n, q, d)
+    if de != ok { ret de }
     let (f, e) = ols.ols(a, d, y, n, q + 1usize)
     if e != ok { ret e }
     var k = 0usize
     while k <= q {
         out[k] = f.beta[k]
         k += 1usize
+    }
+    ret ok
+}
+
+// standardize(glm(y ~ x, family)): the model refitted on the rescaled predictors by iteratively reweighted least squares as glm does it (the usual starting means, deviance change below
+// 1e-8 relative, 25 iterations); family 1 binomial (logit), 2 Poisson (log)
+fn standardize_glm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: usize, family: usize, out: []f64) -> err {
+    let k = q + 1usize
+    let (d, e1) = mem.alloc[f64](a, n * k)
+    let (eta, e2) = mem.alloc[f64](a, n)
+    let (mu, e3) = mem.alloc[f64](a, n)
+    let (am, e4) = mem.alloc[f64](a, k * k)
+    let (bv, e5) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    let de = std_design(a, x, n, q, d)
+    if de != ok { ret de }
+    var i = 0usize
+    while i < n {
+        if family == 1usize { mu[i] = (y[i] + 0.5f64) / 2.0f64 } else { mu[i] = y[i] + 0.1f64 }
+        if family == 1usize { eta[i] = math.log[f64](mu[i] / (1.0f64 - mu[i])) } else { eta[i] = math.log[f64](mu[i]) }
+        i += 1usize
+    }
+    var devold = 0.0f64
+    i = 0usize
+    while i < n {
+        devold += dev_resid(family, y[i], mu[i])
+        i += 1usize
+    }
+    var it = 0usize
+    while it < 25usize {
+        var r = 0usize
+        while r < k {
+            var c = 0usize
+            while c < k {
+                am[r * k + c] = 0.0f64
+                c += 1usize
+            }
+            bv[r] = 0.0f64
+            r += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var w = mu[i]
+            var me = mu[i]
+            if family == 1usize {
+                w = mu[i] * (1.0f64 - mu[i])
+                me = w
+            }
+            let z = eta[i] + (y[i] - mu[i]) / me
+            r = 0usize
+            while r < k {
+                var c = 0usize
+                while c < k {
+                    am[r * k + c] += w * d[i * k + r] * d[i * k + c]
+                    c += 1usize
+                }
+                bv[r] += w * d[i * k + r] * z
+                r += 1usize
+            }
+            i += 1usize
+        }
+        let (inv, ie) = gp.invert(a, am, k)
+        if ie != ok { ret ie }
+        var dev = 0.0f64
+        r = 0usize
+        while r < k {
+            var v = 0.0f64
+            var c = 0usize
+            while c < k {
+                v += inv[r * k + c] * bv[c]
+                c += 1usize
+            }
+            out[r] = v
+            r += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var e = 0.0f64
+            r = 0usize
+            while r < k {
+                e += d[i * k + r] * out[r]
+                r += 1usize
+            }
+            eta[i] = e
+            if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) } else { mu[i] = math.exp[f64](e) }
+            dev += dev_resid(family, y[i], mu[i])
+            i += 1usize
+        }
+        it += 1usize
+        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 1.0e-8f64 { break }
+        devold = dev
     }
     ret ok
 }

@@ -24,6 +24,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "logit") { ret arm.logit(x[0usize]) }
     if str.eq(k, "invlogit") { ret arm.invlogit(x[0usize]) }
     if str.eq(k, "stdlm") { ret stdlm_answer(a, c) }
+    if str.eq(k, "stdglm") {
+        let n = usize(x[0usize])
+        let q = usize(x[1usize])
+        let (o, e) = mem.alloc[f64](a, q + 1usize)
+        if e != ok { os.exit(22) }
+        if arm.standardize_glm(a, x[3usize + n..3usize + n + n * q], x[3usize..3usize + n], n, q, usize(x[2usize]), o) != ok { os.exit(23) }
+        ret o[usize(x[3usize + n + n * q])]
+    }
     if str.eq(k, "bayesglm") || str.eq(k, "bayesglm2") || str.eq(k, "bayesglm3") {
         let n = usize(x[0usize])
         var pdf = 1.0f64

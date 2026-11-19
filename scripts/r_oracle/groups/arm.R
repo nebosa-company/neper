@@ -38,6 +38,20 @@ for (rep in 1:15) {
   sm <- standardize(m); cf <- as.numeric(coef(sm))
   for (j in 0:q) cases[[length(cases) + 1]] <- case("stdlm", c(n, q, y, as.vector(t(Xm)), j), cf[j + 1], rel = 1e-8, abs = 1e-11)
 }
+# standardize(glm): "stdglm" args (n, q, family 1 binomial 2 poisson, y, x row-major, index)
+for (rep in 1:16) {
+  fam <- rep %% 2 + 1; n <- sample(80:160, 1); q <- sample(2:4, 1); Xm <- matrix(round(rnorm(n * q, 1, 1.5), 3), n, q)
+  if (q >= 3) Xm[, 3] <- rbinom(n, 1, 0.4)
+  eta <- as.vector(cbind(1, Xm) %*% c(-0.3, runif(q, -0.4, 0.4)))
+  y <- if (fam == 1) rbinom(n, 1, 1 / (1 + exp(-eta))) else rpois(n, exp(eta * 0.5))
+  dfx <- as.data.frame(Xm); names(dfx) <- paste0("v", 1:q); dfx$y <- y
+  assign("dfx_g", dfx, envir = globalenv()); assign("fo_g", as.formula(paste("y ~", paste(names(dfx)[1:q], collapse = " + "))), envir = globalenv())
+  assign("fam_g", if (fam == 1) binomial else poisson, envir = globalenv())
+  m <- tryCatch(suppressWarnings(glm(fo_g, data = dfx_g, family = fam_g)), error = function(e) NULL)
+  if (is.null(m)) next
+  cf <- as.numeric(coef(suppressWarnings(standardize(m))))
+  for (j in 0:q) cases[[length(cases) + 1]] <- case("stdglm", c(n, q, fam, y, as.vector(t(Xm)), j), cf[j + 1], rel = 1e-6, abs = 1e-8)
+}
 # bayesglm: args (n, k, family 0 gaussian 1 binomial 2 poisson, x[n * k] row-major with the constant first, y[n], j): coefficient j (0-based) of bayesglm with the default priors.
 for (rep in 1:18) {
   fam <- (rep - 1) %% 3; n <- sample(60:150, 1); k <- sample(2:4, 1)
