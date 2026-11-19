@@ -8,4 +8,11 @@ for (rep in 1:30) {
   r <- siegelTukeyTest(x, y)
   add(c(n1, n2, 0, x, y), unname(r$statistic)); add(c(n1, n2, 1, x, y), r$p.value)
 }
+# siegelTukeyTest with ties (rounded data): z statistic and p from the normal approximation, same layout.
+for (rep in 1:20) {
+  n1 <- sample(6:14, 1); n2 <- sample(6:14, 1); x <- round(rnorm(n1), 1); y <- round(rnorm(n2, 0, runif(1, 0.5, 2)), 1)
+  if (!any(duplicated(c(x, y)))) next
+  r <- suppressWarnings(siegelTukeyTest(x, y))
+  add(c(n1, n2, 0, x, y), unname(r$statistic)); add(c(n1, n2, 1, x, y), r$p.value)
+}
 emit("pmcmr_st", "PMCMRplus", list(cases))

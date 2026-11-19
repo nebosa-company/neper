@@ -685,7 +685,7 @@ fn welch_pair(x: []const f64, grp: []const usize, j: usize) -> (f64, f64) {
     ret (tv, 2.0f64 * nb.pt(0.0f64 - at, df, true, false))
 }
 
-// siegelTukeyTest (no ties, two-sided): the pooled sample is sorted, the ranks 1, 4, 5, 8, 9, ... from the low end and ..., 7, 6, 3, 2 from the high end are assigned by position, W = R1 -
+// siegelTukeyTest (two-sided; with ties the normal approximation): the pooled sample is sorted, the ranks 1, 4, 5, 8, 9, ... from the low end and ..., 7, 6, 3, 2 from the high end are assigned by position, W = R1 -
 // n1 (n1 + 1) / 2 and the exact p is 2 min(1/2, the Wilcoxon tail on the side of W); answers (W, p). x holds the first sample then the second
 fn siegel_tukey(a: *mem.Arena, x: []const f64, n1: usize, out: []f64) -> err {
     let n = x.len
@@ -737,6 +737,43 @@ fn siegel_tukey(a: *mem.Arena, x: []const f64, n1: usize, out: []f64) -> err {
     }
     let n1f = f64(n1)
     let n2f = f64(n2)
+    // ties: S1 and S2 are the sums of squares of the Siegel-Tukey ranks and of their tied-group means over the tied observations, and the answer is the normal z with continuity
+    // correction (R's warning branch), p = 2 min(1/2, upper normal tail of |z|)
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var tied = false
+    i = 0usize
+    while i < n {
+        var cnt = 0.0f64
+        var sm = 0.0f64
+        var q = 0usize
+        while q < n {
+            if x[ord[q]] == x[ord[i]] {
+                cnt += 1.0f64
+                sm += r[q]
+            }
+            q += 1usize
+        }
+        if cnt > 1.0f64 {
+            tied = true
+            s1 += r[i] * r[i]
+            let rc = sm / cnt
+            s2 += rc * rc
+        }
+        i += 1usize
+    }
+    if tied {
+        var av = 1.0f64
+        if 2.0f64 * r1 > n1f * (n1f + n2f + 1.0f64) { av = -1.0f64 }
+        let numer = 2.0f64 * r1 - n1f * (n1f + n2f + 1.0f64) + av
+        let denom = math.sqrt[f64](n1f * (n1f + n2f + 1.0f64) * (n2f / 3.0f64) - 4.0f64 * (n1f * n2f / ((n1f + n2f) * (n1f + n2f - 1.0f64))) * (s1 - s2))
+        let z = numer / denom
+        var az = z
+        if az < 0.0f64 { az = 0.0f64 - az }
+        out[0usize] = z
+        out[1usize] = 2.0f64 * math.min[f64](0.5f64, dist.pnorm(0.0f64 - az, 0.0f64, 1.0f64, true, false))
+        ret ok
+    }
     let w = r1 - n1f * (n1f + 1.0f64) / 2.0f64
     var p = 0.0f64
     if w > n1f * n2f / 2.0f64 {

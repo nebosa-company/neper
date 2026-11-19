@@ -50335,3 +50335,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7400 — PMCMRplus siegelTukeyTest (no ties)
 `siegel_tukey` builds R's alternating rank sequence (1, 4, 5, 8, 9, ... from the low end and the matching ... 7, 6, 3, 2 from the high end) by position in the sorted pooled sample, W = R1 - n1 (n1 + 1)/2 and the exact two-sided p from the Wilcoxon distribution (2 min(1/2, the tail on W's side)). Equal to R on 30 samples without ties; the tied-data normal approximation is not ported. L487 at 0.82.
+
+## D7401 — PMCMRplus siegelTukeyTest with ties
+With tied observations `siegel_tukey` returns R's normal-approximation branch: S1 and S2 are the sums of squares of the Siegel-Tukey ranks and of their tied-group means over the tied observations, z = (2 R1 - n1 (n1 + n2 + 1) + a) / sqrt(n1 (n1 + n2 + 1) n2 / 3 - 4 n1 n2 / ((n1 + n2)(n1 + n2 - 1)) (S1 - S2)) with a = -1 when 2 R1 exceeds n1 (n1 + n2 + 1) and 1 otherwise (R1 on the uncorrected ranks, as R does), p = 2 min(1/2, upper tail of |z|). Equal to R on 20 rounded samples; the local `enum` was a reserved word. L487 stays at 0.82.
