@@ -50734,3 +50734,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `gaussq.tweedie_series_bigp` is `dtweedie_series` for power > 2 and y > 0: logv is the log of the alternating sum of (-1)^k sin(-a pi k) exp(k r + lgamma(1 + a k) - lgamma(1 + k)) over the terms from the drop-of-37 range, with the package's reliability test (rounding-error estimate under 1e-6 of the sum); the density is exp((y theta - kappa)/phi - log(pi y) + logv), NaN where the package gives up. The package's inversion method for power above 2 is compiled code (`twcomputation`) and is not ported.
 
 **Result.** `oracle_gaussq` (2987 cases, 59 new) equals `tweedie::dtweedie_series` on Windows to 1e-9 on the points where the series is reliable. Linux pending. L518 stays partial (score 0.2): ptweedie, qtweedie and rtweedie for power above 2, the inversion method with its tolerances, power 1 and 2 edge cases.
+
+## D7369 — lavaan: one-factor confirmatory factor analysis
+
+**Decision.** `lavaanpkg.cfa_one_factor` fits `cfa("f =~ x1 + ... + xp")` by maximum likelihood from the sample covariance: Sigma = psi l l' + diag(theta) with the first loading fixed at 1, the discrepancy log|Sigma| + tr(Sigma^-1 S) - log|S| - p with S the covariance divided by n (lavaan's normal-theory likelihood), minimised over (loadings, log residual variances, log factor variance) by Nelder-Mead polished with BFGS on a central-difference gradient. The chi-square is n F, the degrees of freedom p (p + 1) / 2 - 2 p.
+
+**Result.** The new `oracle_lavaan_cfa` (202 values on 14 simulated models of 4 to 6 indicators) equals lavaan on Windows to 1e-4 relative. Linux pending. L354 is open at score 0.05: standard errors, several factors, regressions between latent variables, means and intercepts, other estimators, fit indices, the model syntax.

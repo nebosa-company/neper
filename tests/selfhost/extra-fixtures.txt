@@ -552,3 +552,4 @@ oracle_pmcmr_ns
 oracle_pmcmr_steelk
 oracle_rgamma
 oracle_pscl_nb
+oracle_lavaan_cfa

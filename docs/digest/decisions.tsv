@@ -4275,4 +4275,5 @@ D7366	791	survival: tmerge event()
 D7426	653	pscl standard errors of the negative binomial zeroinfl
 D7427	693	pscl standard errors for the geometric and link fits
 D7367	922	mlogit: covariance matrix and Wald tests
-D7368	891	tweedie: the series density for power above 2
+D7368	892	tweedie: the series density for power above 2
+D7369	914	lavaan: one-factor confirmatory factor analysis
