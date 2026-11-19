@@ -4135,4 +4135,5 @@ D7338	1164	clue: the other partition agreements and dissimilarities
 D7339	1092	clue: Gordon-Vichi and Boorman-Arabie dissimilarities
 D7340	1101	mgcv: the cubic regression spline basis and its penalty
 D7341	914	mgcv: sum-to-zero constraint absorption
-D7342	962	mgcv: the P-spline smooth
+D7342	963	mgcv: the P-spline smooth
+D7343	1124	mgcv: penalised least squares for a Gaussian gam (fixed smoothing parameter)

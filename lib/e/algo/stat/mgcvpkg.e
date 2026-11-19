@@ -427,3 +427,144 @@ fn ps_penalty(a: *mem.Arena, nb: usize, m2: usize, s: []f64) -> err {
     }
     ret ok
 }
+
+// ---- penalised least squares for a Gaussian gam with one smooth and a fixed smoothing parameter: the design is [1 | X] (X the absorbed basis, n by q) and the penalty
+// blockdiag(0, sp S) (S q by q, scaled as smoothCon scales it); beta = (DtD + P)^-1 Dt y by Gauss-Jordan elimination with partial pivoting (solve_dense). gam_gaussian answers
+// (the sum of the effective degrees of freedom, the trace of (DtD + P)^-1 DtD, and the residual sum of squares); sig2 = rss / (n - edf) and the GCV score n rss / (n - edf)^2
+// follow from them. coef has q + 1 entries and fitted n.
+fn solve_dense(a: *mem.Arena, m: []const f64, p: usize, rhs: []const f64, ncol: usize, out: []f64) -> err {
+    let w = p + ncol
+    let (g, e0) = mem.alloc[f64](a, p * w)
+    if e0 != ok { ret e0 }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            g[i * w + j] = m[i * p + j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < ncol {
+            g[i * w + p + j] = rhs[i * ncol + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var col = 0usize
+    while col < p {
+        var piv = col
+        var r = col + 1usize
+        while r < p {
+            if math.abs[f64](g[r * w + col]) > math.abs[f64](g[piv * w + col]) { piv = r }
+            r += 1usize
+        }
+        if g[piv * w + col] == 0.0f64 { ret Malformed }
+        if piv != col {
+            var k = 0usize
+            while k < w {
+                let t = g[col * w + k]
+                g[col * w + k] = g[piv * w + k]
+                g[piv * w + k] = t
+                k += 1usize
+            }
+        }
+        let d = g[col * w + col]
+        var k = 0usize
+        while k < w {
+            g[col * w + k] = g[col * w + k] / d
+            k += 1usize
+        }
+        r = 0usize
+        while r < p {
+            if r != col {
+                let f = g[r * w + col]
+                k = 0usize
+                while k < w {
+                    g[r * w + k] = g[r * w + k] - f * g[col * w + k]
+                    k += 1usize
+                }
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < ncol {
+            out[i * ncol + j] = g[i * w + p + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+fn gam_gaussian(a: *mem.Arena, x: []const f64, n: usize, q: usize, s: []const f64, sp: f64, y: []const f64, coef: []f64, fitted: []f64) -> (f64, f64, err) {
+    let p = q + 1usize
+    let (dm, e0) = mem.alloc[f64](a, n * p)
+    let (xtx, e1) = mem.alloc[f64](a, p * p)
+    let (pen, e2) = mem.alloc[f64](a, p * p)
+    let (xty, e3) = mem.alloc[f64](a, p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    var i = 0usize
+    while i < n {
+        dm[i * p] = 1.0f64
+        var j = 0usize
+        while j < q {
+            dm[i * p + 1usize + j] = x[i * q + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var v = 0.0f64
+            i = 0usize
+            while i < n {
+                v += dm[i * p + r] * dm[i * p + c]
+                i += 1usize
+            }
+            xtx[r * p + c] = v
+            pen[r * p + c] = v
+            if r >= 1usize && c >= 1usize { pen[r * p + c] = v + sp * s[(r - 1usize) * q + (c - 1usize)] }
+            c += 1usize
+        }
+        var t = 0.0f64
+        i = 0usize
+        while i < n {
+            t += dm[i * p + r] * y[i]
+            i += 1usize
+        }
+        xty[r] = t
+        r += 1usize
+    }
+    let e4 = solve_dense(a, pen, p, xty, 1usize, coef)
+    if e4 != ok { ret (0.0f64, 0.0f64, e4) }
+    let (sol, e5) = mem.alloc[f64](a, p * p)
+    if e5 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    let e6 = solve_dense(a, pen, p, xtx, p, sol)
+    if e6 != ok { ret (0.0f64, 0.0f64, e6) }
+    var edf = 0.0f64
+    r = 0usize
+    while r < p {
+        edf += sol[r * p + r]
+        r += 1usize
+    }
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        var v = 0.0f64
+        var j = 0usize
+        while j < p {
+            v += dm[i * p + j] * coef[j]
+            j += 1usize
+        }
+        fitted[i] = v
+        rss += (y[i] - v) * (y[i] - v)
+        i += 1usize
+    }
+    ret (edf, rss, ok)
+}

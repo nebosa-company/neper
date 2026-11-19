@@ -502,3 +502,4 @@ oracle_fpc_ncoord
 oracle_lpsolve_int
 oracle_mgcv_cr
 oracle_mgcv_ps
+oracle_mgcv_gam
