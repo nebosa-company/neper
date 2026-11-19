@@ -26,7 +26,7 @@ for (rep in 1:6) {
   pe <- parameterEstimates(fit); ld <- numeric(p); for (j in 1:p) ld[j] <- if (j == which(fac == fac[j])[1]) 1 else pe$est[pe$op == "=~" & pe$rhs == colnames(X)[j]]
   th <- sapply(1:p, function(j) pe$est[pe$op == "~~" & pe$lhs == colnames(X)[j] & pe$rhs == colnames(X)[j]])
   phv <- c(); for (u in 1:nf) for (v in 1:u) phv <- c(phv, pe$est[pe$op == "~~" & ((pe$lhs == paste0("f", u) & pe$rhs == paste0("f", v)) | (pe$lhs == paste0("f", v) & pe$rhs == paste0("f", u)))][1])
-  fm <- fitMeasures(fit, c("chisq", "df", "pvalue")); v <- c(ld, th, phv, as.numeric(fm)); S <- cov(X)
+  fm <- fitMeasures(fit, c("chisq", "df", "pvalue", "baseline.chisq", "baseline.df", "cfi", "tli", "rmsea", "srmr", "logl", "aic", "bic")); v <- c(ld, th, phv, as.numeric(fm)); S <- cov(X)
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("cfmf", c(n, p, nf, fac, as.vector(t(S)), q - 1), v[q], rel = 2e-4, abs = 1e-6)
 }
 emit("lavaan_cfa", "lavaan", list(cases))

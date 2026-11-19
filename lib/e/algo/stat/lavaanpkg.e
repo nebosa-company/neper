@@ -498,5 +498,63 @@ fn cfa_factors(a: *mem.Arena, s: []const f64, n: usize, p: usize, nf: usize, fac
     out[o] = nn * fmin
     out[o + 1usize] = df
     out[o + 2usize] = nm.pchisq(nn * fmin, df, false, false)
+    // the fit measures of lavaan at the estimates: out[o + 3 ..] the baseline chi-square (the independence model, n (sum log s_ii - log|S|)), its df, CFI, TLI, RMSEA, SRMR, logl, AIC, BIC
+    let (sgf, e8) = mem.alloc[f64](a, p * p)
+    let (sgi, e9) = mem.alloc[f64](a, p * p)
+    if e8 != ok || e9 != ok { ret false }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            let fu = fac[i]
+            let fv = fac[j]
+            var hi = fu
+            var lo = fv
+            if fv > fu {
+                hi = fv
+                lo = fu
+            }
+            sgf[i * p + j] = out[i] * out[j] * out[2usize * p + hi * (hi + 1usize) / 2usize + lo]
+            j += 1usize
+        }
+        sgf[i * p + i] += out[p + i]
+        i += 1usize
+    }
+    if !ps.invert(a, sgf, p, sgi) { ret false }
+    var trs = 0.0f64
+    var sumlog = 0.0f64
+    var srm = 0.0f64
+    i = 0usize
+    while i < p {
+        sumlog += math.log[f64](sm[i * p + i])
+        var j = 0usize
+        while j < p {
+            trs += sgi[i * p + j] * sm[j * p + i]
+            if j <= i {
+                let rr = (sm[i * p + j] - sgf[i * p + j]) / math.sqrt[f64](sm[i * p + i] * sm[j * p + j])
+                srm += rr * rr
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let chi = nn * fmin
+    let cb = nn * (sumlog - c.logs)
+    let dfb = f64(p * (p - 1usize) / 2usize)
+    let d0 = math.max[f64](chi - df, 0.0f64)
+    let denom = math.max[f64](math.max[f64](chi - df, cb - dfb), 0.0f64)
+    var cfi = 1.0f64
+    if denom > 0.0f64 { cfi = 1.0f64 - d0 / denom }
+    let tli = ((cb / dfb) - (chi / df)) / ((cb / dfb) - 1.0f64)
+    let logl = 0.0f64 - nn / 2.0f64 * (f64(p) * math.log[f64](2.0f64 * 3.141592653589793f64) + ps.logdet(a, sgf, p) + trs)
+    out[o + 3usize] = cb
+    out[o + 4usize] = dfb
+    out[o + 5usize] = cfi
+    out[o + 6usize] = tli
+    out[o + 7usize] = math.sqrt[f64](d0 / (df * nn))
+    out[o + 8usize] = math.sqrt[f64](srm / f64(p * (p + 1usize) / 2usize))
+    out[o + 9usize] = logl
+    out[o + 10usize] = 0.0f64 - 2.0f64 * logl + 2.0f64 * f64(npar)
+    out[o + 11usize] = 0.0f64 - 2.0f64 * logl + f64(npar) * math.log[f64](nn)
     ret true
 }

@@ -14,7 +14,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let mp = usize(z[1usize])
         let mf = usize(z[2usize])
         let (fac, fe) = mem.alloc[usize](a, mp)
-        let (mo, me) = mem.alloc[f64](a, 2usize * mp + mf * (mf + 1usize) / 2usize + 4usize)
+        let (mo, me) = mem.alloc[f64](a, 2usize * mp + mf * (mf + 1usize) / 2usize + 14usize)
         if fe != ok || me != ok { ret 0.0f64 / 0.0f64 }
         var t = 0usize
         while t < mp {

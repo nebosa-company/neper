@@ -4332,4 +4332,5 @@ D7477	747	caret createFolds for a numeric response
 D7478	509	caret createMultiFolds for a numeric response
 D7479	609	caret varImp for a Poisson glm
 D7480	665	caret varImp for a Gamma(log) glm
-D7481	688	clue cl_dissimilarity of hierarchies
+D7481	689	clue cl_dissimilarity of hierarchies
+D7372	892	lavaan: fit measures

@@ -50914,3 +50914,9 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7481 — clue cl_dissimilarity of hierarchies
 `hier_dissimilarity` takes the ultrametrics of two hclust trees (the cophenetic distances of the n (n - 1) / 2 pairs, from `e.algo.stat.hclust`) and answers clue's euclidean (root of the summed squares), manhattan, cophenetic (1 - cor^2), Chebyshev (the largest difference) and gamma (twice the discordant pairs of entries, each entry pair counted once and doubled as clue's C routine counts it, over choose(m, 2)); equal to clue on 40 pairs of trees of mixed linkages (200 values in oracle_clue_hier). Open for L367: symdiff and the other hierarchy dissimilarities, consensus, soft partitions, lpSolveAPI, sensitivity for equality rows.
+
+## D7372 — lavaan: fit measures
+
+**Decision.** `cfa_factors` also returns lavaan's `fitMeasures` for the fitted model: the baseline (independence) model chi-square n (sum log s_ii - log|S|) on p (p - 1)/2 degrees of freedom, CFI = 1 - max(chi - df, 0) / max(chi - df, chi_b - df_b, 0), TLI, RMSEA = sqrt(max(chi - df, 0) / (df n)), SRMR over the lower triangle with its diagonal of the residuals scaled by the sample standard deviations, the log-likelihood -n/2 (p log 2 pi + log|Sigma| + tr(Sigma^-1 S)), AIC and BIC with the number of free parameters.
+
+**Result.** `oracle_lavaan_cfa` (566 cases, 54 new fit-measure values on 6 models) equals lavaan on Windows to 2e-4 relative. Linux pending. L354 stays open at 0.1: standard errors for several factors, regressions between latent variables, cross-loadings and other structures, means and intercepts, other estimators, the model syntax.
