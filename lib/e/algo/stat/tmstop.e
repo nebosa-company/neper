@@ -329,3 +329,59 @@ fn tokenize_words(a: *mem.Arena, s: str) -> (str, err) {
     }
     ret (str.done(&bd), ok)
 }
+
+// tokenizers::tokenize_ngrams(x, n = nmax, n_min = nmin) (tidytext unnest_tokens(token = "ngrams")): the word tokens, then from each start position the n-grams of nmin to nmax tokens that fit, joined by single spaces; the n-grams come back separated by newlines (none when the text has fewer than nmin tokens)
+fn tokenize_ngrams(a: *mem.Arena, s: str, nmin: usize, nmax: usize) -> (str, err) {
+    let (tk, e0) = tokenize_words(a, s)
+    if e0 != ok { ret ("", e0) }
+    // token start offsets and ends in tk (tokens are separated by newlines)
+    let (st, e1) = mem.alloc[usize](a, tk.len + 2usize)
+    let (en, e2) = mem.alloc[usize](a, tk.len + 2usize)
+    if e1 != ok || e2 != ok { ret ("", mem.Full) }
+    var nt = 0usize
+    var i = 0usize
+    if tk.len > 0usize {
+        st[0usize] = 0usize
+        nt = 1usize
+        while i < tk.len {
+            if tk[i] == 10u8 {
+                en[nt - 1usize] = i
+                st[nt] = i + 1usize
+                nt += 1usize
+            }
+            i += 1usize
+        }
+        en[nt - 1usize] = tk.len
+    }
+    let (bld, eb) = str.builder(a, tk.len * (nmax + 2usize) + 2usize)
+    if eb != ok { ret ("", eb) }
+    var bd = bld
+    var first = true
+    var b = 0usize
+    while b < nt {
+        var len = nmin
+        while len <= nmax {
+            if b + len <= nt {
+                if !first {
+                    if str.push_byte(&bd, 10u8) != ok { ret ("", mem.Full) }
+                }
+                first = false
+                var k = 0usize
+                while k < len {
+                    if k > 0usize {
+                        if str.push_byte(&bd, 32u8) != ok { ret ("", mem.Full) }
+                    }
+                    var q = st[b + k]
+                    while q < en[b + k] {
+                        if str.push_byte(&bd, tk[q]) != ok { ret ("", mem.Full) }
+                        q += 1usize
+                    }
+                    k += 1usize
+                }
+            }
+            len += 1usize
+        }
+        b += 1usize
+    }
+    ret (str.done(&bd), ok)
+}

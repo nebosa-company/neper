@@ -29,4 +29,12 @@ for (rep in 1:100) {
   cases[[length(cases) + 1]] <- case("twn", utf8ToInt(txt), length(cc), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("tws", utf8ToInt(txt), sum(cc * seq_along(cc)), rel = 0, abs = 0)
 }
+# tokenize_ngrams: "ng" args (n_min, n_max, the text codes); length ("ngn") and position-weighted code sum ("ngs") of the n-grams joined by newlines (none -> 0)
+for (rep in 1:80) {
+  txt <- paste(sample(c("a", "b", "c", "dd", "ee", "1", "x_y", " ", " ", " ", "!", ".", "'", "q"), sample(3:30, 1), TRUE), collapse = ""); nmx <- sample(1:4, 1); nmn <- sample(1:nmx, 1)
+  tk <- tokenize_ngrams(txt, n = nmx, n_min = nmn)[[1]]; tk <- tk[!is.na(tk)]; cc <- if (length(tk)) utf8ToInt(paste(tk, collapse = "
+")) else integer(0)
+  cases[[length(cases) + 1]] <- case("ngn", c(nmn, nmx, utf8ToInt(txt)), length(cc), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("ngs", c(nmn, nmx, utf8ToInt(txt)), sum(cc * seq_along(cc)), rel = 0, abs = 0)
+}
 emit("tm_stop", "tm", list(cases))

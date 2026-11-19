@@ -9,6 +9,26 @@ use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "ngn") || str.eq(c.name, "ngs") {
+        let (b4, eb4) = str.builder(a, c.args.len + 1usize)
+        if eb4 != ok { ret 0.0f64 / 0.0f64 }
+        var bd4 = b4
+        var j4 = 2usize
+        while j4 < c.args.len {
+            if str.push_byte(&bd4, u8(c.args[j4])) != ok { ret 0.0f64 / 0.0f64 }
+            j4 += 1usize
+        }
+        let (r4, er4) = ts.tokenize_ngrams(a, str.done(&bd4), usize(c.args[0usize]), usize(c.args[1usize]))
+        if er4 != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(c.name, "ngn") { ret f64(r4.len) }
+        var sm4 = 0.0f64
+        var k4 = 0usize
+        while k4 < r4.len {
+            sm4 += f64(r4[k4]) * f64(k4 + 1usize)
+            k4 += 1usize
+        }
+        ret sm4
+    }
     let (bld, eb) = str.builder(a, c.args.len + 1usize)
     if eb != ok { ret 0.0f64 / 0.0f64 }
     var bd = bld
