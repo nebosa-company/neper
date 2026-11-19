@@ -661,27 +661,10 @@ fn principal(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []f64) -> 
     ret ok
 }
 
-// psych::principal(r, nfactors = nf, rotate = "varimax"): the unrotated loadings of `principal` rotated by stats::varimax (normalize, eps 1e-5), the columns ordered by decreasing sum of squares and each
-// signed to a positive sum. out[0 .. p nf] the loadings (item i, component k at i + k p), then the rotation matrix (nf by nf column-major: element (r, c) at p nf + r + c nf)
-fn principal_varimax(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []f64) -> err {
-    let (pc, e1) = mem.alloc[f64](a, p * nf + 2usize * p)
-    if e1 != ok { ret e1 }
-    let e2 = principal(a, r, p, nf, pc)
-    if e2 != ok { ret e2 }
-    let (xr, e3) = mem.alloc[f64](a, p * nf)
-    if e3 != ok { ret e3 }
+// the columns of the rotated loadings rot (p by nf row-major) with the rotation matrix rm (nf by nf row-major) ordered by decreasing sum of squares and each signed to a positive sum, as psych does after a rotation: out[0 .. p nf] the loadings
+// (item i, column k at i + k p), then the rotation matrix (element (r, c) at p nf + r + c nf)
+fn rot_sort(a: *mem.Arena, rot: []const f64, rm: []const f64, p: usize, nf: usize, out: []f64) -> err {
     var i = 0usize
-    while i < p {
-        var k = 0usize
-        while k < nf {
-            xr[i * nf + k] = pc[i + k * p]
-            k += 1usize
-        }
-        i += 1usize
-    }
-    let (rot, rm, e4) = gp.varimax_stats(a, xr, p, nf, true, 1.0e-5f64)
-    if e4 != ok { ret e4 }
-    // order the rotated columns by sum of squares, then fix signs
     let (ss, e5) = mem.alloc[f64](a, nf)
     let (ord, e6) = mem.alloc[usize](a, nf)
     if e5 != ok { ret e5 }
@@ -733,6 +716,29 @@ fn principal_varimax(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []
         k += 1usize
     }
     ret ok
+}
+
+// psych::principal(r, nfactors = nf, rotate = "varimax"): the unrotated loadings of `principal` rotated by stats::varimax (normalize, eps 1e-5), the columns ordered by decreasing sum of squares and each
+// signed to a positive sum. out[0 .. p nf] the loadings (item i, component k at i + k p), then the rotation matrix (nf by nf column-major: element (r, c) at p nf + r + c nf)
+fn principal_varimax(a: *mem.Arena, r: []const f64, p: usize, nf: usize, out: []f64) -> err {
+    let (pc, e1) = mem.alloc[f64](a, p * nf + 2usize * p)
+    if e1 != ok { ret e1 }
+    let e2 = principal(a, r, p, nf, pc)
+    if e2 != ok { ret e2 }
+    let (xr, e3) = mem.alloc[f64](a, p * nf)
+    if e3 != ok { ret e3 }
+    var i = 0usize
+    while i < p {
+        var k = 0usize
+        while k < nf {
+            xr[i * nf + k] = pc[i + k * p]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let (rot, rm, e4) = gp.varimax_stats(a, xr, p, nf, true, 1.0e-5f64)
+    if e4 != ok { ret e4 }
+    ret rot_sort(a, rot, rm, p, nf, out)
 }
 
 // psych::fa(r, nfactors = nf, fm = "pa", rotate = "none") of a correlation matrix r (p by p, symmetric): principal-axis factoring from the squared multiple correlations until the sum of communalities changes
@@ -1194,6 +1200,35 @@ fn fa_ml(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool 
             }
         }
         k += 1usize
+    }
+    ret true
+}
+
+// psych::fa(r, nfactors = q, fm = "ml", rotate = "varimax") for q >= 2: the loadings of `fa_ml` rotated by stats::varimax (normalize, eps 1e-5), columns ordered and signed by `rot_sort`; out = the p uniquenesses, then the p q rotated loadings (item i,
+// factor k at p + i + k p), then the q by q rotation matrix
+fn fa_ml_varimax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool {
+    let (ml, e1) = mem.alloc[f64](a, p + 1usize + p * q)
+    let (xr, e2) = mem.alloc[f64](a, p * q)
+    let (srt, e3) = mem.alloc[f64](a, p * q + q * q)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    if !fa_ml(a, r, p, q, ml) { ret false }
+    var i = 0usize
+    while i < p {
+        var k = 0usize
+        while k < q {
+            xr[i * q + k] = ml[p + 1usize + i + k * p]
+            k += 1usize
+        }
+        out[i] = ml[i]
+        i += 1usize
+    }
+    let (rot, rm, e4) = gp.varimax_stats(a, xr, p, q, true, 1.0e-5f64)
+    if e4 != ok { ret false }
+    if rot_sort(a, rot, rm, p, q, srt) != ok { ret false }
+    i = 0usize
+    while i < p * q + q * q {
+        out[p + i] = srt[i]
+        i += 1usize
     }
     ret true
 }

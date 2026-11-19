@@ -4559,4 +4559,5 @@ D7658	490	mirt: analytic Rasch gradient
 D7659	1011	survival: concordance by pair counts
 D7660	901	survival: survSplit
 D7661	944	psych: maximum likelihood factor analysis
-D7662	618	psych: maximum likelihood loadings
+D7662	619	psych: maximum likelihood loadings
+D7663	864	psych: varimax rotation of the maximum likelihood fit
