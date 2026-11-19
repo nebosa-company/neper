@@ -1,6 +1,6 @@
 # pscl zeroinfl and hurdle with Poisson counts and a logit zero part, at a tight tolerance.
 #   args: (n, p, q, kind 0 zeroinfl 1 hurdle, y[n], x[n*p] row-major with constant, z[n*q] row-major with constant)
-#   fn "ll" (log-likelihood), "count" (count coefficients weighted by position), "zero" (zero-part coefficients weighted by position)
+#   fn "ll" (log-likelihood), "count" (count coefficients weighted by position), "zero" (zero-part coefficients weighted by position); "secount" and "sezero" (the standard errors, sqrt of diag(vcov), weighted by position; R's Hessian is numeric so the tolerance is 2e-3)
 suppressMessages(library(pscl))
 cases <- list()
 add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-4, abs = 1e-5)
@@ -20,5 +20,7 @@ for (rep in 1:24) {
   a <- c(n, p, q, kind, y, as.vector(t(x)), as.vector(t(z)))
   cc <- coef(f, "count"); zc <- coef(f, "zero")
   add("ll", a, as.numeric(logLik(f))); add("count", a, sum(cc * seq_along(cc))); add("zero", a, sum(zc * seq_along(zc)))
+  sv <- sqrt(diag(vcov(f))); ns <- names(sv); sc <- sv[grepl("^count_", ns)]; sz <- sv[grepl("^zero_", ns)]
+  cases[[length(cases) + 1]] <- case("secount", a, sum(sc * seq_along(sc)), rel = 2e-3, abs = 1e-6); cases[[length(cases) + 1]] <- case("sezero", a, sum(sz * seq_along(sz)), rel = 2e-3, abs = 1e-6)
 }
 emit("pscl", "pscl", list(cases))

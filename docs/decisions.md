@@ -50224,3 +50224,6 @@ kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and una
 
 ## D7365 — sm hsj (Sheather-Jones bandwidth)
 `sj` is sm's fixed-point residual with the pilot bandwidths a = 0.92 IQR n^(-1/7) and b = 0.912 IQR n^(-1/9) (type-7 quantiles) and the phi4 and phi6 double sums over all ordered pairs; `hsj` starts at hnorm, steps by 1.1 or 0.9 until the residual changes sign and interpolates linearly, exactly as sm does. Unbinned only (sm bins above 100 observations; the oracle uses 20 to 90). Equal to R on 30 samples including bimodal ones to 1e-9. L505 at 0.35.
+
+## D7366 — pscl standard errors
+`standard_errors` inverts minus the exact Hessian already used by the Newton fit, at the fitted parameters: one (p + q) block for zeroinfl, two separate blocks for the hurdle (truncated count part, zero part), as vcov of a hurdle fit is block diagonal. R takes a numeric Hessian from optim, so the oracle compares the position-weighted sums of the standard errors to 2e-3 relative, not 1e-4. Equal on 24 fits. L412 at 0.35.

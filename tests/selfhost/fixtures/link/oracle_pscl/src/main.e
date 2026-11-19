@@ -25,6 +25,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "ll") { ret ll }
     var s = 0.0f64
     var i = 0usize
+    if str.eq(c.name, "secount") || str.eq(c.name, "sezero") {
+        let (se, e2) = mem.alloc[f64](a, p + q)
+        if e2 != ok { ret nan }
+        if ps.standard_errors(a, kind, x, zz, y, n, p, q, par, se) != ok { ret nan }
+        if str.eq(c.name, "secount") {
+            while i < p {
+                s += se[i] * f64(i + 1usize)
+                i += 1usize
+            }
+        } else {
+            while i < q {
+                s += se[p + i] * f64(i + 1usize)
+                i += 1usize
+            }
+        }
+        ret s
+    }
     if str.eq(c.name, "count") {
         while i < p {
             s += par[i] * f64(i + 1usize)

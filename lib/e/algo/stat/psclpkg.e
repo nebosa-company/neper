@@ -1,6 +1,6 @@
 // R pscl: zero-inflated Poisson (zeroinfl, logit zero part) and the Poisson hurdle model (hurdle, zero-truncated count part and logit zero part), fitted by Newton's method with step halving on the exact Hessian (R uses BFGS from glm starting values; the likelihood optimum is what is compared). Matrices are row-major with their own constant columns.
 //
-// Not here: negative binomial and geometric counts, the other zero links, offsets and weights, standard errors, predictions.
+// Not here: negative binomial and geometric counts, the other zero links, offsets and weights, predictions.
 
 use e.algo.stat.gparot as gp
 use e.math
@@ -268,4 +268,52 @@ fn hurdle(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usiz
         i += 1usize
     }
     ret r1 + r2
+}
+
+// the standard errors of the fitted parameters (square roots of the diagonal of the inverse of minus the exact Hessian at par): kind 0 zeroinfl (one block, p + q parameters),
+// kind 1 hurdle (the truncated count part and the zero part are separate blocks, as vcov gives block-diagonal)
+fn standard_errors(a: *mem.Arena, kind: usize, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []const f64, se: []f64) -> err {
+    var blocks = 1usize
+    if kind == 1usize { blocks = 2usize }
+    var b = 0usize
+    while b < blocks {
+        var model = 0usize
+        var m = p + q
+        var off = 0usize
+        if kind == 1usize {
+            if b == 0usize {
+                model = 2usize
+                m = p
+            } else {
+                model = 3usize
+                m = q
+                off = p
+            }
+        }
+        let (gr, e1) = mem.alloc[f64](a, m)
+        let (h, e2) = mem.alloc[f64](a, m * m)
+        let (pb, e3) = mem.alloc[f64](a, m)
+        if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+        var i = 0usize
+        while i < m {
+            pb[i] = par[off + i]
+            i += 1usize
+        }
+        let ll = lik(model, x, z, y, n, p, q, pb, gr, h, true)
+        if ll != ll { ret mem.Full }
+        i = 0usize
+        while i < m * m {
+            h[i] = 0.0f64 - h[i]
+            i += 1usize
+        }
+        let (inv, ie) = gp.invert(a, h, m)
+        if ie != ok { ret ie }
+        i = 0usize
+        while i < m {
+            se[off + i] = math.sqrt[f64](inv[i * m + i])
+            i += 1usize
+        }
+        b += 1usize
+    }
+    ret ok
 }
