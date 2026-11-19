@@ -4,6 +4,7 @@
 // Not here: the one-parameter families (Nelder-Mead), the t and negative binomial, and `lower` / `upper` bounds (L-BFGS-B).
 
 use e.algo.stat.rbfgs as bf
+use e.algo.stat.rnm
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
@@ -302,4 +303,40 @@ fn fitdistr2_start(a: *mem.Arena, x: []const f64, kind: usize, s1: f64, s2: f64,
     var c = FdCtx{ x: x, kind: kind, ps1: 1.0f64, ps2: 1.0f64 }
     if kind == 0usize { c.ps2 = s2 }
     ret fitdistr2_finish(a, x, kind, c, s1, s2, b, out)
+}
+
+type ChiCtx = struct { x: []const f64 }
+
+fn chi_nll1(c: *ChiCtx, df: f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.x.len {
+        s += nm.dchisq(c.x[i], df, true)
+        i += 1usize
+    }
+    ret 0.0f64 - s
+}
+
+fn chi_obj(c: *ChiCtx, p: []const f64) -> f64 { ret chi_nll1(c, p[0usize]) }
+
+fn chi_grad(c: *ChiCtx, b: f64) -> f64 {
+    let eps = 0.001f64
+    ret (chi_nll1(c, b + eps) - chi_nll1(c, b - eps)) / (2.0f64 * eps)
+}
+
+// fitdistr(x, "chi-squared", start = list(df = df0)): optim Nelder-Mead on the one parameter (R's nmmin, reltol 1.49e-8), optimHess for the standard error; out = (df, sd, loglik)
+fn fitdistr_chisq(a: *mem.Arena, x: []const f64, df0: f64, out: []f64) -> err {
+    var c = ChiCtx{ x: x }
+    var st: [1]f64 = zero
+    st[0usize] = df0
+    var xo: [1]f64 = zero
+    let (fv, cnt, fail) = rnm.nmmin[ChiCtx](a, &c, chi_obj, st[0usize..1usize], 0.0f64 - 1.0e308f64, 1.4901161193847656e-08f64, 1.0f64, 0.5f64, 2.0f64, 500usize, 1.0f64, xo[0usize..1usize])
+    let _ = cnt
+    let _ = fail
+    let eps = 0.001f64
+    let h = (chi_grad(&c, xo[0usize] + eps) - chi_grad(&c, xo[0usize] - eps)) / (2.0f64 * eps)
+    out[0usize] = xo[0usize]
+    out[1usize] = math.sqrt[f64](1.0f64 / h)
+    out[2usize] = 0.0f64 - fv
+    ret ok
 }

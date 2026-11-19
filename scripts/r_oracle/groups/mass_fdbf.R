@@ -10,4 +10,12 @@ for (rep in 1:40) {
   v <- c(r$estimate, r$sd, r$loglik)
   for (w in 0:4) cases[[length(cases) + 1]] <- case("fdbf", c(kd, n, w, 2, 2, x), v[w + 1], rel = if (kd == 6) (if (w == 4) 1e-4 else 2e-2) else if (w %in% 2:3) 1e-3 else 1e-5, abs = 1e-7)
 }
+# kind 7 chi-squared (n, which 0 df 1 sd 2 loglik, start, x[n])
+for (rep in 1:30) {
+  n <- sample(60:200, 1); x <- rchisq(n, df = runif(1, 2, 9))
+  r <- tryCatch(suppressWarnings(fitdistr(x, "chi-squared", start = list(df = 3))), error = function(e) NULL)
+  if (is.null(r)) next
+  v <- c(r$estimate, r$sd, r$loglik)
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("fdchi", c(7, n, w, 3, 0, x), v[w + 1], rel = if (w == 1) 1e-3 else 1e-5, abs = 1e-7)
+}
 emit("mass_fdbf", "MASS", list(cases))

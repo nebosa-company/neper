@@ -13,6 +13,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[1usize])
     let (fo, fe) = mem.alloc[f64](a, 5usize)
     if fe != ok { ret nan }
+    if usize(z[0usize]) == 7usize {
+        var co: [3]f64 = zero
+        if fdi.fitdistr_chisq(a, z[5usize..5usize + n], z[3usize], co[0usize..3usize]) != ok { ret nan }
+        ret co[usize(z[2usize])]
+    }
     if fdi.fitdistr2_start(a, z[5usize..5usize + n], usize(z[0usize]), z[3usize], z[4usize], fo) != ok { ret nan }
     ret fo[usize(z[2usize])]
 }
