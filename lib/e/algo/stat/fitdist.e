@@ -22,6 +22,8 @@ fn fd_nll(c: *FdCtx, p1: f64, p2: f64) -> f64 {
         if c.kind == 2usize { s += dist.dlogis(c.x[i], p1, p2, true) }
         if c.kind == 3usize { s += dist.dcauchy(c.x[i], p1, p2, true) }
         if c.kind == 4usize { s += nb.dnbinom_mu(c.x[i], p1, p2, true) }
+        if c.kind == 5usize { s += nb.dbeta(c.x[i], p1, p2, true) }
+        if c.kind == 6usize { s += nb.df(c.x[i], p1, p2, true) }
         i += 1usize
     }
     ret 0.0f64 - s
@@ -111,6 +113,11 @@ fn fitdistr2(a: *mem.Arena, x: []const f64, kind: usize, out: []f64) -> err {
         s1 = q7(sorted, 0.5f64)
         s2 = (q7(sorted, 0.75f64) - q7(sorted, 0.25f64)) / 2.0f64
     }
+    ret fitdistr2_finish(a, x, kind, c, s1, s2, b, out)
+}
+
+fn fitdistr2_finish(a: *mem.Arena, x: []const f64, kind: usize, cin: FdCtx, s1: f64, s2: f64, b: []f64, out: []f64) -> err {
+    var c = cin
     b[0usize] = s1 / c.ps1
     b[1usize] = s2 / c.ps2
     let fmin = bf.vmmin[FdCtx](a, &c, fd_f, fd_g, b, 1.4901161193847656e-08f64, 100usize)
@@ -287,4 +294,12 @@ fn fitdistr_t(a: *mem.Arena, x: []const f64, out: []f64) -> err {
     out[5usize] = math.sqrt[f64](m6[2usize * 6usize + 5usize])
     out[6usize] = 0.0f64 - fmin
     ret ok
+}
+
+fn fitdistr2_start(a: *mem.Arena, x: []const f64, kind: usize, s1: f64, s2: f64, out: []f64) -> err {
+    let (b, e1) = mem.alloc[f64](a, 2usize)
+    if e1 != ok { ret e1 }
+    var c = FdCtx{ x: x, kind: kind, ps1: 1.0f64, ps2: 1.0f64 }
+    if kind == 0usize { c.ps2 = s2 }
+    ret fitdistr2_finish(a, x, kind, c, s1, s2, b, out)
 }

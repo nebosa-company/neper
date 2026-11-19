@@ -4322,4 +4322,5 @@ D7468	493	MASS negative.binomial family terms
 D7469	579	MASS gamma.shape
 D7470	713	MASS stepAIC for lm
 D7471	649	MASS fitdistr for the t family
-D7371	1103	lavaan: several correlated factors
+D7371	1104	lavaan: several correlated factors
+D7472	748	MASS fitdistr for the beta and F families
