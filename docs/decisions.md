@@ -50947,3 +50947,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7490 — gamlss.dist BCCGo
 `dbccgo`, `pbccgo` and `qbccgo` are the original Box-Cox Cole-Green distribution (mu the scale, not the median): the transformed normal truncated at -1 / (sigma |nu|), the density with the pnorm(1 / (sigma |nu|)) normaliser, the distribution as (pnorm(z) - pnorm(-1 / (sigma nu)) [nu > 0]) / pnorm(1 / (sigma |nu|)), and the quantile through qnorm of the matching tail; equal to gamlss.dist on 60 draws of each (nu negative, zero and positive; 180 values in oracle_gamlss_bccgo). Of the 116 gamlss.dist families only MN3, MN4, MN5 (multinomials), SI and ST3C are still without a density. Open for L464: those, r, moments, links.
+
+## D7491 — gamlss.dist ST3C
+ST3C is the compiled-code implementation of ST3 (dST3C, pST3C and qST3C return exactly the values of dST3, pST3 and qST3: differences of 0 on a probe, and the integral of dST3C has the ST3 mean and variance, not a re-centred one), so the existing `dst3`, `pst3` and `qst3` are its port; 40 draws of each added to oracle_gamlss_bccgo (300 cases in all) equal gamlss.dist ST3C. Of the 116 families only MN3, MN4, MN5 (multinomials) and SI now lack a density. Open for L464: SI (a Bessel-K sum in compiled code), the multinomials, r, moments, links.

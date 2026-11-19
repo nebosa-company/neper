@@ -4342,4 +4342,5 @@ D7486	644	gsl Airy derivatives and zeros
 D7487	709	gsl legendre_H3d
 D7488	392	gsl hazard
 D7489	429	gsl coulomb_CL
-D7490	660	gamlss.dist BCCGo
+D7490	661	gamlss.dist BCCGo
+D7491	577	gamlss.dist ST3C

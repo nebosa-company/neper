@@ -10,6 +10,9 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if str.eq(c.name, "s3d") { ret gd.dst3(z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }
+    if str.eq(c.name, "s3p") { ret gd.pst3(z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }
+    if str.eq(c.name, "s3q") { ret gd.qst3(z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }
     if str.eq(c.name, "bd") { ret gd.dbccgo(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(c.name, "bp") { ret gd.pbccgo(z[3usize], z[0usize], z[1usize], z[2usize]) }
     ret gd.qbccgo(z[3usize], z[0usize], z[1usize], z[2usize])

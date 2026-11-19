@@ -10,4 +10,11 @@ for (rep in 1:60) {
   cases[[length(cases) + 1]] <- case("bp", c(mu, sg, nu, x), pBCCGo(x, mu, sg, nu), rel = 1e-9, abs = 1e-13)
   cases[[length(cases) + 1]] <- case("bq", c(mu, sg, nu, p), qBCCGo(p, mu, sg, nu), rel = 1e-9, abs = 1e-13)
 }
+# ST3C (the compiled-code twin of ST3): "s3d", "s3p", "s3q" with args (mu, sigma, nu, tau, x_or_p)
+for (rep in 1:40) {
+  mu <- rnorm(1, 1, 2); sg <- runif(1, 0.3, 2); nu <- runif(1, 0.4, 2.5); tau <- runif(1, 2.5, 30); x <- rnorm(1, mu, 2 * sg); p <- runif(1, 0.02, 0.98)
+  cases[[length(cases) + 1]] <- case("s3d", c(mu, sg, nu, tau, x), dST3C(x, mu, sg, nu, tau), rel = 1e-9, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("s3p", c(mu, sg, nu, tau, x), pST3C(x, mu, sg, nu, tau), rel = 1e-9, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("s3q", c(mu, sg, nu, tau, p), qST3C(p, mu, sg, nu, tau), rel = 1e-8, abs = 1e-10)
+}
 emit("gamlss_bccgo", "gamlss.dist", list(cases))
