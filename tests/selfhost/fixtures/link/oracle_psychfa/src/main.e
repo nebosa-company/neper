@@ -12,6 +12,10 @@ fn fit_case(a: *mem.Arena, c: *const oracle.Case, cached: []f64) -> bool {
     let z = c.args
     let p = usize(z[0usize])
     let q = usize(z[1usize])
+    if c.name.len == 6usize {
+        let o9 = cached[0usize..2usize]
+        ret ps.omega_one(a, z[1usize..1usize + p * p], p, o9)
+    }
     if c.name.len == 9usize {
         let o8 = cached[0usize..9usize]
         ret ps.split_half(a, z[1usize..1usize + p * p], p, o8)

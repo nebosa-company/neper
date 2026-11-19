@@ -83,4 +83,11 @@ for (rep in 1:12) {
   s <- suppressWarnings(splitHalf(R, raw = TRUE, brute = TRUE)); g <- suppressWarnings(guttman(R)); v <- c(s$maxrb, s$minrb, s$meanr, s$med.r, s$lambda6, s$lambda2, g$lambda.1, g$lambda.3, g$lambda.5)
   for (k in 1:9) cases[[length(cases) + 1]] <- case("splithalf", c(p, as.vector(t(R)), k - 1), as.numeric(v[k]), rel = 1e-9, abs = 1e-11)
 }
+# omega(r, nfactors = 1): "omegah" args (p, r[p * p], k) k 0 omega_h, 1 omega.tot
+for (rep in 1:12) {
+  p <- sample(4:10, 1); N <- sample(150:400, 1); L <- runif(p, 0.3, 0.8); X <- outer(rnorm(N), L) + matrix(rnorm(N * p, 0, 0.7), N, p); R <- cor(X)
+  o <- suppressWarnings(omega(R, nfactors = 1, n.obs = N, plot = FALSE)); f <- suppressWarnings(fa(R, 1, fm = "minres", rotate = "none")); if (any(f$uniquenesses < 0.02)) next
+  v <- c(o$omega_h, o$omega.tot)
+  for (k in 1:2) cases[[length(cases) + 1]] <- case("omegah", c(p, as.vector(t(R)), k - 1), as.numeric(v[k]), rel = 3e-3, abs = 1e-3)
+}
 emit("psychfa", "psych", list(cases))

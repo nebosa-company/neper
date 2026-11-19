@@ -1715,3 +1715,27 @@ fn split_half(a: *mem.Arena, r: []const f64, p: usize, out: []f64) -> bool {
     out[8usize] = out[6usize] + 2.0f64 * math.sqrt[f64](mx) / tot
     ret true
 }
+
+// psych::omega(r, nfactors = 1) from a correlation matrix: the minres one-factor fit gives the loadings l and uniquenesses u, omega_h = (sum l)^2 / sum(r) and omega.tot = 1 - sum(u) / sum(r); out = omega_h, omega.tot
+fn omega_one(a: *mem.Arena, r: []const f64, p: usize, out: []f64) -> bool {
+    let (fit, e1) = mem.alloc[f64](a, p + 1usize + p)
+    if e1 != ok { ret false }
+    if !fa_resid(a, r, p, 1usize, 0usize, fit) { ret false }
+    var tot = 0.0f64
+    var i = 0usize
+    while i < p * p {
+        tot += r[i]
+        i += 1usize
+    }
+    var sl = 0.0f64
+    var su = 0.0f64
+    i = 0usize
+    while i < p {
+        sl += fit[p + 1usize + i]
+        su += fit[i]
+        i += 1usize
+    }
+    out[0usize] = sl * sl / tot
+    out[1usize] = 1.0f64 - su / tot
+    ret true
+}
