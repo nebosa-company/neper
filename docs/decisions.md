@@ -49958,3 +49958,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `betareg.fit_var` fits `betareg(y ~ x | z)` with the default log precision link, phi_i = exp(z_i' gamma), by Nelder-Mead on the joint likelihood from the constant-precision fit; the fixture caches the fit across the cases of one data set.
 
 **Result.** `oracle_betareg` (620 cases, 70 new) equals betareg on Windows: mean and precision coefficients to 3e-3, log-likelihood to 1e-6. Linux pending. L451 stays partial: standard errors of the variable-dispersion fit, other precision links, bias correction, sweighted2.
+
+## D7318 — agricolae: friedman
+
+`e.algo.stat.agricolae` gains `friedman` and `friedman_pair`: the Friedman test of a blocks by treatments table (within-block average-tie ranks, the rank sums, the tie-adjusted chi-square statistic and its p value, the F statistic and its p value) and the post-hoc comparisons of the rank sums (the difference, the p value rounded to four decimals, and limits using the least significant difference rounded to two decimals, as the package does).
+
+**Result.** `oracle_agricolae_groups` has 796 values (adding ten Friedman designs with 5 to 12 blocks and 3 to 6 treatments, half of them with ties from one-decimal data) and equals agricolae on Windows. Linux pending. L396 stays partial: Waller, the design functions and AMMI remain.

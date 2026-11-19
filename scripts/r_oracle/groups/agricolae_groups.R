@@ -25,4 +25,16 @@ for (rep in 1:14) {
   add("kd", sum(cmp[[1]] * w)); add("kpv", sum(cmp[[2]] * w), abs = 1e-4 * nrow(cmp) * (nrow(cmp) + 1) / 2)
   add("kl", sum(cmp$LCL * w)); add("ku", sum(cmp$UCL * w))
 }
+# friedman (kind 6): args (6, nb, nt, y[nb nt] row-major); fn "fc" Chisq, "fp" p.chisq, "ff" F, "fpf" p.F, "fd" "fq" "fl" "fu" the weighted sums over the pairs of the difference, p value and limits
+for (rep in 1:10) {
+  nb <- sample(5:12, 1); nt <- sample(3:6, 1)
+  y <- matrix(round(rnorm(nb * nt) + rep(seq_len(nt) * runif(1, 0, 0.5), each = nb), if (rep %% 2 == 0) 1 else 4), nb, nt)
+  d <- data.frame(judge = factor(rep(seq_len(nb), nt)), trt = factor(rep(seq_len(nt), each = nb)), ev = as.vector(y))
+  fr <- friedman(d$judge, d$trt, d$ev, group = FALSE)
+  cmp <- fr$comparison; w <- seq_len(nrow(cmp)); a <- c(6, nb, nt, as.vector(t(y)))
+  add <- function(fn, want, rel = 1e-9, abs = 1e-12) cases[[length(cases) + 1]] <<- case(fn, a, want, rel = rel, abs = abs)
+  add("fc", fr$statistics$Chisq); add("fp", fr$statistics$p.chisq); add("ff", fr$statistics$F); add("fpf", fr$statistics$p.F)
+  add("fd", sum(cmp[[1]] * w)); add("fq", sum(cmp[[2]] * w), abs = 1e-4 * nrow(cmp) * (nrow(cmp) + 1) / 2)
+  add("fl", sum(cmp$LCL * w), abs = 0.01 * nrow(cmp) * (nrow(cmp) + 1) / 2 + 1e-9); add("fu", sum(cmp$UCL * w), abs = 0.01 * nrow(cmp) * (nrow(cmp) + 1) / 2 + 1e-9)
+}
 emit("agricolae_groups", "agricolae", list(cases))

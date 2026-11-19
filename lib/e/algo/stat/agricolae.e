@@ -253,3 +253,72 @@ fn kruskal_pair(w: Kruskal, rmean: []const f64, size: []const f64, i: usize, j: 
 }
 
 fn round4(p: f64) -> f64 { ret math.floor[f64](p * 10000.0f64 + 0.5f64) / 10000.0f64 }
+
+// ---- friedman: agricolae's Friedman test of an nb by nt table (blocks by treatments, one value per cell) with the post-hoc comparisons of the rank sums; the
+// within-block ranks average their ties, the statistic is adjusted for ties
+type Friedman = struct { chisq: f64, pchisq: f64, f: f64, pf: f64, df: f64, a1: f64, ss: f64 }
+
+// s receives the nt rank sums
+fn friedman(a: *mem.Arena, y: []const f64, blocks: usize, nt: usize, s: []f64) -> Friedman {
+    var r: Friedman = zero
+    var j = 0usize
+    while j < nt {
+        s[j] = 0.0f64
+        j += 1usize
+    }
+    var a1 = 0.0f64
+    var i = 0usize
+    while i < blocks {
+        j = 0usize
+        while j < nt {
+            var less = 0usize
+            var eq = 0usize
+            var q = 0usize
+            while q < nt {
+                if y[i * nt + q] < y[i * nt + j] { less += 1usize }
+                if y[i * nt + q] == y[i * nt + j] { eq += 1usize }
+                q += 1usize
+            }
+            let rk = f64(less) + (f64(eq) + 1.0f64) / 2.0f64
+            s[j] += rk
+            a1 += rk * rk
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var ss = 0.0f64
+    j = 0usize
+    while j < nt {
+        ss += s[j] * s[j]
+        j += 1usize
+    }
+    let b = f64(blocks)
+    let t = f64(nt)
+    let c1 = b * t * (t + 1.0f64) * (t + 1.0f64) / 4.0f64
+    let t1aj = (t - 1.0f64) * (ss - b * c1) / (a1 - c1)
+    let t2aj = (b - 1.0f64) * t1aj / (b * (t - 1.0f64) - t1aj)
+    r.chisq = t1aj
+    r.pchisq = 1.0f64 - nm.pchisq(t1aj, t - 1.0f64, true, false)
+    r.f = t2aj
+    r.pf = 1.0f64 - nb.pf(t2aj, t - 1.0f64, (t - 1.0f64) * (b - 1.0f64), true, false)
+    r.df = (b - 1.0f64) * (t - 1.0f64)
+    r.a1 = a1
+    r.ss = ss
+    ret r
+}
+
+// the pair (i, j): the difference of the rank sums, the p value (four decimals), and the limits with the least significant difference rounded to two decimals
+fn friedman_pair(fr: Friedman, s: []const f64, blocks: usize, i: usize, j: usize, alpha: f64) -> (f64, f64, f64, f64) {
+    let d = s[i] - s[j]
+    let sd = math.sqrt[f64](2.0f64 * (f64(blocks) * fr.a1 - fr.ss) / fr.df)
+    var ad = d
+    if ad < 0.0f64 { ad = 0.0f64 - ad }
+    let p = round4(2.0f64 * (1.0f64 - nb2pt(ad / sd, fr.df)))
+    let t = nb2qt(1.0f64 - alpha / 2.0f64, fr.df)
+    let l = math.floor[f64](t * sd * 100.0f64 + 0.5f64) / 100.0f64
+    ret (d, p, d - l, d + l)
+}
+
+fn nb2pt(x: f64, df: f64) -> f64 { ret nb.pt(x, df, true, false) }
+
+fn nb2qt(p: f64, df: f64) -> f64 { ret nb.qt(p, df, true, false) }

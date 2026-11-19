@@ -13,6 +13,33 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let kind = usize(x[0usize])
     let n = usize(x[1usize])
     let k = usize(x[2usize])
+    if kind == 6usize {
+        let (sr, es) = mem.alloc[f64](a, k)
+        if es != ok { os.exit(7) }
+        let fr = ag.friedman(a, x[3usize..3usize + n * k], n, k, sr)
+        if str.eq(c.name, "fc") { ret fr.chisq }
+        if str.eq(c.name, "fp") { ret fr.pchisq }
+        if str.eq(c.name, "ff") { ret fr.f }
+        if str.eq(c.name, "fpf") { ret fr.pf }
+        var tot = 0.0f64
+        var pos = 1usize
+        var pp = 0usize
+        while pp < k {
+            var qq = pp + 1usize
+            while qq < k {
+                let (d, pv, lo, hi) = ag.friedman_pair(fr, sr, n, pp, qq, 0.05f64)
+                var v = d
+                if str.eq(c.name, "fq") { v = pv }
+                if str.eq(c.name, "fl") { v = lo }
+                if str.eq(c.name, "fu") { v = hi }
+                tot += v * f64(pos)
+                pos += 1usize
+                qq += 1usize
+            }
+            pp += 1usize
+        }
+        ret tot
+    }
     let y = x[3usize..3usize + n]
     let (grp, e1) = mem.alloc[usize](a, n)
     let (mean, e2) = mem.alloc[f64](a, k)
