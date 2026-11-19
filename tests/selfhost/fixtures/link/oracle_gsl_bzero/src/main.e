@@ -5,9 +5,17 @@ use e.algo.stat.gslfns as gs
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
-fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 { ret gs.bessel_zero_jnu(c.args[0usize], usize(c.args[1usize])) }
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "az") { ret gs.airy_zero(usize(c.args[0usize]), usize(c.args[1usize])) }
+    if str.eq(c.name, "ad") {
+        if usize(c.args[0usize]) == 2usize { ret gs.airy_ai_deriv(c.args[1usize]) }
+        ret gs.airy_bi_deriv(c.args[1usize])
+    }
+    ret gs.bessel_zero_jnu(c.args[0usize], usize(c.args[1usize]))
+}
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/gsl_bzero.json")

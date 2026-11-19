@@ -1237,3 +1237,66 @@ fn bessel_zero_jnu(nu: f64, s: usize) -> f64 {
     }
     ret 0.0f64 / 0.0f64
 }
+
+// Ai'(x) and Bi'(x) from the same Bessel representations as airy_ai and airy_bi (DLMF 9.6.2 - 9.6.4 for x > 0, 9.6.7 - 9.6.8 for x < 0)
+fn airy_ai_deriv(x: f64) -> f64 {
+    if x > 0.0f64 {
+        let z = 2.0f64 / 3.0f64 * math.pow[f64](x, 1.5f64)
+        ret 0.0f64 - x / (pi() * math.sqrt[f64](3.0f64)) * bessel_knu(2.0f64 / 3.0f64, z)
+    }
+    let a = 0.0f64 - x
+    let z = 2.0f64 / 3.0f64 * math.pow[f64](a, 1.5f64)
+    ret a / 3.0f64 * (bessel_jnu(2.0f64 / 3.0f64, z) - bessel_jnu(0.0f64 - 2.0f64 / 3.0f64, z))
+}
+
+fn airy_bi_deriv(x: f64) -> f64 {
+    if x > 0.0f64 {
+        let z = 2.0f64 / 3.0f64 * math.pow[f64](x, 1.5f64)
+        ret x / math.sqrt[f64](3.0f64) * (bessel_inu(0.0f64 - 2.0f64 / 3.0f64, z) + bessel_inu(2.0f64 / 3.0f64, z))
+    }
+    let a = 0.0f64 - x
+    let z = 2.0f64 / 3.0f64 * math.pow[f64](a, 1.5f64)
+    ret a / math.sqrt[f64](3.0f64) * (bessel_jnu(0.0f64 - 2.0f64 / 3.0f64, z) + bessel_jnu(2.0f64 / 3.0f64, z))
+}
+
+fn airy_kind(kind: usize, x: f64) -> f64 {
+    if kind == 0usize { ret airy_ai(x) }
+    if kind == 1usize { ret airy_bi(x) }
+    if kind == 2usize { ret airy_ai_deriv(x) }
+    ret airy_bi_deriv(x)
+}
+
+// airy_zero_Ai (kind 0), Bi (1), Ai' (2) and Bi' (3) of order s: the s-th negative zero by a scan of sign changes in steps of 0.05 and bisection (the Bessel series behind the functions keeps its digits for |x| up to about 5, a few zeros)
+fn airy_zero(kind: usize, s: usize) -> f64 {
+    var x = 0.0f64 - 0.01f64
+    var f = airy_kind(kind, x)
+    var found = 0usize
+    while found < s && x > 0.0f64 - 6.0f64 {
+        let xn = x - 0.05f64
+        let fn1 = airy_kind(kind, xn)
+        if (f < 0.0f64 && fn1 >= 0.0f64) || (f > 0.0f64 && fn1 <= 0.0f64) {
+            found += 1usize
+            if found == s {
+                var lo = xn
+                var hi = x
+                var fhi = f
+                var it = 0usize
+                while it < 200usize {
+                    let mid = 0.5f64 * (lo + hi)
+                    let fm = airy_kind(kind, mid)
+                    if (fhi < 0.0f64 && fm >= 0.0f64) || (fhi > 0.0f64 && fm <= 0.0f64) {
+                        lo = mid
+                    } else {
+                        hi = mid
+                        fhi = fm
+                    }
+                    it += 1usize
+                }
+                ret 0.5f64 * (lo + hi)
+            }
+        }
+        x = xn
+        f = fn1
+    }
+    ret 0.0f64 / 0.0f64
+}

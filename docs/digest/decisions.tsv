@@ -4337,4 +4337,5 @@ D7372	893	lavaan: fit measures
 D7482	758	clue hierarchy agreements and the symmetric-difference dissimilarity
 D7483	601	clue Euclidean dissimilarity of soft partitions
 D7484	421	gamlss.dist qexGAUS verified
-D7485	766	gsl bessel_zero_Jnu
+D7485	767	gsl bessel_zero_Jnu
+D7486	643	gsl Airy derivatives and zeros
