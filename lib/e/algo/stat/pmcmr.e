@@ -328,3 +328,66 @@ fn p_adjust(a: *mem.Arena, p: []f64, kind: usize) -> err {
     }
     ret ok
 }
+
+// Friedman all-pairs tests on a complete block design (y is n blocks by k treatments, row-major): the ranks within each block are averaged for ties. kind 0 Nemenyi (the statistic
+// sqrt(2) |mean rank difference| / sqrt(k (k + 1) / (6 n)) and its single-step Tukey p with infinite df), kind 1 Conover with the Tukey p, kind 2 Conover's t and its unadjusted p.
+// The pair is (row i, column j) of the result table, so i > j; the Conover statistic is the signed rank sum difference R_j - R_i over sqrt(A B).
+fn frd_pair(a: *mem.Arena, n: usize, k: usize, y: []const f64, kind: usize, i: usize, j: usize) -> (f64, f64, err) {
+    let (r, e0) = mem.alloc[f64](a, n * k)
+    let (row, e1) = mem.alloc[f64](a, k)
+    let (rr, e2) = mem.alloc[f64](a, k)
+    let (rs, e3) = mem.alloc[f64](a, k)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    var c = 0usize
+    while c < k {
+        rs[c] = 0.0f64
+        c += 1usize
+    }
+    var b = 0usize
+    var sumsq = 0.0f64
+    while b < n {
+        c = 0usize
+        while c < k {
+            row[c] = y[b * k + c]
+            c += 1usize
+        }
+        let er = rank_avg(a, row, rr)
+        if er != ok { ret (0.0f64, 0.0f64, er) }
+        c = 0usize
+        while c < k {
+            rs[c] += rr[c]
+            sumsq += rr[c] * rr[c]
+            c += 1usize
+        }
+        b += 1usize
+    }
+    let nf = f64(n)
+    let kf = f64(k)
+    if kind == 0usize {
+        var dif = (rs[i] - rs[j]) / nf
+        if dif < 0.0f64 { dif = 0.0f64 - dif }
+        let q = dif / math.sqrt[f64](kf * (kf + 1.0f64) / (6.0f64 * nf)) * math.sqrt[f64](2.0f64)
+        ret (q, 1.0f64 - nb.ptukey(q, 1.0f64, kf, 1.0e300f64, true, false), ok)
+    }
+    let s2 = (sumsq - kf * nf * (kf + 1.0f64) * (kf + 1.0f64) / 4.0f64) / (kf - 1.0f64)
+    var t2 = 0.0f64
+    c = 0usize
+    while c < k {
+        let dd = rs[c] - nf * (kf + 1.0f64) / 2.0f64
+        t2 += dd * dd
+        c += 1usize
+    }
+    t2 = t2 / s2
+    let df = nf * kf - kf - nf + 1.0f64
+    let aa = s2 * (2.0f64 * nf * (kf - 1.0f64)) / df
+    let bb = 1.0f64 - t2 / (nf * (kf - 1.0f64))
+    let diff = rs[j] - rs[i]
+    let tv = diff / (math.sqrt[f64](aa) * math.sqrt[f64](bb))
+    var at = tv
+    if at < 0.0f64 { at = 0.0f64 - at }
+    if kind == 1usize {
+        let qv = math.sqrt[f64](2.0f64) * at
+        ret (math.sqrt[f64](2.0f64) * tv, nb.ptukey(qv, 1.0f64, kf, 1.0e300f64, false, false), ok)
+    }
+    ret (tv, 2.0f64 * nb.pt(0.0f64 - at, df, true, false), ok)
+}

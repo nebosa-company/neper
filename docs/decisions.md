@@ -50194,3 +50194,6 @@ For `coxph(Surv(Tstart, Tstop, status) ~ strata(trans), method = "breslow")` the
 
 ## D7355 — mstate probtrans fixedhorizon
 `probtrans_fixed` builds the suffix products of (I + dA) over the event times up to predt with later factors on the right: row 0 holds all of them, row k the product over the times after t_k, the last row the identity, plus one more identity row when predt is not an event time. Equal to R on six hand-built four-state models with predt on and off an event time. L441 at 0.35; variance and covariance forms remain.
+
+## D7356 — PMCMRplus Friedman all-pairs tests
+`frd_pair` ranks within each block (ties averaged) and answers for one table cell (row i, column j, i > j): Nemenyi's sqrt(2) |mean rank difference| / sqrt(k(k+1)/(6n)) with the Tukey p at infinite df, and Conover's A, B and df = nk - k - n + 1 with the signed statistic R_j - R_i (times sqrt(2) in the single-step form), its Tukey p, and the unadjusted two-sided t p. Equal to R on ten random block designs with and without ties. L487 at 0.4; the remaining post-hoc families are open.
