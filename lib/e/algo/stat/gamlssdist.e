@@ -2325,3 +2325,23 @@ fn qdel(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     }
     ret res
 }
+
+// pSICHEL as the running sum of the Sichel mass (the package accumulates it in compiled code), and ZASICHEL's distribution: tau at 0 and tau + (1 - tau) (F(q) - F(0)) / (1 - F(0)) above
+fn psichel(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var y = 0.0f64
+    while y <= math.floor[f64](q) {
+        s += dsichel(y, mu, sigma, nu)
+        y += 1.0f64
+    }
+    ret s
+}
+
+fn pzasichel(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q == 0.0f64 { ret tau }
+    let c0 = psichel(0.0f64, mu, sigma, nu)
+    let c1 = psichel(q, mu, sigma, nu)
+    ret tau + (1.0f64 - tau) * (c1 - c0) / (1.0f64 - c0)
+}

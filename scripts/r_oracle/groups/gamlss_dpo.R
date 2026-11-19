@@ -43,4 +43,10 @@ for (rep in 1:40) {
   pr <- runif(1, 0.02, 0.98)
   add("dp", c(14, mu, sg, pr, nu), qDEL(pr, mu = mu, sigma = sg, nu = nu), 0, 0)
 }
+# pSICHEL (fn 15) and pZASICHEL (fn 16): mu, sigma, nu, [tau,] x
+for (rep in 1:30) {
+  mu <- runif(1, 0.5, 6); sg <- runif(1, 0.3, 2); nu <- runif(1, -1.5, 1); t2 <- runif(1, 0.05, 0.6); xi <- rpois(1, mu)
+  add("dp", c(15, mu, sg, xi, nu), pSICHEL(xi, mu = mu, sigma = sg, nu = nu), 1e-7, 1e-12)
+  add("dp", c(16, mu, sg, xi, nu, t2), pZASICHEL(xi, mu = mu, sigma = sg, nu = nu, tau = t2), 1e-7, 1e-12)
+}
 emit("gamlss_dpo", "gamlss.dist", list(cases))

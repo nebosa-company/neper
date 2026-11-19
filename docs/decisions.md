@@ -50596,3 +50596,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `gamlssdist.ddel`, `pdel`, `qdel` take the Delaporte mass as the convolution of a Poisson of mean mu nu and a negative binomial of mean mu (1 - nu) and size 1/sigma (the package sums the same series in compiled code), the Poisson alone for sigma <= 1e-4; the distribution is the running sum and the quantile the first point reaching p.
 
 **Result.** `oracle_gamlss_dpo` (600 cases, 120 new) equals gamlss.dist on Windows: d and p to 1e-7, q exactly. Linux pending. L464 stays partial: SI, MN3-5, ST3C, SEP and ZASICHEL p and q, ZISICHEL p and q, the remaining random-number generators, moments.
+
+## D7347 — gamlss.dist: SICHEL and ZASICHEL distribution functions
+
+**Decision.** `gamlssdist.psichel` is the running sum of the Sichel mass (the package accumulates it in compiled code) and `pzasichel` is tau at zero and tau + (1 - tau) (F(q) - F(0)) / (1 - F(0)) above.
+
+**Result.** `oracle_gamlss_dpo` (660 cases, 60 new) equals gamlss.dist on Windows to 1e-7. Linux pending. L464 stays partial: SI, MN3-5, ST3C, quantiles of SICHEL and ZASICHEL, SEP and ZISICHEL p and q, the remaining random-number generators, moments.
