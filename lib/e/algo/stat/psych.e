@@ -11,6 +11,7 @@ use e.math.nmath_beta as nbt
 use e.math.dist as dst
 use e.algo.stat.desctools as dt
 use e.mem
+use e.algo.rand.r as rrg
 
 error Malformed
 use e.algo.stat.gparot as gp
@@ -997,6 +998,79 @@ fn score_items(a: *mem.Arena, x: []const f64, n: usize, p: usize, keys: []const 
             v += 1usize
         }
         u += 1usize
+    }
+    ret ok
+}
+
+// the eigenvalues, descending, of the correlation matrix of the n by p column-major data x
+fn corr_eigen(a: *mem.Arena, x: []const f64, n: usize, p: usize, ev: []f64) -> err {
+    let (r, e1) = corr(a, x, n, p)
+    if e1 != ok { ret e1 }
+    let (w, e2) = mem.alloc[f64](a, p)
+    let (z, e3) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    let e4 = sy.dsyevr_all(a, r, p, w, z)
+    if e4 != ok { ret e4 }
+    var k = 0usize
+    while k < p {
+        ev[k] = w[p - 1usize - k]
+        k += 1usize
+    }
+    ret ok
+}
+
+// psych::fa.parallel(x, fa = "pc", n.iter = niter) of raw data under set.seed(seed): per iteration every column is resampled with replacement (`sample(y, n, replace = TRUE)`) and its correlation eigenvalues kept,
+// then n p standard normal draws fill an n by p matrix (by column) whose correlation eigenvalues are kept. out[0 .. p] the eigenvalues of the data (pc.values), p the mean resampled ones (pc.simr), p the mean simulated ones (pc.sim)
+fn fa_parallel(a: *mem.Arena, x: []const f64, n: usize, p: usize, niter: usize, seed: i64, out: []f64) -> err {
+    let (ev, e1) = mem.alloc[f64](a, p)
+    let (sd, e2) = mem.alloc[f64](a, n * p)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    var g: rrg.Rng = zero
+    rrg.seed(&g, seed)
+    let e3 = corr_eigen(a, x, n, p, ev)
+    if e3 != ok { ret e3 }
+    var k = 0usize
+    while k < p {
+        out[k] = ev[k]
+        out[p + k] = 0.0f64
+        out[2usize * p + k] = 0.0f64
+        k += 1usize
+    }
+    var it = 0usize
+    while it < niter {
+        var col = 0usize
+        while col < p {
+            let (idx, e4) = rrg.sample_int(a, &g, i64(n), i64(n), true)
+            if e4 != ok { ret e4 }
+            var i = 0usize
+            while i < n {
+                sd[col * n + i] = x[col * n + usize(idx[i]) - 1usize]
+                i += 1usize
+            }
+            col += 1usize
+        }
+        let e5 = corr_eigen(a, sd, n, p, ev)
+        if e5 != ok { ret e5 }
+        k = 0usize
+        while k < p {
+            out[p + k] += ev[k] / f64(niter)
+            k += 1usize
+        }
+        var q = 0usize
+        while q < n * p {
+            sd[q] = rrg.rnorm(&g, 0.0f64, 1.0f64)
+            q += 1usize
+        }
+        let e6 = corr_eigen(a, sd, n, p, ev)
+        if e6 != ok { ret e6 }
+        k = 0usize
+        while k < p {
+            out[2usize * p + k] += ev[k] / f64(niter)
+            k += 1usize
+        }
+        it += 1usize
     }
     ret ok
 }

@@ -43,6 +43,13 @@ for (rep in 1:15) {
     for (w in 0:11) cases[[length(cases) + 1]] <- case("descby", c(n, x, g, gr, w), as.numeric(v[w + 1]), rel = 1e-8, abs = 1e-10)
   }
 }
+# fa.parallel(fa = "pc") of raw data under set.seed: "fapar" (n, p, niter, seed, X column-major, q) q < p pc.values, p .. 2p-1 pc.simr, 2p .. 3p-1 pc.sim
+for (rep in 1:12) {
+  n <- sample(40:120, 1); p <- sample(3:6, 1); f <- rnorm(n); X <- sapply(1:p, function(j) f * runif(1, 0, 1) + rnorm(n)); ni <- sample(3:10, 1); sdv <- sample(1000:99999, 1)
+  set.seed(sdv); r <- suppressMessages(suppressWarnings(fa.parallel(X, fa = "pc", n.iter = ni, plot = FALSE)))
+  vals <- c(r$pc.values, r$pc.simr, r$pc.sim)
+  for (q in seq_along(vals)) cases[[length(cases) + 1]] <- case("fapar", c(n, p, ni, sdv, X, q - 1), vals[q], rel = 1e-8, abs = 1e-10)
+}
 # corr.test: "ctest" args (n, p, X column-major, i, j, which) with i < j 0-based; which 0 r, 1 t, 2 p, 3 lower, 4 upper, 5 Holm-adjusted p
 for (rep in 1:15) {
   n <- sample(20:60, 1); p <- sample(3:5, 1); f <- rnorm(n); X <- sapply(1:p, function(j) round(f * runif(1, 0, 1) + rnorm(n), 3)); colnames(X) <- paste0("v", 1:p)

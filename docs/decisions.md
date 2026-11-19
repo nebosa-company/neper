@@ -50557,3 +50557,9 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 **Decision.** `describeBy(x, g, mat = TRUE)` is `describe` applied to the cases of each group, so the fixture selects each group's values and calls `psych.describe`.
 
 **Result.** `oracle_psych` (3999 cases, 444 new: 12 statistics for each group of 15 samples) equals psych on Windows to 1e-8. Linux pending. L312 stays partial: missing data and overlapping keys in scoreItems, minres, ml, wls and gls extraction, oblique rotations, smoothing, omega, fa.parallel, VSS.
+
+## D7342 — psych: fa.parallel
+
+**Decision.** `psych.fa_parallel` reproduces `fa.parallel(x, fa = "pc", n.iter = k)` of raw data under `set.seed`: each iteration resamples every column with replacement (R's `sample`, column by column) and keeps the correlation eigenvalues, then fills an n by p matrix with `rnorm` (by column) and keeps its eigenvalues; the outputs are the eigenvalues of the data and the means over the iterations of the resampled (`pc.simr`) and simulated (`pc.sim`) ones. psych's `mclapply` runs serially on Windows, so the random stream follows the iteration order.
+
+**Result.** `oracle_psych` (4129 cases, 130 new on 12 data sets) equals psych on Windows to 1e-8. Linux pending (a forked `mclapply` there could reorder the stream, so the Linux run needs a look). L312 stays partial: the factor-analytic eigenvalues of fa.parallel (fa = "fa"), the suggested numbers of factors and components, missing data and overlapping keys in scoreItems, minres, ml, wls and gls extraction, oblique rotations, smoothing, omega, VSS.
