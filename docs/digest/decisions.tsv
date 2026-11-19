@@ -4586,4 +4586,5 @@ D7685	1158	psych: rms and crms; scores re-set
 D7686	1240	smooth.spline with a target df
 D7687	1070	emmeans: one-way logistic contrasts on both scales
 D7688	712	emmeans: Poisson contrasts
-D7689	691	unmarked: standard errors of the occupancy fit
+D7689	692	unmarked: standard errors of the occupancy fit
+D7690	671	unmarked: pcount standard errors, one Hessian routine
