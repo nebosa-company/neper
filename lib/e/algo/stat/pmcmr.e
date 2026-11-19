@@ -1358,7 +1358,23 @@ fn lsd_gh_pair(x: []const f64, grp: []const usize, k: usize, ri: usize, cj: usiz
     let df = aa * aa / (vr[ri] * vr[ri] / (cnt[ri] * cnt[ri] * (cnt[ri] - 1.0f64)) + vr[cj] * vr[cj] / (cnt[cj] * cnt[cj] * (cnt[cj] - 1.0f64)))
     var aq = q
     if aq < 0.0f64 { aq = 0.0f64 - aq }
-    ret (q, 1.0f64 - nb.ptukey(aq, 1.0f64, kf, df, true, false))
+    if kind == 1usize { ret (q, 1.0f64 - nb.ptukey(aq, 1.0f64, kf, df, true, false)) }
+    // Tamhane's T2 (kind 2) and Dunnett's T3 (kind 3): the Welch t = q / sqrt(2) with the same Welch df
+    let tw = q / math.sqrt[f64](2.0f64)
+    var at = tw
+    if at < 0.0f64 { at = 0.0f64 - at }
+    let mpairs = kf * (kf - 1.0f64) / 2.0f64
+    if kind == 2usize {
+        // the unadjusted Welch p, then the Sidak-type adjustment min(1, 1 - (1 - p)^m) over the k (k - 1) / 2 pairs
+        let pu = 2.0f64 * nb.pt(0.0f64 - at, df, true, false)
+        var pa = 1.0f64 - math.pow[f64](1.0f64 - pu, mpairs)
+        if pa > 1.0f64 { pa = 1.0f64 }
+        ret (tw, pa)
+    }
+    // T3: the studentised maximum modulus of m = k (k - 1) / 2 independent t components at the rounded Welch df
+    var lam: [16]f64 = zero
+    let mm = usize(mpairs)
+    ret (tw, 1.0f64 - mvt_one_factor_upper(at, lam[0usize..mm], math.floor[f64](df + 0.5f64), true))
 }
 
 // snkTest (kind 0) and duncanTest (kind 1) on one-way data for the table cell (row group ri, column group cj): the groups are ranked by mean (decreasing), p = 1 + the rank distance

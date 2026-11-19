@@ -62,4 +62,13 @@ for (rep in 1:14) {
   sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
   add("sn", a, sw2(sn$statistic)); add("snp", a, sw2(sn$p.value)); add("dn", a, sw2(dn$statistic)); add("dnp", a, sw2(dn$p.value))
 }
+# tamhaneT2Test ("t2", "t2p") and dunnettT3Test ("t3", "t3p"): statistics and p values (lower triangle, position-weighted); T3's p is R's pmvt Monte Carlo (error about 1e-3).
+for (rep in 1:10) {
+  k <- sample(3:4, 1); sz <- sample(5:10, k, replace = TRUE); n <- sum(sz); g <- factor(rep(1:k, sz))
+  x <- round(rnorm(n) * rep(runif(k, 0.5, 2), sz) + as.numeric(g) * runif(1, 0, 0.6), 4)
+  a <- c(n, k, x, as.numeric(g)); t2 <- suppressWarnings(tamhaneT2Test(x, g, welch = TRUE)); t3 <- suppressWarnings(dunnettT3Test(x, g))
+  sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
+  add("t2", a, sw2(t2$statistic)); add("t2p", a, sw2(t2$p.value))
+  add("t3", a, sw2(t3$statistic)); cases[[length(cases) + 1]] <- case("t3p", a, sw2(t3$p.value), rel = 5e-3, abs = 5e-3)
+}
 emit("pmcmr", "PMCMRplus", list(cases))
