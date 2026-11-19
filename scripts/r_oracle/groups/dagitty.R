@@ -70,4 +70,18 @@ for (rep in 1:40) {
   zz <- c(n, 0, 1, 0, as.vector(t(A)))
   add("nci", zz, length(ci)); add("sci", zz, sg)
 }
+# localTests (type "cis") on data from a linear model over the DAG: args (n, nobs, 0, 0, adjacency n*n, correlation n*n); "ltn" the number of tests, "lte" the sum of the estimates, "ltp" of the p values, "ltl" of the lower and "ltu" of the upper interval ends
+for (rep in 1:30) {
+  n <- sample(4:7, 1); nodes <- paste0("v", seq_len(n))
+  A <- matrix(0, n, n); for (i in 1:(n - 1)) for (j in (i + 1):n) if (runif(1) < 0.4) A[i, j] <- 1
+  edges <- which(A == 1, arr.ind = TRUE)
+  txt <- paste("dag {", paste(nodes, collapse = " "), if (nrow(edges)) paste(sprintf("%s -> %s", nodes[edges[, 1]], nodes[edges[, 2]]), collapse = " "), "}")
+  g <- dagitty(txt); nobs <- sample(60:200, 1)
+  D <- matrix(0, nobs, n); for (j in 1:n) D[, j] <- rnorm(nobs) + (if (j > 1) D[, seq_len(j - 1), drop = FALSE] %*% (A[seq_len(j - 1), j] * runif(j - 1, 0.4, 1)) else 0)
+  colnames(D) <- nodes
+  lt <- tryCatch(localTests(g, as.data.frame(D)), error = function(e) NULL)
+  if (is.null(lt) || nrow(lt) == 0) next
+  a <- c(n, nobs, 0, 0, as.vector(t(A)), as.vector(t(cor(D))))
+  add("ltn", a, nrow(lt)); add("lte", a, sum(lt$estimate)); add("ltp", a, sum(lt$p.value)); add("ltl", a, sum(lt[["2.5%"]])); add("ltu", a, sum(lt[["97.5%"]]))
+}
 emit("dagitty", "dagitty", list(cases))

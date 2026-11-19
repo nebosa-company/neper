@@ -4458,4 +4458,5 @@ D7600	1040	full lower- and upper-casing of strings
 D7601	792	ICU Latin-ASCII transliteration over the common ranges
 D7602	1004	energy kgroups equal to R, closing L459
 D7603	1039	sampling fastflightcube (the cube method flight phase)
-D7604	1084	sampling samplecube and landingcube, closing L508
+D7604	1085	sampling samplecube and landingcube, closing L508
+D7605	949	dagitty localTests (type cis) on data

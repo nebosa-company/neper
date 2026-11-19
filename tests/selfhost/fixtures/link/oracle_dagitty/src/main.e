@@ -22,6 +22,26 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     let k = c.name
+    if k.len == 3usize && k[0usize] == 108u8 && k[1usize] == 116u8 {
+        var lx: [512]usize = zero
+        var ly: [512]usize = zero
+        var lz: [512]u32 = zero
+        let cnt = dg.implied_list(adj, n, lx[0usize..512usize], ly[0usize..512usize], lz[0usize..512usize])
+        if k[2usize] == 110u8 { ret f64(cnt) }
+        var tot = 0.0f64
+        var q = 0usize
+        while q < cnt {
+            var res: [4]f64 = zero
+            let le = dg.local_test(a, x[4usize + n * n..4usize + 2usize * n * n], n, lx[q], ly[q], lz[q], x[1usize], 0.95f64, res[0usize..4usize])
+            if le != ok { os.exit(7) }
+            if k[2usize] == 101u8 { tot += res[0usize] }
+            if k[2usize] == 112u8 { tot += res[1usize] }
+            if k[2usize] == 108u8 { tot += res[2usize] }
+            if k[2usize] == 117u8 { tot += res[3usize] }
+            q += 1usize
+        }
+        ret tot
+    }
     if str.eq(k, "dsep") {
         if dg.dseparated(adj, n, dg.bit(xi), dg.bit(yi), z) { ret 1.0f64 }
         ret 0.0f64

@@ -6,6 +6,11 @@
 // Not here: the other effect types, canonical and exhaustive set types, instrumentalVariables, paths, equivalentDAGs, localTests and the
 // mixed-graph (bidirected edge) forms.
 
+use e.algo.stat.mass as mass
+use e.math
+use e.math.nmath as nm
+use e.math.dist as nq
+use e.math.scale as sc
 use e.mem
 
 fn has(adj: []const bool, n: usize, i: usize, j: usize) -> bool { ret adj[i * n + j] }
@@ -399,3 +404,87 @@ fn implied_independencies(adj: []const bool, n: usize) -> (usize, f64) {
     }
     ret (count, sig)
 }
+
+// whether z is a minimal d-separating set of x and y (no proper subset separates them)
+fn minimal_separator(adj: []const bool, n: usize, x: usize, y: usize, z: u32) -> bool {
+    if !dseparated(adj, n, bit(x), bit(y), z) { ret false }
+    if z == 0u32 { ret true }
+    var sub = (z - 1u32) & z
+    while true {
+        if dseparated(adj, n, bit(x), bit(y), sub) { ret false }
+        if sub == 0u32 { break }
+        sub = (sub - 1u32) & z
+    }
+    ret true
+}
+
+// the statements of impliedConditionalIndependencies (missing.edge) one by one into ox, oy (x < y) and oz (the set as a bit mask); the number written
+fn implied_list(adj: []const bool, n: usize, ox: []usize, oy: []usize, oz: []u32) -> usize {
+    var count = 0usize
+    var x = 0usize
+    while x < n {
+        var y = x + 1usize
+        while y < n {
+            if !has(adj, n, x, y) && !has(adj, n, y, x) {
+                let rest = ((1u32 << u32(n)) - 1u32) & ~(bit(x) | bit(y))
+                var z = 0u32
+                let total = 1u32 << u32(n)
+                while z < total {
+                    if (z & ~rest) == 0u32 && minimal_separator(adj, n, x, y, z) && count < ox.len {
+                        ox[count] = x
+                        oy[count] = y
+                        oz[count] = z
+                        count += 1usize
+                    }
+                    z += 1u32
+                }
+            }
+            y += 1usize
+        }
+        x += 1usize
+    }
+    ret count
+}
+
+// localTests(type = "cis") on a correlation matrix (n_vars square, row-major) and the sample size: the partial correlation of x and y given the bit mask z from the pseudo-inverse of the
+// sub-matrix (x, y, then z in index order), the chi-squared(1) p value of its Fisher z on nobs - |z| - 3 degrees of freedom, and the interval dagitty computes with atan (not tanh) at
+// conf.level; out = (estimate, p value, lower, upper)
+fn local_test(a: *mem.Arena, cor: []const f64, nv: usize, x: usize, y: usize, z: u32, nobs: f64, level: f64, out: []f64) -> err {
+    var vars: [32]usize = zero
+    vars[0usize] = x
+    vars[1usize] = y
+    var m = 2usize
+    var i = 0usize
+    while i < nv {
+        if (z & bit(i)) != 0u32 {
+            vars[m] = i
+            m += 1usize
+        }
+        i += 1usize
+    }
+    let (sub, e1) = mem.alloc[f64](a, m * m)
+    if e1 != ok { ret e1 }
+    i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            sub[i * m + j] = cor[vars[i] * nv + vars[j]]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (gi, ge) = mass.ginv(a, sub, m, m)
+    if ge != ok { ret ge }
+    let pcor = 0.0f64 - gi[1usize] / math.sqrt[f64](gi[0usize] * gi[m + 1usize])
+    let pz = sc.atanh(pcor)
+    let df = nobs - f64(m - 2usize) - 3.0f64
+    let sem = 1.0f64 / math.sqrt[f64](df)
+    let crit = dist_qnorm_upper((1.0f64 - level) / 2.0f64)
+    out[0usize] = pcor
+    out[1usize] = nm.pchisq(pz * pz * df, 1.0f64, false, false)
+    out[2usize] = math.atan[f64](pz - crit * sem)
+    out[3usize] = math.atan[f64](pz + crit * sem)
+    ret ok
+}
+
+fn dist_qnorm_upper(p: f64) -> f64 { ret 0.0f64 - nq.qnorm(p, 0.0f64, 1.0f64, true, false) }
