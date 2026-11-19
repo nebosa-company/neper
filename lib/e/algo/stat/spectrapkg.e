@@ -476,3 +476,31 @@ fn eigs_sym_op[Ctx: type](a: *mem.Arena, ctx: *Ctx, f: fn(*Ctx, []const f64, []f
     }
     ret eigs_sym(a, dense, n, k, which, sigma, vals, vecs)
 }
+
+// RSpectra::svds with a matrix-free operator: f(ctx, x, y) writes A x (x of length n, y of length m); the matrix is recovered from the unit vectors and goes through svds; d receives the k
+// largest singular values (the transpose operator is not needed once A is recovered)
+fn svds_op[Ctx: type](a: *mem.Arena, ctx: *Ctx, f: fn(*Ctx, []const f64, []f64), m: usize, n: usize, k: usize, d: []f64) -> err {
+    let (dense, e0) = mem.alloc[f64](a, m * n)
+    let (ex, e1) = mem.alloc[f64](a, n)
+    let (ey, e2) = mem.alloc[f64](a, m)
+    let (u, e3) = mem.alloc[f64](a, m * k)
+    let (v, e4) = mem.alloc[f64](a, n * k)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var j = 0usize
+    while j < n {
+        var i = 0usize
+        while i < n {
+            ex[i] = 0.0f64
+            i += 1usize
+        }
+        ex[j] = 1.0f64
+        f(ctx, ex, ey)
+        i = 0usize
+        while i < m {
+            dense[i * n + j] = ey[i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret svds(a, dense, m, n, k, d, u, v)
+}
