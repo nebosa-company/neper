@@ -610,3 +610,6 @@ oracle_gamlss_famlink
 oracle_gslcoulomb
 oracle_gslmore
 oracle_gslmore2
+oracle_irlba
+oracle_irlba_aux
+oracle_rspectra
