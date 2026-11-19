@@ -4297,4 +4297,5 @@ D7443	488	sm binning
 D7444	358	sm.regression on binned data
 D7445	322	sm.density on binned data
 D7446	441	sm h.select cv on binned data
-D7447	699	sm h.select df and aicc on binned regression data
+D7447	700	sm h.select df and aicc on binned regression data
+D7448	498	isotone activeSet Poisson solver

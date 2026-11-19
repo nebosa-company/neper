@@ -40,6 +40,7 @@ fn active(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if sc == 104u8 { kind = 5u8 }
     if sc == 105u8 { kind = 6u8 }
     if sc == 111u8 { kind = 7u8 }
+    if sc == 112u8 { kind = 8u8 }
     if kind >= 2u8 {
         aw = z[2usize + 2usize * n + 2usize * m + 1usize]
         bw = z[2usize + 2usize * n + 2usize * m + 2usize]

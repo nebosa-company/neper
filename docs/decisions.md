@@ -50806,3 +50806,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7447 — sm h.select df and aicc on binned regression data
 `hselect_bin_reg` carries the count weights and the within-bin deviations through the df (tr S, S = sum of the count-weighted local-linear rows) and aicc (tr S = sum freq * s_ii, nobs = sum freq) criteria; equal to h.select(x, y, method, nbins = k) at rel 1e-6 on 10 samples each in oracle_sm_hsel. The cv kind is written the same way but not in the oracle: its score is flat to six digits over the whole bracket (0.1120704 at h 0.1, 0.1120612 at 0.2 on a probe), so the minimiser moves with rounding order and 4 of 10 samples disagreed with R. Open for L505: that cv equality, reference bands, 2-d, sm.ancova, sm.survival, sm.options.
+
+## D7448 — isotone activeSet Poisson solver
+activeSet(isomat, "Poisson") is kind 8 of the block BFGS solvers: objective sum(x - z log x) (sSolver ignores the weights), gradient 1 - z / x, started from the same block means as the other fSolver kinds; fval, niter, the fitted values and the multipliers equal isotone on up to 30 random partial orders (positive responses) added to oracle_isotone. Open for L520: gpava with a list response, the Chebyshev activeSet (mSolver), user-supplied solvers.

@@ -844,6 +844,7 @@ fn iso_term(c: *const IsoCtx, i: usize, x: f64) -> f64 {
         if delta > (1.0f64 + c.bw) * c.aw { g = delta - c.aw }
         ret w * g
     }
+    if c.kind == 8u8 { ret x - c.z[i] * math.log[f64](x) }
     ret w * rpow(math.abs[f64](d), c.aw)
 }
 
@@ -875,6 +876,7 @@ fn iso_grad(c: *const IsoCtx, i: usize, x: f64) -> f64 {
         }
         ret w * g
     }
+    if c.kind == 8u8 { ret 1.0f64 - c.z[i] / x }
     ret c.aw * w * sgn(d) * rpow(math.abs[f64](d), c.aw - 1.0f64)
 }
 

@@ -76,4 +76,16 @@ for (rep in 1:40) {
     for (j in 0:4) cases[[length(cases) + 1]] <- case("rows", c(a, j), st[j + 1], rel = 1e-10, abs = 1e-12)
   }
 }
+# activeSet Poisson (sSolver) on positive responses: ap, args as aq; the statistic is j in 0:3
+set.seed(20262340)
+for (rep in 1:30) {
+  n <- sample(4:8, 1); y <- round(abs(rnorm(n)) + 0.5, 3); w <- round(runif(n, 0.5, 3), 2); perm <- sample(n); ed <- NULL
+  for (i in 1:(n - 1)) for (j in (i + 1):n) if (runif(1) < 0.3) ed <- rbind(ed, c(perm[i], perm[j]))
+  if (is.null(ed)) next
+  a <- c(n, nrow(ed), y, w, ed[, 1], ed[, 2])
+  r <- tryCatch(suppressWarnings(activeSet(ed, "Poisson", y = y, weights = w, check = FALSE)), error = function(e) NULL)
+  if (is.null(r) || r$niter >= 100 || any(is.na(r$lambda)) || any(is.na(r$x))) next
+  st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
+  for (j in 0:3) cases[[length(cases) + 1]] <- case("ap", c(a, j, 1, 1), st[j + 1], rel = 1e-9, abs = 1e-10)
+}
 emit("isotone", "isotone", list(cases))
