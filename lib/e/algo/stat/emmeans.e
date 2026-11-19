@@ -375,3 +375,171 @@ fn pois_glm_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
     if !ps.invert(a, xwx, p, inv) { ret (zero, Singular) }
     ret (Lm { beta: beta, cov: inv, df: 1.0e300f64, p: p }, ok)
 }
+
+// the contrast coefficients of emmeans' *.emmc functions for k levels, level i of contrast j at out[i m + j] (m returned, 0 when the kind is unknown): kind 0 pairwise, 1 revpairwise, 2 trt.vs.ctrl (first level the control),
+// 3 trt.vs.ctrlk (last level), 4 consec, 5 eff, 6 del.eff, 7 poly (orthogonal polynomials of degree 1 .. k - 1 on 1 .. k, scaled to the smallest whole numbers, the last entry positive)
+fn contrast_coefs(kind: usize, k: usize, out: []f64) -> usize {
+    var m = 0usize
+    if kind == 0usize || kind == 1usize {
+        m = k * (k - 1usize) / 2usize
+    } else if kind == 2usize || kind == 3usize || kind == 4usize || kind == 7usize {
+        m = k - 1usize
+    } else if kind == 5usize || kind == 6usize {
+        m = k
+    } else {
+        ret 0usize
+    }
+    var z = 0usize
+    while z < k * m {
+        out[z] = 0.0f64
+        z += 1usize
+    }
+    if kind == 0usize || kind == 1usize {
+        var j = 0usize
+        var a = 0usize
+        while a < k {
+            var b = a + 1usize
+            while b < k {
+                if kind == 0usize {
+                    out[a * m + j] = 1.0f64
+                    out[b * m + j] = 0.0f64 - 1.0f64
+                } else {
+                    out[a * m + j] = 0.0f64 - 1.0f64
+                    out[b * m + j] = 1.0f64
+                }
+                j += 1usize
+                b += 1usize
+            }
+            a += 1usize
+        }
+        // revpairwise lists the pairs by the larger level last: 2-1, 3-1, 3-2, 4-1, ... (second index major)
+        if kind == 1usize {
+            z = 0usize
+            while z < k * m {
+                out[z] = 0.0f64
+                z += 1usize
+            }
+            j = 0usize
+            var hi = 1usize
+            while hi < k {
+                var lo = 0usize
+                while lo < hi {
+                    out[lo * m + j] = 0.0f64 - 1.0f64
+                    out[hi * m + j] = 1.0f64
+                    j += 1usize
+                    lo += 1usize
+                }
+                hi += 1usize
+            }
+        }
+    } else if kind == 2usize {
+        var j = 0usize
+        while j < m {
+            out[j] = 0.0f64 - 1.0f64
+            out[(j + 1usize) * m + j] = 1.0f64
+            j += 1usize
+        }
+    } else if kind == 3usize {
+        var j = 0usize
+        while j < m {
+            out[j * m + j] = 1.0f64
+            out[(k - 1usize) * m + j] = 0.0f64 - 1.0f64
+            j += 1usize
+        }
+    } else if kind == 4usize {
+        var j = 0usize
+        while j < m {
+            out[j * m + j] = 0.0f64 - 1.0f64
+            out[(j + 1usize) * m + j] = 1.0f64
+            j += 1usize
+        }
+    } else if kind == 5usize || kind == 6usize {
+        var j = 0usize
+        while j < k {
+            var i = 0usize
+            while i < k {
+                if kind == 5usize {
+                    if i == j { out[i * m + j] = 1.0f64 - 1.0f64 / f64(k) } else { out[i * m + j] = 0.0f64 - 1.0f64 / f64(k) }
+                } else {
+                    if i == j { out[i * m + j] = 1.0f64 } else { out[i * m + j] = 0.0f64 - 1.0f64 / f64(k - 1usize) }
+                }
+                i += 1usize
+            }
+            j += 1usize
+        }
+    } else {
+        // Gram-Schmidt on the powers of the centred levels, degree d in column d - 1
+        let kf = f64(k)
+        var d = 1usize
+        while d < k {
+            var i = 0usize
+            while i < k {
+                out[i * m + d - 1usize] = math.pow[f64](f64(i) - (kf - 1.0f64) / 2.0f64, f64(d))
+                i += 1usize
+            }
+            // remove the constant
+            var s = 0.0f64
+            i = 0usize
+            while i < k {
+                s += out[i * m + d - 1usize]
+                i += 1usize
+            }
+            i = 0usize
+            while i < k {
+                out[i * m + d - 1usize] = out[i * m + d - 1usize] - s / kf
+                i += 1usize
+            }
+            var e = 1usize
+            while e < d {
+                var dot = 0.0f64
+                var nn = 0.0f64
+                i = 0usize
+                while i < k {
+                    dot += out[i * m + d - 1usize] * out[i * m + e - 1usize]
+                    nn += out[i * m + e - 1usize] * out[i * m + e - 1usize]
+                    i += 1usize
+                }
+                i = 0usize
+                while i < k {
+                    out[i * m + d - 1usize] = out[i * m + d - 1usize] - dot / nn * out[i * m + e - 1usize]
+                    i += 1usize
+                }
+                e += 1usize
+            }
+            var mn = 1.0e300f64
+            i = 0usize
+            while i < k {
+                let v = math.abs[f64](out[i * m + d - 1usize])
+                if v > 1.0e-6f64 && v < mn { mn = v }
+                i += 1usize
+            }
+            var sg = 1.0f64
+            if out[(k - 1usize) * m + d - 1usize] < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+            i = 0usize
+            while i < k {
+                out[i * m + d - 1usize] = sg * out[i * m + d - 1usize] / mn
+                i += 1usize
+            }
+            // the smallest integer multiplier that makes every entry a whole number
+            var tm = 1usize
+            while tm < 200usize {
+                var whole = true
+                i = 0usize
+                while i < k {
+                    let v = out[i * m + d - 1usize] * f64(tm)
+                    if math.abs[f64](v - math.round[f64](v)) > 1.0e-6f64 { whole = false }
+                    i += 1usize
+                }
+                if whole { break }
+                tm += 1usize
+            }
+            i = 0usize
+            while i < k {
+                out[i * m + d - 1usize] = out[i * m + d - 1usize] * f64(tm)
+                i += 1usize
+            }
+            d += 1usize
+        }
+    }
+    ret m
+}
