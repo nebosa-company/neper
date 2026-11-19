@@ -50638,3 +50638,9 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 **Decision.** `rWEI(n, mu, sigma)` is R's `rweibull(n, shape = sigma, scale = mu)`, mu (-log(U))^(1/sigma) for one uniform U per draw, and `rEXP(n, mu)` is `rexp(n, rate = 1/mu)`, which uses R's exponential generator (`exp_rand`), not the inversion of a uniform.
 
 **Result.** `oracle_gamlss_dpo` (884 cases, 6 new random-number checks) equals gamlss.dist on Windows to 1e-6. Linux pending. L464 stays partial: SI, MN3-5, ST3C, moments, random numbers for the families not yet drawn.
+
+## D7354 — performance: performance_pcp and r2_mckelvey
+
+**Decision.** `performancepkg.logit_pcp` gives, for a logistic regression, the Herron percentage correctly predicted of the model (the mean of p for y = 1 and 1 - p for y = 0) and of the null (ybar^2 + (1 - ybar)^2) with their Wald 95% limits est +- 1.96 sqrt(est (1 - est) / n), the likelihood-ratio chi-square against the null and its p value, and McKelvey-Zavoina R2 = var(eta) / (var(eta) + pi^2/3), the variance divided by n.
+
+**Result.** `oracle_performancepkg` (1368 cases, 180 new on 20 models) equals performance on Windows to 1e-6. Linux pending. L339 stays partial: bayesfactor_savagedickey and si (they need the uninstalled logspline package), factor predictors in standardize_parameters, Nakagawa R2 and icc (mixed models), other outlier methods.

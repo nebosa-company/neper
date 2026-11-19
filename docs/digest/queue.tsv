@@ -30,7 +30,7 @@ L334	library	0.35	775	RSpectra and irlba: partial eigen and singular value decom
 L336	library	0.25	563	nnet: single-hidden-layer networks and multinom	Partial (D6615).
 L394	library	0.05	448	ipred: bagging and error estimation	Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred;
 L338	library	0.2	461	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
-L339	library	0.16	1229	bayestestR, performance and parameters: model summary indices	D7332: bayestestR map_estimate (kernel, Sheather-Jones) equal to bayestestR.
+L339	library	0.16	1372	bayestestR, performance and parameters: model summary indices	D7354: performance_pcp (Herron, with Wald limits and the likelihood-ratio test) and r2_mckelvey of a logistic regression equal to performance.
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 
 L361	library	0.2	646	segmented and strucchange: breakpoints and structural change	Partial (D6613).

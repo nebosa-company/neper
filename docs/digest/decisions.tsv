@@ -4258,4 +4258,5 @@ D7349	550	gamlss.dist: ZISICHEL distribution and quantile
 D7350	486	gamlss.dist: pSEP
 D7351	468	gamlss.dist: qSEP
 D7352	645	gamlss.dist: random numbers by the quantile function
-D7353	537	gamlss.dist: WEI and EXP random numbers
+D7353	538	gamlss.dist: WEI and EXP random numbers
+D7354	819	performance: performance_pcp and r2_mckelvey

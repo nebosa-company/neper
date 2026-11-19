@@ -589,3 +589,60 @@ fn std_params_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
     }
     ret ok
 }
+
+// performance_pcp (Herron) and r2_mckelvey of a logistic regression: which 0 the model's percentage correctly predicted (mean of p for y = 1 and 1 - p for y = 0), 1 the null model's (ybar^2 + (1 - ybar)^2),
+// 2 and 3 the 95% Wald limits of the first, 4 and 5 of the second (est +- 1.96 sqrt(est (1 - est) / n)), 6 the likelihood-ratio chi-square 2 (ll - ll0) of the test against the null, 7 its p value on 1 degree
+// of freedom less than the parameters (p - 1), 8 McKelvey-Zavoina R2: var(eta) / (var(eta) + pi^2 / 3)
+fn logit_pcp(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, which: usize) -> f64 {
+    let (pr, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    if logit_fitted(a, x, y, n, p, pr) != ok { ret 0.0f64 / 0.0f64 }
+    let nn = f64(n)
+    var ybar = 0.0f64
+    var i = 0usize
+    while i < n {
+        ybar += y[i]
+        i += 1usize
+    }
+    ybar = ybar / nn
+    var full = 0.0f64
+    var ll = 0.0f64
+    var ll0 = 0.0f64
+    var me = 0.0f64
+    i = 0usize
+    while i < n {
+        if y[i] == 1.0f64 {
+            full += pr[i]
+            ll += math.log[f64](pr[i])
+            ll0 += math.log[f64](ybar)
+        } else {
+            full += 1.0f64 - pr[i]
+            ll += math.log[f64](1.0f64 - pr[i])
+            ll0 += math.log[f64](1.0f64 - ybar)
+        }
+        me += math.log[f64](pr[i] / (1.0f64 - pr[i]))
+        i += 1usize
+    }
+    full = full / nn
+    let nul = ybar * ybar + (1.0f64 - ybar) * (1.0f64 - ybar)
+    let z = 1.959963984540054f64
+    if which == 0usize { ret full }
+    if which == 1usize { ret nul }
+    if which == 2usize { ret full - z * math.sqrt[f64](full * (1.0f64 - full) / nn) }
+    if which == 3usize { ret full + z * math.sqrt[f64](full * (1.0f64 - full) / nn) }
+    if which == 4usize { ret nul - z * math.sqrt[f64](nul * (1.0f64 - nul) / nn) }
+    if which == 5usize { ret nul + z * math.sqrt[f64](nul * (1.0f64 - nul) / nn) }
+    let chisq = 2.0f64 * (ll - ll0)
+    if which == 6usize { ret chisq }
+    if which == 7usize { ret nm.pchisq(chisq, f64(p) - 1.0f64, false, false) }
+    me = me / nn
+    var sv = 0.0f64
+    i = 0usize
+    while i < n {
+        let eta = math.log[f64](pr[i] / (1.0f64 - pr[i]))
+        sv += (eta - me) * (eta - me)
+        i += 1usize
+    }
+    sv = sv / nn
+    ret sv / (sv + 3.141592653589793f64 * 3.141592653589793f64 / 3.0f64)
+}

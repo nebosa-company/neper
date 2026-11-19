@@ -86,4 +86,12 @@ for (rep in 1:15) {
   r <- as.data.frame(suppressMessages(standardize_parameters(lm(y ~ ., d), method = "refit", ci = lev)))
   for (j in 1:p) for (w in 0:2) cases[[length(cases) + 1]] <- case("stdp", c(n, p, lev, j - 1, w, y, as.vector(t(X))), r[j + 1, c("Std_Coefficient", "CI_low", "CI_high")[w + 1]], rel = 1e-8, abs = 1e-10)
 }
+# performance_pcp and r2_mckelvey of a logistic regression: "pcp" (which 0..8 as logit_pcp, n, p, y, x row-major with the intercept)
+for (rep in 1:20) {
+  n <- sample(60:200, 1); p <- sample(2:4, 1); X <- cbind(1, matrix(round(rnorm(n * (p - 1)), 3), n, p - 1)); y <- rbinom(n, 1, plogis(as.vector(X %*% c(0, runif(p - 1, -1, 1)))))
+  if (sum(y) < 10 || sum(y) > n - 10) next
+  dd <- data.frame(y = y, X[, -1, drop = FALSE]); names(dd) <- c("y", paste0("x", seq_len(p - 1))); m <- glm(y ~ ., data = dd, family = binomial); pc <- as.data.frame(performance_pcp(m))
+  v <- c(pc$Estimate[1], pc$Estimate[2], pc$CI_low[1], pc$CI_high[1], pc$CI_low[2], pc$CI_high[2], pc$Chisq[2], pc$p[2], as.numeric(r2_mckelvey(m)))
+  for (w in 0:8) cases[[length(cases) + 1]] <- case("pcp", c(w, n, p, y, as.vector(t(X))), as.numeric(v[w + 1]), rel = 1e-6, abs = 1e-10)
+}
 emit("performancepkg", "performance", list(cases))

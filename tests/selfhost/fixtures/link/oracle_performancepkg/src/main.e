@@ -27,6 +27,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if se != ok { os.exit(9) }
             if pf.std_params_lm(a, x[5usize + sn..5usize + sn + sn * sp], x[5usize..5usize + sn], sn, sp, x[2usize], so) != ok { os.exit(10) }
             got = so[usize(x[4usize]) * sp + usize(x[3usize])]
+        } else if str.eq(c.name, "pcp") {
+            let pn = usize(x[1usize])
+            let pp = usize(x[2usize])
+            got = pf.logit_pcp(a, x[3usize + pn..3usize + pn + pn * pp], x[3usize..3usize + pn], pn, pp, usize(x[0usize]))
         } else if str.eq(c.name, "het") {
             let hn = usize(x[0usize])
             let hp = usize(x[1usize])
