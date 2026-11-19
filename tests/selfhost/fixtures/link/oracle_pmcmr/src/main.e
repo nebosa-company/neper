@@ -59,6 +59,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if str.eq(kind, "dz") || str.eq(kind, "dp") || str.eq(kind, "dpholm") {
                 let (z, p) = pm.dunn(q, rbar, rn, row, col)
                 if str.eq(kind, "dz") { vals[pos] = z } else { vals[pos] = p }
+            } else if str.eq(kind, "tk") || str.eq(kind, "tkp") || str.eq(kind, "sc") || str.eq(kind, "scp") {
+                var ok1 = 0usize
+                if str.eq(kind, "sc") || str.eq(kind, "scp") { ok1 = 1usize }
+                let (ts, tp) = pm.oneway_pair(y, grp, k, row, col, ok1)
+                if str.eq(kind, "tk") || str.eq(kind, "sc") { vals[pos] = ts } else { vals[pos] = tp }
             } else if str.eq(kind, "ds") || str.eq(kind, "dsp") {
                 let (ds1, dp1, ed) = pm.dscf_pair(a, y, grp, k, col + 1usize, row + 1usize)
                 if ed != ok { os.exit(11) }

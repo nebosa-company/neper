@@ -38,4 +38,12 @@ for (rep in 1:14) {
   sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
   add("ds", a, sw2(ds$statistic)); add("dsp", a, sw2(ds$p.value))
 }
+# tukeyTest ("tk", "tkp") and scheffeTest ("sc", "scp"): statistics and p values, position-weighted over the pairs as the other kinds.
+for (rep in 1:14) {
+  k <- sample(3:5, 1); sz <- sample(4:9, k, replace = TRUE); n <- sum(sz); g <- factor(rep(1:k, sz))
+  x <- round(rnorm(n) + as.numeric(g) * runif(1, 0, 0.6), 4)
+  a <- c(n, k, x, as.numeric(g)); tk <- suppressWarnings(tukeyTest(x, g)); sc <- suppressWarnings(scheffeTest(x, g))
+  sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
+  add("tk", a, sw2(tk$statistic)); add("tkp", a, sw2(tk$p.value)); add("sc", a, sw2(sc$statistic)); add("scp", a, sw2(sc$p.value))
+}
 emit("pmcmr", "PMCMRplus", list(cases))

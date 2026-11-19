@@ -50326,3 +50326,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7397 — PMCMRplus dscfAllPairsTest
 `dscf_pair` reuses the pairwise Mann-Whitney z of `manyone_u` (which gained the first-group argument): the Dwass-Steel-Critchlow-Fligner statistic is -sqrt(2) |z| (R takes the smaller U, so it is never positive) and the p is the upper Tukey probability of |statistic| at k means and infinite df. Equal to R on 14 data sets, statistics and p values as position-weighted sums; the existing many-to-one U fixture was updated for the new argument and still passes. L487 stays at 0.75.
+
+## D7398 — PMCMRplus tukeyTest and scheffeTest
+`oneway_pair` forms the pooled within-group variance s2 = sum((n_g - 1) var_g) / (n - k) and, for the table cell (row group, column group) with dif the signed mean difference, Tukey's q = dif / sqrt(s2 (1/n_i + 1/n_j) / 2) with the upper Tukey probability of |q| at (k, n - k), and Scheffe's F = dif^2 / (s2 (1/n_i + 1/n_j)(k - 1)) with the upper F probability. Equal to R on 14 data sets, statistics and p values. L487 stays at 0.75.

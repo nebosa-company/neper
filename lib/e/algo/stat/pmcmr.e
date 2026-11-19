@@ -607,3 +607,42 @@ fn dscf_pair(a: *mem.Arena, x: []const f64, grp: []const usize, k: usize, g0: us
     let st = 0.0f64 - math.sqrt[f64](2.0f64) * az
     ret (st, 1.0f64 - nb.ptukey(math.sqrt[f64](2.0f64) * az, 1.0f64, f64(k), 1.0e300f64, true, false), ok)
 }
+
+// tukeyTest (kind 0) and scheffeTest (kind 1) on one-way data (labels 1..k): with the pooled variance s2 = sum((n_g - 1) var_g) / (n - k) and dif = mean_ri - mean_cj, Tukey's
+// q = dif / sqrt(s2 (1/n_ri + 1/n_cj) / 2) with the upper Tukey probability of |q| (k means, n - k df), Scheffe's F = dif^2 / (s2 (1/n_ri + 1/n_cj) (k - 1)) with the upper F probability
+fn oneway_pair(x: []const f64, grp: []const usize, k: usize, ri: usize, cj: usize, kind: usize) -> (f64, f64) {
+    let n = x.len
+    var cnt: [16]f64 = zero
+    var mean: [16]f64 = zero
+    var t = 0usize
+    while t < n {
+        cnt[grp[t] - 1usize] += 1.0f64
+        mean[grp[t] - 1usize] += x[t]
+        t += 1usize
+    }
+    var g = 0usize
+    while g < k {
+        mean[g] = mean[g] / cnt[g]
+        g += 1usize
+    }
+    var ss = 0.0f64
+    t = 0usize
+    while t < n {
+        let d = x[t] - mean[grp[t] - 1usize]
+        ss += d * d
+        t += 1usize
+    }
+    let nf = f64(n)
+    let kf = f64(k)
+    let s2 = ss / (nf - kf)
+    let dif = mean[ri] - mean[cj]
+    let b = 1.0f64 / cnt[ri] + 1.0f64 / cnt[cj]
+    if kind == 0usize {
+        let q = dif / math.sqrt[f64](s2 * 0.5f64 * b)
+        var aq = q
+        if aq < 0.0f64 { aq = 0.0f64 - aq }
+        ret (q, 1.0f64 - nb.ptukey(aq, 1.0f64, kf, nf - kf, true, false))
+    }
+    let fv = dif * dif / (s2 * b * (kf - 1.0f64))
+    ret (fv, nb.pf(fv, kf - 1.0f64, nf - kf, false, false))
+}
