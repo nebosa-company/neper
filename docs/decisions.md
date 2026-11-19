@@ -50581,3 +50581,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7424 — pscl pR2 for zeroinfl
 `pr2_zeroinfl` fits the intercept-only zeroinfl (y ~ 1 | 1) as the null model and returns pscl's six numbers: the log-likelihoods, G2 = -2 (llhNull - llh), McFadden = 1 - llh / llhNull, r2ML = 1 - exp(-G2 / n) and r2CU = r2ML / (1 - exp(2 llhNull / n)). Equal to pR2 to 1e-4 on twelve zero-inflated Poisson fits (the exact Newton fits of the original oracle). L412 at 0.75; pR2 for the hurdle and the other count families, the hurdle with weights and offsets, and standard errors of the generalised fits remain.
+
+## D7425 — pscl pR2 for the hurdle
+`pr2_hurdle` is `pr2_zeroinfl` with the null model hurdle(y ~ 1 | 1); the same six numbers equal pR2 to 1e-4 on twelve Poisson hurdle fits (24 pR2 sets in all with D7424). L412 at 0.78.

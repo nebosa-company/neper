@@ -23,7 +23,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "r20") || str.eq(c.name, "r21") || str.eq(c.name, "r22") || str.eq(c.name, "r23") || str.eq(c.name, "r24") || str.eq(c.name, "r25") {
         let (r2, e9) = mem.alloc[f64](a, 6usize)
         if e9 != ok { ret nan }
-        if ps.pr2_zeroinfl(a, x, zz, y, n, p, q, r2) != ok { ret nan }
+        var er2 = ok
+        if kind == 0usize { er2 = ps.pr2_zeroinfl(a, x, zz, y, n, p, q, r2) } else { er2 = ps.pr2_hurdle(a, x, zz, y, n, p, q, r2) }
+        if er2 != ok { ret nan }
         var w = 0usize
         if str.eq(c.name, "r21") { w = 1usize }
         if str.eq(c.name, "r22") { w = 2usize }
