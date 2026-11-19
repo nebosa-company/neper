@@ -89,4 +89,15 @@ for (rep in 1:30) {
   cases[[length(cases) + 1]] <- case("dg", c(a, 1), r$p.value, rel = 1e-6, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("dg", c(a, 2), unname(r$parameter), rel = 0, abs = 0)
 }
+# pscore.test for glm(y ~ x), k = 10: "pg" args as "dg", which 0 the statistic 1 the p value
+for (rep in 1:30) {
+  n <- sample(60:150, 1); x <- sort(round(runif(n, 0, 10), 3)); fam <- 1 + rep %% 2; cp <- runif(1, 3, 7); eta <- 0.2 + 0.15 * x + (x > cp) * (x - cp) * runif(1, -0.6, 0.6)
+  y <- if (fam == 1) rbinom(n, 1, plogis(eta - 1)) else rpois(n, exp(eta - 1))
+  alt <- (rep - 1) %% 3; alts <- c("two.sided", "less", "greater"); d <- data.frame(x = x, y = y); assign("d", d, envir = globalenv())
+  r <- tryCatch(pscore.test(glm(y ~ x, data = d, family = if (fam == 1) binomial else poisson), ~x, k = 10, alternative = alts[alt + 1]), error = function(e) NULL, warning = function(w) NULL)
+  if (is.null(r)) next
+  a <- c(n, 2, alt, fam, y, x)
+  cases[[length(cases) + 1]] <- case("pg", c(a, 0), unname(r$statistic), rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("pg", c(a, 1), r$p.value, rel = 1e-6, abs = 1e-9)
+}
 emit("strucchange", "strucchange", list(cases))

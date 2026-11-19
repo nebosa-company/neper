@@ -630,6 +630,14 @@ fn sim_lm(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, 
 // IRLS of glm.fit for the binomial (family 1, logit) and poisson (family 2, log) with a dispersion of 1: the stopping rule is R's (|dev - devold| / (|dev| + 0.1) < 1e-8), cov is (X'WX)^-1 with the
 // weights of the last iteration (what summary.glm uses); d is n by k row-major
 fn glm_fit(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, family: usize, eta0: []const f64, beta: []f64, cov: []f64) -> err {
+    let (wl, e0) = mem.alloc[f64](a, n)
+    let (mf, e1) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok { ret mem.Full }
+    ret glm_fit_w(a, d, y, n, k, family, eta0, beta, cov, wl, mf)
+}
+
+// glm_fit that also answers the working weights of the last iteration (what glm.fit keeps in $weights) and the final fitted means
+fn glm_fit_w(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, family: usize, eta0: []const f64, beta: []f64, cov: []f64, wlast: []f64, mufinal: []f64) -> err {
     let (eta, e2) = mem.alloc[f64](a, n)
     let (mu, e3) = mem.alloc[f64](a, n)
     let (am, e4) = mem.alloc[f64](a, k * k)
@@ -664,6 +672,7 @@ fn glm_fit(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, fa
             if family == 2usize { me = math.exp[f64](eta[i]) }
             if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
             let sw = me / math.sqrt[f64](vr)
+            wlast[i] = sw * sw
             let z = eta[i] + (y[i] - mu[i]) / me
             var c = 0usize
             while c < k {
@@ -739,6 +748,11 @@ fn glm_fit(a: *mem.Arena, d: []const f64, y: []const f64, n: usize, k: usize, fa
             if family == 1usize { if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 }
                 if mu[i] > 1.0f64 - 2.220446049250313e-16f64 { mu[i] = 1.0f64 - 2.220446049250313e-16f64 } } else { if mu[i] < 2.220446049250313e-16f64 { mu[i] = 2.220446049250313e-16f64 } }
             dev += dev_resid(family, y[i], mu[i])
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            mufinal[i] = mu[i]
             i += 1usize
         }
         it += 1usize

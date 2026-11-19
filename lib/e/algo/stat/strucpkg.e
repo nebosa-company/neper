@@ -1201,3 +1201,101 @@ fn davies_glm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, 
     out[2usize] = f64(cnt)
     ret ok
 }
+
+// segmented::pscore.test for a binomial (family 1) or poisson (family 2) glm with one break (dispersion 1): the term mean_j pmax(z - psi_j, 0) (psi seq(min z, max z, length = k)) is
+// residualized on the weighted design of the last IRLS iteration (qr.resid of ws * term), u = A' (ws * working residual), v = A'A, stat = u / sqrt(v), p from the normal (alt 0 two-sided,
+// 1 less, 2 greater); out = (stat, p)
+fn pscore_glm(a: *mem.Arena, y: []const f64, z: []const f64, xreg: []const f64, n: usize, p: usize, k: usize, family: usize, alt: usize, out: []f64) -> err {
+    let (b0, e0) = mem.alloc[f64](a, p)
+    let (c0, e1) = mem.alloc[f64](a, p * p)
+    let (wl, e2) = mem.alloc[f64](a, n)
+    let (mf, e3) = mem.alloc[f64](a, n)
+    let (pm, e4) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret e0 }
+    var nostart: []f64 = zero
+    let fe = ar.glm_fit_w(a, xreg, y, n, p, family, nostart, b0, c0, wl, mf)
+    if fe != ok { ret fe }
+    var zmin = z[0usize]
+    var zmax = z[0usize]
+    var i = 0usize
+    while i < n {
+        if z[i] < zmin { zmin = z[i] }
+        if z[i] > zmax { zmax = z[i] }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            var v = z[i] - (zmin + (zmax - zmin) * f64(j) / f64(k - 1usize))
+            if v < 0.0f64 { v = 0.0f64 }
+            s += v
+            j += 1usize
+        }
+        pm[i] = s / f64(k)
+        i += 1usize
+    }
+    // A = ws * pm - X~ (X~'X~)^-1 X~' (ws * pm) with X~ = ws * X
+    let (xtx, e5) = mem.alloc[f64](a, p * p)
+    if e5 != ok { ret e5 }
+    var r = 0usize
+    while r < p * p {
+        xtx[r] = 0.0f64
+        r += 1usize
+    }
+    var xty: [16]f64 = zero
+    i = 0usize
+    while i < n {
+        var c1 = 0usize
+        while c1 < p {
+            xty[c1] += wl[i] * xreg[i * p + c1] * pm[i]
+            var c2 = 0usize
+            while c2 < p {
+                xtx[c1 * p + c2] += wl[i] * xreg[i * p + c1] * xreg[i * p + c2]
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        i += 1usize
+    }
+    let (inv, ie) = gp.invert(a, xtx, p)
+    if ie != ok { ret ie }
+    var bh: [16]f64 = zero
+    var c1 = 0usize
+    while c1 < p {
+        var c2 = 0usize
+        while c2 < p {
+            bh[c1] += inv[c1 * p + c2] * xty[c2]
+            c2 += 1usize
+        }
+        c1 += 1usize
+    }
+    var u = 0.0f64
+    var vv = 0.0f64
+    i = 0usize
+    while i < n {
+        let ws = math.sqrt[f64](wl[i])
+        var fit = 0.0f64
+        var c = 0usize
+        while c < p {
+            fit += bh[c] * xreg[i * p + c]
+            c += 1usize
+        }
+        let aa = ws * (pm[i] - fit)
+        var me = mf[i] * (1.0f64 - mf[i])
+        if family == 2usize { me = mf[i] }
+        if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
+        let res = (y[i] - mf[i]) / me
+        u += aa * ws * res
+        vv += aa * aa
+        i += 1usize
+    }
+    let st = u / math.sqrt[f64](vv)
+    var pv = 2.0f64 * dist.pnorm(math.abs[f64](st), 0.0f64, 1.0f64, false, false)
+    if alt == 1usize { pv = dist.pnorm(st, 0.0f64, 1.0f64, true, false) }
+    if alt == 2usize { pv = dist.pnorm(st, 0.0f64, 1.0f64, false, false) }
+    out[0usize] = st
+    out[1usize] = pv
+    ret ok
+}

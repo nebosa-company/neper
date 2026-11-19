@@ -57,6 +57,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if pe != ok { ret nan }
         ret pout[usize(z[3usize + 2usize * nd])]
     }
+    if str.eq(c.name, "pg") {
+        let nd = usize(z[0usize])
+        let (xr, exr) = mem.alloc[f64](a, nd * 2usize)
+        if exr != ok { ret nan }
+        var qd = 0usize
+        while qd < nd {
+            xr[qd * 2usize] = 1.0f64
+            xr[qd * 2usize + 1usize] = z[4usize + nd + qd]
+            qd += 1usize
+        }
+        var gout: [2]f64 = zero
+        let ge = sc.pscore_glm(a, z[4usize..4usize + nd], z[4usize + nd..4usize + 2usize * nd], xr, nd, 2usize, 10usize, usize(z[3usize]), usize(z[2usize]), gout[0usize..2usize])
+        if ge != ok { ret nan }
+        ret gout[usize(z[4usize + 2usize * nd])]
+    }
     if str.eq(c.name, "dg") {
         let nd = usize(z[0usize])
         let (xr, exr) = mem.alloc[f64](a, nd * 2usize)
