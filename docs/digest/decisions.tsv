@@ -4480,11 +4480,11 @@ D7622	1379	nnet hidden-layer regression network
 D7376	1269	mediation: quasi-Bayesian mediate for linear models
 D7623	698	nnet skip-layer connections
 D7624	1188	nnet with several outputs, logistic, entropy and softmax
-D7625	550	read.octave N-d arrays and string arrays
+D7700	550	read.octave N-d arrays and string arrays
 D7625	784	VGAM: cumulative logit with parallel slopes (proportional odds)
 D7680	988	nnet from set.seed, and the entropy floor
-D7626	749	read.octave lists, structs and cells
+D7701	749	read.octave lists, structs and cells
 D7626	489	VGAM: cumulative probit and cloglog links
 D7627	458	VGAM: multinomial logit
 D7681	883	nnet multinom standard errors (summary.multinom)
-D7628	659	dbscan sNNclust
+D7702	659	dbscan sNNclust

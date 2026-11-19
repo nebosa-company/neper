@@ -12,7 +12,7 @@
       "score": 0.55,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6417, D6418, D6420, D7113, D7114, D7115). read.arff for dense files, with date attributes (their own format, parsed to UTC seconds), sparse rows and relational attributes refused as read.arff refuses them; read.dbf common field types; read.octave scalars, matrices and strings. Equals foreign on Windows (oracle_foreign, 138 cases; Linux pending). write.arff for numeric and factor columns (D7590) equals foreign. Open: read.dbf memo fields, write.dbf, read.mtp, read.systat (compiled C in foreign: needs the source tarball), a missing month or day taken from today as R does (a yyyy-DDD column); read.octave complete for the types it reads: N-d and string arrays (D7625), cell, struct and list (D7626, oracle_octave 163 cases); bool, complex, range and integer types done (oracle_octave, 105 cases). Was: Open (CRAN rank 249). Small to mid. SAS, SPSS and Stata are L304."
+      "evidence": "Partial (D6417, D6418, D6420, D7113, D7114, D7115). read.arff for dense files, with date attributes (their own format, parsed to UTC seconds), sparse rows and relational attributes refused as read.arff refuses them; read.dbf common field types; read.octave scalars, matrices and strings. Equals foreign on Windows (oracle_foreign, 138 cases; Linux pending). write.arff for numeric and factor columns (D7590) equals foreign. Open: read.dbf memo fields, write.dbf, read.mtp, read.systat (compiled C in foreign: needs the source tarball), a missing month or day taken from today as R does (a yyyy-DDD column); read.octave complete for the types it reads: N-d and string arrays (D7700), cell, struct and list (D7701, oracle_octave 163 cases); bool, complex, range and integer types done (oracle_octave, 105 cases). Was: Open (CRAN rank 249). Small to mid. SAS, SPSS and Stata are L304."
     },
     {
       "id": "L358",
@@ -23,7 +23,7 @@
       "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows; oracle_dbscanpkg; Linux pending). D7526: extractDBSCAN equals dbscan. D7628: sNNclust equals dbscan. Open: hdbscan, extractXi, jpclust. Was: Open (CRAN rank 368). Small to mid. e.ml.cluster.density has dbscan and optics. Acceptance, equal to dbscan: hdbscan with its condensed tree, membership probabilities and outlier scores, lof, sNN and sNNclust, kNN and frNN, kNNdist, extractXi and extractDBSCAN, jpclust."
+      "evidence": "Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows; oracle_dbscanpkg; Linux pending). D7526: extractDBSCAN equals dbscan. D7702: sNNclust equals dbscan. Open: hdbscan, extractXi, jpclust. Was: Open (CRAN rank 368). Small to mid. e.ml.cluster.density has dbscan and optics. Acceptance, equal to dbscan: hdbscan with its condensed tree, membership probabilities and outlier scores, lof, sNN and sNNclust, kNN and frNN, kNNdist, extractXi and extractDBSCAN, jpclust."
     },
     {
       "id": "L380",
