@@ -18,4 +18,12 @@ for (rep in 1:14) {
     add(c(kd, n, k, k2, cl, cl2, as.vector(t(X))), as.numeric(v))
   }
 }
+# cluster.varstats' varwise table of a categorised variable: "vw" args (n, ncl, cats, clustering[n], x[n], cell index = (cluster - 1) * cats + category - 1) the count
+for (rep in 1:12) {
+  n <- sample(30:150, 1); ncl <- sample(2:4, 1); cats <- sample(3:8, 1); cl <- sample(seq_len(ncl), n, TRUE); cl[seq_len(ncl)] <- seq_len(ncl); x <- round(rnorm(n, cl, 2), 3)
+  vt <- suppressWarnings(cluster.varstats(cl, data.frame(x = x), clusterwise = FALSE, catvar = 1, catvarcats = cats))[[1]]
+  tab <- matrix(0, ncl, cats); rn <- rownames(vt)[seq_len(ncl)]; cn <- as.integer(colnames(vt))
+  for (i in seq_len(ncl)) for (j in seq_along(cn)) tab[as.integer(rn[i]), cn[j]] <- vt[i, j]
+  for (c1 in seq_len(ncl)) for (c2 in seq_len(cats)) cases[[length(cases) + 1]] <- case("vw", c(n, ncl, cats, cl, x, (c1 - 1) * cats + c2 - 1), tab[c1, c2], rel = 0, abs = 0)
+}
 emit("fpc", "fpc", list(cases))

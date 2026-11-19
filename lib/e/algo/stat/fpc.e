@@ -1498,3 +1498,55 @@ fn merge_bhat(a: *mem.Arena, x: []const f64, n: usize, d: usize, k: usize, probs
     if nv == k { nv -= 1usize }
     ret (nv, ok)
 }
+
+// the quantile of the sorted sample at probability p, type 7
+fn varwise_q7(s: []const f64, p: f64) -> f64 {
+    let n = s.len
+    let h = f64(n - 1usize) * p
+    let lo = math.floor[f64](h)
+    let i = usize(lo)
+    if i + 1usize >= n { ret s[n - 1usize] }
+    ret s[i] + (h - lo) * (s[i + 1usize] - s[i])
+}
+
+// fpc cluster.varstats' varwise table of a categorised variable: the variable is cut at its cats quantiles (category 1, or j when above the (j - 1)-th of the cats - 1 inner quantile points
+// as the package writes it) and the counts per cluster (1 .. ncl) and category fill out (ncl rows by cats columns, row-major)
+fn varwise_counts(a: *mem.Arena, x: []const f64, clustering: []const usize, ncl: usize, cats: usize, out: []f64) -> err {
+    let n = x.len
+    let (srt, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret e0 }
+    var i = 0usize
+    while i < n {
+        srt[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let v = srt[i]
+        var j = i
+        while j > 0usize && srt[j - 1usize] > v {
+            srt[j] = srt[j - 1usize]
+            j -= 1usize
+        }
+        srt[j] = v
+        i += 1usize
+    }
+    i = 0usize
+    while i < ncl * cats {
+        out[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var cat = 1usize
+        var j = 2usize
+        while j <= cats {
+            let q = varwise_q7(srt, f64(j - 1usize) / f64(cats))
+            if x[i] > q { cat = j }
+            j += 1usize
+        }
+        out[(clustering[i] - 1usize) * cats + cat - 1usize] += 1.0f64
+        i += 1usize
+    }
+    ret ok
+}
