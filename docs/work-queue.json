@@ -147,17 +147,6 @@
       "evidence": "Partial (D6165). cluster.stats validity indexes (no noise cluster) equal fpc on Windows (oracle_fpc; Linux pending). D7124: discrcoord equal to fpc up to the sign of its axes (oracle_fpc_discr, 96 sign-invariant values; the axis signs are open, see D7124). dbscan equals fpc (oracle_fpc_dbscan, 1840 values). ncoord equals fpc up to the axis signs (oracle_fpc_ncoord, 758 sign-normalised values; solve() now follows LAPACK's LU order). D7474-D7476: bhattacharyya.dist and mergenormals (bhat, demp) equal fpc. Open: noise clusters, clusterboot, nselectboot, the ridge, dip and predictive mergenormals methods, cluster.varstats, the axis signs. Was: Open (CRAN rank 803). Small to mid. Acceptance, equal to fpc under set.seed: cluster.stats with every validity index, calinhara, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats, plotcluster data (discrcoord, ncoord)."
     },
     {
-      "id": "L478",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 640,
-      "title": "dagitty: causal graph reasoning",
-      "score": 0.63,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6159). Ancestors, d-separation and minimal total-effect adjustment sets of DAGs equal dagitty on Windows (oracle_dagitty; Linux pending). All and canonical adjustment sets and path counts with open flags equal dagitty (oracle_dagitty, 640 values in all). equivalentDAGs (the class size) equals dagitty (680 values in all). impliedConditionalIndependencies (the minimal separators of every non-adjacent pair) equals dagitty (760 values in all). localTests equals dagitty (D7605). Open: instrumentalVariables (a rule matching 98 percent of random graphs is known, see the decision log; not ported). Was: Open (CRAN rank 845). Small to mid. Acceptance, equal to dagitty: dseparated, impliedConditionalIndependencies, adjustmentSets (minimal, canonical, exhaustive), instrumentalVariables, paths, ancestors, equivalentDAGs, localTests on data."
-    },
-    {
       "id": "L479",
       "category": "library",
       "group": "CRAN parity",

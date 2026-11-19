@@ -84,4 +84,18 @@ for (rep in 1:30) {
   a <- c(n, nobs, 0, 0, as.vector(t(A)), as.vector(t(cor(D))))
   add("ltn", a, nrow(lt)); add("lte", a, sum(lt$estimate)); add("ltp", a, sum(lt$p.value)); add("ltl", a, sum(lt[["2.5%"]])); add("ltu", a, sum(lt[["97.5%"]]))
 }
+# instrumentalVariables(g, x, y): "ivn" the number of instruments, "ivs" the sum of their node bit masks, "ivz" the sum over them of the conditioning set's bit mask (args as "dsep": n, x, y, 0, adjacency)
+for (rep in 1:60) {
+  n <- sample(5:9, 1); nodes <- paste0("v", seq_len(n))
+  A <- matrix(0, n, n); for (i in 1:(n - 1)) for (j in (i + 1):n) if (runif(1) < 0.4) A[i, j] <- 1
+  edges <- which(A == 1, arr.ind = TRUE)
+  txt <- paste("dag {", paste(nodes, collapse = " "), if (nrow(edges)) paste(sprintf("%s -> %s", nodes[edges[, 1]], nodes[edges[, 2]]), collapse = " "), "}")
+  g <- dagitty(txt); x <- sample(n - 1, 1); y <- if (x + 1 == n) n else sample((x + 1):n, 1)
+  iv <- tryCatch(instrumentalVariables(g, nodes[x], nodes[y]), error = function(e) NULL)
+  if (is.null(iv)) next
+  a <- c(n, x - 1, y - 1, 0, as.vector(t(A)))
+  add("ivn", a, length(iv))
+  add("ivs", a, sum(vapply(iv, function(v) sum(2^(match(v$I, nodes) - 1)), 0)))
+  add("ivz", a, sum(vapply(iv, function(v) if (length(v$Z)) sum(2^(match(v$Z, nodes) - 1)) else 0, 0)))
+}
 emit("dagitty", "dagitty", list(cases))

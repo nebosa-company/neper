@@ -488,3 +488,120 @@ fn local_test(a: *mem.Arena, cor: []const f64, nv: usize, x: usize, y: usize, z:
 }
 
 fn dist_qnorm_upper(p: f64) -> f64 { ret 0.0f64 - nq.qnorm(p, 0.0f64, 1.0f64, true, false) }
+
+// ---- instrumentalVariables (dagitty's conditional-instrument search, read from its JavaScript): in the back-door graph (the edges from x to the children of x on proper causal paths removed,
+// the intermediate nodes between x and y made latent so that they cannot be conditioned) a candidate z is an instrument when the minimal separator that dagitty's findMinimalSeparator
+// builds for y and z (two closeSeparator sweeps, first from y then from z, over the ancestral set of y and z) contains no descendant of y and not x, and x and z are d-connected given it.
+fn close_sep(gb: []const bool, n: usize, t: usize, r: usize, anc: u32, cand: u32, out: *u32) -> bool {
+    var su: [64]usize = zero
+    var ss: [64]usize = zero
+    var nu = 1usize
+    var ns = 0usize
+    su[0usize] = t
+    var vis_s = 0u32
+    var vis_u = 0u32
+    var f = 0u32
+    var cm = cand & ~bit(t)
+    while nu > 0usize || ns > 0usize {
+        var from_parent = false
+        var o = 0usize
+        if ns > 0usize {
+            ns -= 1usize
+            o = ss[ns]
+            from_parent = true
+        } else {
+            nu -= 1usize
+            o = su[nu]
+        }
+        if o == r { ret false }
+        let h = (cm & bit(o)) != 0u32
+        if h { f = f | bit(o) }
+        var p = 0usize
+        while p < n {
+            if gb[p * n + o] && (anc & bit(p)) != 0u32 {
+                if !h || from_parent {
+                    if (vis_u & bit(p)) == 0u32 {
+                        vis_u = vis_u | bit(p)
+                        su[nu] = p
+                        nu += 1usize
+                    }
+                }
+            }
+            p += 1usize
+        }
+        var c = 0usize
+        while c < n {
+            if gb[o * n + c] && (anc & bit(c)) != 0u32 {
+                if !h {
+                    if (vis_s & bit(c)) == 0u32 {
+                        vis_s = vis_s | bit(c)
+                        ss[ns] = c
+                        ns += 1usize
+                    }
+                }
+            }
+            c += 1usize
+        }
+    }
+    *out = f
+    ret true
+}
+
+fn instruments(adj: []const bool, n: usize, x: usize, y: usize, iv: []usize, zm: []u32) -> usize {
+    var nodes_anc_y: u32 = bit(y)
+    // proper causal path nodes: y and everything above it, not expanding past x
+    var frontier = bit(y)
+    var seen = bit(y)
+    while frontier != 0u32 {
+        var nf = 0u32
+        var v = 0usize
+        while v < n {
+            if (frontier & bit(v)) != 0u32 && v != x {
+                let par = parents_mask(adj, n, v)
+                nf = nf | (par & ~seen)
+            }
+            v += 1usize
+        }
+        seen = seen | nf
+        frontier = nf
+    }
+    nodes_anc_y = seen
+    let desc_x = descendants(adj, n, bit(x))
+    let pcp = nodes_anc_y & desc_x
+    var gb: [400]bool = zero
+    var i = 0usize
+    while i < n * n {
+        gb[i] = adj[i]
+        i += 1usize
+    }
+    var c = 0usize
+    while c < n {
+        if adj[x * n + c] && (pcp & bit(c)) != 0u32 { gb[x * n + c] = false }
+        c += 1usize
+    }
+    let inter = descendants(adj, n, bit(x)) & ancestors(adj, n, bit(y)) & ~bit(x) & ~bit(y)
+    let dy = descendants(gb[0usize..n * n], n, bit(y))
+    var count = 0usize
+    var f = 0usize
+    while f < n {
+        if f != x && f != y {
+            let o = ancestors(gb[0usize..n * n], n, bit(y) | bit(f))
+            let cand0 = o & ~bit(y) & ~bit(f) & ~inter
+            var s1 = 0u32
+            if close_sep(gb[0usize..n * n], n, y, f, o, cand0, &s1) {
+                let sep1 = s1 & cand0
+                var s2 = 0u32
+                if close_sep(gb[0usize..n * n], n, f, y, o, sep1, &s2) {
+                    let sep = s2 & sep1
+                    if (sep & dy) == 0u32 && (sep & bit(x)) == 0u32 && !dseparated(gb[0usize..n * n], n, bit(x), bit(f), sep) {
+                        iv[count] = f
+                        zm[count] = sep
+                        count += 1usize
+                    }
+                }
+            }
+        }
+        f += 1usize
+    }
+    ret count
+}

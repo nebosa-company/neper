@@ -42,6 +42,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tot
     }
+    if k.len == 3usize && k[0usize] == 105u8 && k[1usize] == 118u8 {
+        var ivn: [20]usize = zero
+        var ivz: [20]u32 = zero
+        let nv = dg.instruments(adj, n, xi, yi, ivn[0usize..20usize], ivz[0usize..20usize])
+        if k[2usize] == 110u8 { ret f64(nv) }
+        var tot = 0.0f64
+        var q = 0usize
+        while q < nv {
+            if k[2usize] == 115u8 { tot += f64(dg.bit(ivn[q])) } else { tot += f64(ivz[q]) }
+            q += 1usize
+        }
+        ret tot
+    }
     if str.eq(k, "dsep") {
         if dg.dseparated(adj, n, dg.bit(xi), dg.bit(yi), z) { ret 1.0f64 }
         ret 0.0f64
