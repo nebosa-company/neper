@@ -458,16 +458,25 @@ fn sscc_power(orr: f64, p0: f64, n: f64, r: f64, sided: f64, level: f64) -> f64 
     ret dist.pnorm((tn1 - tn2) / math.sqrt[f64](td1 + td2), 0.0f64, 1.0f64, true, false)
 }
 
-// epi.dsl for odds ratios: DerSimonian-Laird random-effects pooling of k two-by-two tables (ev_t, n_t, ev_c, n_c per study, a half added to a table with a cell below 1);
-// out = (tau squared, pooled OR, lower, upper, Cochran's Q, heterogeneity p value, I squared in percent)
-fn epi_dsl_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f64, level: f64, out: []f64) {
+// epi.dsl: DerSimonian-Laird random-effects pooling of k two-by-two tables (ev_t, n_t, ev_c, n_c per study, a half added to a table with a cell below 1) for odds
+// ratios, or risk ratios when rr is set (where Q is taken about the Mantel-Haenszel-weighted ratio, weights b c / N, as epiR does);
+// out = (tau squared, pooled ratio, lower, upper, Cochran's Q, heterogeneity p value, I squared in percent)
+fn epi_dsl_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f64, rr: bool, level: f64, out: []f64) {
     let k = evt.len
     let z = z_of(level)
     var sw = 0.0f64
     var sw2 = 0.0f64
     var swo = 0.0f64
+    var smw = 0.0f64
+    var smr = 0.0f64
     var i = 0usize
     while i < k {
+        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i], rr)
+        let ratio = math.exp[f64](l)
+        let w = 1.0f64 / v
+        sw += w
+        sw2 += w * w
+        swo += w * ratio
         var a = evt[i]
         var b = nt[i] - evt[i]
         var c = evc[i]
@@ -478,31 +487,18 @@ fn epi_dsl_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f
             c += 0.5f64
             d += 0.5f64
         }
-        let orr = a * d / (b * c)
-        let se = math.sqrt[f64](1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d)
-        let w = 1.0f64 / (se * se)
-        sw += w
-        sw2 += w * w
-        swo += w * orr
+        let wm = b * c / (a + b + c + d)
+        smw += wm
+        smr += wm * ratio
         i += 1usize
     }
-    let lnmh = math.log[f64](swo / sw)
+    var lnmh = math.log[f64](swo / sw)
+    if rr { lnmh = math.log[f64](smr / smw) }
     var q = 0.0f64
     i = 0usize
     while i < k {
-        var a = evt[i]
-        var b = nt[i] - evt[i]
-        var c = evc[i]
-        var d = nc[i] - evc[i]
-        if a < 1.0f64 || b < 1.0f64 || c < 1.0f64 || d < 1.0f64 {
-            a += 0.5f64
-            b += 0.5f64
-            c += 0.5f64
-            d += 0.5f64
-        }
-        let ln = math.log[f64](a * d / (b * c))
-        let se = math.sqrt[f64](1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d)
-        q += (ln - lnmh) * (ln - lnmh) / (se * se)
+        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i], rr)
+        q += (l - lnmh) * (l - lnmh) / v
         i += 1usize
     }
     let df = f64(k) - 1.0f64
@@ -512,21 +508,10 @@ fn epi_dsl_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f
     var swdl = 0.0f64
     i = 0usize
     while i < k {
-        var a = evt[i]
-        var b = nt[i] - evt[i]
-        var c = evc[i]
-        var d = nc[i] - evc[i]
-        if a < 1.0f64 || b < 1.0f64 || c < 1.0f64 || d < 1.0f64 {
-            a += 0.5f64
-            b += 0.5f64
-            c += 0.5f64
-            d += 0.5f64
-        }
-        let ln = math.log[f64](a * d / (b * c))
-        let v = 1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d
+        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i], rr)
         let wd = 1.0f64 / (v + tau2)
         swd += wd
-        swdl += wd * ln
+        swdl += wd * l
         i += 1usize
     }
     let lnd = swdl / swd

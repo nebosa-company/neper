@@ -51184,3 +51184,6 @@ The cross-sectional design reports the cohort.count measures under the prevalenc
 
 ## D7563 — epiR epi.iv for risk ratios
 `study_lnor` and `epi_iv_or` take a risk-ratio flag: the study statistic is ln RR with variance 1/a + 1/c - 1/n1 - 1/n2 instead of the log odds ratio, and the pooling, Q, H squared, I squared and effect test are unchanged. Equal to epi.iv(method = "risk.ratio") on 25 meta-analyses (325 values added to oracle_epir, 4515 in all). The risk-ratio DerSimonian-Laird method stays open.
+
+## D7564 — epiR epi.dsl for risk ratios
+`epi_dsl_or` takes the risk-ratio flag and now builds on `study_lnor`: for risk ratios epiR takes Q about the Mantel-Haenszel-weighted ratio (weights b c / N, not the inverse-variance weights it uses for odds ratios), then tau squared, the random-effects weights and the pooled interval are as before. Equal to epi.dsl(method = "risk.ratio") on 25 meta-analyses (175 values added to oracle_epir, 4690 in all); the odds-ratio cases of D7559 still pass through the refactor.

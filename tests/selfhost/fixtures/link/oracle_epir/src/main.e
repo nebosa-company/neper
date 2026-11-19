@@ -17,10 +17,10 @@ fn answer(c: *const oracle.Case) -> f64 {
         ep.epi_iv_or(x[1usize..1usize + ki], x[1usize + ki..1usize + 2usize * ki], x[1usize + 2usize * ki..1usize + 3usize * ki], x[1usize + 3usize * ki..1usize + 4usize * ki], str.eq(c.name, "ivr"), 0.95f64, iv[0usize..16usize])
         ret iv[usize(x[1usize + 4usize * ki])]
     }
-    if str.eq(c.name, "dsl") {
+    if str.eq(c.name, "dsl") || str.eq(c.name, "dslr") {
         let kd = usize(x[0usize])
         var dv: [8]f64 = zero
-        ep.epi_dsl_or(x[1usize..1usize + kd], x[1usize + kd..1usize + 2usize * kd], x[1usize + 2usize * kd..1usize + 3usize * kd], x[1usize + 3usize * kd..1usize + 4usize * kd], 0.95f64, dv[0usize..8usize])
+        ep.epi_dsl_or(x[1usize..1usize + kd], x[1usize + kd..1usize + 2usize * kd], x[1usize + 2usize * kd..1usize + 3usize * kd], x[1usize + 3usize * kd..1usize + 4usize * kd], str.eq(c.name, "dslr"), 0.95f64, dv[0usize..8usize])
         ret dv[usize(x[1usize + 4usize * kd])]
     }
     if str.eq(c.name, "ss") {
