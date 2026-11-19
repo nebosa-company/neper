@@ -4277,4 +4277,7 @@ D7427	693	pscl standard errors for the geometric and link fits
 D7367	922	mlogit: covariance matrix and Wald tests
 D7368	892	tweedie: the series density for power above 2
 D7369	915	lavaan: one-factor confirmatory factor analysis
-D7370	710	lavaan: standard errors of the one-factor fit
+D7370	711	lavaan: standard errors of the one-factor fit
+D7428	978	pscl hurdle with weights, offsets, a zero link and standard errors
+D7429	695	pscl standard errors of the negative binomial and geometric hurdles
+D7430	1088	L412 closed: vuong between the Poisson models, and the acceptance list is met

@@ -1,6 +1,6 @@
 // R pscl: zero-inflated Poisson (zeroinfl, logit zero part) and the Poisson hurdle model (hurdle, zero-truncated count part and logit zero part), fitted by Newton's method with step halving on the exact Hessian (R uses BFGS from glm starting values; the likelihood optimum is what is compared). Matrices are row-major with their own constant columns.
 //
-// Not here: the other zero links, offsets and weights, prediction types beyond response, count and zero.
+
 
 use e.algo.stat.gparot as gp
 use e.math
@@ -1062,5 +1062,97 @@ fn hurdle_nb_se(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n
         j += 1usize
     }
     if !geom { se[p + q] = cs[p] }
+    ret ok
+}
+
+// the per-row probability of the observed count under a Poisson glm (kind 0), a zero-inflated Poisson (1) or a Poisson hurdle (2) with the fitted par (beta, gamma; the glm uses beta only)
+fn row_probs(kind: usize, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []const f64, out: []f64) {
+    var i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        var j = 0usize
+        while j < p {
+            eta += x[i * p + j] * par[j]
+            j += 1usize
+        }
+        let mu = math.exp[f64](eta)
+        let f = nm.dpois_raw(y[i], mu, false)
+        if kind == 0usize {
+            out[i] = f
+        } else {
+            var zeta = 0.0f64
+            j = 0usize
+            while j < q {
+                zeta += z[i * q + j] * par[p + j]
+                j += 1usize
+            }
+            let pi = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - zeta))
+            if kind == 1usize {
+                if y[i] == 0.0f64 { out[i] = pi + (1.0f64 - pi) * f } else { out[i] = (1.0f64 - pi) * f }
+            } else {
+                // hurdle: the logit part models y > 0 here, so P(y = 0) = 1 - pi and P(y > 0) = pi f / (1 - f0)
+                if y[i] == 0.0f64 { out[i] = 1.0f64 - pi } else { out[i] = pi * f / (1.0f64 - math.exp[f64](0.0f64 - mu)) }
+            }
+        }
+        i += 1usize
+    }
+}
+
+// the Vuong statistics (raw, AIC-corrected, BIC-corrected) of model 1 against model 2 from their row probabilities and coefficient counts, as pscl's vuong prints them
+fn vuong_stats(p1: []const f64, p2: []const f64, n: usize, k1: usize, k2: usize, out: []f64) {
+    let nf = f64(n)
+    let dk = f64(k1) - f64(k2)
+    var c = 0usize
+    while c < 3usize {
+        var corr = 0.0f64
+        if c == 1usize { corr = dk / nf }
+        if c == 2usize { corr = dk / (2.0f64 * nf) * math.log[f64](nf) }
+        var s = 0.0f64
+        var i = 0usize
+        while i < n {
+            s += math.log[f64](p1[i]) - math.log[f64](p2[i]) - corr
+            i += 1usize
+        }
+        let mean = s / nf
+        var ss = 0.0f64
+        i = 0usize
+        while i < n {
+            let d = math.log[f64](p1[i]) - math.log[f64](p2[i]) - corr - mean
+            ss += d * d
+            i += 1usize
+        }
+        out[c] = s / (math.sqrt[f64](ss / (nf - 1.0f64)) * math.sqrt[f64](nf))
+        c += 1usize
+    }
+}
+
+// vuong between fitted Poisson models: which 0 zeroinfl against hurdle, 1 hurdle against the Poisson glm; out = (raw, AIC, BIC)
+fn vuong_pair(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, which: usize, out: []f64) -> err {
+    let (pz, e0) = mem.alloc[f64](a, p + q)
+    let (ph, e1) = mem.alloc[f64](a, p + q)
+    let (pg, e2) = mem.alloc[f64](a, p)
+    let (r1, e3) = mem.alloc[f64](a, n)
+    let (r2, e4) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    let lh = hurdle(a, x, z, y, n, p, q, ph)
+    if lh != lh { ret mem.Full }
+    if which == 0usize {
+        let lz = zeroinfl(a, x, z, y, n, p, q, pz)
+        if lz != lz { ret mem.Full }
+        row_probs(1usize, x, z, y, n, p, q, pz, r1)
+        row_probs(2usize, x, z, y, n, p, q, ph, r2)
+        vuong_stats(r1, r2, n, p + q, p + q, out)
+        ret ok
+    }
+    var i = 0usize
+    while i < p {
+        pg[i] = 0.0f64
+        i += 1usize
+    }
+    let lg = maximise(a, 1usize, x, z, y, n, p, q, pg)
+    if lg != lg { ret mem.Full }
+    row_probs(2usize, x, z, y, n, p, q, ph, r1)
+    row_probs(0usize, x, z, y, n, p, q, pg, r2)
+    vuong_stats(r1, r2, n, p + q, p, out)
     ret ok
 }

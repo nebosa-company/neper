@@ -26,4 +26,16 @@ for (rep in 1:24) {
   sv <- sqrt(diag(vcov(f))); ns <- names(sv); sc <- sv[grepl("^count_", ns)]; sz <- sv[grepl("^zero_", ns)]
   cases[[length(cases) + 1]] <- case("secount", a, sum(sc * seq_along(sc)), rel = 2e-3, abs = 1e-6); cases[[length(cases) + 1]] <- case("sezero", a, sum(sz * seq_along(sz)), rel = 2e-3, abs = 1e-6)
 }
+# vuong of zeroinfl against hurdle ("vg0".."vg2": raw, AIC, BIC) and of hurdle against the Poisson glm ("vh0".."vh2"); the statistics come from the printed table (7 digits).
+for (rep in 1:10) {
+  n <- sample(250:400, 1); x <- cbind(1, rnorm(n)); z <- cbind(1, rnorm(n)); b <- c(0.7, rnorm(1, 0, .3)); g <- c(-0.5, rnorm(1, 0, .5)); lam <- exp(as.vector(x %*% b)); pz <- plogis(as.vector(z %*% g))
+  y <- ifelse(runif(n) < pz, 0, rpois(n, lam)); d <- data.frame(y = y, x1 = x[, 2], z1 = z[, 2])
+  fz <- tryCatch(zeroinfl(y ~ x1 | z1, data = d), error = function(e) NULL); fh <- tryCatch(hurdle(y ~ x1 | z1, data = d), error = function(e) NULL); fg <- glm(y ~ x1, data = d, family = poisson)
+  if (is.null(fz) || is.null(fh)) next
+  parse <- function(out) sapply(c("Raw", "AIC-corrected", "BIC-corrected"), function(k) as.numeric(strsplit(trimws(sub(k, "", out[startsWith(out, k)][1])), " +")[[1]][1]))
+  a <- c(n, 2, 2, 0, y, as.vector(t(x)), as.vector(t(z)))
+  v1 <- parse(capture.output(vuong(fz, fh))); v2 <- parse(capture.output(vuong(fh, fg)))
+  if (all(is.finite(v1))) for (u in 1:3) cases[[length(cases) + 1]] <- case(paste0("vg", u - 1), a, v1[u], rel = 5e-4, abs = 5e-4)
+  if (all(is.finite(v2))) for (u in 1:3) cases[[length(cases) + 1]] <- case(paste0("vh", u - 1), a, v2[u], rel = 5e-4, abs = 5e-4)
+}
 emit("pscl", "pscl", list(cases))

@@ -34,6 +34,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "r25") { w = 5usize }
         ret r2[w]
     }
+    if str.eq(c.name, "vg0") || str.eq(c.name, "vg1") || str.eq(c.name, "vg2") || str.eq(c.name, "vh0") || str.eq(c.name, "vh1") || str.eq(c.name, "vh2") {
+        let (vs, e8) = mem.alloc[f64](a, 3usize)
+        if e8 != ok { ret nan }
+        var wv = 0usize
+        if str.eq(c.name, "vh0") || str.eq(c.name, "vh1") || str.eq(c.name, "vh2") { wv = 1usize }
+        if ps.vuong_pair(a, x, zz, y, n, p, q, wv, vs) != ok { ret nan }
+        var u = 0usize
+        if str.eq(c.name, "vg1") || str.eq(c.name, "vh1") { u = 1usize }
+        if str.eq(c.name, "vg2") || str.eq(c.name, "vh2") { u = 2usize }
+        ret vs[u]
+    }
     var ll = 0.0f64
     if kind == 0usize { ll = ps.zeroinfl(a, x, zz, y, n, p, q, par) } else { ll = ps.hurdle(a, x, zz, y, n, p, q, par) }
     if str.eq(c.name, "ll") { ret ll }
