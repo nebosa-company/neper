@@ -19,7 +19,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let n = usize(c.args[0usize])
         var got = 0.0f64
-        if str.eq(c.name, "hcvreg") { got = sm.hselect_cv_reg(c.args[1usize..1usize + n], c.args[1usize + n..1usize + 2usize * n]) } else { got = sm.hselect_cv(c.args[1usize..1usize + n]) }
+        if str.eq(c.name, "haicc") { got = sm.hselect_crit(c.args[1usize..1usize + n], c.args[1usize + n..1usize + 2usize * n], 1usize, 0.0f64) } else if str.eq(c.name, "hdf") { got = sm.hselect_crit(c.args[1usize..1usize + n], c.args[1usize + n..1usize + 2usize * n], 0usize, 5.0f64) } else if str.eq(c.name, "hcvreg") { got = sm.hselect_cv_reg(c.args[1usize..1usize + n], c.args[1usize + n..1usize + 2usize * n]) } else { got = sm.hselect_cv(c.args[1usize..1usize + n]) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

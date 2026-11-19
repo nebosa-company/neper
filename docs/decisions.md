@@ -50785,3 +50785,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7440 — sm h.select cv for regression
 `hselect_cv_reg` is h.select(x, y, method = "cv") for one unbinned covariate: the same optimise over log(sd / 16) to log(2 sd), minimising the leave-one-out squared error over n. Equal to sm on 20 samples added to oracle_sm_hsel. Open for L505: df and aicc criteria, binning, 2-d.
+
+## D7441 — sm h.select df and aicc criteria
+`hselect_crit` is h.select(x, y, method = "df", df = d) (criterion (tr S - d)^2) and method = "aicc" (log(rss / n) + 1 + 2 (tr S + 1) / (n - tr S - 2)) for one unbinned covariate, the same optimise as the cv forms; equal to sm on 20 samples each added to oracle_sm_hsel. Open for L505: binning above 100 observations, 2-d structures, bands, sm.ancova, sm.survival, sm.options.

@@ -281,3 +281,61 @@ fn hselect_cv_reg(x: []const f64, y: []const f64) -> f64 {
     var c = CvRegCtx { x: x, y: y }
     ret math.exp[f64](fd.brent_min[CvRegCtx](&c, cv_reg_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
 }
+
+// the local-linear smoother at x[i] with bandwidth h: trace entry s_ii and the fit sum_j s_ij y[j]
+fn smooth_row(x: []const f64, y: []const f64, i: usize, h: f64, sii: *f64) -> f64 {
+    let n = x.len
+    var s0 = 0.0f64
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var j = 0usize
+    while j < n {
+        let wd = x[i] - x[j]
+        let w = math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+        s0 += w
+        s1 += w * wd
+        s2 += w * wd * wd
+        j += 1usize
+    }
+    var fit = 0.0f64
+    j = 0usize
+    while j < n {
+        let wd = x[i] - x[j]
+        let w = math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+        let sij = w * (s2 - wd * s1) / (s2 * s0 - s1 * s1)
+        fit += sij * y[j]
+        if j == i { *sii = sij }
+        j += 1usize
+    }
+    ret fit
+}
+
+// the df criterion (tr S - df)^2 (kind 0) and the AICc criterion (kind 1) of sm at log bandwidth lh
+type CritCtx = struct { x: []const f64, y: []const f64, kind: usize, df: f64 }
+
+fn crit_log(c: *CritCtx, lh: f64) -> f64 {
+    let n = c.x.len
+    let h = math.exp[f64](lh)
+    var tr = 0.0f64
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        var sii = 0.0f64
+        let fit = smooth_row(c.x, c.y, i, h, &sii)
+        tr += sii
+        rss += (c.y[i] - fit) * (c.y[i] - fit)
+        i += 1usize
+    }
+    if c.kind == 0usize { ret (tr - c.df) * (tr - c.df) }
+    let nn = f64(n)
+    let v = math.log[f64](rss / nn) + 1.0f64 + 2.0f64 * (tr + 1.0f64) / (nn - tr - 2.0f64)
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+// h.select(x, y, method = "df" or "aicc") for one unbinned covariate; kind 0 is df (with df = df), 1 is aicc
+fn hselect_crit(x: []const f64, y: []const f64, kind: usize, df: f64) -> f64 {
+    let start = sd_of(x) / 2.0f64
+    var c = CritCtx { x: x, y: y, kind: kind, df: df }
+    ret math.exp[f64](fd.brent_min[CritCtx](&c, crit_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+}
