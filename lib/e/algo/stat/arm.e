@@ -1,9 +1,10 @@
 // R arm: logit and invlogit, se.coef of a linear model, and binned.resids (the binned-residual table behind binnedplot).
 //
-// rescale (the numeric core of standardize) is here. Not here: sim, bayesglm, discrete, corrplot data and the model refit of standardize.
+// rescale (the numeric core of standardize) is here. Not here: sim, discrete, corrplot data and the model refit of standardize.
 
 use e.algo.stat.carlmtest as ols
 use e.algo.stat.desctools as dt
+use e.algo.stat.gparot as gp
 use e.math
 use e.mem
 
@@ -196,4 +197,259 @@ fn standardize_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, q: us
         k += 1usize
     }
     ret ok
+}
+
+// the deviance residual of one observation (gaussian, binomial or poisson)
+fn dev_resid(family: usize, y: f64, mu: f64) -> f64 {
+    if family == 0usize { ret (y - mu) * (y - mu) }
+    if family == 1usize {
+        var d = 0.0f64
+        if y > 0.0f64 { d += y * math.log[f64](y / mu) }
+        if y < 1.0f64 { d += (1.0f64 - y) * math.log[f64]((1.0f64 - y) / (1.0f64 - mu)) }
+        ret 2.0f64 * d
+    }
+    var d = 0.0f64
+    if y > 0.0f64 { d = y * math.log[f64](y / mu) }
+    ret 2.0f64 * (d - (y - mu))
+}
+
+// bayesglm with the default priors (Cauchy: prior.df 1, prior.scale 2.5, 10 for the intercept in column 0, prior mean 0, scaled = TRUE): arm's EM-style IRLS, replicated step by step
+// so that the iteration at which it stops is the same. family 0 gaussian, 1 binomial (logit), 2 poisson (log); x is n by k row-major with the constant in column 0. coef receives the
+// coefficients and the answer is the number of iterations (0 on failure).
+fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, coef: []f64) -> usize {
+    let nf = f64(n)
+    let (ps, e1) = mem.alloc[f64](a, k)
+    let (ps0, e2) = mem.alloc[f64](a, k)
+    let (psd, e3) = mem.alloc[f64](a, k)
+    let (eta, e4) = mem.alloc[f64](a, n)
+    let (mu, e5) = mem.alloc[f64](a, n)
+    let (zz, e6) = mem.alloc[f64](a, n)
+    let (ww, e7) = mem.alloc[f64](a, n)
+    let (am, e8) = mem.alloc[f64](a, k * k)
+    let (bv, e9) = mem.alloc[f64](a, k)
+    let (hat, e10) = mem.alloc[f64](a, k)
+    let (cm, e11) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret 0usize }
+    var ybar = 0.0f64
+    var i = 0usize
+    while i < n {
+        ybar += y[i]
+        i += 1usize
+    }
+    ybar = ybar / nf
+    var yv = 0.0f64
+    i = 0usize
+    while i < n {
+        yv += (y[i] - ybar) * (y[i] - ybar)
+        i += 1usize
+    }
+    yv = yv / (nf - 1.0f64)
+    let ysd = math.sqrt[f64](yv)
+    var j = 0usize
+    while j < k {
+        ps[j] = 2.5f64
+        if j == 0usize { ps[j] = 10.0f64 }
+        if family == 0usize { ps[j] = ps[j] * 2.0f64 * ysd }
+        ps0[j] = ps[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < k {
+        // the number of distinct values of column j decides its scale: two values the range, more than two twice the sd
+        var lo = x[j]
+        var hi = x[j]
+        var mean = 0.0f64
+        i = 0usize
+        while i < n {
+            let v = x[i * k + j]
+            if v < lo { lo = v }
+            if v > hi { hi = v }
+            mean += v
+            i += 1usize
+        }
+        mean = mean / nf
+        cm[j] = mean
+        var distinct = 0usize
+        i = 0usize
+        while i < n && distinct < 3usize {
+            var seen = false
+            var q = 0usize
+            while q < i {
+                if x[q * k + j] == x[i * k + j] { seen = true }
+                q += 1usize
+            }
+            if !seen { distinct += 1usize }
+            i += 1usize
+        }
+        var xs = 1.0f64
+        if distinct == 2usize { xs = hi - lo }
+        if distinct > 2usize {
+            var vv = 0.0f64
+            i = 0usize
+            while i < n {
+                vv += (x[i * k + j] - mean) * (x[i * k + j] - mean)
+                i += 1usize
+            }
+            xs = 2.0f64 * math.sqrt[f64](vv / (nf - 1.0f64))
+        }
+        ps[j] = ps[j] / xs
+        psd[j] = ps[j]
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var m0 = y[i]
+        if family == 1usize { m0 = (y[i] + 0.5f64) / 2.0f64 }
+        if family == 2usize { m0 = y[i] + 0.1f64 }
+        mu[i] = m0
+        eta[i] = m0
+        if family == 1usize { eta[i] = math.log[f64](m0 / (1.0f64 - m0)) }
+        if family == 2usize { eta[i] = math.log[f64](m0) }
+        i += 1usize
+    }
+    var disp = yv / 10000.0f64
+    if family != 0usize { disp = 1.0f64 }
+    var dispold = disp
+    var devold = 0.0f64
+    i = 0usize
+    while i < n {
+        devold += dev_resid(family, y[i], mu[i])
+        i += 1usize
+    }
+    var iter = 1usize
+    while iter <= 25usize {
+        i = 0usize
+        while i < n {
+            var me = 1.0f64
+            var vr = 1.0f64
+            if family == 1usize {
+                me = mu[i] * (1.0f64 - mu[i])
+                vr = me
+            }
+            if family == 2usize {
+                me = mu[i]
+                vr = mu[i]
+            }
+            zz[i] = eta[i] + (y[i] - mu[i]) / me
+            ww[i] = math.sqrt[f64](me * me / vr)
+            i += 1usize
+        }
+        // the normal equations of the weighted least squares augmented by the k prior rows: the identity with row 0 replaced by the column means (intercept and scaled);
+        // the prior mean is 0, so the prior rows add nothing to the right-hand side
+        var r = 0usize
+        while r < k {
+            var c = 0usize
+            while c < k {
+                var v = 0.0f64
+                i = 0usize
+                while i < n {
+                    v += ww[i] * ww[i] * x[i * k + r] * x[i * k + c]
+                    i += 1usize
+                }
+                var pr = 0.0f64
+                var j2 = 0usize
+                while j2 < k {
+                    let wj = math.sqrt[f64](disp) / psd[j2]
+                    var vr0 = 0.0f64
+                    var vc0 = 0.0f64
+                    if j2 == 0usize {
+                        vr0 = cm[r]
+                        vc0 = cm[c]
+                    } else {
+                        if r == j2 { vr0 = 1.0f64 }
+                        if c == j2 { vc0 = 1.0f64 }
+                    }
+                    pr += wj * wj * vr0 * vc0
+                    j2 += 1usize
+                }
+                am[r * k + c] = v + pr
+                c += 1usize
+            }
+            var t = 0.0f64
+            i = 0usize
+            while i < n {
+                t += ww[i] * ww[i] * x[i * k + r] * zz[i]
+                i += 1usize
+            }
+            bv[r] = t
+            r += 1usize
+        }
+        let (inv, ie) = gp.invert(a, am, k)
+        if ie != ok { ret 0usize }
+        r = 0usize
+        while r < k {
+            var v = 0.0f64
+            var c = 0usize
+            while c < k {
+                v += inv[r * k + c] * bv[c]
+                c += 1usize
+            }
+            hat[r] = v
+            r += 1usize
+        }
+        if family == 0usize {
+            j = 0usize
+            while j < k {
+                ps[j] = ps0[j]
+                j += 1usize
+            }
+        }
+        j = 0usize
+        while j < k {
+            psd[j] = math.sqrt[f64]((hat[j] * hat[j] + inv[j * k + j] * disp + ps[j] * ps[j]) / 2.0f64)
+            coef[j] = hat[j]
+            j += 1usize
+        }
+        var dev = 0.0f64
+        i = 0usize
+        while i < n {
+            var e = 0.0f64
+            j = 0usize
+            while j < k {
+                e += x[i * k + j] * hat[j]
+                j += 1usize
+            }
+            eta[i] = e
+            if family == 0usize { mu[i] = e }
+            if family == 1usize { mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e)) }
+            if family == 2usize { mu[i] = math.exp[f64](e) }
+            dev += dev_resid(family, y[i], mu[i])
+            i += 1usize
+        }
+        if family == 0usize {
+            var mse = 0.0f64
+            var unc = 0.0f64
+            i = 0usize
+            while i < n {
+                var e = 0.0f64
+                j = 0usize
+                while j < k {
+                    e += x[i * k + j] * hat[j]
+                    j += 1usize
+                }
+                let rr = ww[i] * (zz[i] - e)
+                mse += rr * rr
+                var q = 0.0f64
+                j = 0usize
+                while j < k {
+                    var xv = 0.0f64
+                    var c = 0usize
+                    while c < k {
+                        xv += x[i * k + c] * inv[c * k + j]
+                        c += 1usize
+                    }
+                    q += xv * x[i * k + j]
+                    j += 1usize
+                }
+                unc += q
+                i += 1usize
+            }
+            disp = mse / nf + unc / nf * disp
+        }
+        if iter > 1usize && math.abs[f64](dev - devold) / (0.1f64 + math.abs[f64](dev)) < 1.0e-8f64 && math.abs[f64](disp - dispold) / (0.1f64 + math.abs[f64](disp)) < 1.0e-8f64 { ret iter }
+        devold = dev
+        dispold = disp
+        iter += 1usize
+    }
+    ret 25usize
 }

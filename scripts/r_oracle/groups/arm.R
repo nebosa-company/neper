@@ -1,4 +1,5 @@
 # arm: logit, invlogit, se.coef of a linear model, binned.resids.
+# bayesglm: see the block before emit.
 #   args: "logit"/"invlogit" (v); "se" (n, p, x row-major n by p, y) with the coefficient index last; "binned" (nclass, n, x, y, column, bin) weighted by position over the table
 suppressMessages(library(arm))
 cases <- list()
@@ -36,5 +37,16 @@ for (rep in 1:15) {
   m <- lm(fo_g, data = dfx_g)
   sm <- standardize(m); cf <- as.numeric(coef(sm))
   for (j in 0:q) cases[[length(cases) + 1]] <- case("stdlm", c(n, q, y, as.vector(t(Xm)), j), cf[j + 1], rel = 1e-8, abs = 1e-11)
+}
+# bayesglm: args (n, k, family 0 gaussian 1 binomial 2 poisson, x[n * k] row-major with the constant first, y[n], j): coefficient j (0-based) of bayesglm with the default priors.
+for (rep in 1:18) {
+  fam <- (rep - 1) %% 3; n <- sample(60:150, 1); k <- sample(2:4, 1)
+  X <- cbind(1, matrix(round(rnorm(n * (k - 1)), 4), n)); if (k >= 3 && rep %% 2 == 0) X[, 3] <- rbinom(n, 1, 0.4)
+  b <- c(0.2, runif(k - 1, -0.8, 0.8)); eta <- as.vector(X %*% b)
+  y <- if (fam == 0) round(eta + rnorm(n, 0, 0.6), 4) else if (fam == 1) rbinom(n, 1, plogis(eta)) else rpois(n, exp(eta))
+  d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
+  f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = list(gaussian, binomial, poisson)[[fam + 1]])), error = function(e) NULL)
+  if (is.null(f)) next
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm", c(n, k, fam, as.vector(t(X)), y, j), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
 }
 emit("arm", "arm", list(cases))

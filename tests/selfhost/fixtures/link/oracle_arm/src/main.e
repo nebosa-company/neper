@@ -24,6 +24,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "logit") { ret arm.logit(x[0usize]) }
     if str.eq(k, "invlogit") { ret arm.invlogit(x[0usize]) }
     if str.eq(k, "stdlm") { ret stdlm_answer(a, c) }
+    if str.eq(k, "bayesglm") {
+        let n = usize(x[0usize])
+        let kk = usize(x[1usize])
+        let (o, e) = mem.alloc[f64](a, kk)
+        if e != ok { os.exit(30) }
+        if arm.bayesglm(a, x[3usize..3usize + n * kk], x[3usize + n * kk..3usize + n * kk + n], n, kk, usize(x[2usize]), o) == 0usize { ret 0.0f64 / 0.0f64 }
+        ret o[usize(x[3usize + n * kk + n])]
+    }
     if str.eq(k, "rescale") {
         let n = usize(x[1usize])
         let (o, e) = mem.alloc[f64](a, n)
