@@ -1400,3 +1400,13 @@ fn hselect_reg_2d(x1: []const f64, x2: []const f64, y: []const f64, kind: usize,
     if which == 0usize { ret f * c.s1 }
     ret f * c.s2
 }
+
+// sm.density's variability band for an unweighted, unrestricted 1-d estimate est at bandwidth h from a sample of n: se = sqrt(dnorm(0, sd = sqrt(2)) / (4 n h)), the bounds
+// (sqrt(est) +- 2 se)^2 with the lower root cut at zero; answers (se, lower, upper)
+fn density_band(est: f64, n: f64, h: f64) -> (f64, f64, f64) {
+    let se = math.sqrt[f64](phi(0.0f64 / math.sqrt[f64](2.0f64)) / math.sqrt[f64](2.0f64) / (4.0f64 * n * h))
+    let up = math.sqrt[f64](est) + 2.0f64 * se
+    var lo = math.sqrt[f64](est) - 2.0f64 * se
+    if lo < 0.0f64 { lo = 0.0f64 }
+    ret (se, lo * lo, up * up)
+}

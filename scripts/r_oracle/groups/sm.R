@@ -21,4 +21,11 @@ for (rep in 1:40) {
   h1 <- tryCatch(suppressMessages(capture.output(r <- hcv(x))) , error = function(e) NULL); if (!is.null(h1) && is.numeric(r)) add("hcvd", c(n, x), r)
   h2 <- tryCatch(suppressMessages(capture.output(r2 <- hcv(x, y))), error = function(e) NULL); if (!is.null(h2) && is.numeric(r2)) add("hcvr", c(n, x, y), r2)
 }
+# the variability band of sm.density (se = TRUE, the default of the 1-d estimate): "bse", "blo", "bup" args (n, h, p, x...)
+for (rep in 1:25) {
+  n <- sample(15:90, 1); x <- round(rnorm(n, 1, 2), 4); h <- runif(1, 0.2, 1); p <- runif(1, min(x), max(x))
+  d <- sm.density(x, h = h, eval.points = p, display = "none")
+  a <- c(n, h, p, x)
+  add("bse", a, d$se[1]); add("blo", a, d$lower[1]); add("bup", a, d$upper[1])
+}
 emit("sm", "sm", list(cases))

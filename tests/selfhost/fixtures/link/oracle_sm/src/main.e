@@ -16,6 +16,13 @@ fn answer(c: *const oracle.Case) -> f64 {
     if str.eq(k, "hcvr") { ret sm.hcv(x[1usize..1usize + n], x[1usize + n..1usize + 2usize * n], true) }
     if str.eq(k, "hn1") { ret sm.hnorm(x[1usize..1usize + n], 1usize) }
     if str.eq(k, "hn2") { ret sm.hnorm(x[1usize..1usize + n], 2usize) }
+    if str.eq(k, "bse") || str.eq(k, "blo") || str.eq(k, "bup") {
+        let est = sm.density1(x[3usize..3usize + n], x[1usize], x[2usize])
+        let (bse, blo, bup) = sm.density_band(est, f64(n), x[1usize])
+        if str.eq(k, "bse") { ret bse }
+        if str.eq(k, "blo") { ret blo }
+        ret bup
+    }
     if str.eq(k, "dens1") { ret sm.density1(x[3usize..3usize + n], x[1usize], x[2usize]) }
     if str.eq(k, "dens2") { ret sm.density2(x[5usize..5usize + n], x[5usize + n..5usize + 2usize * n], x[1usize], x[2usize], x[3usize], x[4usize]) }
     ret sm.regression(x[4usize..4usize + n], x[4usize + n..4usize + 2usize * n], x[1usize], x[2usize], usize(x[3usize]))

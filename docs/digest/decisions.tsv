@@ -4474,4 +4474,5 @@ D7616	1063	epiR Koopman risk-ratio interval on every table
 D7617	425	L460 (epiR) closed
 D7618	866	actuar rcompound and the simulation aggregate
 D7619	825	actuar linear Bayes credibility (bayes)
-D7620	1282	actuar regression credibility (Hachemeister, hache.origin)
+D7620	1283	actuar regression credibility (Hachemeister, hache.origin)
+D7621	591	sm.density variability band
