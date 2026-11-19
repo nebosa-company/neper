@@ -71,4 +71,12 @@ for (rep in 1:10) {
   add("t2", a, sw2(t2$statistic)); add("t2p", a, sw2(t2$p.value))
   add("t3", a, sw2(t3$statistic)); cases[[length(cases) + 1]] <- case("t3p", a, sw2(t3$p.value), rel = 5e-3, abs = 5e-3)
 }
+# hsAllPairsTest (Hayter-Stone) statistic "hs" (alternatives greater and less alternate): position-weighted over the pairs.
+for (rep in 1:12) {
+  k <- sample(3:5, 1); sz <- sample(5:10, k, replace = TRUE); n <- sum(sz); g <- factor(rep(1:k, sz)); alt <- rep %% 2
+  x <- round(rnorm(n) + as.numeric(g) * runif(1, 0, 0.7), if (rep %% 3 == 0) 1 else 4)
+  hs <- suppressWarnings(hsAllPairsTest(x, g, alternative = c("greater", "less")[alt + 1]))
+  sw2 <- function(m) { v <- as.vector(m); v <- v[!is.na(v)]; sum(v * seq_along(v)) }
+  add(if (alt == 0) "hs0" else "hs1", c(n, k, x, as.numeric(g)), sw2(hs$statistic))
+}
 emit("pmcmr", "PMCMRplus", list(cases))

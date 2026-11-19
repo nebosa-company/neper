@@ -1439,3 +1439,33 @@ fn range_pair(x: []const f64, grp: []const usize, k: usize, ri: usize, cj: usize
     if pa > 1.0f64 { pa = 1.0f64 }
     ret (tv, pa)
 }
+
+// hsAllPairsTest (Hayter-Stone) statistic of the cell (row group ri, column group cj < ri): U = the number of pairs (x in group cj, y in group ri) with x < y, S = 2 sqrt(6) (U - n_c n_r / 2) /
+// sqrt(n_c n_r (n_c + n_r + 1)); "less" negates the data first (alt 1)
+fn hs_stat(x: []const f64, grp: []const usize, ri: usize, cj: usize, alt: usize) -> f64 {
+    var u = 0.0f64
+    var nc = 0.0f64
+    var nr = 0.0f64
+    var a = 0usize
+    while a < x.len {
+        if grp[a] == cj + 1usize {
+            nc += 1.0f64
+            var b = 0usize
+            while b < x.len {
+                if grp[b] == ri + 1usize {
+                    var xa = x[a]
+                    var xb = x[b]
+                    if alt == 1usize {
+                        xa = 0.0f64 - xa
+                        xb = 0.0f64 - xb
+                    }
+                    if xa < xb { u += 1.0f64 }
+                }
+                b += 1usize
+            }
+        }
+        if grp[a] == ri + 1usize { nr += 1.0f64 }
+        a += 1usize
+    }
+    ret 2.0f64 * math.sqrt[f64](6.0f64) * (u - nc * nr / 2.0f64) / math.sqrt[f64](nc * nr * (nc + nr + 1.0f64))
+}

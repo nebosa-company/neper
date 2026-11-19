@@ -69,6 +69,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
                 if str.eq(kind, "gh") || str.eq(kind, "ghp") { kg = 1usize }
                 let (ls1, lp1) = pm.lsd_gh_pair(y, grp, k, row, col, kg)
                 if str.eq(kind, "ls") || str.eq(kind, "gh") { vals[pos] = ls1 } else { vals[pos] = lp1 }
+            } else if str.eq(kind, "hs0") || str.eq(kind, "hs1") {
+                var ah = 0usize
+                if str.eq(kind, "hs1") { ah = 1usize }
+                vals[pos] = pm.hs_stat(y, grp, row, col, ah)
             } else if str.eq(kind, "t2") || str.eq(kind, "t2p") || str.eq(kind, "t3") || str.eq(kind, "t3p") {
                 var kt = 2usize
                 if str.eq(kind, "t3") || str.eq(kind, "t3p") { kt = 3usize }
