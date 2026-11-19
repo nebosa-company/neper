@@ -51025,3 +51025,6 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7512 — ordinal clm predictions
 `clm_predict_prob` is predict(fit, newdata, type = "prob") of a clm: P(y = j) = F(theta_j - eta) - F(theta_(j-1) - eta) at the new rows' linear predictor (the class prediction is the most probable class of these). Equal to ordinal on 18 fits with 5 to 15 new rows each, every class (63 values added to oracle_ordinal, 366 in all). Open for L393: cauchit and the flexible links, nominal and scale effects, clmm, anova and profile.
+
+## D7513 — ordinal clm anova
+`clm_anova` is anova(fit0, fit1) of nested clm fits: the likelihood-ratio statistic 2 (ll1 - ll0) and its chi-square upper tail on the difference of the parameter counts; the fixture fits the full model and the one without its last covariate through `clm` and compares both numbers with ordinal on 18 draws (36 values added to oracle_ordinal, 402 in all). Open for L393: cauchit and the flexible links, nominal and scale effects, clmm, profile.

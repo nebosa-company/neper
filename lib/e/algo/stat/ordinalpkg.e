@@ -5,6 +5,7 @@
 use e.algo.stat.gparot as gp
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nmo
 use e.mem
 
 // F, f and f' of the link at a (0 logit, 1 probit, 2 cloglog, 3 loglog, 4 cauchit)
@@ -682,4 +683,11 @@ fn clm_predict_prob(x: []const f64, n: usize, p: usize, nk: usize, link: usize, 
         }
         t += 1usize
     }
+}
+
+// anova(fit0, fit1) of two nested clm fits: the likelihood-ratio statistic 2 (ll1 - ll0) and its chi-square p-value on df = the difference of the parameter counts; out[0] the statistic, out[1] the p-value
+fn clm_anova(ll0: f64, ll1: f64, df: f64, out: []f64) {
+    let st = 2.0f64 * (ll1 - ll0)
+    out[0usize] = st
+    out[1usize] = nmo.pchisq(st, df, false, false)
 }

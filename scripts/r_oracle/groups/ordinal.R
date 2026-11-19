@@ -90,4 +90,19 @@ for (rep in 1:18) {
   a <- c(n, p, K, lk, y, as.vector(t(x)), m, as.vector(t(xn)))
   for (j in 1:K) add("pr", c(a, j - 1), sum(pr[, j] * seq_len(m)))
 }
+# anova of nested fits (drop the last covariate): "an" args (n, p, K, link, y, x) and the statistic ("anst") and p-value ("anp")
+set.seed(20262485)
+for (rep in 1:18) {
+  n <- sample(150:300, 1); p <- sample(2:3, 1); K <- sample(3:5, 1); lk <- (rep - 1) %% 3
+  x <- matrix(rnorm(n * p), n); b <- rnorm(p) * 0.7; th <- sort(rnorm(K - 1)) * 1.2
+  eta <- as.vector(x %*% b); u <- if (lk == 0) rlogis(n) else if (lk == 1) rnorm(n) else log(-log(runif(n)))
+  y <- findInterval(eta + u, th)
+  if (length(unique(y)) < K) next
+  d <- as.data.frame(x); names(d) <- paste0("v", seq_len(p)); d$y <- factor(y, ordered = TRUE)
+  f1 <- tryCatch(clm(y ~ ., data = d, link = links[lk + 1], control = clm.control(gradTol = 1e-10, maxIter = 500)), error = function(e) NULL)
+  f0 <- tryCatch(clm(as.formula(paste("y ~", paste(paste0("v", seq_len(p - 1)), collapse = " + "))), data = d, link = links[lk + 1], control = clm.control(gradTol = 1e-10, maxIter = 500)), error = function(e) NULL)
+  if (is.null(f1) || is.null(f0)) next
+  an <- anova(f0, f1); a <- c(n, p, K, lk, y, as.vector(t(x)))
+  add("anst", a, an[["LR.stat"]][2]); add("anp", a, an[["Pr(>Chisq)"]][2])
+}
 emit("ordinal", "ordinal", list(cases))

@@ -66,6 +66,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret se
     }
     let ll = od.clm(a, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], wts, n, p, nk, link, par)
+    if str.eq(c.name, "anst") || str.eq(c.name, "anp") {
+        let ll1 = od.clm(a, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], wts, n, p, nk, link, par)
+        // the reduced model drops the last covariate: its design is the first p - 1 columns of every row
+        let (x0, ex0) = mem.alloc[f64](a, n * (p - 1usize))
+        let (par0, ep0) = mem.alloc[f64](a, nk - 1usize + p - 1usize)
+        if ex0 != ok || ep0 != ok { ret nan }
+        var r0 = 0usize
+        while r0 < n {
+            var c0 = 0usize
+            while c0 < p - 1usize {
+                x0[r0 * (p - 1usize) + c0] = z[4usize + n + r0 * p + c0]
+                c0 += 1usize
+            }
+            r0 += 1usize
+        }
+        let ll0 = od.clm(a, x0, z[4usize..4usize + n], wts, n, p - 1usize, nk, link, par0)
+        var an: [2]f64 = zero
+        od.clm_anova(ll0, ll1, 1.0f64, an[0usize..2usize])
+        if str.eq(c.name, "anst") { ret an[0usize] }
+        ret an[1usize]
+    }
     if str.eq(c.name, "pr") {
         let mp = usize(z[4usize + n + n * p])
         let (po, ep) = mem.alloc[f64](a, mp * nk)
