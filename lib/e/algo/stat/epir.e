@@ -1197,3 +1197,106 @@ fn paf_est(a: f64, b: f64, c: f64, d: f64, level: f64) -> (f64, f64, f64) {
     let r2 = (pu - ou) / pu
     ret ((pe - oe) / pe, math.min[f64](r1, r2), math.max[f64](r1, r2))
 }
+
+// epiR zRRscore for every table: the cubic of `rr_score` for the interior and the cases it names (a zero count, or a whole row), and the two 1.0001-step searches of the original for the
+// tables with a full unexposed or exposed row (c = N0 or a = N1); (est, lower, upper) with 1 / 0 for the infinite end
+fn rr_score_all(t: Table2, level: f64) -> (f64, f64, f64) {
+    let inf = 1.0f64 / 0.0f64
+    let z = z_of(level)
+    let a = t.a
+    let c = t.c
+    let n1 = t.a + t.b
+    let n0 = t.c + t.d
+    let est = (a / n1) / (c / n0)
+    if c == 0.0f64 && a == 0.0f64 { ret (est, 0.0f64, inf) }
+    let z2 = z * z
+    let a1 = n0 * (n0 * (n0 + n1) * a + n1 * (n0 + a) * z2)
+    let a2 = 0.0f64 - n0 * (n0 * n1 * (c + a) + 2.0f64 * (n0 + n1) * c * a + n1 * (n0 + c + 2.0f64 * a) * z2)
+    let a3 = 2.0f64 * n0 * n1 * c * (c + a) + (n0 + n1) * c * c * a + n0 * n1 * (c + a) * z2
+    let a4 = 0.0f64 - n1 * c * c * (c + a)
+    let b1 = a2 / a1
+    let b2 = a3 / a1
+    let b3 = a4 / a1
+    let c1 = b2 - b1 * b1 / 3.0f64
+    let c2 = b3 - b1 * b2 / 3.0f64 + 2.0f64 * b1 * b1 * b1 / 27.0f64
+    var ax = math.sqrt[f64](27.0f64) * c2 / (2.0f64 * c1 * math.sqrt[f64](0.0f64 - c1))
+    if ax <= -1.0f64 || ax >= 1.0f64 { ax = 0.0f64 }
+    let ceta = math.acos[f64](ax)
+    let pi = 3.141592653589793f64
+    let s = 2.0f64 * math.sqrt[f64](0.0f64 - c1 / 3.0f64)
+    let p01 = 0.0f64 - s * math.cos[f64](pi / 3.0f64 - ceta / 3.0f64) - b1 / 3.0f64
+    let p02 = 0.0f64 - s * math.cos[f64](pi / 3.0f64 + ceta / 3.0f64) - b1 / 3.0f64
+    let p03 = s * math.cos[f64](ceta / 3.0f64) - b1 / 3.0f64
+    let p0sum = p01 + p02 + p03
+    let p0up = math.min[f64](p01, math.min[f64](p02, p03))
+    let p0low = p0sum - p0up - math.max[f64](p01, math.max[f64](p02, p03))
+    let fl = (1.0f64 - (n1 - a) * (1.0f64 - p0low) / (c + n1 - (n0 + n1) * p0low)) / p0low
+    let fu = (1.0f64 - (n1 - a) * (1.0f64 - p0up) / (c + n1 - (n0 + n1) * p0up)) / p0up
+    if c == 0.0f64 && a != 0.0f64 { ret (est, fl, inf) }
+    if c != n0 && a == 0.0f64 { ret (est, 0.0f64, fu) }
+    if c == n0 && a == n1 { ret (est, n1 / (n1 + z2), (n0 + z2) / n0) }
+    if a == n1 || c == n0 {
+        var ll = 0.0f64
+        if c == n0 && a != 0.0f64 {
+            let x1 = a
+            let nn1 = n1
+            let x2 = c
+            let nn2 = n0
+            let phat1 = x2 / nn2
+            let phat2 = x1 / nn1
+            let phihat = phat2 / phat1
+            var phil = level * phihat
+            var chiv = 0.0f64
+            var it = 0usize
+            while chiv <= z && it < 200000usize {
+                let aa = (nn2 + nn1) * phil
+                let bb = 0.0f64 - ((x2 + nn1) * phil + x1 + nn2)
+                let cc = x2 + x1
+                let p1hat = (0.0f64 - bb - math.sqrt[f64](bb * bb - 4.0f64 * aa * cc)) / (2.0f64 * aa)
+                let p2hat = p1hat * phil
+                let q2hat = 1.0f64 - p2hat
+                let vr = (nn2 * nn1 * p2hat) / (nn1 * (phil - p2hat) + nn2 * q2hat)
+                chiv = ((x1 - nn1 * p2hat) / q2hat) / math.sqrt[f64](vr)
+                ll = phil
+                phil = ll / 1.0001f64
+                it += 1usize
+            }
+        }
+        var i = c
+        var j = a
+        var ni = n0
+        var nj = n1
+        if a == n1 {
+            i = a
+            j = c
+            ni = n1
+            nj = n0
+        }
+        let phat1 = i / ni
+        let phat2 = j / nj
+        let phihat = phat2 / phat1
+        var phiu = 1.1f64 * phihat
+        if c == n0 && a == 0.0f64 {
+            if n0 < 100.0f64 { phiu = 0.01f64 } else { phiu = 0.001f64 }
+        }
+        var chi1 = 0.0f64
+        var phiu1 = phiu
+        var it2 = 0usize
+        while chi1 >= 0.0f64 - z && it2 < 200000usize {
+            let aa = (ni + nj) * phiu
+            let bb = 0.0f64 - ((i + nj) * phiu + j + ni)
+            let cc = i + j
+            let p1hat = (0.0f64 - bb - math.sqrt[f64](bb * bb - 4.0f64 * aa * cc)) / (2.0f64 * aa)
+            let p2hat = p1hat * phiu
+            let q2hat = 1.0f64 - p2hat
+            let vr = (ni * nj * p2hat) / (nj * (phiu - p2hat) + ni * q2hat)
+            chi1 = ((j - nj * p2hat) / q2hat) / math.sqrt[f64](vr)
+            phiu1 = phiu
+            phiu = 1.0001f64 * phiu1
+            it2 += 1usize
+        }
+        if a == n1 { ret (est, 1.0f64 / phiu1, fu) }
+        ret (est, ll, phiu1)
+    }
+    ret (est, fl, fu)
+}

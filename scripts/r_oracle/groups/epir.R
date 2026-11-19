@@ -245,4 +245,12 @@ for (rep in 1:25) {
   r <- epi.2by2(dat, method = "case.control", interpret = FALSE, outcome = "as.columns")$massoc.detail$PAFest.strata.wald
   for (w in 0:2) cases[[length(cases) + 1]] <- case("pe", c(a, b, cc, d, w), unlist(r[1, ])[w + 1], rel = 1e-8, abs = 1e-11)
 }
+# the score risk-ratio interval on boundary tables (a zero cell or a full row): "rb" args (a, b, c, d, which 0 est 1 lower 2 upper)
+bt <- list(c(0, 40, 12, 100), c(5, 40, 0, 100), c(0, 30, 0, 50), c(20, 0, 8, 60), c(10, 30, 15, 0), c(25, 0, 12, 0), c(0, 35, 14, 0), c(18, 0, 0, 40), c(0, 0, 9, 60), c(7, 33, 10, 0))
+for (v in bt) {
+  dat <- as.table(matrix(v, 2, byrow = TRUE))
+  r <- tryCatch(suppressWarnings(epiR:::zRRscore(c(v[1], v[3], v[2], v[4]), 0.95)), error = function(e) NULL)
+  if (is.null(r) || any(is.nan(r))) next
+  for (w in 0:2) cases[[length(cases) + 1]] <- case("rb", c(v, w), r[w + 1], rel = 1e-8, abs = 1e-11)
+}
 emit("epir", "epiR", list(cases))

@@ -4467,4 +4467,5 @@ D7609	1036	epiR conditional MLE, Cornfield and exact odds-ratio intervals
 D7610	906	epiR epi.conf closed-form types
 D7611	967	epiR epi.conf proportion contrasts and epi.tests for every interval method
 D7612	879	epiR epi.2by2 for person-time cohorts (cohort.time)
-D7613	1032	epiR case-control population attributable fraction
+D7613	1033	epiR case-control population attributable fraction
+D7614	760	epiR score risk-ratio interval on boundary tables
