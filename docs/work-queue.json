@@ -262,10 +262,10 @@
       "group": "CRAN parity",
       "order": 673,
       "title": "Unicode collation, transliteration and encoding detection (stringi)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open. Needs L264. e.text.collate has codepoint, byte and natural compare only. Acceptance: stri_sort, stri_order, stri_compare with UCA and locale tailoring (en, de, sv, tr), stri_trans_general for Latin-ASCII, Any-Lower, Any-Hex and Any-NFD, stri_enc_detect and stri_encode over the shared charsets, sentence and grapheme splitting, all equal to stringi on a seeded multilingual corpus."
+      "evidence": "Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases; Linux pending). Open: everything else in the acceptance. Needs L264. e.text.collate has codepoint, byte and natural compare only. Acceptance: stri_sort, stri_order, stri_compare with UCA and locale tailoring (en, de, sv, tr), stri_trans_general for Latin-ASCII, Any-Lower, Any-Hex and Any-NFD, stri_enc_detect and stri_encode over the shared charsets, sentence and grapheme splitting, all equal to stringi on a seeded multilingual corpus."
     },
     {
       "id": "L274",
@@ -295,7 +295,7 @@
       "group": "CRAN parity",
       "order": 682,
       "title": "Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open. Needs L264 and L265. e.math.mcmc has sampler basics; no autodiff, no ADVI. Acceptance: reverse-mode gradients of a closed set of Stan math functions (distributions from L265, matrix ops, log-sum-exp) agree with R-computed numDeriv gradients to 1e-8; NUTS with dual-averaging step size and diagonal mass-matrix adaptation recovers posterior means and sds of a seeded hierarchical model within Monte Carlo error of rstan; ADVI meanfield and fullrank match rstan vb ELBO trajectory shape and final means within tolerance. Stan language compiler is out of scope."
@@ -438,7 +438,7 @@
       "group": "CRAN parity",
       "order": 711,
       "title": "gam: backfitting generalized additive models",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Open (CRAN rank 388). Mid. mgcv is L353. Acceptance, equal to gam: gam with s and lo terms (smoothing spline and loess), the Gaussian, binomial and Poisson families, backfitting convergence, step.Gam, anova and predict with standard errors."
@@ -449,7 +449,7 @@
       "group": "CRAN parity",
       "order": 712,
       "title": "uwot and Rtsne: embeddings equal to R",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Open (CRAN ranks 311, 315). Mid. e.ml.reduce has t-SNE and UMAP; verify against R under set.seed first. Acceptance, equal to R: uwot umap and umap_transform with its nearest-neighbour graph, spectral and random initialization, optimizer epochs; Rtsne Barnes-Hut and exact, with perplexity, theta and PCA preprocessing."
@@ -471,7 +471,7 @@
       "group": "CRAN parity",
       "order": 714,
       "title": "RcppAnnoy: approximate nearest neighbours",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Open (CRAN rank 463). Mid. e.ml.knn is exact. Acceptance, equal to RcppAnnoy: index building with its seeded random-projection splits, Euclidean, angular, Manhattan and Hamming metrics, getNNsByVector and getNNsByItem with search_k, and the index file format."
@@ -559,7 +559,7 @@
       "group": "CRAN parity",
       "order": 728,
       "title": "earth: multivariate adaptive regression splines",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Open (CRAN rank 780). Mid. Acceptance, equal to earth: earth with degree, penalty, nk, thresh, minspan and pmethod, GCV and pruning, glm responses, cross-validation, evimp, predict, model.matrix and the basis-function printout."
@@ -636,7 +636,7 @@
       "group": "CRAN parity",
       "order": 744,
       "title": "topicmodels: LDA and CTM",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Open (CRAN rank 897). Mid. Acceptance, equal to topicmodels under set.seed: LDA with the VEM and Gibbs methods, CTM, posterior distributions, perplexity, logLik, terms and topics, with the document-term inputs of L380."
@@ -669,7 +669,7 @@
       "group": "CRAN parity",
       "order": 747,
       "title": "Cubist: rule-based regression models",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 924). Mid. Acceptance, equal to Cubist under set.seed: cubist with committees and neighbors, the generated rules and their linear models, predict, summary, varImp, and the C5.0-style splitting on mixed predictors."
@@ -768,7 +768,7 @@
       "group": "CRAN parity",
       "order": 757,
       "title": "randomForest: Breiman forests equal to R",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 255; ranger 299 is not bit-portable). Mid to large. Verify e.ml.tree forests first. Acceptance, equal to randomForest under set.seed: classification and regression, mtry, nodesize, sampsize, replace, OOB predictions and error, importance (type 1 and 2), proximity, votes, predict, partialPlot data, with the R RNG sampling order of the C code."
@@ -845,7 +845,7 @@
       "group": "CRAN parity",
       "order": 770,
       "title": "hunspell: spell checking",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 464). Mid to large. Acceptance, equal to hunspell: .dic and .aff dictionary parsing (prefix and suffix rules, cross products, compounds, replacement and keyboard suggestion tables, ICONV and OCONV), hunspell_check, hunspell_find, hunspell_suggest, hunspell_analyze and hunspell_stem on the standard dictionaries."
@@ -878,7 +878,7 @@
       "group": "CRAN parity",
       "order": 774,
       "title": "gss: smoothing spline ANOVA",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 634). Mid to large. Acceptance, equal to gss: ssanova and ssanova0 with cubic, tensor and thin-plate marginals and GCV, GML and Mallows smoothing parameters, gssanova for exponential families, ssden density and sshzd hazard estimation, predict with standard errors."
@@ -999,7 +999,7 @@
       "group": "CRAN parity",
       "order": 785,
       "title": "coxme: mixed-effects Cox models",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Open (CRAN rank 900). Mid. Needs L311. Acceptance, equal to coxme: coxme with random intercepts, nested and crossed effects, correlated slopes, the penalized partial likelihood fits and the variance components, ranef, fixef and VarCorr."
@@ -1087,7 +1087,7 @@
       "group": "CRAN parity",
       "order": 793,
       "title": "Raster core and CRS reprojection (terra)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open; large (terra is about 74k lines of C++ over GDAL, GEOS and PROJ). Needs L264. Acceptance: raster cell algebra, focal (window, function, edge), aggregate, resample (near, bilinear, cubic), crop, mask, zonal and extract over GeoTIFF inputs equal terra values; reprojection among EPSG 4326, 3857, UTM zones and a set of national grids matches PROJ to 1e-6 m; vector buffer, intersect and union on seeded polygons match GEOS after canonical ring ordering."
@@ -1131,7 +1131,7 @@
       "group": "CRAN parity",
       "order": 798,
       "title": "ncdf4: NetCDF and HDF5 files",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 237). Large. No reader exists. Acceptance, equal to ncdf4 on real files: NetCDF classic (CDF-1, 2, 5) and NetCDF-4 over HDF5 (object headers, B-trees, chunked and deflate and shuffle-filtered datasets, groups, attributes, unlimited dimensions), reading variables, dimensions and attributes."
@@ -1175,7 +1175,7 @@
       "group": "CRAN parity",
       "order": 812,
       "title": "partykit: conditional inference trees and MOB",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 386). Large. Needs L371. Acceptance, equal to partykit: ctree and ctree_control, mob with lmtree and glmtree, cforest under set.seed, node and split structures, predict, party and constparty conversions."
@@ -1197,7 +1197,7 @@
       "group": "CRAN parity",
       "order": 814,
       "title": "rugarch: the GARCH family",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 497). Large. e.algo.timeseries has a plain GARCH. Acceptance, equal to rugarch within the optimizer tolerance: ugarchspec for sGARCH, eGARCH, gjrGARCH, apARCH, fGARCH, IGARCH and csGARCH with ARFIMA means, external regressors and the norm, snorm, std, sstd, ged, sged, nig and jsu innovations; ugarchfit, ugarchfilter, ugarchforecast, ugarchsim and ugarchboot under set.seed, news-impact curves, information criteria and the tests."
@@ -1219,7 +1219,7 @@
       "group": "CRAN parity",
       "order": 816,
       "title": "phangorn: phylogenetic inference",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 666). Large. Needs L350. Acceptance, equal to phangorn: parsimony and pratchet, pml with JC, F81, K80, HKY, GTR and Gamma and invariant-site rate models, optim.pml, bootstrap.pml, modelTest, NJ and UPGMA from distances, tree and network operations."
@@ -1241,7 +1241,7 @@
       "group": "CRAN parity",
       "order": 818,
       "title": "mirt: item response theory",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 841). Large. Acceptance, equal to mirt: mirt for Rasch, 1PL to 4PL, graded response, generalized partial credit, nominal and multidimensional models by EM, itemfit, personfit, fscores, multipleGroup, DIF, anova and the fit statistics M2 and C2."
@@ -1263,7 +1263,7 @@
       "group": "CRAN parity",
       "order": 820,
       "title": "gamlss: GAMLSS model fitting",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 836). Large. Needs L464. Acceptance, equal to gamlss: gamlss fitted by the RS and CG algorithms with pb, cs, lo and ga smoothers, centiles, lms, stepGAIC, the diagnostics and the worm plot data."
@@ -1274,7 +1274,7 @@
       "group": "CRAN parity",
       "order": 821,
       "title": "unmarked: occupancy and abundance models",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 905). Large. Acceptance, equal to unmarked: occu, occuRN, pcount, distsamp, colext, gmultmix, multinomPois with detection and abundance submodels, standard errors, predict, parboot under set.seed, fitList and model selection."
@@ -1318,7 +1318,7 @@
       "group": "CRAN parity",
       "order": 825,
       "title": "VGAM: vector generalized linear and additive models",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 382). Very large (about 150k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to VGAM: vglm and vgam for the multinomial, cumulative, acat, sratio, zero-inflated, beta-binomial, Tobit and extreme-value families with their link functions."
@@ -1329,7 +1329,7 @@
       "group": "CRAN parity",
       "order": 826,
       "title": "glmmTMB: generalized linear mixed models by Laplace approximation",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 342). Very large; relates to L274 and L284; ask the user whether it is still relevant before starting. Acceptance, equal to glmmTMB: families gaussian, binomial, poisson, nbinom1, nbinom2, Gamma, beta, tweedie, with zero inflation, dispersion models and covariance structures (us, ar1, cs, ou, exp)."
@@ -1340,7 +1340,7 @@
       "group": "CRAN parity",
       "order": 827,
       "title": "spatstat: point pattern analysis",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN ranks 304, 314, 316, 323). Very large (about 100k lines upstream across four packages); ask the user whether it is still relevant before starting. Acceptance, equal to spatstat: ppp and owin objects, distances and tessellations, K, L, G, F, J and pair correlation estimates with edge corrections, envelopes under set.seed, simulation of Poisson, Cox, Thomas, Matern and Gibbs processes, kernel intensity."
@@ -1351,7 +1351,7 @@
       "group": "CRAN parity",
       "order": 828,
       "title": "tgp: Bayesian treed Gaussian processes",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 909). Large (about 25k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to tgp under set.seed: bgp, btgp, bcart, blm, bgpllm and btgpllm by reversible-jump MCMC, the posterior predictions and the design routines."
@@ -1362,7 +1362,7 @@
       "group": "CRAN parity",
       "order": 829,
       "title": "grf: generalized random forests",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 944). Large (about 30k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to grf under set.seed: regression, quantile, causal, instrumental, survival and local linear forests with honest splitting, out-of-bag predictions, variance estimates, variable importance and the average treatment effect."
@@ -1373,7 +1373,7 @@
       "group": "Library",
       "order": 422,
       "title": "e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Open. With C286 landed gfx_cssvalue emits and runs, and stops on `min(abs(360in), min(16pt, 100dvh))`. Its reference answer is {v:0, u:\"px\", o:0, p:null} -- a plain zero length whose to_px resolution is null -- while the fixture's check fails, and the likeliest reason is that css.parse_length answers not-good because LengthUnit is {Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax, Ch, Lh} with no viewport-dynamic unit, so `100dvh` is not a length at all. Whether the reference reaches 0 by treating an unknown basis as zero (so min(16pt, 0) is 0 and min(abs(360in), 0) is 0) or by clamping is the thing to establish from Vaper's Dart parser before choosing between adding the dvh family to the enum and matching the zero-basis reading. Everything after this case is unmeasured, since the fixture stops at the first mismatch. Acceptance: gfx_cssvalue runs to completion, and the fixture's remaining cases agree with the reference."
@@ -1593,7 +1593,7 @@
       "group": "Self-hosting",
       "order": 88,
       "title": "Bootstrap frozen and deleted",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "bootstrap/neper.c still builds stage 0. Follow-on (D1898): deletion is also the biggest LLMx lever â€” until it lands, agents write M1 per the docs and compile neper-0 plus quirks, and failures like T021's look like agent error. The 2026-11-12 compiler review adds to the acceptance: a clean clone on each host builds the compiler with no C compiler present. Notes: docs/compiler-hardening-plan.md."
@@ -1780,7 +1780,7 @@
       "group": "Tooling",
       "order": 32,
       "title": "MCP server, share-token, and audit-trail service surface",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Appdor services/mcp-server (stdio NDJSON plus HTTP JSON-RPC, caller-JWT RLS scoping), src/sharing share tokens (b64url payload plus HMAC, distinct from jwt.e), src/audit record taxonomy with CSV export, src/templates workflow recipe catalog as data. Serve via e.net.http plus e.os.proc stdio and e.db; DB-poll worker shape (no AMQP) maps to e.task plus e.db.pool."
@@ -1791,7 +1791,7 @@
       "group": "Drivers",
       "order": 152,
       "title": "HTTP fuzz and host-sweep helpers for authorized scanning",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "e.net.http plus e.fmt.html/xml and e.text.regex cover web-test transport and parsing, but the wfuzz/gobuster pattern (payload encoders, concurrent sweep runner, finding records) is rebuilt by every scanner. Add e.net.http extensions plus a recipe: payload-encoder table, sweep runner over e.task with e.ratelimit and e.cancel, stable-ID finding records via e.algo.hash; fixtures use fake HTTP only, target authorization stays caller policy. Plan: docs/ethical-hacking.md S4."
@@ -1802,7 +1802,7 @@
       "group": "Drivers",
       "order": 153,
       "title": "Certificate issuance for authorized TLS-intercept testing (e.crypto.x509)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "e.crypto.x509 parses and verifies only (parse/parse_pem/pool/verify_signature in lib/e/crypto/x509.e) -- the auto-CA plus forged-leaf half of the intercept-proxy story has no issuance path. Add CA generation plus leaf issuance/signing over e.crypto.sign (no new crypto primitives) with fixtures: issued chain verifies under a pinned CA, expiry/SAN/DNS-name goldens, fail-closed on wrong issuer. Plan: docs/ethical-hacking.md S5."
@@ -1857,7 +1857,7 @@
       "group": "Project tools",
       "order": 34,
       "title": "Reattachable harness journal and work-status panel",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1812). Reference: JustCode src/perp.js. Not yet: a tooling panel composed from existing collection/overlay controls and L066's safe viewer, reading persistent journal/status through a supplied adapter; timeline/detail/filter views, follow-tail, path-specific watcher refresh with bounded fallback, absent-harness handling and close/reopen reattachment. Work lifecycle stays in the harness, so closing the panel cannot stop work and reopening cannot lose it. Validate truncated/partial records, journal rotation, stale refresh replies and bounded large-journal reads. Harness discovery, binding validation and typed run/pause/message actions stay outside e.ui; the panel must not invent a second task scheduler. Follow-on (D1898): parallel harnesses also need a claim protocol â€” queue-item checkout plus D-number reservation â€” after two live collisions between sessions sharing one JSON queue. Use generic library view primitives without baking Perpetum or .harness schemas into the standard library."
@@ -2011,7 +2011,7 @@
       "group": "NeperOS",
       "order": 153,
       "title": "NeperOS Camera remainder: the sensor feed, video files, flash and exposure hardware, the QR reader",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C122 (D2397): the Camera writes photos and straightened scans as PNG files in /DCIM that Photos lists, with focus ring, exposure steps and a timer. Acceptance: (1) a camera driver server (virtio-video or USB video under QEMU, the Pixel camera later) delivering frames to the viewfinder at a steady rate, front and rear chosen from the devices found; (2) video recording with a codec from the library and audio from e.audio, written as a file Photos plays; (3) focus, exposure, flash and HDR stacking as far as the hardware has them; (4) Scan mode's QR reading (L137) opening the code's content, and a scan offered to Wallet documents (C121); (5) a fixture on QEMU against a test video source. Not queued here: portrait blur, night mode, RAW capture."
@@ -2143,7 +2143,7 @@
       "group": "NeperOS",
       "order": 165,
       "title": "NeperOS Meet remainder: media transport, capture, codecs, screen sharing",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C135 (D2424): Meet signals over a WebSocket and shows the people and the speaker the server names. Acceptance: (1) media over C117 (needs UDP in the network server): a WebRTC-style stack (ICE, DTLS-SRTP) or a simple SFU protocol; (2) capture: the camera frames from the camera server (C153) and the microphone from e.audio, encoded and sent with a codec from the library, the received streams decoded into the tiles; (3) the speaker and grid layouts follow the audio levels; (4) screen sharing from the compositor, raise hand visible to others, chat in the meeting (C134/C164), captions; (5) echo cancellation, noise suppression and bandwidth adaptation; (6) a fixture with two clients in one machine against a relay that exchanges test frames and checks them."
@@ -2374,7 +2374,7 @@
       "group": "UI",
       "order": 270,
       "title": "layout + filter persistence, customization panel, quick customization",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: round-trip; unknown/new column tolerance."
@@ -2385,7 +2385,7 @@
       "group": "UI",
       "order": 271,
       "title": "export + clipboard (+ print hand-off)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: CSV/XML/HTML/XLSX of filtered+grouped view equals golden."
@@ -2396,7 +2396,7 @@
       "group": "UI",
       "order": 272,
       "title": "MTG Studio reference app: card-pool/deck/collection views over a 150k fixture",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: all §7 rows exercised; benchmark table filled with measured numbers."
@@ -2484,7 +2484,7 @@
       "group": "Library",
       "order": 171,
       "title": "Browser M6: beyond Vaper (gap items)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Plan docs/browser-progress.html. Needs L170; individual gap rows may start earlier when nothing blocks them. Acceptance: every tracker row with track gap or core is done or explicitly deferred with a decision: Shadow DOM and custom elements (6.16), Workers and Service Workers (6.18, 6.19), contenteditable and Selection (6.11, 6.12), process isolation and OS sandbox (8.1 to 8.3, N.6), DevTools (7.13), WebAssembly (5.17), vertical writing modes (2.16, N.5), audio (3.19), backdrop-filter and blend modes (N.3), colour emoji and CFF (N.4), HSTS and clickjacking protections (4.15, 4.16), fuzzing (8.4). Not yet: all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P8): 0 done, 0 partial, 7 todo of 7; score is the mean with partial counted as half."
@@ -2495,7 +2495,7 @@
       "group": "WebAssembly",
       "order": 213,
       "title": "e.ui in a browser: a real phone's virtual keyboard and IME",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Android Chrome checked by hand (D5890, D5891: suggestion replacement, touch hold, drag selection, toolbar); iPhone simulator (iOS 17.5 Mobile Safari, .github/workflows/ios-sim.yml, D5900) passes typing, Backspace and the hold toolbar; a real iPhone and a composing keyboard are still unchecked. Needs a device. Prepared: `node scripts/serve-wasm.mjs --isolated --host 0.0.0.0` and open /tests/wasm/browser/phone_probe.html on the phone (a plain field that logs key, composition, paste, visualViewport and scroll events; Report copies the log) to answer checks 1-5 before touching ui_counter. D5821 lists what the mobile preset did and did not show (synthetic composition events, the textarea at 16 px not scrolling or zooming). Serve tests/wasm/browser/ui_counter.html over HTTPS or a LAN address with scripts/serve-wasm.mjs --isolated (a secure context is needed for crossOriginIsolated and the clipboard) and check on iOS Safari and Android Chrome: (1) tapping the Name field opens the keyboard and neither zooms nor scrolls the page; (2) typed letters, Backspace and Enter arrive once each; (3) composition with a CJK keyboard (pinyin or kana) delivers the committed text once, with no duplicate after compositionend and none while composing; (4) the clipboard: paste from the system menu reaches the program, and Ctrl+C in the program writes navigator.clipboard, with the permission prompt answered either way; (5) visualViewport resizes when the keyboard opens and the canvas stays usable (decide whether the window follows it); (6) a physical keyboard on a tablet still works. Fix what fails in lib/wasm/window.js; window_visible is separate."
@@ -2506,7 +2506,7 @@
       "group": "OpenGL",
       "order": 278,
       "title": "OpenGL 5: CGL context on macOS (GL 4.1 core, presentation only)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Design docs/opengl-plan.md, D5879, D5880. Needs L173. Acceptance: an NSOpenGLContext on the content view that window_native returns; follows the Retina backing scale; checked on the macOS CI runners. Metal (C193) keeps the Mac's compute."
@@ -2517,7 +2517,7 @@
       "group": "OpenGL",
       "order": 292,
       "title": "OpenGL verify 4 (verify-only): full suites for the shared compiler change",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Verify-only turn, no edits. Needs T047. Run the full suites on both hosts for the glsl target change and report the tails."
@@ -2539,7 +2539,7 @@
       "group": "OpenGL",
       "order": 294,
       "title": "Regression test for the heap-backed device-lost path (D5949)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "D5949 keeps a device lost after a failed Metal or OpenGL command, but no fixture makes dispatch_wait fail, so nothing fails if the sticky flag or the state_of check is removed. Acceptance: a fixture that makes one launch's wait fail (a fault-injecting HeapDriver or a deliberate device loss on a Mac), then checks that info, has, queue creation and a later launch all report Lost whichever is called first, and that close still returns ok and frees the heap."
@@ -2550,7 +2550,7 @@
       "group": "Back end",
       "order": 295,
       "title": "x86-32 emitter: x86-windows and x86-linux targets",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:179 by the single-list audit; not previously a queue row. Acceptance: `neper build --target x86-linux` and `x86-windows` emit runnable 32-bit executables (cdecl/stdcall, one vector slot per spec section 5). The M1/M2 corpus and bidirectional C ABI fixtures pass on both. Size XL. Checked open: grep src/*.e for x86-linux/x86-windows/ia32/i386: no hits; only codegen_x64.e and codegen_a64.e exist; work-done has no x86-32 record; not a queue.tsv row."
@@ -2561,7 +2561,7 @@
       "group": "Back end",
       "order": 296,
       "title": "aarch64-windows target: ARM64 PE emitter, linker and runtime",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:178 by the single-list audit; not previously a queue row. Acceptance: `--target aarch64-windows` links a PE32+ ARM64 executable with the own linker and runs hello plus the conformance corpus on a Windows-on-ARM host or emulator. Spec section 13 lists the target, so it stops being an option error. Size L. Checked open: aarch64 exists for linux/macos/none/neperos (codegen_a64.e, link_elf_a64.e, link_macho.e) but grep 'aarch64-windows' in src/*.e is empty and link_pe.e has no ARM64 machine type."
@@ -2572,7 +2572,7 @@
       "group": "Back end",
       "order": 297,
       "title": "PTX emitter and CUDA compute backend for e.gpu (.Cuda devices open and launch)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:180 by the single-list audit; not previously a queue row. Acceptance: A kernel compiles to PTX and `e.gpu.open` on a `.Cuda` device launches it through the driver API. GP-10 kernels are bit-identical with the CPU backend, or within their stated ULP bound for the approximate builtins. Size XL. Checked open: grep -i ptx across src/lib/tests/docs/work-done.jsonl: no hits. lib/e/gpu/cuda.e header says 'Only enumeration lives here: there is no CUDA compute backend yet'."
@@ -2583,7 +2583,7 @@
       "group": "Back end",
       "order": 298,
       "title": "PDB writer in the own PE linker (MSF, DBI, module, symbol and line streams)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:183 by the single-list audit; not previously a queue row. Acceptance: A `--linker=own` Windows build writes a `.pdb` that WinDbg and Visual Studio symbolicate with function names and lines, with no type stream. Output is byte-deterministic. Size L. Checked open: grep -i pdb in src/ and lib/: no writer; src/link_pe.e writes .text/.idata only; the work-done PDB hit is the CodeView record emitter (C084), not the PDB container."
@@ -2594,7 +2594,7 @@
       "group": "Back end",
       "order": 299,
       "title": "neper-format debug side table in .em (types, locals, scopes, variable locations)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:185 by the single-list audit; not previously a queue row. Acceptance: The `.em` Debug section carries a side table over the serialised type table, beside the DWARF/CodeView subset and never replacing it. A conformance fixture reads back the locals and locations of a function and they agree with the standard-format locations. Size L. Checked open: grep src/em.e and binary.e for a debug side table: only line/symbol tables and .nepersym; spec section 11 'from M4, the neper-format side table' still future; no work-done record."
@@ -2605,7 +2605,7 @@
       "group": "Tooling",
       "order": 300,
       "title": "Native debug engine: process control, breakpoints, single-step, stack walking, location rendering",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:188 by the single-list audit; not previously a queue row. Acceptance: A library (Windows and Linux hosts) launches a Neper program under control, sets and hits a breakpoint, single-steps, walks the stack and renders locals from the side table. A fixture asserts the stop locations match `lldb` on shared programs. Size XL. Checked open: grep for ptrace/DebugActiveProcess/breakpoint in lib/ and src/: only lib/e/debug/dump/host.linux.e (post-mortem dump) and a UI style hit; no live-process control."
@@ -2616,7 +2616,7 @@
       "group": "Tooling",
       "order": 301,
       "title": "`neper dap`: framed-JSON debug adapter plus VS Code and Zed extensions",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:190 by the single-list audit; not previously a queue row. Acceptance: `neper dap` speaks DAP over stdio with Content-Length framing and rejects `--json` and `--absolute-paths`. VS Code and Zed extensions launch it and a scripted session hits a breakpoint and reads a local. Size L. Checked open: grep '\"dap\"' src/main.e: no dispatch; no dap record in work-done beyond decision text; spec.md:4245 lists it as M4."
@@ -2627,7 +2627,7 @@
       "group": "Back end",
       "order": 302,
       "title": "Optimiser depth: inlining heuristics, load/store forwarding and instruction scheduling",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:194 by the single-list audit; not previously a queue row. Acceptance: A release build forwards stores to later loads in a block and schedules independent instructions, and cross-.em inlining uses a cost heuristic below the 40-NIR cap. The GP-09 and compiler-build benchmarks improve against benchmarks/baseline budgets with identical output. Size L. Checked open: grep -i 'forward' and 'schedul' in src/nir.e, lower.e, regalloc.e, codegen_x64.e: no matches; C079 only covers the fixed 40-NIR inlining cap."
@@ -2638,7 +2638,7 @@
       "group": "Back end",
       "order": 303,
       "title": "Vector register class: pass Vec/Mask in xmm/ymm per spec section 5",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:196 by the single-list audit; not previously a queue row. Acceptance: `Vec[T,N]` and `Mask[T,N]` live in vector registers across calls and spills instead of copied storage (D786/D1524). GP-09 improves measurably and the ABI fixtures for sysv and win64 pass. Size L. Checked open: src/codegen_x64.e:849 and :883 state 'not yet a vector register class'; regalloc.e has no vector class; decisions D786 and D1524 defer it to M4."
@@ -2649,7 +2649,7 @@
       "group": "Project tools",
       "order": 304,
       "title": "neper pacman CLI group and e.* namespace-reservation enforcement",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:363 by the single-list audit; not previously a queue row. Acceptance: `neper pacman init|add|remove|resolve|sync|upgrade|build|run|task|vendor|publish|cache|info` exist with versioned JSON output, shared diagnostics and schema validation. A registry package exporting under a toolchain-reserved `e.*`/`e.algo.*`/`e.ui.*` prefix is rejected and `x.<owner>.*` is accepted. Size L. Checked open: grep 'pacman' in src/main.e: none; no namespace check in src/project.e or resolve.e."
@@ -2660,7 +2660,7 @@
       "group": "Tooling",
       "order": 305,
       "title": "One shared usage text for --help, -h, help and E-CLI-9999; info.commands lists every dispatched command",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit; not previously a queue row. Acceptance: `neper --help`, `-h` and `help` print the same text the two E-CLI-9999 sites use, naming all dispatched commands, and `info.commands` matches. A conformance check fails if the three disagree with the dispatcher. Size S. Checked open: grep '\"--help\"' in src/main.e: none; src/main.e:1115 usage names only tokens|parse|fmt-file|info; no work-done record. The 2026-11-12 compiler review adds to the acceptance: `scripts/check_agent_routes.py` gains a check that every dispatched command is in `info`; a tools golden pins the capabilities stream. Notes: docs/compiler-hardening-plan.md."
@@ -2671,7 +2671,7 @@
       "group": "Project tools",
       "order": 306,
       "title": "`neper eval EXPR`: fold a const initialiser and print it (comptime interpreter, no codegen)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:440 by the single-list audit; not previously a queue row. Acceptance: `neper eval \"1usize << 40\" . x64 windows` prints 1099511627776 and a module-scope call such as `table_sum()` folds in its module. No code is generated or linked and a non-constant expression is a diagnostic. Size M. Checked open: grep '\"eval\"' in src/main.e: no dispatch; docs/tooling.md:1063 documents the examples but nothing implements them; no work-done record."
@@ -2682,7 +2682,7 @@
       "group": "Tooling",
       "order": 307,
       "title": "Rename the prose name for the standard library to `e.lib` across the docs",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:444 by the single-list audit; not previously a queue row. Acceptance: spec section 1 and 2, modules.md, module-apis.md, tooling.md, README.md and render_progress.py row text use `e.lib` for the lib/e modules, with a D-row recording the term. A grep for 'stdlib', 'core library' and 'standard library' in those files finds none outside quotes. Size S. Checked open: grep 'e\\.lib' in src/ hits only unrelated identifiers; docs still say 'standard library'/'stdlib'."
@@ -2693,7 +2693,7 @@
       "group": "Back end",
       "order": 308,
       "title": "Windows resources part 1: link a precompiled .res into a .rsrc section; os.resource(kind,name)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:450 by the single-list audit; not previously a queue row. Acceptance: `project.yaml` names a `.res` per Windows target and the PE carries a byte-deterministic `.rsrc` directory (type, name, language order; icon and group-icon split; manifest at id 1). `os.resource` reads a custom RCDATA entry at run time. A Linux build records the resource as not applicable. Size L. Checked open: grep -i 'rsrc' in src/ and lib/: no hits; link_pe.e emits .text and .idata only; no os.resource in lib/e/os.windows.e."
@@ -2704,7 +2704,7 @@
       "group": "Project tools",
       "order": 309,
       "title": "Windows resources part 2: `neper rc FILE.rc -o FILE.res` compiler",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:456 by the single-list audit; not previously a queue row. Acceptance: The compiler accepts ICON, CURSOR, BITMAP, VERSIONINFO, STRINGTABLE, RCDATA, RT_MANIFEST, LANGUAGE, user-typed `NAME TYPE \"file\"` and `#define NAME integer`, and rejects #include and expressions. Its .res output links to the same bytes as a reference .res and the build manifest records path, size and SHA-256. Size M. Checked open: grep 'neper rc' and '\"rc\"' in src/main.e: none; depends on the .rsrc linking item."
@@ -2715,7 +2715,7 @@
       "group": "Project tools",
       "order": 310,
       "title": "`build --subsystem gui`: PE subsystem 2 behind a flag, recorded in the build manifest",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:469 by the single-list audit; not previously a queue row. Acceptance: `neper build --subsystem gui` writes IMAGE_SUBSYSTEM_WINDOWS_GUI so no console window opens, and the build manifest records the subsystem. The default stays console. Size S. Checked open: grep -i subsystem in src/*.e: no hits; the PE header writer has no flag, and ui windowed apps on Windows still open with a console."
@@ -2726,7 +2726,7 @@
       "group": "Project tools",
       "order": 311,
       "title": "`neper run --watch`: rebuild and rerun on a source change using e.fs.watch",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:472 by the single-list audit; not previously a queue row. Acceptance: `neper run --watch` rebuilds and restarts the program when any module in its graph changes, stopping the old process first. A fixture edits a file and observes the new output. Size S. Checked open: grep -n 'watch' src/main.e: none; lib/e/fs/watch.e exists as the prerequisite."
@@ -2737,7 +2737,7 @@
       "group": "Tooling",
       "order": 312,
       "title": "TextMate grammar neper.tmLanguage.json generated from grammar.ebnf",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/roadmap.md:475 by the single-list audit; not previously a queue row. Acceptance: A script beside render_progress.py generates the grammar from keywords, literal suffixes and the // trivia rule in grammar.ebnf. A test tokenises the conformance token corpus and the scope spans match `tokens --json`. Size S. Checked open: grep -ri 'tmLanguage|textmate' across the repo (src, scripts, tests, docs/work-done.jsonl): none."
@@ -2748,7 +2748,7 @@
       "group": "UI",
       "order": 313,
       "title": "Chart PDF: embedded TrueType text, FlateDecode streams, multi-page reports; SVG font subsetting",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1716 by the single-list audit; not previously a queue row. Acceptance: e.gfx.chart.pdf writes TrueType-embedded text and FlateDecode content streams and can emit a multi-page document; pypdf parses it and text extraction returns the labels. SVG embed_font writes a glyph subset, and the gradient_font SVG shrinks versus the full 610 KB font with identical raster output. Size M. Checked open: lib/e/gfx/chart/pdf.e line 7 ponytail comment (uncompressed, Helvetica only); no subset code in svg.e; not in queue.tsv or work-done"
@@ -2759,7 +2759,7 @@
       "group": "UI",
       "order": 314,
       "title": "Chart widget: legends, multi-layer views, keyboard zoom/orbit, single-axis zoom, cross-chart filter state",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1740 by the single-list audit; not previously a queue row. Acceptance: chart.widget View holds a list of layers and an interactive legend, zooms one axis, and zooms/orbits from the keyboard. A selection in one View filters another through shared selection state; a headless-harness fixture checks each interaction. Size M. Checked open: lib/e/gfx/chart/widget.e:28 ponytail one layer per view; only wheel/drag zoom_about; charts.md:436 cross-chart filtering planned; no queue row"
@@ -2770,7 +2770,7 @@
       "group": "UI",
       "order": 315,
       "title": "Chart layout: automatic legend placement/wrapping, layout-aware margins, label and strip collision avoidance",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:929 by the single-list audit; not previously a queue row. Acceptance: A layout pass sizes margins from measured tick, title and legend text, wraps and places legends without overlap, and omits or flips colliding tick labels and facet strips. plot_grid gets spanning cells and shared legends; free-scale and categorical facets map geoms beyond Scatter. Fixtures on Windows and Linux show no label overlaps on a dense case. Size L. Checked open: chart.e has only legend_items (caller places) and category_facet_scatter (Scatter only); charts.md:929,1222,1239,1547 say these remain planned; no queue row"
@@ -2781,7 +2781,7 @@
       "group": "UI",
       "order": 316,
       "title": "Chart label leader lines and optimising placement; curved labels for sunburst/pie",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1771 by the single-list audit; not previously a queue row. Acceptance: label_placement can draw leader lines from displaced labels to marks and optionally runs a conflict-graph or annealing pass that places more labels than the greedy Imhof order. A fixture compares placed counts on the 25-city case and checks determinism. Size M. Checked open: lib/e/gfx/chart.e has only greedy 8-slot placement; charts.md:1771 and :1007 say optimising placement and curved-label placement remain open"
@@ -2792,7 +2792,7 @@
       "group": "UI",
       "order": 317,
       "title": "Chart downsampling and scene batching for very large series",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1667 by the single-list audit; not previously a queue row. Acceptance: A min/max or LTTB downsampler reduces a 1M-point line or scatter to a bounded number of vertices keeping extremes, and the scene display list batches same-brush marks. A benchmarks/charts case records layout time for 1M points under a stated budget. Size M. Checked open: grep downsample/lttb in lib/: none; charts.md:1667 (L062 item 6) names progressive downsampling and GPU batching as open"
@@ -2803,7 +2803,7 @@
       "group": "UI",
       "order": 318,
       "title": "Chart color accessibility: Machado anomalous-trichromacy tables and automatic marker shapes",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1784 by the single-list audit; not previously a queue row. Acceptance: simulate_color_vision supports anomalous trichromacy (Machado 2009) at severity steps with reference values from the paper, and a helper assigns distinct marker shapes per series so series stay distinguishable when palette_separation is low. Size S. Checked open: chart.e has simulate_color_vision (dichromat only) and no marker-shape selector; charts.md:1784,1807 say both remain open"
@@ -2814,7 +2814,7 @@
       "group": "UI",
       "order": 319,
       "title": "Geographic charts: quantile and Jenks classes, TopoJSON reader, polygon clipping, antimeridian splitting",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1751 by the single-list audit; not previously a queue row. Acceptance: class_of gains quantile and Jenks natural-breaks classes; a TopoJSON reader beside e.gfx.chart.geojson yields the same region arrays; the map window clips polygons to its bounds and splits rings crossing the antimeridian. Fixtures compare breaks to a reference implementation and render a seam-crossing region. Size M. Checked open: lib/e/gfx/chart/geojson.e has equal-interval classes only; grep jenks/topojson: nothing; charts.md:380 and :1751 list these as planned"
@@ -2825,7 +2825,7 @@
       "group": "UI",
       "order": 320,
       "title": "Gantt dependency links, CPM working calendars, leads/lags, resource levelling and duration uncertainty",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1270 by the single-list audit; not previously a queue row. Acceptance: gantt draws dependency arrows between tasks; pert_cpm_schedule honours working calendars and lead/lag; a resource-levelling pass and a Monte Carlo project-duration distribution are exposed. Fixtures check the critical path and dates against a reference scheduler. Size L. Checked open: chart.e gantt (line 5698) has no link input; pert_cpm_schedule has no calendar; charts.md:1270,1280 say links, calendars, levelling and uncertainty remain planned"
@@ -2836,7 +2836,7 @@
       "group": "UI",
       "order": 321,
       "title": "Diagram auto-layout: flowchart, state machine, ER, org chart and dependency-graph routing",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1319 by the single-list audit; not previously a queue row. Acceptance: Flowchart, state-machine and ER diagrams accept unplaced nodes and place them automatically with orthogonal mixed-axis port routing and collision-safe edge labels; the layered layout reduces crossings, bundles edges and inserts dummy nodes for long links; org chart accepts multiple roots and dotted lines. Fixtures count crossings and overlaps. Size L. Checked open: charts.md:1313,1319,1326,1337,1686 say placement, routing and crossing reduction remain planned; chart.e flowchart/state_machine take explicit placement; no queue row"
@@ -2847,7 +2847,7 @@
       "group": "UI",
       "order": 322,
       "title": "UML and decision diagram depth: sequence fragments, activation inference, BPMN gateways, influence diagrams",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:1332 by the single-list audit; not previously a queue row. Acceptance: Sequence diagram supports alt/opt/loop fragments, destruction markers and inferred activation bars; process maps draw BPMN gateways and events; decision trees extend to influence diagrams with utility functions. Each has a scene/SVG fixture. Size M. Checked open: charts.md:1190,1302,1332 list these as planned; no matching fn names in lib/e/gfx/chart.e; no queue row"
@@ -2858,7 +2858,7 @@
       "group": "UI",
       "order": 323,
       "title": "Chart statistics follow-ons: adaptive histogram bins, weighted counts, STL/multiplicative decomposition, robust fit",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:828 by the single-list audit; not previously a queue row. Acceptance: Histogram supports Freedman-Diaconis/Scott bin rules and weighted counts; the decomposition chart accepts e.algo.timeseries stl and a multiplicative model with missing data; a robust (Huber/Tukey) fitted line is available. Results match numpy/statsmodels references. Size M. Checked open: lib/e/algo/timeseries.e has stl but chart decomposition is classical additive only; grep freedman in chart.e/stat.e: none; charts.md:539,828,1107 say these remain planned"
@@ -2869,7 +2869,7 @@
       "group": "UI",
       "order": 324,
       "title": "Chart layout follow-ons: squarified treemap, streamgraph wiggle, Sankey/alluvial crossovers, word-cloud packing",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:998 by the single-list audit; not previously a queue row. Acceptance: Treemap uses caller-scratch squarified layout; streamgraph offers wiggle offsets and automatic layer ordering; Sankey/alluvial handle missing categories and curved crossovers; word cloud normalises case and packs large clouds. Aspect-ratio, area and overlap checks pass in fixtures. Size M. Checked open: chart.e:7633 comment defers squarification; charts.md:998,1040,1045,1119 say these remain planned"
@@ -2880,7 +2880,7 @@
       "group": "UI",
       "order": 325,
       "title": "Report compositions: page breaks, print layout and tabular export for cross-tab and matrix reports",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/charts.md:388 by the single-list audit; not previously a queue row. Acceptance: Cross-tab and grouped matrix reports paginate with repeated headers, lay out for a page size, and export the underlying table as CSV equal to the displayed cells. A fixture compares page count and CSV against goldens. Size M. Checked open: charts.md:388 states these remain follow-on work; no pagination or export symbol found in the report chart functions"
@@ -2891,7 +2891,7 @@
       "group": "UI",
       "order": 326,
       "title": "Motion framework: curves catalogue and tweens (P6-01, P6-02)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/animation-plan.md:1 by the single-list audit; not previously a queue row. Acceptance: e.ui.animation gains CubicBezierCurve, IntervalCurve, StepCurve, curve transforms and a named catalogue, plus value, colour, geometry and transform tweens and TweenSequence. Fixtures check curve samples against Flutter reference values. Size M. Checked open: docs/widget-plan.json P6-01/02 delivered lists empty; lib/e/ui/animation.e is 125 lines with four quadratic curves and one bezier; not in queue.tsv"
@@ -2902,7 +2902,7 @@
       "group": "UI",
       "order": 327,
       "title": "Motion framework: controller v2 and physics simulations (P6-03, P6-04)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/animation-spec.md:235 by the single-list audit; not previously a queue row. Acceptance: Controller reports Status (Dismissed/Forward/Reverse/Completed), is driven forward/reverse/repeat with velocity, and supports time dilation; closed-form Spring (three regimes), Friction and Gravity simulations replace hand-written scroll overshoot. Spring done-times match an mpmath reference within 1 ms. Size L. Checked open: lib/e/ui/animation.e has no Status or Spring; animation-spec.md:722 test table; widget-plan P6-03/04 undelivered; no queue row"
@@ -2913,7 +2913,7 @@
       "group": "UI",
       "order": 328,
       "title": "Motion framework: implicit animations and explicit transitions (P6-05, P6-06)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/animation-plan.md:30 by the single-list audit; not previously a queue row. Acceptance: AnimatedValue, AnimatedOpacity, AnimatedLayout, AnimatedDecoration, AnimatedSwitcher and AnimatedCrossFade retarget smoothly when a property changes, and Fade/Scale/Rotation/Slide/Size transitions run compositor-only. Harness frame sampling shows start, mid and end values. Size L. Checked open: widget-plan P6-05/06 delivered lists empty; animation-plan.md says only loaders call e.ui.animation; no queue row"
@@ -2924,7 +2924,7 @@
       "group": "UI",
       "order": 329,
       "title": "Motion framework: choreography, animated list changes, shared-element and route transitions (P6-07, P6-08)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/animation-controls.md:389 by the single-list audit; not previously a queue row. Acceptance: Staggered and sequence groups, animated list/grid insert-remove-move in e.ui.collection, and Hero, shared-axis, fade-through, container-transform and predictive-back route transitions in e.ui.navigation. Headless fixtures sample intermediate frames and assert final layout equals the non-animated result. Size L. Checked open: widget-plan P6-07/08 undelivered; grep Hero/SharedAxis in lib/e/ui finds only scroll springs; no queue row"
@@ -2935,7 +2935,7 @@
       "group": "UI",
       "order": 330,
       "title": "Motion framework: fake-clock testing, reduced-motion policy, migration of hand-rolled motion (P6-09)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/animation-spec.md:722 by the single-list audit; not previously a queue row. Acceptance: e.ui.testing provides a fake-clock pump and frame sampling; one reduced-motion policy collapses all durations; press ripple, scroll overshoot, tooltip timing and reorder feedback move onto the framework with frame-stat counters. A test fails if any widget animates under reduced motion. Size M. Checked open: widget-plan P6-09 undelivered; animation-plan.md says ripple, overshoot, tooltips, reorder are hand-written in widgets; no queue row"
@@ -2946,7 +2946,7 @@
       "group": "UI",
       "order": 331,
       "title": "Screen-reader bridge: value/name/live-region events, RangeValue and Selection/Table patterns, AT-SPI extents",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/ux/accessibility-bridge.md:251 by the single-list audit; not previously a queue row. Acceptance: A changed value, name or live-region text raises UIA and AT-SPI events; sliders and progress bars expose RangeValue/Value; containers expose Selection and Table; AT-SPI reports screen-space extents and per-granularity text. Verified with the existing accessibility audit fixtures. Size L. Checked open: accessibility-bridge.md 'Not yet' section; grep RangeValue in lib: none (only SelectionItem); macOS NSAccessibility is C190 so excluded"
@@ -2957,7 +2957,7 @@
       "group": "UI",
       "order": 332,
       "title": "Build the unbuilt TcxGrid parity grids on e.ui.datagrid (prices, editions, messages, shortcuts, statistics, import)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/grid-parity/tcxgrid-plan.md:7 by the single-list audit; not previously a queue row. Acceptance: Each grid marked 'not built' (dbgPrices x2, dbgAbilitiesPreview, dbgEditions, dbgPreview, dbgMessages, gdShortcuts, dbgSelectEdition and the eight statistics grids) exists on e.ui.datagrid with the v3 columns, read-only flags and widths, and is compared against its v3 capture. Size L. Checked open: grep dbgPrices/dbgMessages/gdShortcuts/dbgSelectEdition/dbgProbability in lib and examples: only docs; G011/G012 cover the pool/deck views and the metric ledger, not these grids"
@@ -2968,7 +2968,7 @@
       "group": "Validation",
       "order": 333,
       "title": "Promote e.ui/e.gfx from experimental: multi-window keyboard-accessible app workload on three desktops",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/ui-framework.md:283 by the single-list audit; not previously a queue row. Acceptance: A general-purpose application workload (multi-window, keyboard-accessible) runs on Windows, Linux and macOS and records memory, frame-time and compatibility results in a committed report; GP-15 then lists the UI modules as promoted or names the blockers. Size M. Checked open: docs/general-purpose-verification.md:330 says experimental UI modules have not passed GP-15; grep GP-15 in work-done.jsonl: 0; no queue row"
@@ -2979,7 +2979,7 @@
       "group": "Back end",
       "order": 334,
       "title": "GP-09: lower simd.shuffle/interleave to punpck/pshufb so the Base16 codec stops using scalar lane loops",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/gp-performance.md:29 by the single-list audit; not previously a queue row. Acceptance: benchmarks/gp/neper/gp09.e encodes with a vector interleave (no per-lane scalar store loop) and benchmarks/gp/run.py reports runtime p50 within 3x of C (now 1576 ms vs 50 ms) with the identical checksum 534775349. A link fixture pins the interleave/unpack lowering for Vec[u8,16]. Size L. Checked open: lib/e/simd.e:108 shuffle is lane-by-lane (comment says a register class would select one shuffle); gp09.e still has `while lane < 16usize` store loop; not a queue row (M4-08 has no row); grep work-done for SIMD/interleave found only C029 Vec lowering."
@@ -2990,7 +2990,7 @@
       "group": "Back end",
       "order": 335,
       "title": "Direct argument-to-register call lowering in codegen_x64 (finish db-perf item 1 acceptance)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/db-perf-plan.md:60 by the single-list audit; not previously a queue row. Acceptance: A call moves an argument already in a register straight to its parameter register and the result straight to its destination register, with the outgoing-slot path kept only for stack args. benchmarks/db/run.py shows the SQLite scan at >=70% of C (now 56-59%) on both hosts, no cell slower, stage 2 = stage 3 fixed point re-baselined. Size L. Checked open: regalloc.e already has crosses_call preference (D1607) but doc records acceptance missed; load_call_arguments path still the rule in src/codegen_x64.e; no queue row mentions call lowering or db scan ratio."
@@ -3001,7 +3001,7 @@
       "group": "Tooling",
       "order": 336,
       "title": "Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit; not previously a queue row. Acceptance: A Neper binary speaks MCP JSON-RPC over stdio (reusing lib/x/mcp/protocol.e framing) and serves get_symbol_definition, get_build_diagnostics, get_symbol_references and get_ast_subtree from the existing index/check/parse JSONL, with a per-request arena that stays flat across 1000 calls. A conformance test drives it from a scripted client and compares payloads to the CLI output. Size M. Checked open: lib/x/mcp/protocol.e exists but is Appdor table-oriented; no compiler-query MCP binary under tools/ or src/; T032 is the Appdor services/mcp-server only; grep work-done mcp: only L049 builders. The 2026-11-12 compiler review adds to the acceptance: a second query in one session answers in under 50 ms on `src/main.e`. Notes: docs/compiler-hardening-plan.md."
@@ -3012,7 +3012,7 @@
       "group": "Tooling",
       "order": 337,
       "title": "Add --no-trivia to `neper tokens` and `neper parse` (parser-core trivia suppression)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/llm-mcp-server.md:68 by the single-list audit; not previously a queue row. Acceptance: `tokens --no-trivia` and `parse --no-trivia` emit no space/comment/newline-trivia records and still validate against the v1 stream schema; byte offsets of remaining records are unchanged. A conformance fixture compares output against the full stream with trivia filtered out. Size S. Checked open: grep no-trivia in src/*.e returns nothing; not in queue.tsv or work-done."
@@ -3023,7 +3023,7 @@
       "group": "Tooling",
       "order": 338,
       "title": "H33: per-component token-pressure report over whole verified agent trajectories",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/post-m2-llm-hardening.md:1289 by the single-list audit; not previously a queue row. Acceptance: A harness script reproduces, from archived traces, tokens per component (card, context, edit plan, diagnostic, test view, retrieval, schemas, retries, verification) per tokenizer, keeping failed/abandoned trajectories in the denominator, and enforces frozen default byte/token budgets for the card, context projection, successful check, root diagnostic, all-pass test result and final verification. Re-running on the archive gives byte-identical totals. Size L. Checked open: grep H33 in work-done.jsonl = 0; queue T027/T040/T041 text does not mention token budgets; only C051 tokenizer profile (H26) is done."
@@ -3034,7 +3034,7 @@
       "group": "Tooling",
       "order": 339,
       "title": "H43: performance-regression obligations with pre-registered statistics bound into receipts",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/post-m2-llm-hardening.md:1549 by the single-list audit; not previously a queue row. Acceptance: A change contract can name a benchmark obligation (baseline artifact, workload/data hashes, metric, threshold, repetitions, warmup) and the runner returns pass/regression/inconclusive/invalid from a distribution, never a best run. Fixtures for a known regression, noisy data, changed baseline, background disturbance and cherry-picked samples never produce a pass; result artifacts and environment identity enter the receipt. Size L. Checked open: grep H43 in work-done = 0; not named in T039-T042 queue text; benchmarks/baseline/gate.py judges fixed budgets only, not contract-bound obligations."
@@ -3045,7 +3045,7 @@
       "group": "Tooling",
       "order": 340,
       "title": "H45: export H34 receipts and H35 contracts into a signed release-provenance envelope",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/post-m2-llm-hardening.md:1586 by the single-list audit; not previously a queue row. Acceptance: A command exports receipt, change contract, environment identity, lock and artifact digests into the selected external provenance schema; an independent verifier accepts it and rejects altered source, dependency, builder, artifact, receipt or signature. Unsigned output is labelled local traceability and an export claiming more than its inputs is refused. Size L. Checked open: grep H45/provenance in work-done = 0; M6-01..06 milestone files do not mention it; hardening-tracks.json M6-provenance status planned; no SLSA/in-toto reference in repo docs."
@@ -3056,7 +3056,7 @@
       "group": "Library",
       "order": 341,
       "title": "GP-02/GP-03/GP-06 workloads: cross-platform CLI, parallel build executor, streaming parser with designs and oracles",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened 2026-11-03 from docs/general-purpose-verification.md:147 by the single-list audit; not previously a queue row. Acceptance: Each has a written design (arenas, ownership, concurrency, errors, module graph) and a runnable Neper program with a Go/Rust/C oracle, passing on Windows and Linux in both suites, covering Unicode args, cancellation/timeouts/graceful shutdown, and malformed/partial input with bounded buffers. Size XL. Checked open: grep 'GP-0[2-8]|GP-1[1-4]' across repo finds only docs/roadmap.md and the verification doc; benchmarks/gp contains only gp09.e and gp10.e."
@@ -3067,7 +3067,7 @@
       "group": "Library",
       "order": 342,
       "title": "GP-07/GP-13 workloads: persistent bounded cache and binary format reader/writer",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/general-purpose-verification.md:152 by the single-list audit; not previously a queue row. Acceptance: A bounded cache with eviction/fragmentation control under concurrent access and a binary format reader/writer (endianness, packed layouts, zero-copy slices, malformed-file rejection, round trips) each ship with design, oracle and fixtures on both hosts, with RSS flat over a soak run. Size L. Checked open: no gp07/gp13 program in benchmarks/gp, tests/ or examples/; not a queue row."
@@ -3078,7 +3078,7 @@
       "group": "Library",
       "order": 343,
       "title": "GP-04 workload: long-running HTTP service with bounded steady-state memory and graceful shutdown",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/general-purpose-verification.md:149 by the single-list audit; not previously a queue row. Acceptance: An e.net.http service with request arenas, backpressure, logging and concurrent shutdown runs a soak with many connections where RSS stays within a fixed bound and every worker joins on shutdown; Windows and Linux; compared against a Go or Rust oracle on the same script. Size L. Checked open: no GP-04 program in repo; roadmap.md:988 says it waits on e.async/e.net.http; not in queue.tsv."
@@ -3089,7 +3089,7 @@
       "group": "Library",
       "order": 344,
       "title": "GP-05/GP-08 workloads: e.db client over a C library and a plugin-style C ABI",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/general-purpose-verification.md:150 by the single-list audit; not previously a queue row. Acceptance: A database client built on an existing driver and a stable exported-ABI plugin (callbacks with context pointers, version checks, foreign ownership, failure isolation) each have a written design and fixtures that pass under both linkers on both hosts. Size L. Checked open: no GP-05/GP-08 program; drivers exist in lib/x but no plugin-ABI workload; grep GP-05|GP-08 only hits roadmap and verification doc."
@@ -3100,7 +3100,7 @@
       "group": "Library",
       "order": 345,
       "title": "GP-11/GP-14 workloads: interactive terminal application and image/audio transform pipeline",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/general-purpose-verification.md:156 by the single-list audit; not previously a queue row. Acceptance: A terminal app (incremental input, redraw, resize, signals, state restore on exit) and a media pipeline (large buffers, staged arenas, native library interop, parallel stages, sustained memory bound) each pass with a design record, oracle output and a no-leak soak. Size L. Checked open: no GP-11/GP-14 program in repo; roadmap.md:992,994 names dependencies only; not in queue."
@@ -3111,7 +3111,7 @@
       "group": "Library",
       "order": 346,
       "title": "GP-12 workload: multi-package application with reproducible vendoring and clean-room rebuild",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/general-purpose-verification.md:157 by the single-list audit; not previously a queue row. Acceptance: A multi-package application resolves transitive dependencies from a lock with checksums and licences recorded, and a clean-room rebuild on Windows and Linux yields byte-identical artifacts from the same manifest and signed registry snapshot. Size L. Checked open: no GP-12 program; M6-01..03 milestone files exist without queue rows; grep GP-12 hits roadmap.md:970 only."
@@ -3122,7 +3122,7 @@
       "group": "Back end",
       "order": 347,
       "title": "Containers that hold obligated or borrowed values: failure-safe insert and dynamic retention checking",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened 2026-11-03 from docs/m25-h01-ownership.md:389 by the single-list audit; not previously a queue row. Acceptance: A generic container can own an affine/obligated element across growth and failed insert (value not lost, cleanup run exactly once), and a pointer-bearing value stored into a dynamic container is checked against @noescape/region rules (currently only a documented limitation, E-SAFETY-0020 for module stores only). Fixtures cover relocation, insert failure and reset-before-use. Size XL. Checked open: m25-h01-ownership.md:389-393 and m25-h02-regions.md:443 state both as remaining; grep work-done for container retention/obligated resource finds nothing; not a queue row."
@@ -3155,7 +3155,7 @@
       "group": "Formats",
       "order": 353,
       "title": "Add WireGuard packet framing over e.crypto.noise (MAC1/MAC2, TAI64N, cookie reply, transport messages)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from scripts/algos/decisions-pending.md:743 by the single-list audit; not previously a queue row. Acceptance: A wireguard module builds and parses initiation, response, cookie and transport messages over noise initialize/write_message/read_message, interoperating byte-for-byte with a reference WireGuard implementation's captured handshake vectors, with replay-window and malformed-packet tests. Size M. Checked open: lib/e/crypto/noise.e:15 ponytail note names the framing as deferred; grep lib for wireguard: only noise.e; not in queue or work-done"
@@ -3166,7 +3166,7 @@
       "group": "Algorithms",
       "order": 354,
       "title": "Harden e.dist.consensus: Raft pre-vote and config revert, Multi-Paxos accepted values, VR out-of-order",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from scripts/algos/decisions-pending.md:457 by the single-list audit; not previously a queue row. Acceptance: Seeded message-loss/reorder fixtures check safety (one leader per term, committed entries immutable) with pre-vote on, a truncated config entry reverted, Paxos promises carrying accepted values, and VR Prepare buffered when out of order. Size M. Checked open: lib/e/dist/consensus.e ponytail notes at lines ~260, 680, 814, 886 still present; grep pre_vote: none"
@@ -3177,7 +3177,7 @@
       "group": "Algorithms",
       "order": 355,
       "title": "Add a secure wipe primitive and apply a zeroization policy across e.crypto key-holding APIs",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/algorithm-format-conformance.md:31 by the single-list audit; not previously a queue row. Acceptance: A non-elidable wipe(buf) exists and every crypto API holding key material (aead, kdf, kx, sign, noise) wipes its scratch/state on done/error, with a test reading the buffer back to prove it is zero. Each module header documents its zeroization and nonce rules. Size M. Checked open: grep lib/e/crypto for zeroiz|wipe|secure_clear: none except kdf.e:9 comment stating nothing wipes caller buffers"
@@ -3188,7 +3188,7 @@
       "group": "Algorithms",
       "order": 356,
       "title": "Hostile-input, limit and differential sweep for compression/archive/media decoders (A0 matrix)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/algorithm-format-coverage.md:64 by the single-list audit; not previously a queue row. Acceptance: For gzip, zlib, zstd, bzip2, lzw, zip, tar, png, jpeg, webp, wav, mp3, an e.test.fuzz fixture feeds truncated/corrupt/bomb inputs and asserts distinct errors, bounded memory, traversal/symlink rejection (tar, zip), and differential agreement with a native reference on valid vectors. Size L. Checked open: all 37 rows of docs/algorithm-format-coverage.json have status planned; e.test.fuzz is used by only tests/selfhost/fixtures/link/test_fuzz and test_gaps; no per-format hostile fixtures found under tests/"
@@ -3199,7 +3199,7 @@
       "group": "Algorithms",
       "order": 357,
       "title": "Nesting, entity-expansion and limit tests for text parsers (json, xml, yaml, html, csv, ini, mail, mime, uri, protobuf)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/algorithm-format-coverage.md:53 by the single-list audit; not previously a queue row. Acceptance: Each parser has fixtures proving configurable max depth/members/bytes, duplicate-key policy, billion-laughs/entity expansion rejection, invalid-UTF-8 behaviour, and an incremental-parse equivalence check against the one-shot result. Size L. Checked open: fmt/json.e has max_depth/Options but no per-format limit fixtures exist; matrix rows format.json..format.yaml all status planned; grep fmt for expansion/bomb hits only brotli, opus, pdf, xml"
@@ -3210,7 +3210,7 @@
       "group": "Algorithms",
       "order": 358,
       "title": "Crypto and statistics conformance evidence: vectors, nonce rules, NaN/inf contracts (A0 matrix)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/algorithm-format-conformance.md:26 by the single-list audit; not previously a queue row. Acceptance: Each crypto.* and statistics matrix row links golden vectors, malformed-input and constant-time notes, and e.algo.stat tests pin NaN/infinity/overflow behaviour per function. check_algorithm_format_matrix.py then rejects any row still marked planned without linked evidence. Size L. Checked open: docs/algorithm-format-coverage.json: 37 of 37 rows status planned; scripts/check_algorithm_format_matrix.py only validates schema and evidence names, not links"
@@ -3221,7 +3221,7 @@
       "group": "Tooling",
       "order": 359,
       "title": "Regenerate the repo rewrite-coverage inventory against the delivered widget and module set",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/rewrite-coverage-verification.md:10 by the single-list audit; not previously a queue row. Acceptance: scripts/audit_repo_coverage.py is rerun and its status column resolves names to delivered widgets/modules, so the 'implemented' count is no longer zero and the 8,435 missing/extension names are reduced to real extension work or explicit aliases. Size M. Checked open: doc status table shows 0 implemented and 8,435 missing/extension; snapshot predates the e.ui/e.fmt deliveries; no queue row or work-done record for re-auditing"
@@ -3232,7 +3232,7 @@
       "group": "Project tools",
       "order": 360,
       "title": "pacman P0: strict project.yaml parser, canonical project.lock writer, SemVer ranges and PubGrub resolver",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened 2026-11-03 from docs/pacman.md:410 by the single-list audit; not previously a queue row. Acceptance: A `neper pacman` command group resolves a manifest into a byte-canonical project.lock with module-export validation and PubGrub conflict explanations. Golden fixtures cover the manifest/lock formats, resolution ties, conflicts and yanked versions; tests/conformance/package/p0.package.json is produced by the real emitter rather than hand-written. Size XL. Checked open: grep -ril pacman src lib tests scripts: only src/assets.e (comment) and generators; no PubGrub/project.lock/project.yaml producer in src or lib; queue.tsv and work-done.jsonl have no pacman row; work-queue.json T012 says 'Missing: the producer (M6 pacman P0)'."
@@ -3243,7 +3243,7 @@
       "group": "Project tools",
       "order": 361,
       "title": "pacman P1: immutable content-addressed cache, path dependencies, frozen/offline sync and virtual module map",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened 2026-11-03 from docs/pacman.md:412 by the single-list audit; not previously a queue row. Acceptance: A clean machine populates its cache from project.lock, then builds byte-identically under --frozen --offline with path deps resolved through a virtual module map and build-manifest integration. Concurrent syncs never expose partial store entries and a mutable Git ref cannot change a locked sync. Size XL. Checked open: No pacman store/cache/sync code in src/ or lib/; src/project.e only does project-root and source-root discovery; no queue row."
@@ -3254,7 +3254,7 @@
       "group": "Project tools",
       "order": 362,
       "title": "pacman P2: signed registry client, Git adapter, mirrors, publish/yank, cache verify and GC",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened 2026-11-03 from docs/pacman.md:415 by the single-list audit; not previously a queue row. Acceptance: Registry metadata and release archives verify against signing keys and tree digests, Git deps resolve to full commits with submodules rejected, and publish rejects path/unpinned deps. A fake registry fixture covers tamper, yank, mirror failover and network failure leaving lockfile and store unchanged. Size XL. Checked open: No registry/publish/yank code in src or lib; docs/pacman.md sections 6 and 10 unimplemented; absent from queue.tsv."
@@ -3265,7 +3265,7 @@
       "group": "Project tools",
       "order": 363,
       "title": "pacman P3: controlled generation tasks with hash, scratch execution, capability policy and source maps",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/pacman.md:418 by the single-list audit; not previously a queue row. Acceptance: A declared task runs in a scratch directory under a denied-by-default capability policy and produces byte-identical declared outputs with generated-source maps and JSON records. Denied capabilities fail before the task starts and no dependency runs code at resolution or install time. Size L. Checked open: grep for pacman task/capability code in src and lib returns nothing; absent from queue.tsv and work-done.jsonl."
@@ -3276,7 +3276,7 @@
       "group": "Project tools",
       "order": 364,
       "title": "Embed dependency-package assets and external runtime assets in pacman builds",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/pacman.md:156 by the single-list audit; not previously a queue row. Acceptance: A package dependency's declared assets enter the root link identity and e.ui.asset lookup with the same name, metadata and SHA-256 rules as root assets. External runtime assets are declared and verified without being embedded. Size M. Checked open: src/assets.e reads only the root project manifest ('version 1 embeds only declarations in the root project'); no dependency asset code; no queue row."
@@ -3287,7 +3287,7 @@
       "group": "Algorithms",
       "order": 365,
       "title": "Constant-time P-256 ECDSA, BIP-340, FFDHE, ML-DSA and RSA-PSS signing to replace the fail-closed stubs",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/security-audit-2026-09-24.md:H3 by the single-list audit; not previously a queue row. Acceptance: p256_public_from_secret, schnorr_public_from_secret/schnorr_sign and the other secret-key operations in e.crypto.sign return real results with fixed-schedule control flow and masked selection, verified by emitted-control-flow inspection and a timing-independence fixture. Known-answer vectors pass on Windows and Linux. Size L. Checked open: lib/e/crypto/sign.e lines 1299, 1337, 1520, 1530, 1645, 2173 still `ret ..., Unsupported` before the old bodies; audit text says these fail closed; no queue or work-done row for constant-time restoration."
@@ -3298,7 +3298,7 @@
       "group": "Back end",
       "order": 366,
       "title": "Contain module source selection to the project root: resolve symlinks and re-stat at open",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/security-findings.md:407 by the single-list audit; not previously a queue row. Acceptance: A symlink in the source tree whose resolved target escapes the project root is rejected with a diagnostic, and the entry is re-checked at open time. A fixture with an escaping symlink and a swap-after-readdir case fails before the change. Size S. Checked open: src/project.e lines 411 and 463 still accept entry.kind == .Symlink as a source candidate with no realpath containment; security-findings 'Deferred' list names it; no queue row."
@@ -3309,7 +3309,7 @@
       "group": "Formats",
       "order": 368,
       "title": "TLS 1.3 server and client with P-256/RSA credentials, client-certificate auth and PSK session resumption",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/tls-p256-openrouter.md:40 by the single-list audit; not previously a queue row. Acceptance: e.net.tls serves with P-256 and RSA server keys (not only Ed25519), requests and verifies client certificates, and resumes sessions through PSK tickets; 0-RTT stays refused unless replay-safe. Loopback fixtures and an external interop probe cover each mode. Size L. Checked open: docs list client auth, resumption and 0-RTT as unsupported; lib/e/net/tls.e line 1297 'resumes nothing'; validate_server_credentials returns an Ed25519 key only; grep for CertificateRequest/psk finds nothing."
@@ -3320,7 +3320,7 @@
       "group": "Validation",
       "order": 369,
       "title": "Android validation matrix: 4 KiB/16 KiB pages, API-level symbol resolution, APK upgrade and wrong-key rejection",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from docs/android-cross-compilation.md:64 by the single-list audit; not previously a queue row. Acceptance: A script runs the counter APK on emulators with 4 KiB and 16 KiB page sizes across supported API levels, checks Bionic symbol resolution, and verifies upgrade under the same key and rejection under another. Results are recorded as pass/fail rows. Size M. Checked open: grep for 16384/page-size/upgrade in scripts/*android* and scripts/build-apk* finds nothing; doc lists these under 'remaining validation'; C219 and C104 cover other work."
@@ -3331,7 +3331,7 @@
       "group": "UI",
       "order": 370,
       "title": "Apply safe-area insets in the Android counter app and edge-to-edge windows",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/HANDOVER-OPENGL.md:40 by the single-list audit; not previously a queue row. Acceptance: The counter app's content no longer sits under the status bar on a device with insets, using e.ui.window safe_insets. An emulator screenshot check compares the top content offset against the reported inset. Size S. Checked open: examples/android/counter/src/main.e has no inset/safe reference while lib/e/ui/window.e exposes safe_insets; handover lists it under limits; no queue row."
@@ -3342,7 +3342,7 @@
       "group": "Validation",
       "order": 371,
       "title": "Get both full self-host suites green from a clean worktree, including the unreached NeperOS fixture rows",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened 2026-11-03 from HANDOVER.md:40 by the single-list audit; not previously a queue row. Acceptance: tests/selfhost/run.ps1 on Windows and run.sh on Linux each finish with zero failures from a clean detached worktree. The previously unreached rows (sheetfixture through diskfixture) pass or their table expectations are fixed. Size L. Checked open: HANDOVER.md says the suite was 'never yet green end-to-end' and Linux run.sh never run; work-done notes repeat 'full suites not run'; queue T048 covers only the OpenGL shared-change verify."
@@ -3353,7 +3353,7 @@
       "group": "Tooling",
       "order": 372,
       "title": "neper-tooling: make a comptime parameter a symbol and reference target in index and uses output",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened 2026-11-03 from docs/tooling.md:293 by the single-list audit; not previously a queue row. Acceptance: index-file lists a comptime parameter as a parameter symbol and a body use is a read reference targeting it, with schema and golden updates. Existing local and parameter output stays byte-identical. Size S. Checked open: docs/tooling.md line 293 still says 'A comptime parameter is not yet a symbol'; no work-done record for comptime parameter symbols; not in queue.tsv."
@@ -3375,7 +3375,7 @@
       "group": "Library",
       "order": 374,
       "title": "Triage and fix the open GitHub issues of nebosa-company/neper (687 on 2026-10-31)",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Backlog only, nothing to start now. `gh issue list --repo nebosa-company/neper --state open` listed 687 open issues on 2026-10-31 (numbers up to #1620; labels: bug 205, SEO 25, internal 2, the rest unlabelled), most of them against the e.web modules (CSP, page, iframes). Acceptance: every open issue is either fixed with a regression test that fails if it comes back and closed, or closed with a reason; work them in groups by module (read the titles first with `gh issue list --json number,title,labels`), group duplicates, and re-run the issue count at the start of each session because new ones keep arriving."
@@ -3386,7 +3386,7 @@
       "group": "OS targets",
       "order": 375,
       "title": "Android target: Bionic ELF executables, then a NativeActivity APK built by Neper",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Backlog only; blueprint is docs/os/android.md. First acceptance: an aarch64-android ELF (x18 never allocated, 16 KiB PT_LOAD alignment, BTI note, no DT_TEXTREL, PT_INTERP /system/bin/linker64) pushed to /data/local/tmp runs under adb and prints through __android_log_write; then e.mem/e.io/e.fs/e.time fixtures pass on the emulator or a device. Later phases per the document: AXML manifest encoder, APK v2 signer verified by apksigner, NativeActivity with ANativeWindow, JNI by table slot, pthread-based e.thread. Needs an emulator or device, neither is on this machine yet."
@@ -3397,7 +3397,7 @@
       "group": "OS targets",
       "order": 376,
       "title": "iOS target: signed arm64 Mach-O, UIKit through the Objective-C runtime, IPA packaging",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Backlog only; blueprint is docs/os/ios.md. First acceptance: a platform-7 (iOS simulator) Mach-O main with an ad-hoc CodeDirectory runs under xcrun simctl spawn and codesign --verify accepts it; then AppDelegate defined through objc_allocateClassPair, UIApplicationMain, a CAMetalLayer view drawing a frame through the existing msl.e backend. Reuses the macOS Mach-O writer and Metal work. Needs a Mac; App Store identity keys and Assets.car are the last milestone and the highest risk."
@@ -3408,7 +3408,7 @@
       "group": "OS targets",
       "order": 377,
       "title": "FreeBSD target: ELF with the FreeBSD identity, carry-flag syscalls, per-OS constant tables",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Backlog only; blueprint is docs/os/free-bsd.md. First acceptance: an x86_64-freebsd static ELF (EI_OSABI 9, .note.tag ABI note) runs under a FreeBSD 14.x VM, writes and exits; then e.mem/e.io/e.fs/e.time fixtures where each differing constant (CLOCK_MONOTONIC 4, O_CREAT 0x200, EAGAIN 35) has a fixture that fails if the Linux value is used, and a syscall failure fixture proving the carry flag becomes an err. Later: thr_new and _umtx_op threads, kqueue, aarch64, dynamic linking via /libexec/ld-elf.so.1. Syscall numbers come from the target release headers, generated, never hand-typed."
@@ -3419,7 +3419,7 @@
       "group": "OS targets",
       "order": 378,
       "title": "FreeRTOS target: Thumb-2 back end, relocatable ELF output, C shim for the kernel API",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Backlog only; blueprint is docs/os/free-rtos.md. Blocked first on whether the linker can write ET_REL objects (check before sizing). First acceptance: a thumbv7m object whose main prints through semihosting and exits runs under QEMU (lm3s6965evb or mps2-an385) linked with the FreeRTOS ARM_CM3 port; then known-answer fixtures for __aeabi_uldivmod/ldivmod and memcpy, then the neper_freertos.c shim with e.thread/e.sync/e.time fixtures, then neper size and neper stack-report. Thumb bit, branch range and literal pools are the traps. Later: standalone image with a memory map, thumbv6m/v7em, RV32."
@@ -3430,7 +3430,7 @@
       "group": "OS targets",
       "order": 379,
       "title": "Zephyr target: Neper as an out-of-tree Zephyr module with a C shim",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Backlog only; blueprint is docs/os/zephyr.md, and it depends on C227 for the Thumb-2 back end (native_sim needs only the existing x86-64 emitter). First acceptance: a neper-zephyr module (zephyr/module.yml, CMake import of libapp.a, Kconfig, neper_zephyr.c) builds for native_sim/native/64 under WSL or Linux CI, and a Neper main prints through the shim and exits; then e.thread/e.sync/e.time fixtures including the reversed-priority and cooperative-priority checks, then qemu_cortex_m3 once C227 delivers the Thumb-2 back end. No Zephyr API is called directly; everything goes through the shim."
@@ -3441,7 +3441,7 @@
       "group": "OS targets",
       "order": 380,
       "title": "z/OS and CICS target: z/Architecture back end, GOFF linker output, EBCDIC literals, CICS bridge",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Backlog only; blueprint is docs/os/z-os.md. Largest item of the six: a new ISA back end (R1 parameter list, R13 DSA, LE prologue/epilogue), GOFF record output (ESD/TXT/RLD/END) with 8-character member name mangling, IBM-1047 string lowering, e.mem over GETMAIN/FREEMAIN, e.io over CICS queues, and a CICS command wrapper mapping EIB RESP/RESP2 to err. No mainframe or emulator (Hercules, z/PDT) is available here, so the first acceptance is a GOFF byte-level check against IBM's documented record layout and a decision on how code is ever run."
@@ -3452,7 +3452,7 @@
       "group": "Optimization",
       "order": 381,
       "title": "float/vector register class: allocate xmm registers, floats stop living in general registers as raw bits (x64 first, a64 after)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Acceptance: regalloc has a second register class; a scalar float and a Vec[T,N] stay in xmm across operations and calls under the System V and Win64 conventions; D786 copied-storage convention replaced; fixtures for float loops, Vec arguments and returns and callee/caller-saved xmm pass on both hosts; stage2==stage3 holds; cachegrind instruction count of benchmarks/cpu float workloads drops and is recorded."
@@ -3463,7 +3463,7 @@
       "group": "Optimization",
       "order": 382,
       "title": "Vec shuffle, interleave, pack and movemask selection so GP-09 stops using scalar lane loops",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Needs C242. Acceptance: punpck/pshufb/pack/movmsk (and a64 zip/tbl equivalents) selected for the Vec interleave and pair-assembly operations; GP-09 Base16 output unchanged and runtime p50 within 3x of C (was 1576 ms against 50 ms); a fixture compares every shuffle against the scalar lane loop."
@@ -3474,7 +3474,7 @@
       "group": "Optimization",
       "order": 383,
       "title": "scalar replacement of aggregates and copy elision (struct copy was 16% of all instructions, D930-D933)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Acceptance: a non-escaping struct or tuple local is split into scalar locals before promote_locals; a copy whose source is dead afterwards, and a returned aggregate built in place, emit no copy; fixtures prove aliasing and address-taken aggregates are left alone; cachegrind instruction count on the records and db-scan workloads drops and is recorded."
@@ -3485,7 +3485,7 @@
       "group": "Optimization",
       "order": 384,
       "title": "value numbering, instruction simplification and division by constants in NIR",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Acceptance: dominator-based value numbering removes repeated pure computations and repeated loads with no intervening store; rule-driven simplification covers identities (x+0, x*2^k, x^x, compare folds); unsigned and signed division and modulo by a constant use a multiply sequence, checked against the division instruction over edge values; compile time on GP-01 grows less than 3%."
@@ -3496,7 +3496,7 @@
       "group": "Optimization",
       "order": 385,
       "title": "loop-invariant code motion and induction-variable strength reduction",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Acceptance: loop detection and rotation on NIR; pure invariant computations hoist to a preheader; i*scale address arithmetic in counted loops becomes a pointer bump; fixtures prove no hoist across a store that may alias, a call, or a trap; sieve, sort and hash in benchmarks/cpu improve and are recorded."
@@ -3507,7 +3507,7 @@
       "group": "Optimization",
       "order": 386,
       "title": "bounds-check elimination from range facts, extending elide_null_checks",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Acceptance: an index proven below len by a loop bound, a dominating compare or a slice split emits no check in the checked release build; a check that can fail is kept and a fixture traps on it; counted-loop checks hoist out of the loop; checked-release cost on benchmarks/cpu is measured before and after."
@@ -3518,7 +3518,7 @@
       "group": "Optimization",
       "order": 387,
       "title": "likely/unlikely edge hints on trap paths and basic block placement",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Acceptance: trap, check-failure and error paths are marked cold; blocks are laid out with the likely successor falling through and cold blocks at the function end; branch folding removes empty blocks and jumps to jumps; stage2==stage3 holds and the instruction count on GP-01 is recorded."
@@ -3529,7 +3529,7 @@
       "group": "Optimization",
       "order": 388,
       "title": "register allocator: interval splitting, copy coalescing, loop-depth spill weights and rematerialisation",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Start after C242 since both change regalloc data. Acceptance: a value may live in a register for part of its range and in memory for the rest; two-address and call-argument moves coalesce; the spill choice weighs use count by loop depth; constants and frame addresses are rematerialised instead of spilled; the allocator self_test and the emit sweeps pass; spill count and instructions on GP-01 are recorded."
@@ -3540,7 +3540,7 @@
       "group": "Optimization",
       "order": 389,
       "title": "inliner cost model replacing the flat 40-instruction cap",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Acceptance: the decision weighs callee size against bonuses for constant arguments, a single call site and a call inside a loop; validated with benchmarks/baseline/inline_cap.py on GP-01 and the CPU workloads for image size and runtime, with the result recorded; the compiler still builds itself to the same bytes."
@@ -3551,7 +3551,7 @@
       "group": "Optimization",
       "order": 390,
       "title": "tail calls, switch lowering (jump tables, bit tests) and branch folding",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. Acceptance: a call in tail position with matching stack arguments becomes a jump under both conventions, and a deep recursion fixture runs in constant stack; dense integer switches compile to a bounded jump table and sparse ones to a binary search; fixtures cover the edge values of each."
@@ -3562,7 +3562,7 @@
       "group": "Optimization",
       "order": 391,
       "title": "decide whether regions and value semantics guarantee non-aliasing, and emit noalias facts in NIR",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from docs/compiler-optimizations.md. First step is a decision row after reading docs/m25-h02-regions.md and docs/m25-h05-value-semantics.md. Acceptance: if the spec guarantees it, NIR carries a no-alias fact on region and by-value pointers, and C245 value numbering and C246 LICM use it with a fixture that fails if a possibly aliased store is ignored; if it does not, the decision row says so and the item closes."
@@ -3573,7 +3573,7 @@
       "group": "Optimization",
       "order": 392,
       "title": "a64 Linux CI job running the aarch64 differential check on an arm runner or under QEMU",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from docs/compiler-optimizations.md: CI has macos-14 for native macOS a64 but no Linux a64 job, so a64 codegen changes (C242, C243, C249) are checked only in WSL. scripts/a64-differential.sh runs prebuilt x64/aarch64 pairs named in build/a64/out/names.txt, which scripts/a64-differential.ps1 builds on Windows, so the job needs a Linux step that builds the pairs itself. Acceptance: a workflow runs the differential on ubuntu-24.04-arm (native) or ubuntu-latest with qemu-user, libc6:arm64 and aarch64-linux-gnu-gcc, builds both architectures of every fixture in the list, and fails when any pair differs outside the five expected ones (when_target, os_fs, fs_basics, os_gaps, debug_dump); a deliberately broken a64 select_binary makes the job fail; the job is triggered by workflow_dispatch and by pushes touching src/codegen_a64.e, src/regalloc.e or src/nir.e. The 2026-11-12 compiler review adds to the acceptance: a deliberately broken a64 encoding on a branch turns the push red. Notes: docs/compiler-hardening-plan.md."
@@ -3584,7 +3584,7 @@
       "group": "Hardening",
       "order": 393,
       "title": "capacity limits name themselves: every fixed pool, arena and token table reports its own exhaustion",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the weakness review: arena, bootstrap tokens and resolver tokens each filled up and the diagnostic blamed the change, and MAX_LOCALS 256 truncated silently. Acceptance: an inventory of every fixed capacity in src/ and the C bootstrap (constant, file, what fills it); each exhaustion raises one code E-CAP-nnnn naming the limit, its value and the current use; no capacity truncates silently; one generated fixture per capacity that fills it exactly and one past it, the first compiles, the second reports its code; the inventory is the fixture list, not a second document. The 2026-11-12 compiler review adds to the acceptance: the 12,000-const file checks clean; a fixture per remaining fixed limit asserts the pool's name in the message. `resolve.e:230` and `fill_indexes` (`check.e:5344`) stop falling back to linear scans silently: they report. Notes: docs/compiler-hardening-plan.md."
@@ -3595,7 +3595,7 @@
       "group": "Hardening",
       "order": 394,
       "title": "generic deferral probe matrix: instances over instances at every site that can hold a deferred value",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the weakness review: three generic-deferral bugs in a row (data.map, e.bytes, e.data.iter) and the D163 instance-over-instance case, each found by a module hitting it. Acceptance: a generated fixture set crosses {return, assign, let, call argument, field, index, annotation, comptime branch} with {T, Inner[T], Outer[Inner[X], Y], Vec[T]} and checks the value at run time on both hosts; every combination passes or is a named refusal with a code; the checker has no site that reads a still-generic type as concrete. The 2026-11-12 compiler review adds to the acceptance: the C255 matrix (instance over instance at ret / assign / let / argument / field / array length) passes; byte gate. Notes: docs/compiler-hardening-plan.md."
@@ -3606,7 +3606,7 @@
       "group": "Hardening",
       "order": 395,
       "title": "miscompile net: narrow-width and constant edge values through every call, return and store path, run against two back ends",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the weakness review: unwidened narrow extern returns, negative narrow constants (lower_constant), uncleared mem.alloc under neper-self and a local shadowing a module-scope function each shipped silently and were found late. Acceptance: a generated fixture covers i8/i16/i32/u8/u16/u32 at min, max, -1 and 0 through extern return, extern argument, struct field, constant, comparison and shift, with the expected value computed in the generator; each case runs x64 and a64 and under the bootstrap and neper-self, and any pair disagreeing fails; the emit sweep runs it; reverting any of the four past fixes makes a case fail."
@@ -3617,7 +3617,7 @@
       "group": "Optimization",
       "order": 396,
       "title": "extern call path: register arguments and caller-saved-only spills instead of stack slots and spill-all",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the weakness review: extern calls cost about 15 ns over C (D1597) because arguments pass through stack slots and every live value is spilled. C249 owns the allocator; this item owns the call sequence. Acceptance: a call to a leaf extern with up to six integer arguments emits register moves only, and only values live across the call and held in caller-saved registers are spilled; the db-scan microbenchmark of D1597 is within 5 ns of the C baseline; struct-by-value (D1675) and variadic calls keep their fixtures; cachegrind instruction count for the benchmark drops and the number is the test threshold."
@@ -3628,7 +3628,7 @@
       "group": "OS targets",
       "order": 397,
       "title": "WASI e.os surface so the WASM target runs e.fs, e.io, e.time and e.proc-free programs",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the weakness review: the WASM design (D5213) and the browser engine are blocked on a missing WASI e.os; node 22/24 run WASI here. Acceptance: os.wasi.e adds the per-target variant for files, clocks, random, args, environment and exit through wasi_snapshot_preview1; unsupported operations (threads, processes, dynamic linking) return a named error, not a trap; fs_basics, time and the e.str, e.fmt and e.math fixtures run under node on WASM with output equal to the native run; the browser engine builds for WASM and loads a static page."
@@ -3639,7 +3639,7 @@
       "group": "UI",
       "order": 398,
       "title": "operating-system accessibility preferences: reduced motion, high contrast, text scale, screen reader presence",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-09-27 accessibility audit: the AT bridge (D1602-D1604) exists but OS preferences are unread. Acceptance: e.ui exposes one prefs() record read from Windows (SystemParametersInfo, UISettings), macOS (NSWorkspace accessibility display options) and Linux (portal settings over D-Bus) with a change notification; reduced motion disables the D1412-D1450 motion paths, high contrast selects a token set, text scale multiplies font tokens; a fixture sets each preference through a test hook and checks the frame differs; every preference unreadable on a host returns the default and a flag saying so."
@@ -3650,7 +3650,7 @@
       "group": "Tooling",
       "order": 399,
       "title": "suite runner that finishes: bounded workers by free memory, per-fixture timeout, resumable, stderr tolerant",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the weakness review: Windows suites hit the stderr trip and WSL crashes, WSL is short of RAM, and the Linux suite needs GitHub (linux-suite.yml). Acceptance: the runner picks -j from free commit before starting and lowers it on pressure; a fixture past its timeout is killed and reported, not left hanging; an interrupted run resumes from the last finished fixture; stderr output never fails a fixture whose exit code and stdout match; a deliberately hanging fixture and a deliberately stderr-writing fixture are the tests; scripts/check_suite_parity.py keeps both hosts' fixture lists equal. The 2026-11-12 compiler review adds to the acceptance: the migrated slice's pass/fail set equals the scripts' on both hosts; T076's acceptance (finishes, resumable, stderr tolerant) holds for migrated steps. Notes: docs/compiler-hardening-plan.md."
@@ -3661,7 +3661,7 @@
       "group": "Tooling",
       "order": 400,
       "title": "land script for the shared tree: stage listed paths only, merge queue and decision rows by id, allocate D-numbers under a lock",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the weakness review: peers' uncommitted decision rows and queue edits live in the same files, a peer commit swept hunks and a D-number, and landing needs foreign-commit checks before push. Acceptance: one command takes explicit paths and a message, refuses git add -A, takes only this session's hunks from docs/decisions.md and docs/work-queue.json, allocates the next D-number from a lock file so two sessions never share one, refuses to push when git log origin/master..HEAD holds commits not made by this session, and regenerates progress.html and the digests; a two-session fixture on a scratch repo shows no lost row and no duplicate number."
@@ -3672,7 +3672,7 @@
       "group": "Language design",
       "order": 258,
       "title": "language: a local may shadow a module-scope function and a builtin type name (reopen D66's reserved set)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-04 language design review. Problem: E-NAME-0003 ended 35 of the 134 builds that failed on a compile code in 2026-09-20..27, more than any other code (D1678), and its largest slice is the rule that a local or parameter may not reuse a module-scope function (`text`, `row`, `cell`, `level`, `width`, `at`) or a builtin type name (`target`, `Vec`, `i8`). That makes the legality of `let width = 3` depend on declarations elsewhere in the module, which is exactly what a generated line may not depend on (spec section 1, goal 1); D1678's rename fix mitigates it but does not change the design. Proposal: reserve only `use` qualifiers and the `target` namespace. A local or parameter may shadow a module-scope fn, const, var or type name and the builtin type names, because spec section 2 already resolves types and values by position. Module scope keeps one definition per name, so `grep -n ^fn dot` still returns one line, and a call through a shadowed name is a local type error (E-NAME-0004), never an ambiguity. D1678's machine-applicable rename stays for qualifier collisions and duplicate locals. Token and cost: this deletes a repair class. No new syntax, no extra token on any line, a shorter trap section on the card, and it removes one failed build plus one repair turn per occurrence, which is the most expensive failure mode measured. Guard: the five implicit operations, the no-overloading rule and the explicit-cast rule are untouched, and the index, tokens and parse streams keep their shape. Not done: fixtures that shadow a module fn, a const, `i8`, `Vec` and `str` as a value name accept and format; a call through the shadowed name rejects E-NAME-0004; the card re-renders without those two traps; lang-stats repeat rate is re-measured on transcripts written after the change."
@@ -3683,7 +3683,7 @@
       "group": "Language design",
       "order": 259,
       "title": "language: cross-module pointer facts come from the declaration, never from the callee's body",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-04 language design review. Problem: the lexical region subset in section 11 plus `callee_keeps` reads another module's body through any number of modules to decide whether a container retains a borrowed pointer. D1677 records the consequence as found and not fixed: a warm build writes an image the clean build refuses with E-SAFETY-0013, and the documented fix adds a body edge per foreign function, so every body edit invalidates its callers and both section 12 and section 15 pay for it. Proposal: a call that hands a region value or a view across a module boundary is legal only against a declared contract on the parameter (`@noescape`, `own`, or `@borrows` for the result direction), which is the fact the interface already serializes in artifact format 14. Nothing outside the function's own lexical scope is read; an unannotated callee gives no answer, so it cannot be inferred from. Token and cost: one attribute line per boundary function that hands region values, in exchange for a warm build that equals a clean one. A silently wrong image costs a rebuild, a bisect and a debugging turn, the most expensive repair class measured, and the checker loses the alias-chain cases that only the body walk accepted, so its own context shrinks. Guard: the single-function rules (move at most once, cleanup on every exit, a view of a mutated container) stay as they are. Not done: D1677's warm and clean builds agree by a fixture; the alias-chain fixtures the walk alone accepted are annotated or moved to @unsafe; both suites pass."
@@ -3694,7 +3694,7 @@
       "group": "Language design",
       "order": 260,
       "title": "language: make the zero value total - every enum and union enum declares a member at 0",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-04 language design review. Problem: section 7 carries a carve-out. A type that holds, at any depth, an enum with no member at 0 has no zero value, so `= zero`, a module-scope `var` without an initialiser and `try` in a function returning it are compile errors naming the outermost type and the offending field. A generator must therefore read the whole type graph before it knows whether a line is legal, the same unseen-context dependency as C258. Proposal: an `enum` or `union enum` declaration must name a member whose backing value is 0, the mirror of the existing rule that renames an error whose FNV-1a hash is 0. Then every type has a zero value, and the carve-out, its three error sites and the exceptions in the zero table go. `err` = ok, a slice = nil and the null resource already fit. Token and cost: one member on an enum that starts at 1 (`None = 0`), against a rule and three diagnostics that leave every future context, and generated code writes `= zero` and `try` without first resolving the type. Guard: `= undef` and E-SAFETY-0017, the refusal of a value that can only be invalid, are unchanged. Not done: the section 7 table and rule rewrite, the declaration-time diagnostic naming the enum and the member it needs, accept fixtures for `= zero` and `try` over such an enum, a reject fixture for the declaration without a 0 member, and the card's zero section re-rendered."
@@ -3705,7 +3705,7 @@
       "group": "Language design",
       "order": 261,
       "title": "language: protocols are found by an explicit marker, not by a derived snake_case name",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-04 language design review. Problem: `K.hash(v)` resolves to `fn sensor_hash` by deriving the name from the type's name through a Unicode snake_case algorithm (`HTTP2Client` becomes `http2_client`), plus a separate rule for a generic type's stem, a rule for which alias spelling keeps the nominal declaration, and a recorded lookup edge when a supplied fallback is used (section 9, D48). Every implementation must reproduce the algorithm byte for byte, and a reader cannot tell from `fn sensor_hash` that it is the protocol for `Sensor` without running the algorithm in their head. Proposal: `@proto(Sensor)` on the function, and the same fact in `neper index`. Lookup matches a marker rather than a spelling. The five resolution rules, the supplied fallbacks and the call-site syntax stay. Token and cost: one attribute line per protocol function, nothing at any call site, and the spec loses the case algorithm with two name-resolution rules that an agent otherwise has to load to predict a resolution. A typo becomes a missing marker refused with one code, instead of a silent fall back to the supplied hash. Not done: the attribute in the grammar and the checker, the index edge, diagnostics for a duplicated or mismatched marker, and conformance fixtures for a generic type's protocol and the str fallback."
@@ -3716,7 +3716,7 @@
       "group": "Language design",
       "order": 262,
       "title": "docs: one normative home per fact (section 13 versus tooling.md, section 11 versus the H-track files)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-04 language design review. Problem: the same fact is written twice, so a tooling change is read and edited in two places. Section 13 Toolchain is 603 of the spec's 5149 lines and restates docs/tooling.md; section 11's region and concurrency rules restate docs/m25-h02-regions.md and docs/m25-h04-concurrency.md. Three smaller self-contradictions sit on top: `unreachable` is a keyword although section 14 calls it the one builtin that is a keyword rather than a core function; `usize` and `isize` are keywords although they are only type names; section 8 allows copying an `Arena` to transfer it while section 11 makes it affine. Proposal: each fact lives in exactly one document and every other mention links to it. The spec keeps semantics, tooling.md keeps the command and stream contracts, and the H-track files keep their measurements as evidence rather than as normative text. Token and cost: this is the largest context win in the list. An agent landing a tooling change pays for both copies today, and the card, the digest and the tasks page inherit the duplication. Guard: no semantic change; a moved fact gains a link where it was; the card stays generated, never hand-edited. Not done: the split, the three contradictions resolved, and a link check so a moved fact cannot be silently unlinked."
@@ -3727,7 +3727,7 @@
       "group": "Language design",
       "order": 263,
       "title": "bootstrap: the card carries the language, not the C bootstrap's defects",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-04 language design review. Problem: docs/llm-neper-card.md tells an author that code under `src/` must also build with the C bootstrap, which refuses `-=` and `x > CONST {` and truncates a function past 256 locals silently. Those are bootstrap defects printed as language rules. A generator avoids legal syntax and still cannot know when the truncation bites, and a clean bootstrap build is not proof of anything. Proposal: the card carries the language and nothing else. The bootstrap either accepts the surface the grammar defines or it is gone, which is C088, the first queue row. Until then the card carries one sentence pointing at C088 instead of a list of shapes to avoid. Token and cost: the card is loaded on nearly every edit turn, so a `src/`-only exception list is tokens spent on a defect the self-host build would catch anyway, and a silently truncated function costs a debugging session. Not done: the card source edit and re-render, and either the three bootstrap fixes with a fixture per shape or C088's closure."
@@ -3738,7 +3738,7 @@
       "group": "Language design",
       "order": 264,
       "title": "language: labelled break and continue",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-04 language design review; this is the one addition the review recommends. Problem: v1 has no labels, so a generated loop that must leave two levels writes a flag local, an `if` guard at every level and a check after the inner loop. That is three lines and a mutable binding per nesting level, all of which a reviewer follows to see where control goes. Proposal: an optional label on `for` and `while` with `break outer` and `continue outer` resolved at parse time, no dynamic behaviour, no new keyword. Token and cost: measured rather than assumed. Add the shapes to benchmarks/tokens/profile.py and to the card's token table before the grammar revision; the labelled form must be no worse than the flag form per nesting level, which it should beat by roughly ten tokens at depth two, and the tokens and parse streams gain a label field. Guard: `break` and `continue` without a label mean what they mean today, and a label that names no enclosing loop is a compile error. Not done: the grammar revision, the parser, the checker, the formatter and the card re-render; two fixture programs at depth two and three, checked against the flag spelling; the token profile updated."
@@ -3749,7 +3749,7 @@
       "group": "Hardening",
       "order": 401,
       "title": "a syntax error exits with its diagnostic: the error path must not consume the machine",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Found while porting x.duckdb.duckdb to DuckDB v2 and trying to build the Linux self-hosted compiler: a parse failure in lib/e/str.e (mem.bitcast[f32], syntax the September bootstrap does not know) did not report and exit. Measured in a freshly restarted 5GB WSL instance with nothing else running, RSS went 3148 kB at t=3s to 4352956 kB at t=6s, then 4550256 kB at t=9s, with MemAvailable down to 15MB, the process in D state, and exit code 1 only after the allocator had exhausted the VM. The diagnostic printed correctly (E-SYNTAX-9999 at four sites); the defect is that emitting it retained 4.5GB and stalled on swap for minutes instead of returning. Acceptance: a program with a syntax error reports every diagnostic it currently reports and exits 1 with peak RSS within a small fixed multiple of the source size (measured, and stated in the fixture); the same failure on Windows and Linux; a fixture that parses a file with many errors and asserts the exit code and a bounded peak; and no error path allocates per-diagnostic state that is never released."
@@ -3760,7 +3760,7 @@
       "group": "Hardening",
       "order": 402,
       "title": "the bootstrap builds the tree again: refresh it, or make the seed path the contract",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Found while getting tests/selfhost to reach its DuckDB fixture. build/windows/neper.exe and build/linux/neper are both 0.0.96-neper0 and neither can parse the current tree: lib/e/str.e:13 stops at a function type as a struct member, src/check.e:924 at a type-member limit. The bootstrap is a fixed point -- it must parse what it builds -- so once the language gains syntax it cannot build src/main.e, and the suite fails at selfhost.ps1:39 'self-hosted compiler slice did not build'. Windows only appeared healthy because a self-hosted compiler from 6 Nov sat in build/; Linux had nothing until run.sh gained the NEPER_SEED path run.ps1 already had (83bc973bb), and a compiler cross-emitted from the Windows self-host works as that seed. Acceptance: a bootstrap that builds the current src/main.e on both hosts with no NEPER_SEED set, and a suite run on a clean checkout that reaches its fixtures; or, if the seed becomes the contract, both runners require NEPER_SEED and fail with one message naming how to produce it; plus a check that asserts the bootstrap parses the tree so this cannot rot silently again."
@@ -3771,7 +3771,7 @@
       "group": "Hardening",
       "order": 403,
       "title": "emitted binaries are reproducible: no field may depend on which compiler binary ran",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Found while verifying 18 bootstrap-lint fixes by differential build. Two compilers built from the same command line, from source states that differ only by the fix, emit binaries that differ in exactly 8 bytes on many fixtures and match on others. The 8 bytes sit inside an ASCII field `!003d88c0<8 hex>:...` in the image, and the control proves they track the compiler binary rather than the code: the untouched Nov 6 self-hosted compiler differs from a current build in the same 8 bytes at the same offset on the same fixture. Emitting the same source twice with the SAME compiler is byte-identical, so this is not general nondeterminism. The consequence is that byte-identical output cannot be used to check a codegen change, which is the cheapest and strongest regression test available: masking the field is required before any build comparison, and that masking is knowledge held outside the tree. Acceptance: identify what the 8 hex digits hash (candidate: the compiler image, its build id, or a toolchain signature), make the field a function of the translation unit and not of the compiler that performed it, or document it as an intentional stamp in the binary format's spec; a check that builds one source with two different compiler binaries and compares the images byte for byte, so this cannot regress silently; and the header comment in the emitted image's format doc stating whether reproducibility across compiler builds is promised."
@@ -3782,7 +3782,7 @@
       "group": "Hardening",
       "order": 404,
       "title": "the artifact path emits the same debug info as the whole-program path",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Found once crew_windows could finally be reached: 'crew_windows at -j 1 is not the image linked from its artifacts (--time)'. Repro: emit-em-all over crew_windows then link-em the twelve artifacts, and separately emit-executable the same fixture at -j 1, both in the default (debug) mode. Sizes 75560 linked against 76072 direct. A PE section compare (dumpbin /headers) shows every section identical except .debug_info: 3FFA virtual / 4000 raw linked, against 4068 / 4200 direct -- the whole 512-byte file difference is that section's rounding. The code is byte-identical: 0 differing bytes across 0x400..0xB000, which is the headers' payload, .text (A8F5/AA00) and .idata (1B0/200). Inside .debug_info the first four bytes are the unit length, 0x3FF6 linked against 0x4064 direct, and the streams diverge at +0x10A6: the linked copy lists `e.os.PollRegistration`, the direct one `e.text.utf8.Iterator`, so the subprogram DIEs are in a different order and 110 bytes differ in total. In --release the two paths are byte-identical (E5321649... both), which is why this has never been seen: release emits no debug info to disagree about. Pre-existing and not this session's: the untouched Nov 6 self-hosted compiler produces the same two hashes (C1E733B0... linked, FE538AEC... direct). Acceptance: the artifact path and the whole-program path emit the same .debug_info for the same program in the default mode, so the two images are byte-identical there as they already are in --release; crew_windows' artifact comparison then covers both modes again; and a check pins the two images byte for byte in a debug build, which is what would have caught this before a suite run had to reach line 1067 to notice. Where the order comes from, located for the fix: the PE path assembles the debug rows in `assemble_vars` (src/em_link.e:558, D1582: 'The named locals of every copied function, placed where its code landed, in code order: what the image's DWARF describes'), reached from `link_artifact_image` (src/main.e:7744). Code order is already the stated intent, so the artifact path is ordering its subprogram DIEs by the function table it builds from artifacts rather than by where the code landed, while the whole-program path emits them in source order. So the fix is to sort both by code offset, not to reorder the CU. Deferred rather than attempted here: it is an emitter change on a path that only a debug build exercises, the code itself is already byte-identical, and crew_windows now asserts byte-identity in --release where it holds."
@@ -3804,7 +3804,7 @@
       "group": "Hardening",
       "order": 425,
       "title": "compiler coverage reaches 100% with a ratchet floor in the suite",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Open, after C304. Baseline 2026-11-11 (C303, docs/coverage-floor.txt = 65.0): check.e 87.2% (13,248/15,197), lower.e 91.5%, codegen_x64.e 91.1%, em.e 67.2%, parse.e 75%, lex.e 69.6%, resolve.e 71.3%, nir.e 75.8%, graph.e 82.7%. Close gaps by phase (front end, check, lower/nir/graph/regalloc, em and codegen and linkers), one negative and one positive fixture per diagnostic code from the error table, golden-byte checks for emit_*.e encoders, @test unit tests where fixtures are awkward (first verify src modules are importable from a test). Then the suite fails when coverage drops below the committed floor, the floor rising per merged item until it is 100% with only docs/coverage-exempt.tsv entries uncovered. Keep run.sh and run.ps1 in parity."
@@ -3815,7 +3815,7 @@
       "group": "Hardening",
       "order": 426,
       "title": "Resource containment is truncated at depth 6 and the wrong answer is cached",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: nine nested structs, innermost holding `os.File`, close forgotten: E-SAFETY-0002 in both declaration orders and at `-j 1` and `-j 8`. Notes: docs/compiler-hardening-plan.md."
@@ -3826,7 +3826,7 @@
       "group": "Hardening",
       "order": 427,
       "title": "x64 does not widen narrow integer parameters arriving in registers",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a C shim calls a Neper callback with i8/i16/i32 min and -1 and u8/u16/u32 max, in register and stack positions; both back ends agree; `< 0` holds. Notes: docs/compiler-hardening-plan.md."
@@ -3837,7 +3837,7 @@
       "group": "Hardening",
       "order": 428,
       "title": "Negative tags of a narrow signed enum never compare equal",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `enum i8/i16/i32 { A = -1, B = -128 }` and a `union enum i32` through literal, struct field, switch, generated `eq` and formatter, both back ends. Notes: docs/compiler-hardening-plan.md."
@@ -3848,7 +3848,7 @@
       "group": "Hardening",
       "order": 429,
       "title": "Register eviction assumes value numbers ascend with position",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a `regalloc.self_test` case with an out-of-order value under pressure asserting no two overlapping ranges share a register; a kernel fixture with more than 12 hot locals in a loop equal to the serial result. Notes: docs/compiler-hardening-plan.md."
@@ -3859,7 +3859,7 @@
       "group": "Hardening",
       "order": 430,
       "title": "Parser nesting bound has two holes: stack overflow, no diagnostic",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: both shapes reject with the \"nesting deeper than 128\" diagnostic. Notes: docs/compiler-hardening-plan.md."
@@ -3870,7 +3870,7 @@
       "group": "Hardening",
       "order": 431,
       "title": "Valid large literals are rejected as syntax errors",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: link fixture with a generated 20,000-element table builds and sums right. Notes: docs/compiler-hardening-plan.md."
@@ -3881,7 +3881,7 @@
       "group": "Hardening",
       "order": 432,
       "title": "Type memo key ignores `in_shared` and `foreign`",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one expression checked under both expectations in one function yields both types (C255-style probe). Notes: docs/compiler-hardening-plan.md."
@@ -3892,7 +3892,7 @@
       "group": "Hardening",
       "order": 433,
       "title": "Identical-function folding trusts a 64-bit hash",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a self-test forcing two different bodies to one hash keeps both; `--time` `fold_ns` on the all-library root drops; byte gate. Notes: docs/compiler-hardening-plan.md."
@@ -3903,7 +3903,7 @@
       "group": "Hardening",
       "order": 434,
       "title": "Module path segments are case-checked",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixture on Windows with the registered module code and the correctly-cased name as the fix. Notes: docs/compiler-hardening-plan.md."
@@ -3914,7 +3914,7 @@
       "group": "Tooling",
       "order": 435,
       "title": "Query commands take flags by name and have short forms",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a tools conformance case runs `context-file` with `--symbol` before and after `--json` and gets identical streams; an unknown flag exits 2 with E-CLI naming it; `neper context --symbol m.f` equals the long form. Card re-rendered, with `docs/llm-neper-card.src.md:189` (\"past 256 locals silently\") corrected to the bootstrap's reported 400. Notes: docs/compiler-hardening-plan.md."
@@ -3925,7 +3925,7 @@
       "group": "Tooling",
       "order": 436,
       "title": "Short forms forward every flag",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `build F --time` prints phases; `check F --nope` exits 2; `test F --only a` runs one test; a build with five `--overlay` pairs is accepted. Notes: docs/compiler-hardening-plan.md."
@@ -3936,7 +3936,7 @@
       "group": "Tooling",
       "order": 437,
       "title": "Every checker diagnostic kind has a registered code",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one reject fixture per new code; the script passes; the card's per-family counts re-render. Notes: docs/compiler-hardening-plan.md."
@@ -3947,7 +3947,7 @@
       "group": "Tooling",
       "order": 438,
       "title": "Float literals are range-checked by the checker",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixture, E-TYPE-0004 at the literal, under `check-file` alone. Notes: docs/compiler-hardening-plan.md."
@@ -3958,7 +3958,7 @@
       "group": "Tooling",
       "order": 439,
       "title": "Module errors have a span and a suggestion",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixture asserts line 2 and a `fixes` entry `e.str`. Notes: docs/compiler-hardening-plan.md."
@@ -3969,7 +3969,7 @@
       "group": "Tooling",
       "order": 440,
       "title": "Probing never writes into the project",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a tools test snapshots a project tree, runs bare `fmt`, `check`, `index`, and finds the tree byte-identical. Notes: docs/compiler-hardening-plan.md."
@@ -3980,7 +3980,7 @@
       "group": "Tooling",
       "order": 441,
       "title": "Internal failures say where",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a self-test hook that forces an internal error in lowering prints the phase and module. Notes: docs/compiler-hardening-plan.md."
@@ -3991,7 +3991,7 @@
       "group": "Tooling",
       "order": 442,
       "title": "`uses-file` answers for constants and globals",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `uses --symbol m.CONST` equals a grep count on a fixture. Notes: docs/compiler-hardening-plan.md."
@@ -4002,7 +4002,7 @@
       "group": "Tooling",
       "order": 443,
       "title": "`check-fixture.sh` shows the error",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a failing fixture build prints its first diagnostic lines on the terminal; two sessions running check-fixture.sh at once do not share an output file; with NEPER_SEED set the C bootstrap is not run. Notes: docs/compiler-hardening-plan.md."
@@ -4013,7 +4013,7 @@
       "group": "OS targets",
       "order": 444,
       "title": "aarch64 ELF segment alignment is 4 KiB",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte check `p_align >= 16384` and `p_vaddr % p_align == p_offset % p_align`; a fixture runs under `qemu-aarch64 -p 65536`. Notes: docs/compiler-hardening-plan.md."
@@ -4024,7 +4024,7 @@
       "group": "OS targets",
       "order": 445,
       "title": "Host detection and positional arch",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: under qemu-aarch64, `neper build hello.e` writes an aarch64 ELF. Notes: docs/compiler-hardening-plan.md."
@@ -4035,7 +4035,7 @@
       "group": "Optimization",
       "order": 446,
       "title": "A baseline that is one command",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: two consecutive runs differ by under 3% on (a). Every CS and XS package quotes its row before and after. Notes: docs/compiler-hardening-plan.md."
@@ -4046,7 +4046,7 @@
       "group": "Optimization",
       "order": 447,
       "title": "Roadmap corrections",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: docs/compiler-optimizations.md rows for C249, compare-branch fusion and jump-to-next elision match the source; C249's title no longer lists loop-depth spill weights. Notes: docs/compiler-hardening-plan.md."
@@ -4057,7 +4057,7 @@
       "group": "Library",
       "order": 448,
       "title": "A library line-coverage number",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: two runs agree; a module with no fixture reports 0%; the number is in `docs/progress.html` through `render_progress.py`. Notes: docs/library-hardening-plan.md."
@@ -4068,7 +4068,7 @@
       "group": "Library",
       "order": 449,
       "title": "The unreached-function list as a gate",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: the script fails when the count rises. Notes: docs/library-hardening-plan.md."
@@ -4079,7 +4079,7 @@
       "group": "Library",
       "order": 452,
       "title": "WAL replay swallows a failed delete",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: a replay whose delete fails returns the error and the applied count excludes it. Notes: docs/library-hardening-plan.md. Checked 2026-11-16: table_delete answers only found or not, and the db_storage fixture (check 14) replays a log whose random deletes name keys the table never held, so making a missing key an error breaks its goldens (applied 20, sum 362); decide first whether redo of a delete is idempotent, then change the fixture log or the contract together."
@@ -4090,7 +4090,7 @@
       "group": "Library",
       "order": 456,
       "title": "`partial` means partial",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: `docs/progress.html` shows 8 partial library modules, not 155. Notes: docs/library-hardening-plan.md."
@@ -4101,7 +4101,7 @@
       "group": "Library",
       "order": 457,
       "title": "Every source module is in the plan",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: check_module_plan.py fails on a lib/e source file with no docs/modules.json entry; each of today's 111 is listed or marked internal. Notes: docs/library-hardening-plan.md."
@@ -4112,7 +4112,7 @@
       "group": "Library",
       "order": 460,
       "title": "Comments carry no history",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: the count is 0 and the suite's goldens are unchanged. Notes: docs/library-hardening-plan.md."
@@ -4123,7 +4123,7 @@
       "group": "Tooling",
       "order": 462,
       "title": "Bounded, compact answers by default",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: default `uses main.same` is under 8 KB and resumable by cursor; context on `main.dispatch` shows at least 55 body facts; subject `end_line > line`; `--compact` output for `main.same` is under 20 KB for all 503 uses. Schema version bumped and `scripts/validate_stream.py` goldens refreshed. Notes: docs/compiler-hardening-plan.md."
@@ -4134,7 +4134,7 @@
       "group": "Tooling",
       "order": 463,
       "title": "`check --digest`: keep-going text diagnostics with fixes",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the three-error fixture gives three lines under 500 bytes total; output is sorted by path, line, column and stable across `-j 1` and `-j 8`. Notes: docs/compiler-hardening-plan.md."
@@ -4145,7 +4145,7 @@
       "group": "Tooling",
       "order": 464,
       "title": "`neper fix`: apply a diagnostic's own fixes",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the card's E-NAME-0003 and E-TYPE-0002 reject fences become clean after `fix`; a stale file hash aborts with nothing written. Notes: docs/compiler-hardening-plan.md."
@@ -4156,7 +4156,7 @@
       "group": "Tooling",
       "order": 465,
       "title": "`neper explain CODE`",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: every code the card lists as verified has an explanation; an unknown code exits 2. Notes: docs/compiler-hardening-plan.md."
@@ -4167,7 +4167,7 @@
       "group": "Tooling",
       "order": 466,
       "title": "`neper verify`: the whole repair loop in one call",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: on a one-function edit of a fixture project, output is at most 30 lines and names the tests it ran and the ones it skipped as unreached. Notes: docs/compiler-hardening-plan.md."
@@ -4178,7 +4178,7 @@
       "group": "Tooling",
       "order": 467,
       "title": "Syntax errors say what was wrong",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one reject fixture per row pinning code and fix; the card's \"Traps\" section gains nothing (the diagnostics now carry it). Notes: docs/compiler-hardening-plan.md."
@@ -4189,7 +4189,7 @@
       "group": "Tooling",
       "order": 468,
       "title": "Declaration errors always have a location and a kind",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `const PI: f32 = 3.14` and `const S = \"x\"` in a context that fails report at the declaration with a registered code; a bad format verb names the verb and its column. A script counts bare `ret <Error>` lines without a preceding record in `check.e` and ratchets the number down. Notes: docs/compiler-hardening-plan.md."
@@ -4200,7 +4200,7 @@
       "group": "Tooling",
       "order": 469,
       "title": "A failed block header does not cascade; all failures print",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: that fixture reports one diagnostic; a file with 100 bad statements reports 64 and the count of the rest. Notes: docs/compiler-hardening-plan.md."
@@ -4211,7 +4211,7 @@
       "group": "Tooling",
       "order": 470,
       "title": "Duplicate and shadow errors name the first site",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixtures assert `related[0]` line. Notes: docs/compiler-hardening-plan.md."
@@ -4222,7 +4222,7 @@
       "group": "Hardening",
       "order": 471,
       "title": "Safety facts are dropped silently at fixed limits",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a 17-pointer statement followed by a move reports E-SAFETY-0004 or the named limit, never silence; 65 nested loops with `break` reject by name. Notes: docs/compiler-hardening-plan.md."
@@ -4233,7 +4233,7 @@
       "group": "Hardening",
       "order": 472,
       "title": "NIR type verifier and allocation verifier",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `nir.verify_self_test` gains one rejected function per invariant; reverting C310's fix locally fails with `Unverified` (state it in the D-row, do not commit the revert). Count gate: verifier cost under 2% of self-build in release. Notes: docs/compiler-hardening-plan.md."
@@ -4244,7 +4244,7 @@
       "group": "Hardening",
       "order": 473,
       "title": "a64 frames are not stack-probed",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a thread with a 1 MB local array written from the far end exits 0, and unbounded recursion traps cleanly, under qemu-aarch64 and on the macOS runner. Notes: docs/compiler-hardening-plan.md."
@@ -4255,7 +4255,7 @@
       "group": "Hardening",
       "order": 474,
       "title": "Project `check` trusts children it never reads",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: two concurrent project checks both answer correctly; a fixture whose child is killed reports `ok:false`; project check time on `lib/e` at most 1.2x one whole-program check. Notes: docs/compiler-hardening-plan.md."
@@ -4266,7 +4266,7 @@
       "group": "Hardening",
       "order": 475,
       "title": "Emitted images get the platform's standard mitigations",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte checks in `link_elf.self_test` and `link_pe.self_test`; `readelf -lW` shows `GNU_STACK RW`; the trap fixture still names its frames under ASLR; DWARF line fixture still resolves under gdb. Notes: docs/compiler-hardening-plan.md."
@@ -4277,7 +4277,7 @@
       "group": "Hardening",
       "order": 476,
       "title": "Generic-argument rows leak; parallel arrays unchecked",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a fixture with 50,000 calls of one generic instance builds at the default arena; self-test for the length check. Notes: docs/compiler-hardening-plan.md."
@@ -4288,7 +4288,7 @@
       "group": "OS targets",
       "order": 477,
       "title": "Runtime blobs: one assembler, a drift check, shared routines",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: changing one byte of a `.s` without re-embedding fails the check; blobs byte-identical after the split. Notes: docs/compiler-hardening-plan.md."
@@ -4299,7 +4299,7 @@
       "group": "OS targets",
       "order": 478,
       "title": "Variant surface parity for every OS",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the script fails today, listing the gaps; each gap is then either implemented or given an `os.Unsupported` body. Notes: docs/compiler-hardening-plan.md."
@@ -4310,7 +4310,7 @@
       "group": "Optimization",
       "order": 479,
       "title": "Warm builds do no SHA-256 and `--json` takes the no-op path",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: an unchanged `run --json` reports `load and parse` only; SHA-256 call count on a warm build is 0 (counter in `--stats`); C331 row (c) improves. Notes: docs/compiler-hardening-plan.md."
@@ -4321,7 +4321,7 @@
       "group": "Optimization",
       "order": 480,
       "title": "Generic instances: hashed lookup, shared across modules",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: an instance-heavy fixture (e.data.map over 200 key types); count gate. Notes: docs/compiler-hardening-plan.md."
@@ -4332,7 +4332,7 @@
       "group": "Optimization",
       "order": 481,
       "title": "Back-end constant factors",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate; count gate on the self-build. Notes: docs/compiler-hardening-plan.md."
@@ -4343,7 +4343,7 @@
       "group": "Optimization",
       "order": 482,
       "title": "Front-end constant factors",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate; the count gate on the self-build is stated for each item; the dead resolver token pool is gone. Notes: docs/compiler-hardening-plan.md."
@@ -4354,7 +4354,7 @@
       "group": "Optimization",
       "order": 483,
       "title": "x64 array indexing uses scaled addressing",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: emit sweep covers the new encodings against `disasm_x64`; count gate on the self-build and `benchmarks/gp`; both back ends agree on the index fixtures. Notes: docs/compiler-hardening-plan.md."
@@ -4365,7 +4365,7 @@
       "group": "Optimization",
       "order": 484,
       "title": "Spill slots are reused; short displacements",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `--stats` frame bytes and `.text` size on the self-build both drop; count gate; C317's allocation verifier extended to \"no two live values share a slot\". Notes: docs/compiler-hardening-plan.md."
@@ -4376,7 +4376,7 @@
       "group": "Library",
       "order": 485,
       "title": "AV1 and mp4: test or leave the library",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: the fixture fails on the unfixed `mp4.e` (give it a time bound). Notes: docs/library-hardening-plan.md."
@@ -4387,7 +4387,7 @@
       "group": "Library",
       "order": 486,
       "title": "Fuzz the parsers",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: each fixture runs a fixed iteration count under a fixed seed in under 10 s. Notes: docs/library-hardening-plan.md."
@@ -4398,7 +4398,7 @@
       "group": "Library",
       "order": 487,
       "title": "Conformance corpora",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: a deliberately broken parser turns its corpus step red. Notes: docs/library-hardening-plan.md."
@@ -4409,7 +4409,7 @@
       "group": "Library",
       "order": 488,
       "title": "Thin modules get a second fixture",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: each module listed has a second fixture (or a first) that asserts results and one refusal; each function named as untested is called by a fixture. Notes: docs/library-hardening-plan.md."
@@ -4420,7 +4420,7 @@
       "group": "Library",
       "order": 489,
       "title": "Fixture hygiene",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: no fixture cites a path outside the repository; path_pure and every touched fixture exit with a per-case code; a suite step renders a looks subset with a font loaded and compares frame hashes. Notes: docs/library-hardening-plan.md."
@@ -4431,7 +4431,7 @@
       "group": "Library",
       "order": 490,
       "title": "Stub resolver",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: fixtures against a local UDP responder for a wrong-id datagram followed by the right one, and for a TC answer. Notes: docs/library-hardening-plan.md."
@@ -4442,7 +4442,7 @@
       "group": "Library",
       "order": 491,
       "title": "Secrets are never wiped; crypto gaps",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: a fixture reads a key buffer after TLS close and after KDF exit and finds zeros; a cross-signed chain validates; a root with an unhandled critical extension is refused; the privacy samplers' outputs lie on the snapped grid. Notes: docs/library-hardening-plan.md."
@@ -4453,7 +4453,7 @@
       "group": "Library",
       "order": 493,
       "title": "Copy replaces without a sync",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: a fixture observes the sync before the replace through a recording backend; the copy cost before and after is stated in the D-row. Notes: docs/library-hardening-plan.md."
@@ -4464,7 +4464,7 @@
       "group": "Library",
       "order": 494,
       "title": "Platform parity is declared, not discovered",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: EINVAL maps to Invalid on every host, with a fixture per host; sandbox follows one contract on all three hosts, asserted by a fixture; the per-host capability matrix is generated into docs/progress.html. Notes: docs/library-hardening-plan.md."
@@ -4475,7 +4475,7 @@
       "group": "Library",
       "order": 495,
       "title": "Disabled crypto: dead ML-DSA signer, DNSSEC RSASHA256 refused",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: ml_dsa_sign's dead body is gone; a DNSSEC fixture validates an RSASHA256-signed RRset from a recorded answer. Notes: docs/library-hardening-plan.md."
@@ -4497,7 +4497,7 @@
       "group": "Library",
       "order": 497,
       "title": "Options that do nothing",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: each option either changes the Windows-look frame hash in a fixture or is removed from the public struct; the unused parameter is gone. Notes: docs/library-hardening-plan.md."
@@ -4508,7 +4508,7 @@
       "group": "Library",
       "order": 499,
       "title": "Generated blobs are assets",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: the generated files are no longer source text under lib/e; their content loads through e.asset; the fixtures that use them pass unchanged. Notes: docs/library-hardening-plan.md."
@@ -4519,7 +4519,7 @@
       "group": "Library",
       "order": 500,
       "title": "Design-spec prose lives in one place",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: ui/control.e has under 1,000 comment lines, each stating a constraint docs/ux does not; goldens unchanged. Notes: docs/library-hardening-plan.md."
@@ -4530,7 +4530,7 @@
       "group": "Tooling",
       "order": 501,
       "title": "A generated compiler map",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "low",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the map regenerates deterministically; `AGENTS.md` routing names it. Notes: docs/compiler-hardening-plan.md."
@@ -4541,7 +4541,7 @@
       "group": "Tooling",
       "order": 502,
       "title": "`plan-move-file`: move a function between modules",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: move a function between two fixture modules and back; tree byte-identical after the round trip. Notes: docs/compiler-hardening-plan.md."
@@ -4552,7 +4552,7 @@
       "group": "Tooling",
       "order": 503,
       "title": "Split `main.e` (15.5k) and `tool.e` (8.1k)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate after every step; no `src` file over 4k lines at the end; the bootstrap (until C088) still builds it. Notes: docs/compiler-hardening-plan.md."
@@ -4563,7 +4563,7 @@
       "group": "Tooling",
       "order": 504,
       "title": "Split `check.e` (22k)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate after every step. Notes: docs/compiler-hardening-plan.md."
@@ -4574,7 +4574,7 @@
       "group": "OS targets",
       "order": 505,
       "title": "One target record",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `scripts/check_target_literals.py` fails on any target literal in `src/*.e` outside `target.e`; byte gate; adding a dummy row for a new OS on an existing arch needs edits in `target.e`, a runtime, and `lib/e/os.<os>.e` only (write that checklist into the file header). Notes: docs/compiler-hardening-plan.md."
@@ -4585,7 +4585,7 @@
       "group": "OS targets",
       "order": 506,
       "title": "A shared instruction selector",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate on x64; a64 output changes only by the gained fusions, checked by the a64 differential; `codegen_a64.e` no longer imports `codegen_x64`. Notes: docs/compiler-hardening-plan.md."
@@ -4596,7 +4596,7 @@
       "group": "OS targets",
       "order": 507,
       "title": "riscv64-linux as the proof of C323 and C328",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the link-fixture slice that aarch64-linux runs passes on riscv64; the diff touches no file outside `target.e`, the new emitter, runtime and `os` variant. Notes: docs/compiler-hardening-plan.md."
@@ -4607,7 +4607,7 @@
       "group": "Optimization",
       "order": 508,
       "title": "Promotion to values happens in NIR, before the optimisations",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate is not expected to hold; instead the emit sweep, both suites and the count gate (no regression) on both back ends. Notes: docs/compiler-hardening-plan.md."
@@ -4618,7 +4618,7 @@
       "group": "Library",
       "order": 509,
       "title": "Sheet support code leaves the library",
-      "score": 0,
+      "score": 0.08,
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: no lib/e module is imported only by examples/; no looks_* file is named by round or lane; no module-level drawing switch remains; ui fixtures pass unchanged. Notes: docs/library-hardening-plan.md."
@@ -4629,7 +4629,7 @@
       "group": "Library",
       "order": 510,
       "title": "Split `ui/control.e` by platform look",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: byte gate; ui/control.e holds no function prefixed win, linux, cup or mat; one dots painter; frame hashes of the looks subset are unchanged. Notes: docs/library-hardening-plan.md."
@@ -4640,7 +4640,7 @@
       "group": "Library",
       "order": 511,
       "title": "Split the other large UI files",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: byte gate after every move; no file under lib/e/ui is over 6,000 lines. Notes: docs/library-hardening-plan.md."
@@ -4651,7 +4651,7 @@
       "group": "Library",
       "order": 512,
       "title": "The catalogue is generated, not synced",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: adding a helper to a source module needs no docs edit; the pending fences total the 102 declarations `library-fixtures.json` lists. Notes: docs/library-hardening-plan.md."
@@ -4662,7 +4662,7 @@
       "group": "Tooling",
       "order": 513,
       "title": "Many errors per function, no cascades",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: three independent errors in one function give three records; one undefined local used five times gives one; both suites' reject goldens reviewed for count changes. Notes: docs/compiler-hardening-plan.md."
@@ -4673,7 +4673,7 @@
       "group": "OS targets",
       "order": 514,
       "title": "Width axis for 32-bit targets",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a decision row in docs/decisions.md with the width-axis design and a cost estimate; L228's score and text re-checked against lib/e/os.wasi.e. No code. Notes: docs/compiler-hardening-plan.md."
@@ -4684,7 +4684,7 @@
       "group": "CRAN parity",
       "order": 527,
       "title": "YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open. Needs L264. Verifies the partial rows for yaml and xml2 in docs/cran-gaps.tsv. Acceptance: yaml.load and as.yaml equal yaml for 1.1 scalars (yes/no booleans, octal, sexagesimal, merge keys, anchors, tags) on a seeded corpus; read_xml and read_html with recover, XPath 1.0 results, namespace handling and xml_validate against XSD equal xml2 on the same corpus; each failing case becomes a fixture."
@@ -4695,7 +4695,7 @@
       "group": "CRAN parity",
       "order": 526,
       "title": "CommonMark and GFM conformance with xml, latex and man renderers (commonmark)",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
       "evidence": "DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Needs L264. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
