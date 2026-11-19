@@ -1322,3 +1322,6 @@ fn legendre_h3d(l: usize, lam: f64, et: f64) -> f64 {
     }
     ret hc
 }
+
+// gsl hazard(x): the hazard rate of the standard normal, its density over its upper tail
+fn hazard(x: f64) -> f64 { ret math.exp[f64](dist.dnorm(x, 0.0f64, 1.0f64, true) - dist.pnorm(x, 0.0f64, 1.0f64, false, true)) }

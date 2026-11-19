@@ -50938,3 +50938,6 @@ The same `merge_bhat` loop with demp = true uses zmisclassification.matrix in pl
 
 ## D7487 — gsl legendre_H3d
 `legendre_h3d(l, lambda, eta)` is the radial eigenfunction of the Laplacian on hyperbolic 3-space: H_0 = sin(lambda eta) / (lambda sinh eta), H_1 = (sin(lambda eta) / sinh eta)(coth eta - lambda cot(lambda eta)) / (lambda sqrt(lambda^2 + 1)) (found by checking the candidate against gsl: the plain bracket is lambda times the library value), then the upward recurrence sqrt(lambda^2 + (L + 1)^2) H_{L+1} = (2 L + 1) coth(eta) H_L - sqrt(lambda^2 + L^2) H_{L-1}; equal to gsl legendre_H3d on 50 draws (l 0 to 6, eta 0.4 to 3). Small eta and large l, where the upward recurrence loses accuracy, are not covered. Open for L417: Coulomb wave functions, hazard, the error estimates.
+
+## D7488 — gsl hazard
+`hazard(x)` is the standard normal hazard rate, taken on the log scale (exp(log dnorm - log upper-tail pnorm)) because the upper tail underflows to zero from x of about 38 and the plain ratio is then 0 / 0; equal to gsl hazard at rel 1e-12 on 30 points from -8 to 100 (30 values added to oracle_gsl_bzero). Open for L417: Coulomb wave functions, the error estimates.

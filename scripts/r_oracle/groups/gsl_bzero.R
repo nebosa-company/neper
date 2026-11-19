@@ -22,4 +22,5 @@ for (rep in 1:50) {
   l <- sample(0:6, 1); lam <- runif(1, 0.3, 4); eta <- runif(1, 0.4, 3)
   cases[[length(cases) + 1]] <- case("h3", c(l, lam, eta), legendre_H3d(l, lam, eta), rel = 1e-9, abs = 1e-12)
 }
+for (x in c(-8, -3, -1, 0, 0.5, 2, 5, 10, 30, 100, runif(20, -6, 40))) cases[[length(cases) + 1]] <- case("hz", c(x), hazard(x), rel = 1e-12, abs = 1e-300)
 emit("gsl_bzero", "gsl", list(cases))
