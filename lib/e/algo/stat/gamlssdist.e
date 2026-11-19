@@ -2385,3 +2385,16 @@ fn qzisichel(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if !(pn > 0.0f64) { pn = 0.0f64 }
     ret qsichel(pn, mu, sigma, nu)
 }
+
+type SepCtx = struct { mu: f64, sigma: f64, nu: f64, tau: f64 }
+
+fn sep_dens(c: *SepCtx, x: f64) -> f64 { ret dsep(x, c.mu, c.sigma, c.nu, c.tau) }
+
+// pSEP: the package integrates dSEP over (-Inf, q] with integrate() defaults (QUADPACK qagi, tolerance eps^0.25, 100 subdivisions)
+fn psep(a: *mem.Arena, q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var c = SepCtx { mu: mu, sigma: sigma, nu: nu, tau: tau }
+    let tol = pw.uniroot_tol()
+    let (r, e) = qp.qagi[SepCtx](a, &c, sep_dens, q, 0i64 - 1i64, tol, tol, 100usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}

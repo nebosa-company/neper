@@ -61,4 +61,9 @@ for (rep in 1:30) {
   add("dp", c(19, mu, sg, xi, nu, t2), pZISICHEL(xi, mu = mu, sigma = sg, nu = nu, tau = t2), 1e-7, 1e-12)
   add("dp", c(20, mu, sg, pr, nu, t2), qZISICHEL(pr, mu = mu, sigma = sg, nu = nu, tau = t2), 0, 0)
 }
+# pSEP (fn 21; mu, sigma, nu, tau, x)
+for (rep in 1:30) {
+  mu <- rnorm(1, 0, 2); sg <- runif(1, 0.4, 2); nu <- rnorm(1, 0, 1.5); tau <- runif(1, 0.8, 4); x <- rnorm(1, mu, sg)
+  add("dp", c(21, mu, sg, x, nu, tau), pSEP(x, mu = mu, sigma = sg, nu = nu, tau = tau), 1e-7, 1e-12)
+}
 emit("gamlss_dpo", "gamlss.dist", list(cases))
