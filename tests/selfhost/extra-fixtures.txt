@@ -523,3 +523,4 @@ oracle_pmcmr_u
 oracle_pmcmr_vdwmany
 oracle_pmcmr_demsar
 oracle_sm_sj
+oracle_sampling_pi2

@@ -50245,3 +50245,6 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7372 — arm bayesglm per-coefficient priors
 `bayesglm` takes full prior mean, df and scale vectors (intercept first; the intercept's defaults, 10 and df 1, are the caller's). The prior mean enters the right-hand side through the prior rows (weight^2 times the row times the mean, the first row being the column means) and the prior sd update as (beta - mean)^2. Equal to arm to 1e-6 on twelve fits with random means, dfs in {1, 3, Inf} and scales across the three families. L409 at 0.55.
+
+## D7373 — sampling joint inclusion probabilities and varHT
+`up_tille_pi2` follows UPtillepi2 (the product over N - n eliminations of 1 - v_i - v_j with v = 1 - a/b from successive inclusionprobabilities, diagonal pik, zeros outside the units with eps < pik < 1 - eps), `up_systematic_pi2` UPsystematicpi2 (the matrix M of cumulative-sum comparisons mod 1 times the cell widths, pik_i pik_j for degenerate units) and `var_ht` varHT (methods 1 and 2). Equal to sampling to 1e-9 on twenty random designs; cases where R's varHT is not finite (systematic zeros) are not in the golden. L508 at 0.45.

@@ -328,3 +328,211 @@ fn up_midzuno(a: *mem.Arena, g: *rr.Rng, pik: []const f64, s: []f64) -> err {
     }
     ret ok
 }
+
+// UPtillepi2: the joint inclusion probabilities of Tille's elimination design; pi2 is n by n row-major (zero outside the units with 1e-6 < pik < 1 - 1e-6, whose diagonal is pik)
+fn up_tille_pi2(a: *mem.Arena, pik: []const f64, pi2: []f64) -> err {
+    let n = pik.len
+    let eps = 1.0e-6f64
+    var i = 0usize
+    while i < n * n {
+        pi2[i] = 0.0f64
+        i += 1usize
+    }
+    var nb = 0usize
+    var sumb = 0.0f64
+    i = 0usize
+    while i < n {
+        if pik[i] > eps && pik[i] < 1.0f64 - eps {
+            nb += 1usize
+            sumb += pik[i]
+        }
+        i += 1usize
+    }
+    if nb < 1usize { ret mem.Full }
+    let (idx, e0) = mem.alloc[usize](a, nb)
+    let (pb, e1) = mem.alloc[f64](a, nb)
+    let (pp, e2) = mem.alloc[f64](a, nb * nb)
+    let (bb, e3) = mem.alloc[f64](a, nb)
+    let (aa, e4) = mem.alloc[f64](a, nb)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var c = 0usize
+    i = 0usize
+    while i < n {
+        if pik[i] > eps && pik[i] < 1.0f64 - eps {
+            idx[c] = i
+            pb[c] = pik[i]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < nb * nb {
+        pp[i] = 1.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < nb {
+        bb[i] = 1.0f64
+        i += 1usize
+    }
+    let nsum = usize(math.floor[f64](sumb + 0.5f64))
+    if f64(nb) > f64(nsum) {
+        var s = 1usize
+        while s <= nb - nsum {
+            inclusion(pb, f64(nb - s), aa)
+            i = 0usize
+            while i < nb {
+                let vi = 1.0f64 - aa[i] / bb[i]
+                var j = 0usize
+                while j < nb {
+                    let vj = 1.0f64 - aa[j] / bb[j]
+                    pp[i * nb + j] = pp[i * nb + j] * (1.0f64 - vi - vj)
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            i = 0usize
+            while i < nb {
+                bb[i] = aa[i]
+                i += 1usize
+            }
+            s += 1usize
+        }
+        i = 0usize
+        while i < nb {
+            pp[i * nb + i] = pb[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < nb {
+            var j = 0usize
+            while j < nb {
+                pi2[idx[i] * n + idx[j]] = pp[i * nb + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    ret ok
+}
+
+// UPsystematicpi2: the joint inclusion probabilities of systematic sampling (R's `%%` on the cumulative sums), pi2 n by n row-major with pik_i pik_j outside the units with 0 < pik < 1
+fn up_systematic_pi2(a: *mem.Arena, pik: []const f64, pi2: []f64) -> err {
+    let n = pik.len
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            pi2[i * n + j] = pik[i] * pik[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var nb = 0usize
+    i = 0usize
+    while i < n {
+        if pik[i] > 0.0f64 && pik[i] < 1.0f64 { nb += 1usize }
+        i += 1usize
+    }
+    if nb == 0usize { ret ok }
+    let (idx, e0) = mem.alloc[usize](a, nb)
+    let (vk, e1) = mem.alloc[f64](a, nb + 1usize)
+    let (vk1, e2) = mem.alloc[f64](a, nb)
+    let (r, e3) = mem.alloc[f64](a, nb + 1usize)
+    let (cent, e4) = mem.alloc[f64](a, nb)
+    let (p, e5) = mem.alloc[f64](a, nb)
+    let (m, e6) = mem.alloc[f64](a, (nb + 1usize) * nb)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
+    var c = 0usize
+    var cum = 0.0f64
+    vk[0usize] = 0.0f64
+    i = 0usize
+    while i < n {
+        if pik[i] > 0.0f64 && pik[i] < 1.0f64 {
+            idx[c] = i
+            cum += pik[i]
+            vk[c + 1usize] = cum
+            vk1[c] = cum - math.floor[f64](cum)
+            c += 1usize
+        }
+        i += 1usize
+    }
+    if vk1[nb - 1usize] != 0.0f64 { vk1[nb - 1usize] = 0.0f64 }
+    // r = c(sort(vk1), 1)
+    i = 0usize
+    while i < nb {
+        let v = vk1[i]
+        var j = i
+        while j > 0usize && r[j - 1usize] > v {
+            r[j] = r[j - 1usize]
+            j -= 1usize
+        }
+        r[j] = v
+        i += 1usize
+    }
+    r[nb] = 1.0f64
+    i = 0usize
+    while i < nb {
+        cent[i] = (r[i] + r[i + 1usize]) / 2.0f64
+        p[i] = r[i + 1usize] - r[i]
+        i += 1usize
+    }
+    // A[row, col] = (c(0, Vk)[row] - cent[col]) mod 1, rows 0..nb
+    i = 0usize
+    while i <= nb {
+        var j = 0usize
+        while j < nb {
+            let d = vk[i] - cent[j]
+            m[i * nb + j] = d - math.floor[f64](d)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // M[row, col] = A[row, col] > A[row + 1, col]; pi21 = M diag(p) M'
+    i = 0usize
+    while i < nb {
+        var j = 0usize
+        while j < nb {
+            var v = 0.0f64
+            var q = 0usize
+            while q < nb {
+                var mi = 0.0f64
+                var mj = 0.0f64
+                if m[i * nb + q] > m[(i + 1usize) * nb + q] { mi = 1.0f64 }
+                if m[j * nb + q] > m[(j + 1usize) * nb + q] { mj = 1.0f64 }
+                v += mi * p[q] * mj
+                q += 1usize
+            }
+            pi2[idx[i] * n + idx[j]] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// varHT: the Horvitz-Thompson variance estimator from the joint inclusion matrix pikl (n by n, the diagonal the first-order probabilities); method 1 or 2 (Sen-Yates-Grundy)
+fn var_ht(y: []const f64, pikl: []const f64, method: usize) -> f64 {
+    let n = y.len
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let pi = pikl[i * n + i]
+            let pj = pikl[j * n + j]
+            let p1 = pi * pj
+            if method == 1usize {
+                var delta = pikl[i * n + j] - p1
+                if i == j { delta = pi * (1.0f64 - pi) }
+                s += y[i] * y[j] * delta / (p1 * pikl[i * n + j])
+            } else {
+                let d = y[i] / pi - y[j] / pj
+                s += 0.5f64 * d * d * (p1 - pikl[i * n + j]) / pikl[i * n + j]
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret s
+}
