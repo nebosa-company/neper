@@ -5,6 +5,7 @@
 // the other adjustment methods, the chi-square form of Nemenyi's test.
 
 use e.math
+use e.algo.stat.steeltab as stt
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
@@ -868,4 +869,39 @@ fn ndw_many(q: Ranks, rbar: []const f64, rn: []const f64, k: usize, j: usize, la
     var az = z
     if az < 0.0f64 { az = 0.0f64 - az }
     ret (z, 1.0f64 - mvn_one_factor(az, lam[0usize..k - 1usize]))
+}
+
+// steelTest (two-sided is the default; "greater" negates the data): the rank sum R_j of dose group j (1-based label j + 1) among the control's and its own 2 n observations (the dose
+// ranks summed), balanced groups of n replicates; ctrl is label 1. Answers (R_j, the critical value from the table for n replicates and k dose levels, -1 when the table has none)
+fn steel_stat(a: *mem.Arena, x: []const f64, grp: []const usize, n: usize, nk: usize, j: usize, greater: bool) -> (f64, f64, err) {
+    let (sub, e0) = mem.alloc[f64](a, 2usize * n)
+    let (who, e1) = mem.alloc[usize](a, 2usize * n)
+    let (rk, e2) = mem.alloc[f64](a, 2usize * n)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    var m = 0usize
+    var t = 0usize
+    while t < x.len {
+        if grp[t] == 1usize || grp[t] == j + 1usize {
+            var v = x[t]
+            if greater { v = 0.0f64 - v }
+            sub[m] = v
+            who[m] = grp[t]
+            m += 1usize
+        }
+        t += 1usize
+    }
+    let er = rank_avg(a, sub[0usize..m], rk[0usize..m])
+    if er != ok { ret (0.0f64, 0.0f64, er) }
+    var rs = 0.0f64
+    t = 0usize
+    while t < m {
+        if who[t] != 1usize { rs += rk[t] }
+        t += 1usize
+    }
+    var crit = -1.0f64
+    if n >= 4usize && n <= 20usize && nk >= 2usize && nk <= 9usize {
+        let tab = stt.steel_table()
+        crit = tab[(n - 4usize) * 8usize + (nk - 2usize)]
+    }
+    ret (rs, crit, ok)
 }
