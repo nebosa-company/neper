@@ -51181,3 +51181,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7562 — epiR epi.2by2 cross-sectional tables
 The cross-sectional design reports the cohort.count measures under the prevalence-ratio names, and the same functions (risk_ratio, odds_ratio, risk_difference, nnt, par_risk, the Wald and chi-squared tests, rr_score, paf_risk, par_risk_ci, af_risk) equal epiR for method "cross.sectional" on 20 tables (720 values added to oracle_epir, 4190 in all), with no new code. Stratified (Mantel-Haenszel) tables and the boundary and MLE and Cornfield odds-ratio intervals stay open.
+
+## D7563 — epiR epi.iv for risk ratios
+`study_lnor` and `epi_iv_or` take a risk-ratio flag: the study statistic is ln RR with variance 1/a + 1/c - 1/n1 - 1/n2 instead of the log odds ratio, and the pooling, Q, H squared, I squared and effect test are unchanged. Equal to epi.iv(method = "risk.ratio") on 25 meta-analyses (325 values added to oracle_epir, 4515 in all). The risk-ratio DerSimonian-Laird method stays open.

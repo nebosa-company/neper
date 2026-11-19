@@ -542,7 +542,7 @@ fn epi_dsl_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f
 }
 
 // ln odds ratio and its variance of study i with epiR's half-correction (a half added to every cell of a table with a cell below 1): (ln OR, variance)
-fn study_lnor(evt: f64, nt: f64, evc: f64, nc: f64) -> (f64, f64) {
+fn study_lnor(evt: f64, nt: f64, evc: f64, nc: f64, rr: bool) -> (f64, f64) {
     var a = evt
     var b = nt - evt
     var c = evc
@@ -553,19 +553,24 @@ fn study_lnor(evt: f64, nt: f64, evc: f64, nc: f64) -> (f64, f64) {
         c += 0.5f64
         d += 0.5f64
     }
+    if rr {
+        let n1 = a + b
+        let n2 = c + d
+        ret (math.log[f64]((a / n1) / (c / n2)), 1.0f64 / a + 1.0f64 / c - 1.0f64 / n1 - 1.0f64 / n2)
+    }
     ret (math.log[f64](a * d / (b * c)), 1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d)
 }
 
-// epi.iv for odds ratios (inverse-variance fixed effect); out = (pooled OR, lower, upper, Q, heterogeneity p, I squared, H squared, H squared lower,
+// epi.iv for odds ratios, or risk ratios when rr is set (inverse-variance fixed effect); out = (pooled OR, lower, upper, Q, heterogeneity p, I squared, H squared, H squared lower,
 // H squared upper, I squared lower, I squared upper, effect z, effect p two-sided)
-fn epi_iv_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f64, level: f64, out: []f64) {
+fn epi_iv_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f64, rr: bool, level: f64, out: []f64) {
     let k = f64(evt.len)
     let z = z_of(level)
     var sw = 0.0f64
     var swl = 0.0f64
     var i = 0usize
     while i < evt.len {
-        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i])
+        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i], rr)
         sw += 1.0f64 / v
         swl += l / v
         i += 1usize
@@ -574,7 +579,7 @@ fn epi_iv_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f6
     var q = 0.0f64
     i = 0usize
     while i < evt.len {
-        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i])
+        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i], rr)
         q += (l - lniv) * (l - lniv) / v
         i += 1usize
     }

@@ -122,4 +122,12 @@ for (rep in 1:20) {
   for (i in 1:3) add(20 + i, base, unlist(r$PR.strata.score[1, ])[i])
   for (i in 1:3) add(32 + i, base, unlist(r$AFRisk.strata.wald[1, ])[i])
 }
+# epi.iv (risk ratios): "ivr" as "iv"
+for (rep in 1:25) {
+  k <- sample(4:10, 1); nt <- sample(60:300, k); nc <- sample(60:300, k); evt <- rbinom(k, nt, runif(1, 0.05, 0.2)); evc <- rbinom(k, nc, runif(1, 0.1, 0.3))
+  m <- suppressWarnings(epi.iv(evt, nt, evc, nc, names = as.character(1:k), method = "risk.ratio"))
+  v <- c(m$RR.summary$est, m$RR.summary$lower, m$RR.summary$upper, unname(m$heterogeneity["Q"]), unname(m$heterogeneity["p.value"]), m$Isq$est, m$Hsq$est, m$Hsq$lower, m$Hsq$upper, m$Isq$lower, m$Isq$upper, unname(m$effect["z"]), unname(m$effect["p.value"]))
+  if (any(!is.finite(v))) next
+  for (w in 0:12) cases[[length(cases) + 1]] <- case("ivr", c(k, evt, nt, evc, nc, w), v[w + 1], rel = 1e-8, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))

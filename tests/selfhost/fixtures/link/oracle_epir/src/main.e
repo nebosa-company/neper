@@ -11,10 +11,10 @@ use e.test.oracle as oracle
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "sb") { ret ep.sssimpleestb(x[0usize], x[1usize], x[2usize], x[3usize] > 0.5f64, x[4usize], x[5usize], x[6usize] > 0.5f64, 0.95f64) }
-    if str.eq(c.name, "iv") {
+    if str.eq(c.name, "iv") || str.eq(c.name, "ivr") {
         let ki = usize(x[0usize])
         var iv: [16]f64 = zero
-        ep.epi_iv_or(x[1usize..1usize + ki], x[1usize + ki..1usize + 2usize * ki], x[1usize + 2usize * ki..1usize + 3usize * ki], x[1usize + 3usize * ki..1usize + 4usize * ki], 0.95f64, iv[0usize..16usize])
+        ep.epi_iv_or(x[1usize..1usize + ki], x[1usize + ki..1usize + 2usize * ki], x[1usize + 2usize * ki..1usize + 3usize * ki], x[1usize + 3usize * ki..1usize + 4usize * ki], str.eq(c.name, "ivr"), 0.95f64, iv[0usize..16usize])
         ret iv[usize(x[1usize + 4usize * ki])]
     }
     if str.eq(c.name, "dsl") {
