@@ -146,6 +146,13 @@ for (rep in 1:40) {
     cases[[length(cases) + 1]] <- case("ig", c(1, q, 0, k, st), if (st == 0) dlogarithmic(k, q) else plogarithmic(k, q), rel = 1e-8, abs = 1e-13)
   }
 }
+# generalised beta: "gb" args (a, b, t, scale, x, stat 0 d 1 p 2 q 3 m (x is the order))
+for (rep in 1:40) {
+  a <- runif(1, 0.6, 4); b <- runif(1, 0.6, 4); tt <- runif(1, 0.5, 3); sc <- runif(1, 0.5, 5); xx <- sc * runif(1, 0.05, 0.95); pp <- runif(1, 0.05, 0.95); k <- runif(1, -0.4 * a * tt, 3)
+  vals <- c(dgenbeta(xx, a, b, tt, scale = sc), pgenbeta(xx, a, b, tt, scale = sc), qgenbeta(pp, a, b, tt, scale = sc), mgenbeta(k, a, b, tt, scale = sc))
+  args <- c(xx, xx, pp, k)
+  for (st in 0:3) cases[[length(cases) + 1]] <- case("gb", c(a, b, tt, sc, args[st + 1], st), vals[st + 1], rel = 1e-8, abs = 1e-13)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

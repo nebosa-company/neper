@@ -51121,3 +51121,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7542 — actuar inverse Gaussian and logarithmic
 `ig_d`, `ig_p` (inverse Gaussian, mean and shape) and `logd_d`, `logd_p` (logarithmic, prob q, the cdf by summing the mass) equal actuar dinvgauss, pinvgauss, dlogarithmic and plogarithmic on 40 draws each (164 values added to oracle_actuar, 4442 in all). The inverse Gaussian quantile and moments, the generalised beta and the generators stay open.
+
+## D7543 — actuar generalised beta
+`gb_d`, `gb_p`, `gb_q`, `gb_m`: X = scale B^(1/t) with B ~ Beta(shape1, shape2), density t u / x dbeta(u), u = (x / scale)^t, cdf pbeta(u), raw moment scale^k G(a + b) G(a + k / t) / (G(a) G(a + b + k / t)). Equal to actuar dgenbeta, pgenbeta, qgenbeta and mgenbeta on 40 draws (157 values added to oracle_actuar, 4599 in all). Limited moments and the generator stay open.

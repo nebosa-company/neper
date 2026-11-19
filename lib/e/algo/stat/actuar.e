@@ -586,3 +586,22 @@ fn logd_p(x: f64, q: f64) -> f64 {
     }
     ret s
 }
+
+// ---- generalised beta (shape1 a, shape2 b, shape3 t, scale th): X = th B^(1/t) with B ~ Beta(a, b), support (0, th)
+fn gb_d(x: f64, a: f64, b: f64, t: f64, th: f64) -> f64 {
+    if x <= 0.0f64 || x >= th { ret 0.0f64 }
+    let u = math.pow[f64](x / th, t)
+    ret t * u / x * nb.dbeta(u, a, b, false)
+}
+
+fn gb_p(x: f64, a: f64, b: f64, t: f64, th: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    if x >= th { ret 1.0f64 }
+    ret nb.pbeta(math.pow[f64](x / th, t), a, b, true, false)
+}
+
+fn gb_q(p: f64, a: f64, b: f64, t: f64, th: f64) -> f64 { ret th * math.pow[f64](nb.qbeta(p, a, b, true, false), 1.0f64 / t) }
+
+fn gb_m(k: f64, a: f64, b: f64, t: f64, th: f64) -> f64 {
+    ret math.pow[f64](th, k) * math.exp[f64](lgam(a + b) + lgam(a + k / t) - lgam(a) - lgam(a + b + k / t))
+}
