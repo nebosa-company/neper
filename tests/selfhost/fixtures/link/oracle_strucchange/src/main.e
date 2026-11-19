@@ -17,6 +17,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let m = usize(z[2usize])
     let y = z[3usize..3usize + n]
     let x = z[3usize + n..3usize + n + n * p]
+    if str.eq(c.name, "cus") || str.eq(c.name, "cusp") {
+        let (cs, cp) = sc.ols_cusum(a, y, x, n, p)
+        if str.eq(c.name, "cus") { ret cs }
+        ret cp
+    }
     let from = usize(math.floor[f64](0.15f64 * f64(n)))
     let to = n - from
     if str.eq(c.name, "fsum") || str.eq(c.name, "supf") {

@@ -123,3 +123,95 @@ fn breakpoints(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize
     }
     ret best[m * w + n]
 }
+
+// strucchange efp(type = "OLS-CUSUM") with sctest: the supremum of the cumulative OLS residuals scaled by sigma sqrt(n) (sigma from n - p degrees of freedom) and its Brownian-bridge
+// p value 1 - (1 + 2 sum_{i = 1..100} (-1)^i exp(-2 i^2 s^2)) (1 when the statistic is below 0.1); (statistic, p)
+fn ols_cusum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (g, e1) = mem.alloc[f64](a, p * p)
+    let (r, e2) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok { ret (nan, nan) }
+    var i = 0usize
+    while i < p * p {
+        g[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        r[i] = 0.0f64
+        i += 1usize
+    }
+    var t = 0usize
+    while t < n {
+        var c = 0usize
+        while c < p {
+            r[c] += x[t * p + c] * y[t]
+            var d = 0usize
+            while d < p {
+                g[c * p + d] += x[t * p + c] * x[t * p + d]
+                d += 1usize
+            }
+            c += 1usize
+        }
+        t += 1usize
+    }
+    let (inv, ie) = gp.invert(a, g, p)
+    if ie != ok { ret (nan, nan) }
+    var sse = 0.0f64
+    var cum = 0.0f64
+    var peak = 0.0f64
+    t = 0usize
+    var resid_sum = 0.0f64
+    while t < n {
+        var fit = 0.0f64
+        var c = 0usize
+        while c < p {
+            var bc = 0.0f64
+            var d = 0usize
+            while d < p {
+                bc += inv[c * p + d] * r[d]
+                d += 1usize
+            }
+            fit += bc * x[t * p + c]
+            c += 1usize
+        }
+        let e = y[t] - fit
+        sse += e * e
+        resid_sum += e
+        t += 1usize
+    }
+    let sg = math.sqrt[f64](sse / f64(n - p))
+    // second pass for the cumulative sum (the coefficients are recomputed per row, which is cheap for the small p used here)
+    t = 0usize
+    while t < n {
+        var fit = 0.0f64
+        var c = 0usize
+        while c < p {
+            var bc = 0.0f64
+            var d = 0usize
+            while d < p {
+                bc += inv[c * p + d] * r[d]
+                d += 1usize
+            }
+            fit += bc * x[t * p + c]
+            c += 1usize
+        }
+        cum += y[t] - fit
+        let v = math.abs[f64](cum) / (sg * math.sqrt[f64](f64(n)))
+        if v > peak { peak = v }
+        t += 1usize
+    }
+    var pv = 1.0f64
+    if peak >= 0.1f64 {
+        var s = 0.0f64
+        var k = 1usize
+        while k <= 100usize {
+            var sign = 1.0f64
+            if k % 2usize == 1usize { sign = 0.0f64 - 1.0f64 }
+            s += sign * math.exp[f64](0.0f64 - 2.0f64 * f64(k * k) * peak * peak)
+            k += 1usize
+        }
+        pv = 1.0f64 - (1.0f64 + 2.0f64 * s)
+    }
+    ret (peak, pv)
+}

@@ -4436,4 +4436,6 @@ D7577	618	robustbase adjboxStats
 D7578	564	robustbase medcouple for odd sample sizes
 D7579	641	arm bayesglm with the cloglog link
 D7580	722	nnet multinom with weight decay
-D7581	431	nnet multinom with case weights
+D7581	432	nnet multinom with case weights
+D7582	773	nnet hidden-layer network: first attempt does not reproduce R's path
+D7583	547	strucchange efp OLS-CUSUM with sctest

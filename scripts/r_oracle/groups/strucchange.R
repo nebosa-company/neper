@@ -16,6 +16,8 @@ for (rep in 1:20) {
   add("fsum", a, sum(as.vector(f$Fstats) * seq_along(f$Fstats))); add("supf", a, max(f$Fstats))
   b <- breakpoints(y ~ x - 1, h = 0.15, breaks = m)
   bm <- breakpoints(b, breaks = m)
+  e <- efp(y ~ x - 1, type = "OLS-CUSUM"); s <- sctest(e)
+  add("cus", a, unname(s$statistic)); add("cusp", a, unname(s$p.value))
   add("rss", a, summary(b)$RSS["RSS", m + 1]); add("bp", a, sum(bm$breakpoints * seq_along(bm$breakpoints)))
 }
 emit("strucchange", "strucchange", list(cases))
