@@ -4327,4 +4327,5 @@ D7472	749	MASS fitdistr for the beta and F families
 D7473	548	MASS fitdistr for the chi-squared family
 D7474	675	fpc bhattacharyya.dist
 D7475	889	fpc mergenormals, bhat method
-D7476	604	fpc mergenormals, demp method
+D7476	605	fpc mergenormals, demp method
+D7477	746	caret createFolds for a numeric response

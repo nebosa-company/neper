@@ -4742,7 +4742,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open. Split from L328, which met its acceptance list (D6087, D6812-D6816, D6822, D6834, D6835, D6962-D6964). Acceptance, equal to caret: createFolds and createMultiFolds for a numeric response (the quantile cuts ordered by their label strings, locale dependent), preProcess method ica (fastICA with its seeded start), varImp for glm families beyond binomial and for tree and neural models."
+      "evidence": "D7477: createFolds for a numeric response equals caret. Split from L328, which met its acceptance list (D6087, D6812-D6816, D6822, D6834, D6835, D6962-D6964). Remaining, equal to caret: createMultiFolds for numeric y (the same routine repeated), preProcess method ica (fastICA with its seeded start), varImp for glm families beyond binomial and for tree and neural models."
     }
   ]
 }

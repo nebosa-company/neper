@@ -938,3 +938,245 @@ fn var_imp_logit(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f
     }
     ret ok
 }
+
+// C's %.{p}g of v into buf (returns the length): the digits of v rounded to p significant digits, fixed notation when the decimal exponent is in -4 .. p - 1, else d.ddde+XX, trailing zeros dropped
+fn fmt_g(v: f64, p: usize, buf: []u8) -> usize {
+    var n = 0usize
+    if v == 0.0f64 {
+        buf[0usize] = 48u8
+        ret 1usize
+    }
+    var av = v
+    if v < 0.0f64 {
+        buf[0usize] = 45u8
+        n = 1usize
+        av = 0.0f64 - v
+    }
+    var x = i64(math.floor[f64](math.log10[f64](av)))
+    var m = math.floor[f64](av / math.pow[f64](10.0f64, f64(x - i64(p) + 1i64)) + 0.5f64)
+    if m >= math.pow[f64](10.0f64, f64(p)) {
+        m = math.floor[f64](m / 10.0f64 + 0.5f64)
+        x += 1i64
+    }
+    if m < math.pow[f64](10.0f64, f64(p) - 1.0f64) {
+        x -= 1i64
+        m = math.floor[f64](av / math.pow[f64](10.0f64, f64(x - i64(p) + 1i64)) + 0.5f64)
+    }
+    var dg: [20]u8 = zero
+    var q = 0usize
+    var mi = u64(m)
+    while q < p {
+        dg[p - 1usize - q] = u8(48u64 + mi % 10u64)
+        mi = mi / 10u64
+        q += 1usize
+    }
+    var nd = p
+    while nd > 1usize && dg[nd - 1usize] == 48u8 { nd -= 1usize }
+    if x >= -4i64 && x < i64(p) {
+        if x >= 0i64 {
+            var i = 0usize
+            while i <= usize(x) {
+                var ch = 48u8
+                if i < p { ch = dg[i] }
+                buf[n] = ch
+                n += 1usize
+                i += 1usize
+            }
+            if nd > usize(x) + 1usize {
+                buf[n] = 46u8
+                n += 1usize
+                i = usize(x) + 1usize
+                while i < nd {
+                    buf[n] = dg[i]
+                    n += 1usize
+                    i += 1usize
+                }
+            }
+        } else {
+            buf[n] = 48u8
+            buf[n + 1usize] = 46u8
+            n += 2usize
+            var z = 0i64
+            while z < 0i64 - x - 1i64 {
+                buf[n] = 48u8
+                n += 1usize
+                z += 1i64
+            }
+            var i2 = 0usize
+            while i2 < nd {
+                buf[n] = dg[i2]
+                n += 1usize
+                i2 += 1usize
+            }
+        }
+        ret n
+    }
+    buf[n] = dg[0usize]
+    n += 1usize
+    if nd > 1usize {
+        buf[n] = 46u8
+        n += 1usize
+        var i3 = 1usize
+        while i3 < nd {
+            buf[n] = dg[i3]
+            n += 1usize
+            i3 += 1usize
+        }
+    }
+    buf[n] = 101u8
+    n += 1usize
+    var ex = x
+    if ex < 0i64 {
+        buf[n] = 45u8
+        ex = 0i64 - ex
+    } else {
+        buf[n] = 43u8
+    }
+    n += 1usize
+    var eu = u64(ex)
+    if eu >= 100u64 {
+        buf[n] = u8(48u64 + eu / 100u64)
+        n += 1usize
+    }
+    buf[n] = u8(48u64 + (eu / 10u64) % 10u64)
+    buf[n + 1usize] = u8(48u64 + eu % 10u64)
+    n += 2usize
+    ret n
+}
+
+// createFolds(y, k, list = FALSE) for a numeric y: the quantile cuts (floor(n / k) clamped to 2 .. 5 of them, type-7 quantiles, duplicates dropped), cut's interval labels ordered as strings (byte order, which is the order R sorts them in here), then the factor routine
+fn create_folds_numeric(a: *mem.Arena, r: *rng.Rng, y: []const f64, k: usize, fold: []i64) -> err {
+    let n = y.len
+    var cuts = n / k
+    if cuts < 2usize { cuts = 2usize }
+    if cuts > 5usize { cuts = 5usize }
+    let (s, e0) = mem.alloc[f64](a, n)
+    let (br, e1) = mem.alloc[f64](a, cuts)
+    let (cls, e2) = mem.alloc[i64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        s[i] = y[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let key = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > key {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = key
+        i += 1usize
+    }
+    var nbr = 0usize
+    var qi = 0usize
+    while qi < cuts {
+        let h = (f64(n) - 1.0f64) * f64(qi) / f64(cuts - 1usize)
+        let lo = math.floor[f64](h)
+        let hi = math.ceil[f64](h)
+        var v = s[usize(lo)]
+        if hi > lo { v = v + (h - lo) * (s[usize(hi)] - v) }
+        if nbr == 0usize || v != br[nbr - 1usize] {
+            br[nbr] = v
+            nbr += 1usize
+        }
+        qi += 1usize
+    }
+    // the intervals (b[j-1], b[j]], the first including its lower end; labels from formatC(digits = dig) widened until the breaks are distinct
+    let ni = nbr - 1usize
+    var labs: [5][64]u8 = zero
+    var lens: [5]usize = zero
+    var dig = 3usize
+    var ok2 = false
+    while !ok2 && dig <= 12usize {
+        var cb: [6][32]u8 = zero
+        var cl: [6]usize = zero
+        var j = 0usize
+        while j < nbr {
+            cl[j] = fmt_g(br[j], dig, cb[j][0usize..32usize])
+            j += 1usize
+        }
+        ok2 = true
+        j = 1usize
+        while j < nbr {
+            var same = cl[j] == cl[j - 1usize]
+            if same {
+                var q2 = 0usize
+                while q2 < cl[j] {
+                    if cb[j][q2] != cb[j - 1usize][q2] { same = false }
+                    q2 += 1usize
+                }
+            }
+            if same { ok2 = false }
+            j += 1usize
+        }
+        if ok2 {
+            j = 0usize
+            while j < ni {
+                var m = 0usize
+                if j == 0usize { labs[j][0usize] = 91u8 } else { labs[j][0usize] = 40u8 }
+                m = 1usize
+                var q3 = 0usize
+                while q3 < cl[j] {
+                    labs[j][m] = cb[j][q3]
+                    m += 1usize
+                    q3 += 1usize
+                }
+                labs[j][m] = 44u8
+                m += 1usize
+                q3 = 0usize
+                while q3 < cl[j + 1usize] {
+                    labs[j][m] = cb[j + 1usize][q3]
+                    m += 1usize
+                    q3 += 1usize
+                }
+                labs[j][m] = 93u8
+                m += 1usize
+                lens[j] = m
+                j += 1usize
+            }
+        } else {
+            dig += 1usize
+        }
+    }
+    // rank of each interval's label in byte order
+    var rank: [5]i64 = zero
+    var j2 = 0usize
+    while j2 < ni {
+        var rk = 0i64
+        var j3 = 0usize
+        while j3 < ni {
+            if j3 != j2 {
+                var less = false
+                var decided = false
+                var q4 = 0usize
+                while !decided && q4 < lens[j3] && q4 < lens[j2] {
+                    if labs[j3][q4] != labs[j2][q4] {
+                        less = labs[j3][q4] < labs[j2][q4]
+                        decided = true
+                    }
+                    q4 += 1usize
+                }
+                if !decided { less = lens[j3] < lens[j2] }
+                if less { rk += 1i64 }
+            }
+            j3 += 1usize
+        }
+        rank[j2] = rk
+        j2 += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var iv = 0usize
+        var j4 = 1usize
+        while j4 < ni {
+            if y[i] > br[j4] { iv = j4 }
+            j4 += 1usize
+        }
+        cls[i] = rank[iv]
+        i += 1usize
+    }
+    ret create_folds(a, r, cls, k, fold)
+}

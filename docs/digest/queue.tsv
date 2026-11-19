@@ -429,4 +429,4 @@ L287	library	0	513	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml,
 L283	library	0	538	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
 L276	library	0	418	Sass/SCSS compiler (sass, libsass)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
 L518	library	0.2	552	tweedie: powers above 2 and the series beyond statmod	Partial (D7368): dtweedie_series for power above 2 (the Wright-type series with its reliability check) equal to tweedie on 59 values on Windows (oracle_gaussq;
-L519	library	0	389	caret remainder: numeric-response folds, ica and varImp for other models	Open.
+L519	library	0	372	caret remainder: numeric-response folds, ica and varImp for other models	D7477: createFolds for a numeric response equals caret.
