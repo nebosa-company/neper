@@ -50200,3 +50200,6 @@ For `coxph(Surv(Tstart, Tstop, status) ~ strata(trans), method = "breslow")` the
 
 ## D7357 — PMCMRplus van der Waerden all-pairs
 `vdw_pair` scores the pooled ranks as qnorm(rank / (n + 1)) and tests cell (i, j) with |mean score difference| / sqrt(s2 (n - 1 - T)/(n - k) (1/n_i + 1/n_j)), T the van der Waerden statistic; the p values are the two-sided t at n - k df and the single-step Tukey p of sqrt(2) times the statistic. Equal to R on ten random k-group data sets with and without ties. L487 at 0.45.
+
+## D7358 — PMCMRplus Quade all-pairs
+`quade_pair` ranks within blocks and the block ranges across blocks, forms s = q (r - (k + 1)/2), and answers the t form (|S_i - S_j| over sqrt(2b(A - B)/((b-1)(k-1))), two-sided p at (b-1)(k-1) df) or the normal form on the weighted rank sums scaled by 1/(b(b+1)/2). Equal to R on ten random block designs, unadjusted p. L487 at 0.5.

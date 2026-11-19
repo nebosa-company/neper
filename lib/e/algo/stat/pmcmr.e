@@ -433,3 +433,81 @@ fn vdw_pair(a: *mem.Arena, n: usize, k: usize, x: []const f64, grp: []const usiz
     let pt = nb.ptukey(math.sqrt[f64](2.0f64) * tv, 1.0f64, kf, nf - kf, false, false)
     ret (tv, p, pt, ok)
 }
+
+// Quade all-pairs test on a complete block design (y is b blocks by k treatments, row-major): ranks within blocks, block ranges ranked, s = q (r - (k + 1) / 2). dist 0 the t form
+// (|S_i - S_j| / sqrt(2 b (A - B) / ((b - 1) (k - 1))), two-sided p at (b - 1)(k - 1) df), dist 1 the normal form on the weighted rank sums. Answers (statistic, unadjusted p).
+fn quade_pair(a: *mem.Arena, b: usize, k: usize, y: []const f64, dist_kind: usize, i: usize, j: usize) -> (f64, f64, err) {
+    let (rng, e0) = mem.alloc[f64](a, b)
+    let (q, e1) = mem.alloc[f64](a, b)
+    let (r, e2) = mem.alloc[f64](a, b * k)
+    let (row, e3) = mem.alloc[f64](a, k)
+    let (rr, e4) = mem.alloc[f64](a, k)
+    let (ss, e5) = mem.alloc[f64](a, k)
+    let (ww, e6) = mem.alloc[f64](a, k)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    var t = 0usize
+    while t < b {
+        var lo = y[t * k]
+        var hi = y[t * k]
+        var c = 0usize
+        while c < k {
+            row[c] = y[t * k + c]
+            if row[c] < lo { lo = row[c] }
+            if row[c] > hi { hi = row[c] }
+            c += 1usize
+        }
+        rng[t] = hi - lo
+        let er = rank_avg(a, row, rr)
+        if er != ok { ret (0.0f64, 0.0f64, er) }
+        c = 0usize
+        while c < k {
+            r[t * k + c] = rr[c]
+            c += 1usize
+        }
+        t += 1usize
+    }
+    let eq = rank_avg(a, rng, q)
+    if eq != ok { ret (0.0f64, 0.0f64, eq) }
+    let bf = f64(b)
+    let kf = f64(k)
+    var c = 0usize
+    while c < k {
+        ss[c] = 0.0f64
+        ww[c] = 0.0f64
+        c += 1usize
+    }
+    var aa = 0.0f64
+    t = 0usize
+    while t < b {
+        c = 0usize
+        while c < k {
+            let s = q[t] * (r[t * k + c] - (kf + 1.0f64) / 2.0f64)
+            aa += s * s
+            ss[c] += s
+            ww[c] += q[t] * r[t * k + c]
+            c += 1usize
+        }
+        t += 1usize
+    }
+    if dist_kind == 0usize {
+        var bb = 0.0f64
+        c = 0usize
+        while c < k {
+            bb += ss[c] * ss[c]
+            c += 1usize
+        }
+        bb = bb / bf
+        let denom = math.sqrt[f64](2.0f64 * bf * (aa - bb) / ((bf - 1.0f64) * (kf - 1.0f64)))
+        var dif = ss[i] - ss[j]
+        if dif < 0.0f64 { dif = 0.0f64 - dif }
+        let tv = dif / denom
+        ret (tv, 2.0f64 * nb.pt(0.0f64 - tv, (bf - 1.0f64) * (kf - 1.0f64), true, false), ok)
+    }
+    let n = bf * kf
+    let denom = math.sqrt[f64]((kf * (kf + 1.0f64) * (2.0f64 * n + 1.0f64) * (kf - 1.0f64)) / (18.0f64 * n * (n + 1.0f64)))
+    let ff = 1.0f64 / (bf * (bf + 1.0f64) / 2.0f64)
+    var dz = ww[i] * ff - ww[j] * ff
+    if dz < 0.0f64 { dz = 0.0f64 - dz }
+    let zv = dz / denom
+    ret (zv, 2.0f64 * dist.pnorm(0.0f64 - zv, 0.0f64, 1.0f64, true, false), ok)
+}
