@@ -4435,4 +4435,5 @@ D7576	560	actuar zero-modified generators are not an inversion
 D7577	618	robustbase adjboxStats
 D7578	564	robustbase medcouple for odd sample sizes
 D7579	641	arm bayesglm with the cloglog link
-D7580	721	nnet multinom with weight decay
+D7580	722	nnet multinom with weight decay
+D7581	431	nnet multinom with case weights

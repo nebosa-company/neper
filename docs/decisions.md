@@ -51235,3 +51235,6 @@ With an odd n the median is an observation, and the pair (median, median) enters
 
 ## D7580 — nnet multinom with weight decay
 `multinom` takes the decay: the objective is the negative log-likelihood plus decay times the sum of the squared coefficients (the K - 1 coefficient rows, the reference class masked as multinom does), the Newton step adds 2 decay to the Hessian diagonal and subtracts 2 decay times the coefficients from the gradient, and the deviance returned is twice the objective, which is what multinom reports (checked in R: deviance(f) = pure deviance + 2 decay sum(coef^2)). Equal to nnet on 20 fits with decay 0.01, 0.1 and 1 (40 values added to oracle_nnet, 80 in all; the oracle layout gains the decay argument). Case weights, the hidden-layer networks and the BFGS path stay open.
+
+## D7581 — nnet multinom with case weights
+`multinom` takes a case-weight vector that multiplies each observation's log-likelihood, gradient and Hessian terms (the decay penalty is unweighted); the oracle layout appends the weights. Equal to multinom(weights = ) on 20 fits with integer weights 1 to 4 and decay 0.01, 0.1 and 1 (40 values added to oracle_nnet, 120 in all). The hidden-layer networks and the BFGS path stay open.

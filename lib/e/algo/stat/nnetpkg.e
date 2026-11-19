@@ -1,13 +1,13 @@
-// R nnet::multinom with weight decay (the penalty decay * sum of squared coefficients added to the negative log-likelihood; the deviance returned is twice that objective, as multinom reports): the multinomial logit by Newton's method (R runs BFGS on the same likelihood, so the two agree to R's reltol). Class 0 is the reference; the coefficients are the K - 1 rows for classes 1 .. K - 1, p columns each (row-major).
+// R nnet::multinom with case weights and weight decay (the penalty decay * sum of squared coefficients added to the negative log-likelihood; the deviance returned is twice that objective, as multinom reports): the multinomial logit by Newton's method (R runs BFGS on the same likelihood, so the two agree to R's reltol). Class 0 is the reference; the coefficients are the K - 1 rows for classes 1 .. K - 1, p columns each (row-major).
 //
-// Not here: case weights, the hidden-layer networks of nnet, softmax and censored responses.
+// Not here: the hidden-layer networks of nnet, softmax and censored responses.
 
 use e.algo.stat.gparot as gp
 use e.math
 use e.mem
 
 // returns the deviance, -2 log-likelihood (NaN if the Hessian is singular); iterations in it
-fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, decay: f64, coef: []f64) -> f64 {
+fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, decay: f64, wts: []const f64, coef: []f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let q = (nk - 1usize) * p
     let (gr, e1) = mem.alloc[f64](a, q)
@@ -63,21 +63,21 @@ fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
                 k += 1usize
             }
             let yc = usize(cls[t])
-            dev -= 2.0f64 * math.log[f64](pr[yc])
+            dev -= 2.0f64 * wts[t] * math.log[f64](pr[yc])
             k = 1usize
             while k < nk {
                 var d = 0.0f64
                 if yc == k { d = 1.0f64 }
                 var c = 0usize
                 while c < p {
-                    gr[(k - 1usize) * p + c] += (d - pr[k]) * x[t * p + c]
+                    gr[(k - 1usize) * p + c] += wts[t] * (d - pr[k]) * x[t * p + c]
                     var l = 1usize
                     while l < nk {
                         var dl = 0.0f64
                         if l == k { dl = 1.0f64 }
                         var c2 = 0usize
                         while c2 < p {
-                            h[((k - 1usize) * p + c) * q + (l - 1usize) * p + c2] += pr[k] * (dl - pr[l]) * x[t * p + c] * x[t * p + c2]
+                            h[((k - 1usize) * p + c) * q + (l - 1usize) * p + c2] += wts[t] * pr[k] * (dl - pr[l]) * x[t * p + c] * x[t * p + c2]
                             c2 += 1usize
                         }
                         l += 1usize
@@ -138,7 +138,7 @@ fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
             s += pr[k]
             k += 1usize
         }
-        dev -= 2.0f64 * math.log[f64](pr[usize(cls[t])] / s)
+        dev -= 2.0f64 * wts[t] * math.log[f64](pr[usize(cls[t])] / s)
         t += 1usize
     }
     var pen = 0.0f64
