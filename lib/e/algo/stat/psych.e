@@ -1562,3 +1562,28 @@ fn fa_ml_indices(objective: f64, f0: f64, n: f64, p: usize, q: usize, out: []f64
     out[2usize] = (m0 - mm) / (m0 - 1.0f64 / nm)
     out[3usize] = (math.max[f64](nullc - nulld, 0.0f64) - math.max[f64](stat - dof, 0.0f64)) / math.max[f64](nullc - nulld, 0.0f64)
 }
+
+// psych's rms = sqrt(S / (p (p - 1))) and crms = sqrt(S / (2 dof)) for S the sum over the lower-triangle off-diagonal entries of the squared residuals (the full off-diagonal sum gave a value a factor sqrt 2 too large against psych) of the correlation matrix r against the fitted loadings (item i of factor k at ld[i + k p]); out = rms, crms
+fn fa_rms(r: []const f64, ld: []const f64, p: usize, q: usize, dof: f64, out: []f64) {
+    var s = 0.0f64
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            if j < i {
+                var m = 0.0f64
+                var k = 0usize
+                while k < q {
+                    m += ld[i + k * p] * ld[j + k * p]
+                    k += 1usize
+                }
+                let d = r[i * p + j] - m
+                s += d * d
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    out[0usize] = math.sqrt[f64](s / (f64(p) * (f64(p) - 1.0f64)))
+    out[1usize] = math.sqrt[f64](s / (2.0f64 * dof))
+}

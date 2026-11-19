@@ -18,17 +18,22 @@ fn fit_case(a: *mem.Arena, c: *const oracle.Case, cached: []f64) -> bool {
         var st: [4]f64 = zero
         let obj = o7[p] - 2.0f64 * f64(p - q)
         ps.fa_ml_stats(obj, z[2usize], p, q, st[0usize..4usize])
+        var ix: [4]f64 = zero
+        ps.fa_ml_indices(obj, 0.0f64 - ps.logdet(a, z[3usize..3usize + p * p], p), z[2usize], p, q, ix[0usize..4usize])
+        var rr: [2]f64 = zero
+        ps.fa_rms(z[3usize..3usize + p * p], o7[p + 1usize..p + 1usize + p * q], p, q, st[1usize], rr[0usize..2usize])
+        // the statistics replace the front of the cache only after the loadings in it have been used
         cached[0usize] = obj
         cached[1usize] = st[0usize]
         cached[2usize] = st[1usize]
         cached[3usize] = st[2usize]
         cached[4usize] = st[3usize]
-        var ix: [4]f64 = zero
-        ps.fa_ml_indices(obj, 0.0f64 - ps.logdet(a, z[3usize..3usize + p * p], p), z[2usize], p, q, ix[0usize..4usize])
         cached[5usize] = ix[0usize]
         cached[6usize] = ix[1usize]
         cached[7usize] = ix[2usize]
         cached[8usize] = ix[3usize]
+        cached[9usize] = rr[0usize]
+        cached[10usize] = rr[1usize]
         ret true
     }
     if c.name.len == 8usize {
