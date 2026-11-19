@@ -21,6 +21,9 @@ for (rep in 1:20) {
   if (p <= 40) {
     for (ty in c("supF", "aveF", "expF")) { sf <- sctest(f, type = ty); add(paste0("pf", match(ty, c("supF", "aveF", "expF"))), a, unname(sf$p.value)); add(paste0("sf", match(ty, c("supF", "aveF", "expF"))), a, unname(sf$statistic)) }
   }
+  hh <- c(0.1, 0.15, 0.3)[(n %% 3) + 1]
+  em <- efp(y ~ x - 1, type = "OLS-MOSUM", h = hh); sm <- sctest(em)
+  add("mos", c(a, hh), unname(sm$statistic)); add("mosp", c(a, hh), unname(sm$p.value))
   er <- efp(y ~ x - 1, type = "Rec-CUSUM"); sr <- sctest(er)
   add("rec", a, unname(sr$statistic)); add("recp", a, unname(sr$p.value))
   add("rss", a, summary(b)$RSS["RSS", m + 1]); add("bp", a, sum(bm$breakpoints * seq_along(bm$breakpoints)))

@@ -374,3 +374,118 @@ fn pvalue_fstats(ty: usize, x: f64, k: usize, tau: f64) -> f64 {
     let i1 = usize(tau1)
     ret (tau1 + 1.0f64 - taua) * pp[i1 - 1usize] + (taua - tau1) * pp[i1]
 }
+
+// linear interpolation of y over the increasing grid xs at v, clamped at the ends (R's approx with rule = 2)
+fn approx_rule2(xs: []const f64, ys: []const f64, v: f64) -> f64 {
+    let n = xs.len
+    if v <= xs[0usize] { ret ys[0usize] }
+    if v >= xs[n - 1usize] { ret ys[n - 1usize] }
+    var i = 1usize
+    while i < n {
+        if v <= xs[i] {
+            ret ys[i - 1usize] + (ys[i] - ys[i - 1usize]) * (v - xs[i - 1usize]) / (xs[i] - xs[i - 1usize])
+        }
+        i += 1usize
+    }
+    ret ys[n - 1usize]
+}
+
+// strucchange efp(type = "OLS-MOSUM", h) with sctest: the largest |moving sum of nh = floor(n h) OLS residuals| / (sigma sqrt(n)) and its p value interpolated in the table sc.me
+// (columns for p = 0.1, 0.05, 0.025, 0.01, rows h = 0.05 .. 0.5); (statistic, p)
+fn ols_mosum(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, p: usize, h: f64) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (g, e1) = mem.alloc[f64](a, p * p)
+    let (r, e2) = mem.alloc[f64](a, p)
+    let (res, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret (nan, nan) }
+    var i = 0usize
+    while i < p * p {
+        g[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        r[i] = 0.0f64
+        i += 1usize
+    }
+    var t = 0usize
+    while t < n {
+        var c = 0usize
+        while c < p {
+            r[c] += x[t * p + c] * y[t]
+            var d = 0usize
+            while d < p {
+                g[c * p + d] += x[t * p + c] * x[t * p + d]
+                d += 1usize
+            }
+            c += 1usize
+        }
+        t += 1usize
+    }
+    let (inv, ie) = gp.invert(a, g, p)
+    if ie != ok { ret (nan, nan) }
+    var sse = 0.0f64
+    t = 0usize
+    while t < n {
+        var fit = 0.0f64
+        var c = 0usize
+        while c < p {
+            var bc = 0.0f64
+            var d = 0usize
+            while d < p {
+                bc += inv[c * p + d] * r[d]
+                d += 1usize
+            }
+            fit += bc * x[t * p + c]
+            c += 1usize
+        }
+        res[t] = y[t] - fit
+        sse += res[t] * res[t]
+        t += 1usize
+    }
+    let sg = math.sqrt[f64](sse / f64(n - p))
+    let nh = usize(math.floor[f64](f64(n) * h))
+    var win = 0.0f64
+    t = 0usize
+    while t < nh {
+        win += res[t]
+        t += 1usize
+    }
+    var peak = math.abs[f64](win)
+    t = nh
+    while t < n {
+        win += res[t] - res[t - nh]
+        if math.abs[f64](win) > peak { peak = math.abs[f64](win) }
+        t += 1usize
+    }
+    peak = peak / (sg * math.sqrt[f64](f64(n)))
+    var tableh: [10]f64 = zero
+    var q = 0usize
+    while q < 10usize {
+        tableh[q] = 0.05f64 * f64(q + 1usize)
+        q += 1usize
+    }
+    var col: [10]f64 = zero
+    var ipl: [5]f64 = zero
+    var pgrid: [5]f64 = zero
+    pgrid[0usize] = 0.0f64
+    ipl[0usize] = 1.0f64
+    var tp: [5]f64 = zero
+    tp[0usize] = 1.0f64
+    tp[1usize] = 0.1f64
+    tp[2usize] = 0.05f64
+    tp[3usize] = 0.025f64
+    tp[4usize] = 0.01f64
+    let tab = tb.sc_me()
+    var cidx = 0usize
+    while cidx < 4usize {
+        q = 0usize
+        while q < 10usize {
+            col[q] = table_value(tab, q * 4usize + cidx)
+            q += 1usize
+        }
+        pgrid[cidx + 1usize] = approx_rule2(tableh[0usize..10usize], col[0usize..10usize], h)
+        cidx += 1usize
+    }
+    ret (peak, approx_rule2(pgrid[0usize..5usize], tp[0usize..5usize], peak))
+}

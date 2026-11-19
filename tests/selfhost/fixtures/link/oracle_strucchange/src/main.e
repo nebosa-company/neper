@@ -52,6 +52,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "cus") { ret cs }
         ret cp
     }
+    if str.eq(c.name, "mos") || str.eq(c.name, "mosp") {
+        let (ms, mp) = sc.ols_mosum(a, y, x, n, p, z[3usize + n + n * p])
+        if str.eq(c.name, "mos") { ret ms }
+        ret mp
+    }
     if str.eq(c.name, "rec") || str.eq(c.name, "recp") {
         let (rs, rp) = sc.rec_cusum(a, y, x, n, p)
         if str.eq(c.name, "rec") { ret rs }
