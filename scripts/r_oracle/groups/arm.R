@@ -49,4 +49,15 @@ for (rep in 1:18) {
   if (is.null(f)) next
   for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm", c(n, k, fam, as.vector(t(X)), y, j), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
 }
+# bayesglm2: the same with prior.df and prior.scale given: args (n, k, family, x, y, j, prior.df, prior.scale).
+for (rep in 1:18) {
+  fam <- (rep - 1) %% 3; n <- sample(60:150, 1); k <- sample(2:4, 1)
+  pdf <- c(Inf, 4, 7)[(rep - 1) %/% 3 %% 3 + 1]; psc <- c(1, 2.5)[rep %% 2 + 1]
+  X <- cbind(1, matrix(round(rnorm(n * (k - 1)), 4), n)); b <- c(0.2, runif(k - 1, -0.8, 0.8)); eta <- as.vector(X %*% b)
+  y <- if (fam == 0) round(eta + rnorm(n, 0, 0.6), 4) else if (fam == 1) rbinom(n, 1, plogis(eta)) else rpois(n, exp(eta))
+  d <- data.frame(y = y, X[, -1, drop = FALSE]); names(d) <- c("y", paste0("v", seq_len(k - 1)))
+  f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = list(gaussian, binomial, poisson)[[fam + 1]], prior.df = pdf, prior.scale = psc)), error = function(e) NULL)
+  if (is.null(f)) next
+  for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm2", c(n, k, fam, as.vector(t(X)), y, j, pdf, psc), unname(coef(f))[j + 1], rel = 1e-6, abs = 1e-8)
+}
 emit("arm", "arm", list(cases))

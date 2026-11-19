@@ -50236,3 +50236,6 @@ kwManyOneConoverTest reuses `conover` with the pair (j, 0): its signed t and una
 
 ## D7369 — arm bayesglm (default priors)
 `bayesglm` replicates arm's EM-style IRLS step by step so it stops at the same iteration: Cauchy priors (df 1) with scales 2.5 and 10 for the intercept, scaled by 2 sd(y) for gaussian and by each column's range (two values) or 2 sd (more than two); the k prior rows are the identity with row 0 replaced by the column means, weighted sqrt(dispersion) / prior.sd; the prior sd is updated from the coefficient, its posterior variance times the dispersion and df * scale^2; gaussian uses the unscaled prior scale and updates the dispersion from the residual and uncertainty means. The weighted normal equations are inverted directly instead of by QR. Families gaussian, binomial logit and poisson log equal arm to 1e-6 on 18 fits. L409 at 0.4.
+
+## D7370 — arm bayesglm prior df and scale
+`bayesglm` takes the non-intercept prior df and scale: the prior sd update is sqrt((beta^2 + V dispersion + df scale^2) / (1 + df)), or the prior scale itself when df is Inf (normal prior); the intercept keeps scale 10 and df 1. Equal to arm to 1e-6 on 18 fits over df Inf, 4 and 7 and scales 1 and 2.5 (the earlier default-prior cases still pass). L409 at 0.45.

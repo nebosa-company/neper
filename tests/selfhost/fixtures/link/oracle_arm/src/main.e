@@ -24,12 +24,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "logit") { ret arm.logit(x[0usize]) }
     if str.eq(k, "invlogit") { ret arm.invlogit(x[0usize]) }
     if str.eq(k, "stdlm") { ret stdlm_answer(a, c) }
-    if str.eq(k, "bayesglm") {
+    if str.eq(k, "bayesglm") || str.eq(k, "bayesglm2") {
         let n = usize(x[0usize])
+        var pdf = 1.0f64
+        var psc = 2.5f64
+        if str.eq(k, "bayesglm2") {
+            pdf = x[3usize + usize(x[0usize]) * usize(x[1usize]) + usize(x[0usize]) + 1usize]
+            psc = x[3usize + usize(x[0usize]) * usize(x[1usize]) + usize(x[0usize]) + 2usize]
+        }
         let kk = usize(x[1usize])
         let (o, e) = mem.alloc[f64](a, kk)
         if e != ok { os.exit(30) }
-        if arm.bayesglm(a, x[3usize..3usize + n * kk], x[3usize + n * kk..3usize + n * kk + n], n, kk, usize(x[2usize]), o) == 0usize { ret 0.0f64 / 0.0f64 }
+        if arm.bayesglm(a, x[3usize..3usize + n * kk], x[3usize + n * kk..3usize + n * kk + n], n, kk, usize(x[2usize]), pdf, psc, o) == 0usize { ret 0.0f64 / 0.0f64 }
         ret o[usize(x[3usize + n * kk + n])]
     }
     if str.eq(k, "rescale") {

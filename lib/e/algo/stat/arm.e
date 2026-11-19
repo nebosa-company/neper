@@ -213,10 +213,10 @@ fn dev_resid(family: usize, y: f64, mu: f64) -> f64 {
     ret 2.0f64 * (d - (y - mu))
 }
 
-// bayesglm with the default priors (Cauchy: prior.df 1, prior.scale 2.5, 10 for the intercept in column 0, prior mean 0, scaled = TRUE): arm's EM-style IRLS, replicated step by step
+// bayesglm with t priors (prior_df, Inf for normal; prior_scale; 10 and df 1 for the intercept in column 0; prior mean 0; scaled = TRUE): arm's EM-style IRLS, replicated step by step
 // so that the iteration at which it stops is the same. family 0 gaussian, 1 binomial (logit), 2 poisson (log); x is n by k row-major with the constant in column 0. coef receives the
 // coefficients and the answer is the number of iterations (0 on failure).
-fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, coef: []f64) -> usize {
+fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, family: usize, prior_df: f64, prior_scale: f64, coef: []f64) -> usize {
     let nf = f64(n)
     let (ps, e1) = mem.alloc[f64](a, k)
     let (ps0, e2) = mem.alloc[f64](a, k)
@@ -247,7 +247,7 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
     let ysd = math.sqrt[f64](yv)
     var j = 0usize
     while j < k {
-        ps[j] = 2.5f64
+        ps[j] = prior_scale
         if j == 0usize { ps[j] = 10.0f64 }
         if family == 0usize { ps[j] = ps[j] * 2.0f64 * ysd }
         ps0[j] = ps[j]
@@ -396,7 +396,9 @@ fn bayesglm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, f
         }
         j = 0usize
         while j < k {
-            psd[j] = math.sqrt[f64]((hat[j] * hat[j] + inv[j * k + j] * disp + ps[j] * ps[j]) / 2.0f64)
+            var dfj = prior_df
+            if j == 0usize { dfj = 1.0f64 }
+            if dfj == math.inf64() { psd[j] = ps[j] } else { psd[j] = math.sqrt[f64]((hat[j] * hat[j] + inv[j * k + j] * disp + dfj * ps[j] * ps[j]) / (1.0f64 + dfj)) }
             coef[j] = hat[j]
             j += 1usize
         }
