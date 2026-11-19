@@ -138,4 +138,12 @@ for (rep in 1:25) {
   if (any(!is.finite(v))) next
   for (w in 0:6) cases[[length(cases) + 1]] <- case("dslr", c(k, evt, nt, evc, nc, w), v[w + 1], rel = 1e-8, abs = 1e-10)
 }
+# epi.2by2 stratified cohort.count: "mh" args (K, a[K], b[K], c[K], d[K], which 0..2 MH RR, 3..5 MH OR, 6 MH chi2, 7 Woolf RR homogeneity, 8 Woolf OR homogeneity)
+for (rep in 1:25) {
+  K <- sample(2:5, 1); a <- sample(8:120, K, TRUE); b <- sample(40:600, K, TRUE); cc <- sample(5:100, K, TRUE); d <- sample(40:700, K, TRUE)
+  arr <- array(0, dim = c(2, 2, K)); for (s in 1:K) arr[, , s] <- matrix(c(a[s], b[s], cc[s], d[s]), 2, byrow = TRUE)
+  r <- suppressWarnings(epi.2by2(as.table(arr), method = "cohort.count", interpret = FALSE, outcome = "as.columns"))$massoc.detail
+  v <- c(unlist(r$RR.mh.wald[1, ]), unlist(r$OR.mh.wald[1, ]), r$chi2.mh$test.statistic, r$wRR.homog$test.statistic, r$wOR.homog$test.statistic)
+  for (w in 0:8) cases[[length(cases) + 1]] <- case("mh", c(K, a, b, cc, d, w), unname(v[w + 1]), rel = 1e-8, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))

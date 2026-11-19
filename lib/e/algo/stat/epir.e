@@ -610,3 +610,88 @@ fn sssimpleestb(finite: f64, py: f64, epsilon: f64, absolute: bool, se: f64, sp:
     if frac { ret n }
     ret math.ceil[f64](n)
 }
+
+// epi.2by2 on a stack of K cohort tables (a, b, c, d per stratum): Mantel-Haenszel risk ratio and odds ratio with their intervals, the Mantel-Haenszel
+// chi-squared statistic and Woolf's homogeneity statistics; out = (RR, lower, upper, OR, lower, upper, MH chi2, RR homogeneity, OR homogeneity)
+fn strata_mh(a: []const f64, b: []const f64, c: []const f64, d: []const f64, level: f64, out: []f64) {
+    let k = a.len
+    let z = z_of(level)
+    var rn = 0.0f64
+    var rd = 0.0f64
+    var rv = 0.0f64
+    var g = 0.0f64
+    var h = 0.0f64
+    var gp = 0.0f64
+    var gqhp = 0.0f64
+    var hq = 0.0f64
+    var ea = 0.0f64
+    var va = 0.0f64
+    var oa = 0.0f64
+    var i = 0usize
+    while i < k {
+        let n1 = a[i] + b[i]
+        let n0 = c[i] + d[i]
+        let m1 = a[i] + c[i]
+        let m0 = b[i] + d[i]
+        let t = n1 + n0
+        rn += a[i] * n0 / t
+        rd += c[i] * n1 / t
+        rv += m1 * n1 * n0 / (t * t) - a[i] * c[i] / t
+        let gi = a[i] * d[i] / t
+        let hi = b[i] * c[i] / t
+        let pi = (a[i] + d[i]) / t
+        let qi = (b[i] + c[i]) / t
+        g += gi
+        h += hi
+        gp += gi * pi
+        hq += hi * qi
+        gqhp += gi * qi + hi * pi
+        oa += a[i]
+        ea += n1 * m1 / t
+        va += n1 * n0 * m1 * m0 / (t * t * (t - 1.0f64))
+        i += 1usize
+    }
+    let rr = rn / rd
+    let sre = math.sqrt[f64](rv / (rn * rd))
+    let orr = g / h
+    let sor = math.sqrt[f64](gp / (2.0f64 * g * g) + gqhp / (2.0f64 * g * h) + hq / (2.0f64 * h * h))
+    out[0usize] = rr
+    out[1usize] = math.exp[f64](math.log[f64](rr) - z * sre)
+    out[2usize] = math.exp[f64](math.log[f64](rr) + z * sre)
+    out[3usize] = orr
+    out[4usize] = math.exp[f64](math.log[f64](orr) - z * sor)
+    out[5usize] = math.exp[f64](math.log[f64](orr) + z * sor)
+    out[6usize] = (oa - ea) * (oa - ea) / va
+    var sw = 0.0f64
+    var swl = 0.0f64
+    var sv = 0.0f64
+    var svl = 0.0f64
+    i = 0usize
+    while i < k {
+        let lr = math.log[f64]((a[i] / (a[i] + b[i])) / (c[i] / (c[i] + d[i])))
+        let wr = 1.0f64 / (b[i] / (a[i] * (a[i] + b[i])) + d[i] / (c[i] * (c[i] + d[i])))
+        sw += wr
+        swl += wr * lr
+        let lo = math.log[f64](((a[i] + 0.5f64) * (d[i] + 0.5f64)) / ((b[i] + 0.5f64) * (c[i] + 0.5f64)))
+        let wo = 1.0f64 / (1.0f64 / (a[i] + 0.5f64) + 1.0f64 / (b[i] + 0.5f64) + 1.0f64 / (c[i] + 0.5f64) + 1.0f64 / (d[i] + 0.5f64))
+        sv += wo
+        svl += wo * lo
+        i += 1usize
+    }
+    let mr = swl / sw
+    let mo = svl / sv
+    var hr = 0.0f64
+    var ho = 0.0f64
+    i = 0usize
+    while i < k {
+        let lr = math.log[f64]((a[i] / (a[i] + b[i])) / (c[i] / (c[i] + d[i])))
+        let wr = 1.0f64 / (b[i] / (a[i] * (a[i] + b[i])) + d[i] / (c[i] * (c[i] + d[i])))
+        hr += wr * (lr - mr) * (lr - mr)
+        let lo = math.log[f64](((a[i] + 0.5f64) * (d[i] + 0.5f64)) / ((b[i] + 0.5f64) * (c[i] + 0.5f64)))
+        let wo = 1.0f64 / (1.0f64 / (a[i] + 0.5f64) + 1.0f64 / (b[i] + 0.5f64) + 1.0f64 / (c[i] + 0.5f64) + 1.0f64 / (d[i] + 0.5f64))
+        ho += wo * (lo - mo) * (lo - mo)
+        i += 1usize
+    }
+    out[7usize] = hr
+    out[8usize] = ho
+}

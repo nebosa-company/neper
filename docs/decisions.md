@@ -51187,3 +51187,6 @@ The cross-sectional design reports the cohort.count measures under the prevalenc
 
 ## D7564 — epiR epi.dsl for risk ratios
 `epi_dsl_or` takes the risk-ratio flag and now builds on `study_lnor`: for risk ratios epiR takes Q about the Mantel-Haenszel-weighted ratio (weights b c / N, not the inverse-variance weights it uses for odds ratios), then tau squared, the random-effects weights and the pooled interval are as before. Equal to epi.dsl(method = "risk.ratio") on 25 meta-analyses (175 values added to oracle_epir, 4690 in all); the odds-ratio cases of D7559 still pass through the refactor.
+
+## D7565 — epiR stratified cohort tables (Mantel-Haenszel)
+`strata_mh` takes K cohort tables and gives the Mantel-Haenszel risk ratio and odds ratio with epiR's intervals (the variance of ln RR from M1 N1 N0 / T^2 - a c / T, the Robins-Breslow-Greenland variance of ln OR), the Mantel-Haenszel chi-squared statistic (as mantelhaen.test without correction) and Woolf's homogeneity statistics for the risk ratio and the odds ratio (the latter with 0.5 added to every cell). Equal to epi.2by2 on 25 stacks of 2 to 5 strata (225 values added to oracle_epir, 4915 in all). The Mantel-Haenszel risk difference (Sato, Greenland-Robins), the NNT forms, the Breslow-Day statistic and the crude-table estimates stay open.

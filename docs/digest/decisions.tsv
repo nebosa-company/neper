@@ -4419,4 +4419,5 @@ D7560	571	epiR epi.iv for odds ratios
 D7561	534	epiR epi.sssimpleestb
 D7562	526	epiR epi.2by2 cross-sectional tables
 D7563	424	epiR epi.iv for risk ratios
-D7564	515	epiR epi.dsl for risk ratios
+D7564	516	epiR epi.dsl for risk ratios
+D7565	714	epiR stratified cohort tables (Mantel-Haenszel)
