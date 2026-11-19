@@ -1,4 +1,4 @@
-// R nnet::multinom with case weights and weight decay (the penalty decay * sum of squared coefficients added to the negative log-likelihood; the deviance returned is twice that objective, as multinom reports): the multinomial logit by Newton's method (R runs BFGS on the same likelihood, so the two agree to R's reltol). Class 0 is the reference; the coefficients are the K - 1 rows for classes 1 .. K - 1, p columns each (row-major).
+// R nnet::multinom with case weights and weight decay; se receives the standard errors summary.multinom gives (square roots of the inverse information matrix at the penalised fit, without the penalty term) (the penalty decay * sum of squared coefficients added to the negative log-likelihood; the deviance returned is twice that objective, as multinom reports): the multinomial logit by Newton's method (R runs BFGS on the same likelihood, so the two agree to R's reltol). Class 0 is the reference; the coefficients are the K - 1 rows for classes 1 .. K - 1, p columns each (row-major).
 //
 // Not here: the hidden-layer networks of nnet, softmax and censored responses.
 
@@ -8,7 +8,7 @@ use e.mem
 use e.algo.stat.rbfgs as bf
 
 // returns the deviance, -2 log-likelihood (NaN if the Hessian is singular); iterations in it
-fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, decay: f64, wts: []const f64, coef: []f64) -> f64 {
+fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize, nk: usize, decay: f64, wts: []const f64, coef: []f64, se: []f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let q = (nk - 1usize) * p
     let (gr, e1) = mem.alloc[f64](a, q)
@@ -88,6 +88,15 @@ fn multinom(a: *mem.Arena, x: []const f64, cls: []const f64, n: usize, p: usize,
                 k += 1usize
             }
             t += 1usize
+        }
+        // summary.multinom takes the standard errors from the Hessian of the likelihood part alone (nnetHess leaves the decay penalty out)
+        let (inv0, ie0) = gp.invert(a, h, q)
+        if ie0 == ok {
+            var dg = 0usize
+            while dg < q {
+                se[dg] = math.sqrt[f64](inv0[dg * q + dg])
+                dg += 1usize
+            }
         }
         i = 0usize
         while i < q {

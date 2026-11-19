@@ -28,6 +28,8 @@ for (rep in 1:20) {
   cw <- coef(fw); if (is.null(dim(cw))) cw <- matrix(cw, 1)
   aw <- c(n, p, K, dc, y, as.vector(t(x)), wv)
   add("dev", aw, deviance(fw)); add("coef", aw, sum(as.vector(t(cw)) * seq_along(cw)))
+  sw <- summary(fw)$standard.errors; if (is.null(dim(sw))) sw <- matrix(sw, 1)
+  cases[[length(cases) + 1]] <- case("se", aw, sum(as.vector(t(sw)) * seq_along(sw)), rel = 1e-5, abs = 1e-8)
 }
 # nnet(), one hidden layer: "netv" the value, "nets" the sum of the fitted values, "netw" the position-weighted sum of the final weights; args (n, p, h, k, mode, decay, maxit, skip, wts0[nw], x[n p] row-major,
 # y[n k] row-major, case weights[n]); mode 0 linout (SSE), 1 logistic outputs (SSE), 2 logistic outputs with entropy = TRUE, 3 softmax; the output unit's weights are bias, hidden units, (skip) inputs

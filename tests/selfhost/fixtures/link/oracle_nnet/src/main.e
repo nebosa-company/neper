@@ -92,9 +92,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let p = usize(z[1usize])
     let nk = usize(z[2usize])
     let (coef, e1) = mem.alloc[f64](a, (nk - 1usize) * p)
-    if e1 != ok { ret nan }
-    let dev = nn.multinom(a, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], n, p, nk, z[3usize], z[4usize + n + n * p..4usize + 2usize * n + n * p], coef)
+    let (sev, e2) = mem.alloc[f64](a, (nk - 1usize) * p)
+    if e1 != ok || e2 != ok { ret nan }
+    let dev = nn.multinom(a, z[4usize + n..4usize + n + n * p], z[4usize..4usize + n], n, p, nk, z[3usize], z[4usize + n + n * p..4usize + 2usize * n + n * p], coef, sev)
     if str.eq(c.name, "dev") { ret dev }
+    if str.eq(c.name, "se") {
+        var ss = 0.0f64
+        var qi = 0usize
+        while qi < sev.len {
+            ss += sev[qi] * f64(qi + 1usize)
+            qi += 1usize
+        }
+        ret ss
+    }
     var s = 0.0f64
     var i = 0usize
     while i < coef.len {
