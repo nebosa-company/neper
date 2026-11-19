@@ -335,3 +335,48 @@ fn svdr(a: *mem.Arena, g: *rr.Rng, x: []const f64, m: usize, n: usize, k: usize,
     if ef != ok { ret (0usize, ef) }
     ret (iter, ok)
 }
+
+// irlba::prcomp_irlba(x, n = k, center, scale.): sdev = the k leading singular values of the centred (and, with scale., unit-variance) x over sqrt(m - 1), rotation the right singular vectors
+// (n by k into rot, up to sign), totalvar the sum of the column variances of the processed x; x is m by n row-major
+fn prcomp_irlba(a: *mem.Arena, x: []const f64, m: usize, n: usize, k: usize, center: bool, scale: bool, sdev: []f64, rot: []f64, totalvar: *f64) -> err {
+    let (z, e0) = mem.alloc[f64](a, m * n)
+    let (u, e1) = mem.alloc[f64](a, m * k)
+    let (d, e2) = mem.alloc[f64](a, k)
+    if e0 != ok || e1 != ok || e2 != ok { ret mem.Full }
+    var c = 0usize
+    var tv = 0.0f64
+    while c < n {
+        var mean = 0.0f64
+        var i = 0usize
+        while i < m {
+            mean += x[i * n + c]
+            i += 1usize
+        }
+        mean = mean / f64(m)
+        if !center { mean = 0.0f64 }
+        var ss = 0.0f64
+        i = 0usize
+        while i < m {
+            ss += (x[i * n + c] - mean) * (x[i * n + c] - mean)
+            i += 1usize
+        }
+        var sd = math.sqrt[f64](ss / f64(m - 1usize))
+        if !scale { sd = 1.0f64 }
+        i = 0usize
+        while i < m {
+            z[i * n + c] = (x[i * n + c] - mean) / sd
+            i += 1usize
+        }
+        tv += ss / f64(m - 1usize) / (sd * sd)
+        c += 1usize
+    }
+    let e = svds(a, z, m, n, k, d, u, rot)
+    if e != ok { ret e }
+    var j = 0usize
+    while j < k {
+        sdev[j] = d[j] / math.sqrt[f64](f64(m - 1usize))
+        j += 1usize
+    }
+    *totalvar = tv
+    ret ok
+}
