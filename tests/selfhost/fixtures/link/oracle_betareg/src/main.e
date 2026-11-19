@@ -33,6 +33,13 @@ fn fitl_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let which = usize(x[3usize])
     let (f, e) = br.fit_link(a, x[4usize + n..4usize + n + n * p], x[4usize..4usize + n], n, p, link)
     if e != ok { os.exit(6) }
+    if which >= 80usize {
+        let (bo, be) = mem.alloc[f64](a, p + 1usize)
+        if be != ok { os.exit(14) }
+        if !br.fit_bc(a, x[4usize + n..4usize + n + n * p], x[4usize..4usize + n], n, p, link, &f, bo) { os.exit(15) }
+        if which == 90usize { ret bo[p] }
+        ret bo[which - 80usize]
+    }
     if which >= 70usize {
         // the model without the last mean column
         let (dr, de) = mem.alloc[f64](a, n * (p - 1usize))

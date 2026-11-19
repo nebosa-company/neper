@@ -564,3 +564,201 @@ fn sweighted2(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize,
     let h = hat_value(a, x, n, p, link, f, at)
     ret fit_value(x, y, p, link, f, at, 4usize) / math.sqrt[f64](1.0f64 - h)
 }
+
+// d mu / d eta and d^2 mu / d eta^2 of the mean link at eta
+fn mu_eta2(t: f64, link: usize, o: []f64) {
+    let mu = linkinv(t, link)
+    if link == 0usize {
+        o[0usize] = mu * (1.0f64 - mu)
+        o[1usize] = mu * (1.0f64 - mu) * (1.0f64 - 2.0f64 * mu)
+    }
+    if link == 1usize {
+        let dn = dst.dnorm(t, 0.0f64, 1.0f64, false)
+        o[0usize] = dn
+        o[1usize] = 0.0f64 - t * dn
+    }
+    if link == 2usize {
+        let e = math.exp[f64](t)
+        let m1 = e * math.exp[f64](0.0f64 - e)
+        o[0usize] = m1
+        o[1usize] = m1 * (1.0f64 - e)
+    }
+    if link == 3usize {
+        let e = math.exp[f64](0.0f64 - t)
+        let m1 = e * mu
+        o[0usize] = m1
+        o[1usize] = m1 * (e - 1.0f64)
+    }
+    if link == 4usize {
+        let q = 1.0f64 + t * t
+        o[0usize] = 1.0f64 / (3.141592653589793f64 * q)
+        o[1usize] = 0.0f64 - 2.0f64 * t / (3.141592653589793f64 * q * q)
+    }
+}
+
+// betareg(..., type = "BC") with the identity precision link of a constant-precision fit: the one-step bias-corrected (beta, phi) = par + K^-1 a, with the adjustment a_t = tr(K^-1 P_t) / 2 of
+// Kosmidis and Zeileis (K the Fisher information, P_t the matrix of its third-order terms). out[0..p] the mean coefficients, out[p] phi; false when singular
+fn fit_bc(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, link: usize, f: *const Fit, out: []f64) -> bool {
+    let q = p + 1usize
+    let (kk, e1) = mem.alloc[f64](a, q * q)
+    let (inv, e2) = mem.alloc[f64](a, q * q)
+    let (mat, e3) = mem.alloc[f64](a, q * q)
+    let (col, e4) = mem.alloc[f64](a, q)
+    let (pq, e5) = mem.alloc[f64](a, q * q)
+    let (adj, e6) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret false }
+    var i = 0usize
+    while i < q * q {
+        kk[i] = 0.0f64
+        i += 1usize
+    }
+    let phi = f.phi
+    let psi3 = gsl.psi_n(1usize, phi)
+    let dpsi3 = gsl.psi_n(2usize, phi)
+    i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var j = 0usize
+        while j < p {
+            t += x[i * p + j] * f.par[j]
+            j += 1usize
+        }
+        let mu = linkinv(t, link)
+        var omu = 1.0f64 - mu
+        var gp = gprime(mu, link)
+        if link == 2usize {
+            omu = math.exp[f64](0.0f64 - math.exp[f64](t))
+            gp = 1.0f64 / (omu * math.exp[f64](t))
+        }
+        if link == 3usize {
+            let xx = math.exp[f64](0.0f64 - t)
+            if xx < 0.00001f64 { omu = xx - xx * xx / 2.0f64 + xx * xx * xx / 6.0f64 }
+            gp = 1.0f64 / (mu * xx)
+        }
+        let t1 = gsl.psi_n(1usize, mu * phi)
+        let t2 = gsl.psi_n(1usize, omu * phi)
+        let w = (t1 + t2) / (gp * gp)
+        let cc = phi * (t1 * mu - t2 * omu)
+        let dd = t1 * mu * mu + t2 * omu * omu - psi3
+        j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                kk[j * q + k] += phi * phi * w * x[i * p + j] * x[i * p + k]
+                k += 1usize
+            }
+            kk[j * q + p] += x[i * p + j] * cc / gp
+            kk[p * q + j] += x[i * p + j] * cc / gp
+            j += 1usize
+        }
+        kk[p * q + p] += dd
+        i += 1usize
+    }
+    var c = 0usize
+    while c < q {
+        var r = 0usize
+        while r < q * q {
+            mat[r] = kk[r]
+            r += 1usize
+        }
+        r = 0usize
+        while r < q {
+            col[r] = 0.0f64
+            r += 1usize
+        }
+        col[c] = 1.0f64
+        if !qrb.solve_dense(mat, col, q) { ret false }
+        r = 0usize
+        while r < q {
+            inv[r * q + c] = col[r]
+            r += 1usize
+        }
+        c += 1usize
+    }
+    var tt = 0usize
+    while tt < q {
+        var r = 0usize
+        while r < q * q {
+            pq[r] = 0.0f64
+            r += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var et = 0.0f64
+            var j = 0usize
+            while j < p {
+                et += x[i * p + j] * f.par[j]
+                j += 1usize
+            }
+            let mu = linkinv(et, link)
+            var omu = 1.0f64 - mu
+            if link == 2usize { omu = math.exp[f64](0.0f64 - math.exp[f64](et)) }
+            if link == 3usize {
+                let xx = math.exp[f64](0.0f64 - et)
+                if xx < 0.00001f64 { omu = xx - xx * xx / 2.0f64 + xx * xx * xx / 6.0f64 }
+            }
+            var dm: [2]f64 = zero
+            mu_eta2(et, link, dm[0usize..2usize])
+            let d1 = dm[0usize]
+            let d1d = dm[1usize]
+            let ps1 = gsl.psi_n(1usize, mu * phi)
+            let ps2 = gsl.psi_n(1usize, omu * phi)
+            let dps1 = gsl.psi_n(2usize, mu * phi)
+            let dps2 = gsl.psi_n(2usize, omu * phi)
+            let k2 = ps1 + ps2
+            let k3 = dps1 - dps2
+            var bbw = 0.0f64
+            var bgw = 0.0f64
+            var ggv = 0.0f64
+            if tt < p {
+                let xt = x[i * p + tt]
+                bbw = phi * phi * d1 * (phi * d1 * d1 * k3 + d1d * k2) * xt
+                bgw = phi * d1 * d1 * (mu * phi * k3 + phi * dps2 + k2) * xt
+                ggv = phi * d1 * (mu * mu * k3 - dps2 + 2.0f64 * mu * dps2) * xt
+            } else {
+                bbw = phi * (phi * d1 * d1 * mu * k3 + phi * d1 * d1 * dps2 + d1d * mu * k2 - d1d * ps2)
+                bgw = d1 * (phi * mu * mu * k3 + phi * (2.0f64 * mu - 1.0f64) * dps2 + mu * k2 - ps2)
+                ggv = mu * mu * mu * k3 + (3.0f64 * mu * mu - 3.0f64 * mu + 1.0f64) * dps2 - dpsi3
+            }
+            j = 0usize
+            while j < p {
+                var k = 0usize
+                while k < p {
+                    pq[j * q + k] += bbw * x[i * p + j] * x[i * p + k]
+                    k += 1usize
+                }
+                pq[j * q + p] += bgw * x[i * p + j]
+                pq[p * q + j] += bgw * x[i * p + j]
+                j += 1usize
+            }
+            pq[p * q + p] += ggv
+            i += 1usize
+        }
+        var s = 0.0f64
+        var rr = 0usize
+        while rr < q {
+            var k = 0usize
+            while k < q {
+                s += inv[rr * q + k] * pq[k * q + rr]
+                k += 1usize
+            }
+            rr += 1usize
+        }
+        adj[tt] = s / 2.0f64
+        tt += 1usize
+    }
+    var r = 0usize
+    while r < q {
+        var b = 0.0f64
+        var k = 0usize
+        while k < q {
+            b += inv[r * q + k] * adj[k]
+            k += 1usize
+        }
+        var base = f.phi
+        if r < p { base = f.par[r] }
+        out[r] = base + b
+        r += 1usize
+    }
+    ret true
+}

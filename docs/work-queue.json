@@ -103,17 +103,6 @@
       "evidence": "Open (CRAN rank 755). Small to mid. Needs lm and glm fits. Acceptance, equal to mediation under set.seed: mediate with quasi-Bayesian and bootstrap intervals, ACME, ADE and total effects for continuous and binary mediators and outcomes, treatment-mediator interaction, medsens sensitivity."
     },
     {
-      "id": "L451",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 632,
-      "title": "betareg: beta regression",
-      "score": 0.3,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "D7314: hatvalues and sweighted2 residuals equal to betareg. D7313: precision links identity and sqrt equal to betareg. D7312: standard errors of the variable-dispersion fit equal to betareg. D7311: variable dispersion (precision submodel with the log link) equal to betareg. D7310: lrtest (statistic and p-value of nested fits) equal to lmtest. D7309: loglog and cauchit mean links equal to betareg. Partial (D6158, D7291 probit and cloglog mean links and the Fisher-information standard errors, D7292 residuals and predictions). Logit-link, constant-precision fits (coefficients, precision, log-likelihood) agree with betareg on Windows at optimiser tolerance (oracle_betareg; Linux pending). Open: variable dispersion, bias correction, other links (loglog, cauchit), sweighted2 residuals (they need the hat values), lrtest. Was: Open (CRAN rank 710). Small to mid. Acceptance, equal to betareg: betareg with logit, probit and cloglog mean links and a precision submodel, ML, bias-corrected and bias-reduced estimation, standard errors, predict types, residual types, lrtest."
-    },
-    {
       "id": "L452",
       "category": "library",
       "group": "CRAN parity",

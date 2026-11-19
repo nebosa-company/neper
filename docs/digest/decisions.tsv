@@ -4143,4 +4143,42 @@ D7346	1250	mgcv: an additive model of several smooths (fixed smoothing parameter
 D7347	954	mgcv: predict.gam with standard errors
 D7348	1156	mgcv: summary.gam parametric table and fit statistics
 D7349	1221	mgcv: GCV selection of two smoothing parameters
-D7314	427	betareg: hat values and sweighted2 residuals
+D7314	428	betareg: hat values and sweighted2 residuals
+D7350	1045	mgcv thin-plate regression spline (bs = "tp") with GCV selection
+D7351	641	mgcv REML selection of two smoothing parameters
+D7352	601	mstate probtrans (forward, no variance)
+D7353	817	mstate msprep
+D7354	572	mstate msfit without covariates
+D7355	459	mstate probtrans fixedhorizon
+D7356	535	PMCMRplus Friedman all-pairs tests
+D7357	427	PMCMRplus van der Waerden all-pairs
+D7358	375	PMCMRplus Quade all-pairs
+D7359	442	PMCMRplus Dunn many-to-one
+D7360	338	PMCMRplus Conover many-to-one
+D7361	404	PMCMRplus manyOneUTest
+D7362	396	PMCMRplus vanWaerdenManyOneTest
+D7363	428	PMCMRplus frdManyOneDemsarTest
+D7364	499	RSpectra eigs_sym shift-invert
+D7365	501	sm hsj (Sheather-Jones bandwidth)
+D7366	459	pscl standard errors
+D7367	408	pscl predict types
+D7368	588	pscl vuong (zeroinfl against Poisson)
+D7369	784	arm bayesglm (default priors)
+D7370	409	arm bayesglm prior df and scale
+D7371	434	arm bayesglm probit
+D7372	494	arm bayesglm per-coefficient priors
+D7373	598	sampling joint inclusion probabilities and varHT
+D7374	436	sampling UPmidzunopi2
+D7375	512	sampling UPsampfordpi2
+D7376	492	sampling strata (one variable)
+D7377	701	sampling cluster
+D7378	610	sampling calib (linear and raking)
+D7379	640	sampling calib truncated
+D7380	487	sampling calib logit
+D7381	485	sampling design-based estimators
+D7382	454	sampling varest and vartaylor_ratio
+D7383	536	sampling regest
+D7384	381	sampling postest (post-strata only)
+D7385	780	sampling srswr and R's rbinom inversion
+D7386	551	sampling strata and cluster with srswr
+D7315	711	betareg: bias-corrected estimates; L451 closed

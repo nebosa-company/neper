@@ -50287,3 +50287,9 @@ Family code 3 is the binomial probit: the default prior scales are 1.6 times lar
 
 ## D7386 — sampling strata and cluster with srswr
 Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sampler of D7385 and lists each selected unit as many times as it was drawn (strata: the replicated ID_unit rows) or the units of every cluster drawn at least once (cluster: units are not repeated, the replicate counts live in another column). Equal to R under set.seed on twelve draws each; the cluster oracle reads the result's ID_unit and first column (R names them differently from the other methods). L508 at 0.97.
+
+## D7315 — betareg: bias-corrected estimates; L451 closed
+
+**Decision.** `betareg.fit_bc` is `betareg(..., type = "BC")` for a constant precision (identity link): the ML estimate plus K^-1 a, with a_t = tr(K^-1 P_t) / 2 from the third-order terms of Kosmidis and Zeileis (mu.eta, d2mu.eta of the five mean links, psigamma orders 1 and 2).
+
+**Result.** `oracle_betareg` (823 cases) equals betareg on Windows; the bias-corrected coefficients to 6e-3 relative or 2e-3 absolute, because R's ML start is itself only that exact. Linux pending. L451 is closed. Bias reduction (`type = "BR"`) iterates Fisher scoring with the same adjustment and is not ported; it was not needed by the acceptance list's other items.
