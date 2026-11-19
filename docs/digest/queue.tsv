@@ -37,7 +37,7 @@ L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and lik
 L361	library	0.2	646	segmented and strucchange: breakpoints and structural change	Partial (D6613).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
-L367	library	0.5	958	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
+L367	library	0.6	1107	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
 L376	library	0	240	gam: backfitting generalized additive models	Open (CRAN rank 388).
 L378	library	0	318	uwot and Rtsne: embeddings equal to R	Open (CRAN ranks 311, 315).

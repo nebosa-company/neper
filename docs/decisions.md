@@ -50098,3 +50098,9 @@ lpSolve's own integer answers turned out to be unreliable: on 3 of 60 random mix
 **Decision.** `fit_var` and `fit_se_var` take the precision link (0 log, 1 identity, 2 sqrt) through `phi_inv`, `phi_fun` and `phi_deriv`; a non-positive phi is an infinite penalty. Under the sqrt link u and -u give the same phi, so the fixture and oracle both report the gamma with a positive intercept.
 
 **Result.** `oracle_betareg` (741 cases, 72 new) equals betareg on Windows for the three precision links. Linux pending. L451 stays partial: bias correction and bias reduction, sweighted2.
+
+## D7338 — clue: the other partition agreements and dissimilarities
+
+`e.algo.stat.clue` gains `partition_measure`: on two hard partitions, the adjusted Rand agreement (cRand), normalised mutual information (NMI), Katz-Powell (KP), Fowlkes-Mallows (FM), Jaccard, purity and prediction strength (PS) agreements, and the variation of information (VI), comemberships, symmetric-difference and Manhattan membership dissimilarities. All but the Manhattan one are functions of the contingency table; the Manhattan distance matches the classes by the minimal assignment of C[i, j] = a_i + b_j - 2 n_ij (the Hungarian solver already used for the Euclidean one). Empty classes are harmless: the sums skip them, as clue's `table` drops them, and PS skips classes of size one.
+
+**Result.** `oracle_clue_partition` has 312 values (adding, over 24 pairs of partitions of 10 to 45 objects into 2 to 5 classes each, the seven agreements and four dissimilarities) and equals clue on Windows. Linux pending. L367 stays partial: lpSolve sensitivity output, lpSolveAPI model building, the hierarchy and consensus methods of clue (BA/*, GV1, Mallows, CSSD and cl_consensus) remain.

@@ -13,4 +13,14 @@ for (rep in 1:24) {
   add("cl", c(base, 0), as.numeric(cl_agreement(px, py, method = "Rand")))
   add("cl", c(base, 1), as.numeric(cl_dissimilarity(px, py, method = "euclidean")))
 }
+# the other measures: kind 2 cRand, 3 NMI, 4 KP, 5 FM, 6 Jaccard, 7 purity, 8 PS, 9 VI, 10 comemberships, 11 symdiff, 12 manhattan (fn "cl", args as above with which = kind)
+for (rep in 1:24) {
+  n <- sample(10:45, 1); kx <- sample(2:5, 1); ky <- sample(2:5, 1)
+  cx <- c(seq_len(kx), sample(seq_len(kx), n - kx, replace = TRUE))
+  cy <- c(seq_len(ky), sample(seq_len(ky), n - ky, replace = TRUE))
+  px <- as.cl_partition(factor(cx)); py <- as.cl_partition(factor(cy))
+  base <- c(n, kx, ky, cx, cy)
+  for (m in c("cRand", "NMI", "KP", "FM", "Jaccard", "purity", "PS")) add("cl", c(base, match(m, c("cRand", "NMI", "KP", "FM", "Jaccard", "purity", "PS")) + 1), as.numeric(cl_agreement(px, py, method = m)))
+  for (m in c("VI", "comemberships", "symdiff", "manhattan")) add("cl", c(base, match(m, c("VI", "comemberships", "symdiff", "manhattan")) + 8), as.numeric(cl_dissimilarity(px, py, method = m)))
+}
 emit("clue_partition", "clue", list(cases))

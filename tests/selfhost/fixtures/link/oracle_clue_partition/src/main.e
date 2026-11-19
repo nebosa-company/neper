@@ -31,6 +31,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if e != ok { os.exit(11) }
         ret v
     }
+    if which >= 2usize {
+        let (pm, pe) = cl.partition_measure(a, cx, cy, n, k, which)
+        if pe != ok { os.exit(13) }
+        ret pm
+    }
     let (d, de) = cl.euclid_partition(a, cx, cy, n, k)
     if de != ok { os.exit(12) }
     ret d
