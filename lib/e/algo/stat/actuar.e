@@ -557,3 +557,32 @@ fn zm_p(kind: usize, x: f64, a: f64, b: f64, p0: f64) -> f64 {
     if x < 0.0f64 { ret 0.0f64 }
     ret p0 + (1.0f64 - p0) * zt_p(kind, x, a, b)
 }
+
+// ---- inverse Gaussian (mean mu, shape s)
+fn ig_d(x: f64, mu: f64, s: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let d = x - mu
+    ret math.sqrt[f64](s / (2.0f64 * 3.141592653589793f64 * x * x * x)) * math.exp[f64](0.0f64 - s * d * d / (2.0f64 * mu * mu * x))
+}
+
+fn ig_p(x: f64, mu: f64, s: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let r = math.sqrt[f64](s / x)
+    ret dsa.pnorm(r * (x / mu - 1.0f64), 0.0f64, 1.0f64, true, false) + math.exp[f64](2.0f64 * s / mu) * dsa.pnorm(0.0f64 - r * (x / mu + 1.0f64), 0.0f64, 1.0f64, true, false)
+}
+
+// ---- logarithmic (prob q): f(x) = -q^x / (x log(1 - q)), x >= 1
+fn logd_d(x: f64, q: f64) -> f64 {
+    if x < 1.0f64 { ret 0.0f64 }
+    ret 0.0f64 - math.pow[f64](q, x) / (x * math.log[f64](1.0f64 - q))
+}
+
+fn logd_p(x: f64, q: f64) -> f64 {
+    var s = 0.0f64
+    var k = 1.0f64
+    while k <= math.floor[f64](x) {
+        s += logd_d(k, q)
+        k += 1.0f64
+    }
+    ret s
+}

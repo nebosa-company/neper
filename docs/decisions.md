@@ -51118,3 +51118,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7541 — actuar zero-truncated and zero-modified counts
 `zt_d`, `zt_p`, `zm_d`, `zm_p` take a base law (kind 0 Poisson, 1 negative binomial) and give the zero-truncated and zero-modified mass and cdf: zt f(x) / (1 - f(0)), zm p0 at zero and (1 - p0) times the zero-truncated mass elsewhere. Equal to actuar dztpois, pztpois, dzmpois, pzmpois and the negative binomial pairs on 40 draws (160 values added to oracle_actuar, 4278 in all). The geometric, binomial and logarithmic members, the quantiles and the generators stay open.
+
+## D7542 — actuar inverse Gaussian and logarithmic
+`ig_d`, `ig_p` (inverse Gaussian, mean and shape) and `logd_d`, `logd_p` (logarithmic, prob q, the cdf by summing the mass) equal actuar dinvgauss, pinvgauss, dlogarithmic and plogarithmic on 40 draws each (164 values added to oracle_actuar, 4442 in all). The inverse Gaussian quantile and moments, the generalised beta and the generators stay open.

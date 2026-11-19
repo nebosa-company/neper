@@ -4396,4 +4396,5 @@ D7537	476	actuar ruin, exponential claims and waiting times
 D7538	541	actuar phase-type density and survival
 D7539	316	actuar phase-type moments
 D7540	457	actuar loggamma and Gumbel
-D7541	533	actuar zero-truncated and zero-modified counts
+D7541	534	actuar zero-truncated and zero-modified counts
+D7542	403	actuar inverse Gaussian and logarithmic

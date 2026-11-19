@@ -138,6 +138,14 @@ for (rep in 1:40) {
   zm <- if (kd == 0) c(dzmpois(xx, a, p0), pzmpois(xx, a, p0)) else c(dzmnbinom(xx, a, b, p0), pzmnbinom(xx, a, b, p0))
   for (st in 0:3) cases[[length(cases) + 1]] <- case("zc", c(kd, a, b, p0, xx, st), c(zt, zm)[st + 1], rel = 1e-9, abs = 1e-13)
 }
+# inverse Gaussian and logarithmic: "ig" args (kind 0 invgauss 1 logarithmic, p1, p2, x, stat 0 d 1 p)
+for (rep in 1:40) {
+  mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); xx <- runif(1, 0.1, 6); q <- runif(1, 0.1, 0.95); k <- sample(1:15, 1)
+  for (st in 0:1) {
+    cases[[length(cases) + 1]] <- case("ig", c(0, mu, s, xx, st), if (st == 0) dinvgauss(xx, mu, s) else pinvgauss(xx, mu, s), rel = 1e-8, abs = 1e-13)
+    cases[[length(cases) + 1]] <- case("ig", c(1, q, 0, k, st), if (st == 0) dlogarithmic(k, q) else plogarithmic(k, q), rel = 1e-8, abs = 1e-13)
+  }
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

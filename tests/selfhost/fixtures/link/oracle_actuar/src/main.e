@@ -120,6 +120,16 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         if sz == 2usize { ret ac.zm_d(kz, x[4usize], x[1usize], x[2usize], x[3usize]) }
         ret ac.zm_p(kz, x[4usize], x[1usize], x[2usize], x[3usize])
     }
+    if str.eq(c.name, "ig") {
+        let ki = usize(x[0usize])
+        let si = usize(x[4usize])
+        if ki == 0usize {
+            if si == 0usize { ret ac.ig_d(x[3usize], x[1usize], x[2usize]) }
+            ret ac.ig_p(x[3usize], x[1usize], x[2usize])
+        }
+        if si == 0usize { ret ac.logd_d(x[3usize], x[1usize]) }
+        ret ac.logd_p(x[3usize], x[1usize])
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])
