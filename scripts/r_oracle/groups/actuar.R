@@ -68,4 +68,14 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("pj", c(kd, p1, p2, m, fx, nn, 0), v[nn + 1], rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("pj", c(kd, p1, p2, m, fx, nn, 1), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
 }
+# discretize(cdf, method upper / lower / rounding): "dz" args (method 0 upper 1 lower 2 rounding, n, ff[2 n + 1] the cdf at from + k h / 2); the answer is the length and, in a second case, the position-weighted sum of the values
+for (rep in 1:40) {
+  md <- rep %% 3; n <- sample(4:20, 1); h <- runif(1, 0.3, 2); from <- runif(1, 0, 2); to <- from + n * h
+  cdfs <- c("lnorm", "gamma", "weibull")[sample(1:3, 1)]
+  Fn <- switch(cdfs, lnorm = function(x) plnorm(x, 0.3, 0.8), gamma = function(x) pgamma(x, 2.2, 0.5), weibull = function(x) pweibull(x, 1.7, 3))
+  ff <- Fn(from + (0:(2 * n)) * h / 2)
+  d <- discretize(Fn(x), method = c("upper", "lower", "rounding")[md + 1], from = from, to = to, step = h)
+  cases[[length(cases) + 1]] <- case("dz", c(md, n, ff, 0), length(d), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("dz", c(md, n, ff, 1), sum(d * seq_along(d)), rel = 1e-9, abs = 1e-13)
+}
 emit("actuar", "actuar", list(cases))

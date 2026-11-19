@@ -10,6 +10,19 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "dz") {
+        let nd = usize(x[1usize])
+        var dv: [64]f64 = zero
+        let cnt = ac.discretize_cdf(usize(x[0usize]), x[2usize..2usize + 2usize * nd + 1usize], nd, dv[0usize..64usize])
+        if usize(x[3usize + 2usize * nd]) == 0usize { ret f64(cnt) }
+        var sd = 0.0f64
+        var k = 0usize
+        while k < cnt {
+            sd += dv[k] * f64(k + 1usize)
+            k += 1usize
+        }
+        ret sd
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])

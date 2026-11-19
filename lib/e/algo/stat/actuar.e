@@ -165,3 +165,32 @@ fn panjer(kind: usize, p1: f64, p2: f64, fx: []const f64, nn: usize, fs: []f64) 
         x += 1usize
     }
 }
+
+// actuar discretize(cdf, from, to, step, method) from the cdf values ff[k] at from + k step / 2 (k = 0 .. 2 n, n = (to - from) / step): method 0 "upper" (n values F(x + h) - F(x)), 1 "lower" (n + 1 values: zero, then F(x) - F(x - h)),
+// 2 "rounding" (n values: F(from + h / 2) - F(from), then F(x + h / 2) - F(x - h / 2) for the interior points); the answer is how many values went into out
+fn discretize_cdf(method: usize, ff: []const f64, n: usize, out: []f64) -> usize {
+    if method == 0usize {
+        var j = 0usize
+        while j < n {
+            out[j] = ff[2usize * (j + 1usize)] - ff[2usize * j]
+            j += 1usize
+        }
+        ret n
+    }
+    if method == 1usize {
+        out[0usize] = 0.0f64
+        var j = 1usize
+        while j <= n {
+            out[j] = ff[2usize * j] - ff[2usize * (j - 1usize)]
+            j += 1usize
+        }
+        ret n + 1usize
+    }
+    out[0usize] = ff[1usize] - ff[0usize]
+    var j = 1usize
+    while j < n {
+        out[j] = ff[2usize * j + 1usize] - ff[2usize * j - 1usize]
+        j += 1usize
+    }
+    ret n
+}

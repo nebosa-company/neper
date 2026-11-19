@@ -4385,4 +4385,5 @@ D7526	708	dbscan extractDBSCAN
 D7527	551	TSA tsdiag Ljung-Box statistics
 D7528	802	ordinal clm with scale effects
 D7529	754	ordinal clm with nominal effects
-D7530	760	actuar aggregateDist recursive (Panjer)
+D7530	761	actuar aggregateDist recursive (Panjer)
+D7531	831	actuar discretize (upper, lower, rounding)
