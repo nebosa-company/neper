@@ -4512,4 +4512,5 @@ D7689	865	arm sim for a binomial or poisson glm
 D7690	1202	foreign write.dbf
 D7691	1431	Rtsne with theta = 0
 D7692	527	Rtsne distance-matrix input
-D7693	629	Rtsne PCA step
+D7693	630	Rtsne PCA step
+D7694	1341	hcubature's adaptive Genz-Malik recursion

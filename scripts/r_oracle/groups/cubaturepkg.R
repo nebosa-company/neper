@@ -17,4 +17,14 @@ for (rep in 1:16) {
   r <- hcubature(fs[[1]], lo, hi, tol = 1e-10, maxEval = 5e5)
   cases[[length(cases) + 1]] <- case("inf", c(0, d, ifelse(is.infinite(lo), -1e100, lo), ifelse(is.infinite(hi), 1e100, hi)), r$integral, rel = 1e-7, abs = 1e-9)
 }
+# hcubature's own recursion for 2 and 3 dimensions: "hg" args (id, d, lo[d], hi[d], tol, maxEval, which) with which 0 the integral, 1 the error estimate, 2 the evaluation count
+for (rep in 1:24) {
+  id <- (rep - 1) %% 4; d <- 2 + rep %% 2; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); tl <- c(1e-4, 1e-6)[1 + (rep %% 3 == 0)]
+  r <- hcubature(fs[[id + 1]], lo, hi, tol = tl, maxEval = 20000)
+  if (r$functionEvaluations >= 20000) next
+  a <- c(id, d, lo, hi, tl, 20000)
+  cases[[length(cases) + 1]] <- case("hg", c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("hg", c(a, 1), r$error, rel = 1e-6, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("hg", c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
+}
 emit("cubaturepkg", "cubature", list(cases))

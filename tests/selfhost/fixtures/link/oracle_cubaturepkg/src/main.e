@@ -18,6 +18,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let x = c.args
         let d = usize(x[1usize])
+        if c.name.len == 2usize && c.name[0usize] == 104u8 {
+            var o: [3]f64 = zero
+            let he = cb.hcubature_gm(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], x[2usize + 2usize * d], usize(x[3usize + 2usize * d]), o[0usize..3usize])
+            if he != ok { os.exit(9) }
+            let g2 = o[usize(x[4usize + 2usize * d])]
+            if !oracle.agrees(g2, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, g2))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         var got = cb.integral_box(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], 4usize)
         if c.name.len == 3usize && c.name[0usize] == 105u8 { got = cb.integral_inf(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], 8usize) }
         if !oracle.agrees(got, c) {

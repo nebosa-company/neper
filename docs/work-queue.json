@@ -122,7 +122,7 @@
       "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6475 box integrals of four fixed integrands agree with hcubature and pcubature to 1e-8 on Windows through a tensor Gauss-Legendre rule, not the package's adaptive algorithms; oracle_cubaturepkg; Linux pending). Infinite limits (D7589) equal hcubature for the fixed integrand. Open: the adaptive Genz-Malik and Clenshaw-Curtis recursion, vector integrands, error estimates. Was: Open (CRAN rank 753). Small to mid. Acceptance, equal to cubature: hcubature, pcubature, cuhre and vegas, suave, divonne with vector-valued integrands and infinite limits, the returned integral, error estimate, evaluation counts and return codes."
+      "evidence": "Partial (D6475 box integrals of four fixed integrands agree with hcubature and pcubature to 1e-8 on Windows through a tensor Gauss-Legendre rule, not the package's adaptive algorithms; oracle_cubaturepkg; Linux pending). Infinite limits (D7589) equal hcubature for the fixed integrand. The adaptive Genz-Malik recursion of hcubature (2 and 3 dimensions) equals the package in integral, error estimate and evaluation count (D7694). Open: the one-dimensional Gauss-Kronrod rule, the Clenshaw-Curtis recursion of pcubature, vector integrands, cuhre, vegas, suave, divonne. Was: Open (CRAN rank 753). Small to mid. Acceptance, equal to cubature: hcubature, pcubature, cuhre and vegas, suave, divonne with vector-valued integrands and infinite limits, the returned integral, error estimate, evaluation counts and return codes."
     },
     {
       "id": "L454",
