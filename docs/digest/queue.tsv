@@ -12,7 +12,7 @@ L451	library	0.3	957	betareg: beta regression	D7312: standard errors of the vari
 L452	library	0.35	599	TSA: time-series analysis toolkit	Partial (D6190, D6406 McLeod.Li.test).
 L453	library	0.1	586	cubature: adaptive multidimensional integration	Partial (D6475 box integrals of four fixed integrands agree with hcubature and pcubature to 1e-8 on Windows through a tensor Gauss-Legendre rule, not the package's adaptive algorithms;
 L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).
-L468	library	0.4	591	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
+L468	library	0.5	635	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
 L478	library	0.4	519	dagitty: causal graph reasoning	Partial (D6159).
 L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).

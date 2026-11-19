@@ -657,3 +657,149 @@ fn discrcoord(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const usi
     }
     ret ok
 }
+
+// ---- dbscan (fpc::dbscan, any of its methods: they give the same answer): the points scanned in order, a point whose neighbourhood count (within eps, among the points not
+// yet in a cluster plus those that already counted it) reaches MinPts starting a cluster that grows through the reachable points; cv gets the cluster number (0 noise),
+// isseed marks the core points. x is n by p, row-major.
+fn dbscan(a: *mem.Arena, x: []const f64, n: usize, p: usize, eps: f64, min_pts: usize, cv: []i64, isseed: []bool) -> err {
+    let (classn, e0) = mem.alloc[usize](a, n)
+    let (un, e1) = mem.alloc[bool](a, n)
+    let (reach, e2) = mem.alloc[usize](a, n)
+    let (ap, e3) = mem.alloc[usize](a, n)
+    let (jr, e4) = mem.alloc[usize](a, n)
+    let (inr, e5) = mem.alloc[bool](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        classn[i] = 0usize
+        cv[i] = 0i64
+        isseed[i] = false
+        i += 1usize
+    }
+    var cn = 0i64
+    i = 0usize
+    while i < n {
+        // unclass: the points with cv < 1
+        var q = 0usize
+        var any = false
+        while q < n {
+            un[q] = cv[q] < 1i64
+            if un[q] { any = true }
+            q += 1usize
+        }
+        if cv[i] == 0i64 {
+            var nr = 0usize
+            q = 0usize
+            while q < n {
+                if un[q] && dist_xy(x, p, i, q) <= eps {
+                    reach[nr] = q
+                    nr += 1usize
+                }
+                q += 1usize
+            }
+            if nr + classn[i] < min_pts {
+                cv[i] = 0i64 - 1i64
+            } else {
+                cn += 1i64
+                cv[i] = cn
+                isseed[i] = true
+                // reachables without i; unclass without i
+                var m = 0usize
+                q = 0usize
+                while q < nr {
+                    if reach[q] != i {
+                        reach[m] = reach[q]
+                        m += 1usize
+                    }
+                    q += 1usize
+                }
+                nr = m
+                un[i] = false
+                q = 0usize
+                while q < nr {
+                    classn[reach[q]] += 1usize
+                    q += 1usize
+                }
+                while nr > 0usize {
+                    q = 0usize
+                    while q < nr {
+                        cv[reach[q]] = cn
+                        ap[q] = reach[q]
+                        q += 1usize
+                    }
+                    let nap = nr
+                    nr = 0usize
+                    q = 0usize
+                    while q < n {
+                        inr[q] = false
+                        q += 1usize
+                    }
+                    var i2 = 0usize
+                    while i2 < nap {
+                        let j = ap[i2]
+                        var njr = 0usize
+                        q = 0usize
+                        while q < n {
+                            if un[q] && dist_xy(x, p, j, q) <= eps {
+                                jr[njr] = q
+                                njr += 1usize
+                            }
+                            q += 1usize
+                        }
+                        if njr + classn[j] >= min_pts {
+                            isseed[j] = true
+                            var t = 0usize
+                            while t < njr {
+                                if cv[jr[t]] < 0i64 { cv[jr[t]] = cn }
+                                t += 1usize
+                            }
+                            t = 0usize
+                            while t < njr {
+                                if cv[jr[t]] == 0i64 && !inr[jr[t]] {
+                                    inr[jr[t]] = true
+                                    reach[nr] = jr[t]
+                                    nr += 1usize
+                                }
+                                t += 1usize
+                            }
+                        }
+                        var t2 = 0usize
+                        while t2 < njr {
+                            classn[jr[t2]] += 1usize
+                            t2 += 1usize
+                        }
+                        un[j] = false
+                        i2 += 1usize
+                    }
+                }
+            }
+        }
+        // the loop stops once no unclassified point is left
+        var left = false
+        q = 0usize
+        while q < n {
+            if un[q] { left = true }
+            q += 1usize
+        }
+        if !left && !any { break }
+        if !left { break }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if cv[i] == 0i64 - 1i64 { cv[i] = 0i64 }
+        i += 1usize
+    }
+    ret ok
+}
+
+fn dist_xy(x: []const f64, p: usize, i: usize, j: usize) -> f64 {
+    var s = 0.0f64
+    var k = 0usize
+    while k < p {
+        let d = x[i * p + k] - x[j * p + k]
+        s += d * d
+        k += 1usize
+    }
+    ret math.sqrt[f64](s)
+}
