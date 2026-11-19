@@ -5,6 +5,7 @@ use e.algo.stat.actuar as ac
 use e.io
 use e.mem
 use e.os
+use e.algo.rand.r as rr
 use e.str
 use e.test.oracle as oracle
 
@@ -151,6 +152,18 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret ac.zm_q(kq, x[4usize], x[1usize], x[2usize], x[3usize])
     }
     if str.eq(c.name, "iq") { ret ac.ig_q(x[2usize], x[0usize], x[1usize]) }
+    if str.eq(c.name, "rg") {
+        var gg: rr.Rng = zero
+        rr.seed(&gg, i64(x[0usize]))
+        let nr = usize(x[5usize])
+        var tr = 0.0f64
+        var ir = 0usize
+        while ir < nr {
+            tr += ac.rand_draw(&gg, usize(x[1usize]), x[2usize], x[3usize], x[4usize]) * f64(ir + 1usize)
+            ir += 1usize
+        }
+        ret tr
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])

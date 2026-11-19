@@ -51139,3 +51139,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7548 — actuar inverse Gaussian quantile
 `ig_q` inverts `ig_p` by bisection (200 halvings from an upper bound found by doubling the mean). Equal to actuar qinvgauss at 1e-7 relative on 40 draws (47 values added to oracle_actuar, 5064 in all).
+
+## D7549 — actuar random generators under set.seed
+`rand_draw` reproduces actuar rburr, rtrgamma, rinvgamma, rgumbel, rlgamma and rpareto1 draw for draw from the R streams of e.algo.rand.r. Probed in R first: rburr inverts the cdf at 1 - u (not u), rtrgamma is scale rgamma(a)^(1/t), rinvgamma is scale / rgamma(a), rgumbel is alpha - scale log(rexp), rlgamma is exp(rgamma(shape, rate)) and rpareto1 is min / u^(1/shape). Equal to actuar on 60 seeded runs (57 values added to oracle_actuar, 5121 in all). The other families' generators, rphtype and the aggregate generators stay open.

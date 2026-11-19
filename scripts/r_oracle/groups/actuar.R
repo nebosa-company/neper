@@ -187,6 +187,14 @@ for (rep in 1:40) {
   mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); pp <- runif(1, 0.02, 0.98)
   cases[[length(cases) + 1]] <- case("iq", c(mu, s, pp), qinvgauss(pp, mu, s), rel = 1e-7, abs = 1e-10)
 }
+# random generators under set.seed: "rg" args (seed, kind 0 rburr 1 rtrgamma 2 rinvgamma 3 rgumbel 4 rlgamma 5 rpareto1, p1, p2, sc, n); the answer is the position-weighted sum of n draws
+for (rep in 1:60) {
+  kd <- rep %% 6; sd <- sample(1:100000, 1); n <- sample(3:12, 1); p1 <- runif(1, 1, 4); p2 <- runif(1, 1, 3); sc <- runif(1, 0.5, 3)
+  set.seed(sd)
+  v <- switch(kd + 1, rburr(n, p1, p2, scale = sc), rtrgamma(n, p1, p2, scale = sc), rinvgamma(n, p1, scale = sc), rgumbel(n, p1, p2), rlgamma(n, p1, p2 + 2), rpareto1(n, p1, p2))
+  if (kd == 4) p2 <- p2 + 2
+  cases[[length(cases) + 1]] <- case("rg", c(sd, kd, p1, p2, sc, n), sum(v * seq_along(v)), rel = 1e-9, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

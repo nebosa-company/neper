@@ -4403,4 +4403,5 @@ D7544	446	actuar loggamma limited moments and inverse Gaussian moments
 D7545	356	actuar zero-truncated and zero-modified binomial and geometric
 D7546	435	actuar generalised beta limited moments and Gumbel moments
 D7547	546	actuar zero-truncated and zero-modified count quantiles
-D7548	248	actuar inverse Gaussian quantile
+D7548	249	actuar inverse Gaussian quantile
+D7549	588	actuar random generators under set.seed
