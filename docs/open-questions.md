@@ -41,3 +41,5 @@ Answers go in `docs/decisions.md`; delete the line once answered. One line per q
 - Is a fresh Linux and Neper looks audit wanted, or is the 100/100 headline final? (docs/ui/HANDOVER-LOOKS.md)
 - Pursue the roughly 28 Cupertino and Material idiom rows outside the 30-control headline, or leave them at review? (docs/ui/HANDOVER-LOOKS.md)
 - Consolidate the 212 looks status overlays now? Queue T125. (docs/ui/HANDOVER-LOOKS.md)
+- Delete the 8 unmerged codex/fix-* branches, the older browser stream branches and the agent worktrees under C:/Users/gaddl/.codex/worktrees? (docs/HANDOVER-BROWSER.md)
+- Are the uncommitted v5/cardgrid/main.e sample edits on mtg.studio.src main still pending, and may they be pushed? (HANDOVER-GRID.md)

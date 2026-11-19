@@ -308,6 +308,9 @@ a function past 256 locals silently and has fixed pools (declarations, tokens). 
 bootstrap build is therefore not proof, and a pool that is full blames the change that
 filled it; run the self-host build, not only `check-file`.
 
+There is no if-expression: write `var x = a` then `if c { x = b }`. A string literal cannot contain a raw newline (write `
+`). A top-level `f64` const is refused like `f32` and `str`; compute it in a function. An array literal's length must equal the declared length.
+
 Silent-corruption shapes in UI code: a function that takes three `Style` values plus
 many `Node`s by value corrupts the widget tree (keep helpers to 8 argument words, pack
 flags in a `u64`); `f32(u8_field)` inside a style-building function traps the window in
