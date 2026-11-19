@@ -33,4 +33,14 @@ for (rep in 1:8) {
   Ld <- unclass(f$loadings)
   for (kk in 1:q) for (ii in 1:p) cases[[length(cases) + 1]] <- case("famlpro", c(p, q, as.vector(t(R)), p + (ii - 1) + (kk - 1) * p), as.numeric(Ld[ii, kk]), rel = 5e-3, abs = 2e-3)
 }
+# rotate = "oblimin" (GPArotation::oblimin, gamma 0): "famlobl" args as famlv, the pattern loadings
+for (rep in 1:8) {
+  p <- sample(6:8, 1); q <- 2; N <- sample(250:400, 1)
+  L <- matrix(runif(p * q, 0.3, 0.8), p, q); L[1:3, 2] <- 0.05; L[4:6, 1] <- 0.05; Fm <- matrix(rnorm(N * q), N, q); Fm[, 2] <- 0.3 * Fm[, 1] + 0.95 * Fm[, 2]; X <- Fm %*% t(L) + matrix(rnorm(N * p, 0, 0.7), N, p)
+  R <- cor(X)
+  f <- tryCatch(suppressWarnings(fa(R, nfactors = q, n.obs = N, fm = "ml", rotate = "oblimin")), error = function(e) NULL)
+  if (is.null(f) || any(f$uniquenesses < 0.02)) next
+  Ld <- unclass(f$loadings)
+  for (kk in 1:q) for (ii in 1:p) cases[[length(cases) + 1]] <- case("famloblimin", c(p, q, as.vector(t(R)), p + (ii - 1) + (kk - 1) * p), as.numeric(Ld[ii, kk]), rel = 5e-3, abs = 2e-3)
+}
 emit("psychfa", "psych", list(cases))

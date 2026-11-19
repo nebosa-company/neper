@@ -1261,3 +1261,33 @@ fn fa_ml_promax(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -
     }
     ret true
 }
+
+// psych::fa(r, nfactors = q, fm = "ml", rotate = "oblimin") for q >= 2: GPArotation::oblimin (gamma 0, no normalisation, eps 1e-5, 1000 iterations) of `fa_ml`'s loadings, columns ordered and signed by `rot_sort` (whose
+// rotation-matrix block is the oblique transformation's inverse transpose here and is not compared); out as `fa_ml_varimax`
+fn fa_ml_oblimin(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) -> bool {
+    let (ml, e1) = mem.alloc[f64](a, p + 1usize + p * q)
+    let (xr, e2) = mem.alloc[f64](a, p * q)
+    let (srt, e3) = mem.alloc[f64](a, p * q + q * q)
+    if e1 != ok || e2 != ok || e3 != ok { ret false }
+    if !fa_ml(a, r, p, q, ml) { ret false }
+    var i = 0usize
+    while i < p {
+        var k = 0usize
+        while k < q {
+            xr[i * q + k] = ml[p + 1usize + i + k * p]
+            k += 1usize
+        }
+        out[i] = ml[i]
+        i += 1usize
+    }
+    var par0: [1]f64 = zero
+    let (rt, e4) = gp.gpf_obl(a, xr, p, q, 0u8, par0[0usize..1usize], false, 1.0e-5f64, 1000usize)
+    if e4 != ok { ret false }
+    if rot_sort(a, rt.loadings, rt.th, p, q, srt) != ok { ret false }
+    i = 0usize
+    while i < p * q + q * q {
+        out[p + i] = srt[i]
+        i += 1usize
+    }
+    ret true
+}
