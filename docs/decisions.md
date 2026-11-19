@@ -50791,3 +50791,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7442 — sm.regression standard errors
 `regression_se` is the `se` of sm.regression (local linear, unbinned, unit weights) at a point: `sm_sigma` (second-order difference residual scale, as sm.sigma(diff.ord = 2)) times the root of the summed squared smoother weights; equal to sm at rel 1e-9 on 20 cases in oracle_sm_hsel. Open for L505: bands (the reference-band model comparison), binning, 2-d, sm.ancova, sm.survival, sm.options.
+
+## D7443 — sm binning
+`binning1d` is sm's binning(x, y, nbins) for one variable: R's seq() breaks from min to max with the first lowered by 1e-5 (by = (max - min) / nbins, not from the shifted start), right-closed cut, and the non-empty bins' midpoints, counts, y means and deviations; equal to sm on 15 samples (five checks each) in oracle_sm_hsel. Open for L505: running the estimators on binned data above 100 observations, reference bands, 2-d, sm.ancova, sm.survival, sm.options.

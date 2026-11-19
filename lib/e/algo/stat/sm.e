@@ -409,3 +409,63 @@ fn regression_se(a: *mem.Arena, x: []const f64, y: []const f64, h: f64, p: f64) 
     }
     ret (sg * math.sqrt[f64](q), ok)
 }
+
+fn brk(lo: f64, by: f64, k: usize) -> f64 {
+    if k == 0usize { ret lo - 1.0e-5f64 }
+    ret lo + f64(k) * by
+}
+
+// sm binning(x, y, nbins) for one variable: equal-width bins over (min - 1e-5, max], right-closed as R's cut; the non-empty bins' midpoints, counts, y means and y deviations about the mean go to bx, bf, bm, bd (each nbins long); the answer is how many bins are non-empty
+fn binning1d(a: *mem.Arena, x: []const f64, y: []const f64, nbins: usize, bx: []f64, bf: []f64, bm: []f64, bd: []f64) -> (usize, err) {
+    let n = x.len
+    var lo = x[0usize]
+    var hi = x[0usize]
+    var i = 0usize
+    while i < n {
+        if x[i] < lo { lo = x[i] }
+        if x[i] > hi { hi = x[i] }
+        i += 1usize
+    }
+    let b0 = lo - 1.0e-5f64
+    let (cnt, e0) = mem.alloc[f64](a, nbins)
+    let (sum, e1) = mem.alloc[f64](a, nbins)
+    let (idx, e2) = mem.alloc[usize](a, n)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0usize, mem.Full) }
+    let by = (hi - lo) / f64(nbins)
+    var k = 0usize
+    while k < nbins {
+        cnt[k] = 0.0f64
+        sum[k] = 0.0f64
+        k += 1usize
+    }
+    i = 0usize
+    while i < n {
+        // breaks[j] = b0 + (hi - b0) * j / nbins, the seq() R forms; x falls in the first bin whose upper break is >= x
+        var j = 0usize
+        while j + 1usize < nbins && x[i] > lo + f64(j + 1usize) * by { j += 1usize }
+        idx[i] = j
+        cnt[j] += 1.0f64
+        sum[j] += y[i]
+        i += 1usize
+    }
+    var m = 0usize
+    k = 0usize
+    while k < nbins {
+        if cnt[k] > 0.0f64 {
+            let mean = sum[k] / cnt[k]
+            var dev = 0.0f64
+            i = 0usize
+            while i < n {
+                if idx[i] == k { dev += (y[i] - mean) * (y[i] - mean) }
+                i += 1usize
+            }
+            bx[m] = (brk(lo, by, k) + brk(lo, by, k + 1usize)) / 2.0f64
+            bf[m] = cnt[k]
+            bm[m] = mean
+            bd[m] = dev
+            m += 1usize
+        }
+        k += 1usize
+    }
+    ret (m, ok)
+}

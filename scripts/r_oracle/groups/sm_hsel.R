@@ -25,4 +25,15 @@ for (rep in 1:20) {
   r <- sm.regression(x, y, h = h, eval.points = p, display = "none")$se
   cases[[length(cases) + 1]] <- case("hse", c(n, h, p, x, y), r[1], rel = 1e-9, abs = 1e-12)
 }
+# hbin (n, nbins, x[n], y[n]): m, then the index-weighted sums of the bin x, freq, means, devs (four cases)
+for (rep in 1:15) {
+  n <- sample(50:300, 1); nb <- sample(5:20, 1); x <- rnorm(n); y <- x^2 + rnorm(n)
+  b <- binning(x, y, nbins = nb); w <- seq_along(b$x)
+  a <- c(n, nb, x, y)
+  cases[[length(cases) + 1]] <- case("hbm", a, length(b$x), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("hbx", a, sum(b$x * w), rel = 1e-12, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("hbf", a, sum(b$x.freq * w), rel = 1e-12, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("hbmean", a, sum(b$means * w), rel = 1e-10, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("hbdev", a, sum(b$devs * w), rel = 1e-9, abs = 1e-12)
+}
 emit("sm_hsel", "sm", list(cases))

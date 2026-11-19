@@ -19,6 +19,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let n = usize(c.args[0usize])
         var got = 0.0f64
+        if str.eq(c.name, "hbm") || str.eq(c.name, "hbx") || str.eq(c.name, "hbf") || str.eq(c.name, "hbmean") || str.eq(c.name, "hbdev") {
+            let nbn = usize(c.args[1usize])
+            let (bx, f0) = mem.alloc[f64](a, nbn)
+            let (bf, f1) = mem.alloc[f64](a, nbn)
+            let (bm, f2) = mem.alloc[f64](a, nbn)
+            let (bd, f3) = mem.alloc[f64](a, nbn)
+            if f0 != ok || f1 != ok || f2 != ok || f3 != ok { os.exit(4) }
+            let (m, eb) = sm.binning1d(a, c.args[2usize..2usize + n], c.args[2usize + n..2usize + 2usize * n], nbn, bx, bf, bm, bd)
+            if eb != ok { os.exit(4) }
+            var tot = f64(m)
+            if !str.eq(c.name, "hbm") {
+                var pick = bx
+                if str.eq(c.name, "hbf") { pick = bf }
+                if str.eq(c.name, "hbmean") { pick = bm }
+                if str.eq(c.name, "hbdev") { pick = bd }
+                tot = 0.0f64
+                var q = 0usize
+                while q < m {
+                    tot += pick[q] * f64(q + 1usize)
+                    q += 1usize
+                }
+            }
+            if !oracle.agrees(tot, c) { failures += 1usize }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "hse") {
             let hh = c.args[1usize]
             let pp = c.args[2usize]
