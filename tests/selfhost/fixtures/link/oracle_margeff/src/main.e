@@ -11,6 +11,15 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "mrat") {
+        let nr = usize(z[0usize])
+        let pr = usize(z[1usize])
+        let (orr, er) = mem.alloc[f64](a, 2usize)
+        if er != ok { ret nan }
+        let b1 = 5usize
+        mf.glm_avg_ratio(a, usize(z[2usize]), usize(z[3usize]), z[b1 + pr + pr * pr..b1 + pr + pr * pr + nr * pr], z[b1..b1 + pr], z[b1 + pr..b1 + pr + pr * pr], nr, pr, 1usize, orr)
+        ret orr[usize(z[4usize])]
+    }
     if str.eq(c.name, "mhyp") {
         let ph = usize(z[0usize])
         var oh: [4]f64 = zero

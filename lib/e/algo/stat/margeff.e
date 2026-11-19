@@ -179,3 +179,71 @@ fn lin_hypothesis(beta: []const f64, vcov: []const f64, r: []const f64, q: f64, 
     out[2usize] = e / se
     out[3usize] = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](e / se), 0.0f64, 1.0f64, true, false)
 }
+
+// avg_comparisons of a 0 / 1 column j with comparison = "ratio" (kind 0: mean mu1 / mean mu0), "lnratio" (kind 1: its log) or "lift" (kind 2: the ratio less one); the standard error by the delta method on the two means; out = (estimate, standard error)
+fn glm_avg_ratio(a: *mem.Arena, link: usize, kind: usize, x: []const f64, beta: []const f64, vcov: []const f64, n: usize, p: usize, j: usize, out: []f64) {
+    let nf = f64(n)
+    let (ja, e1) = mem.alloc[f64](a, p)
+    let (jb, e2) = mem.alloc[f64](a, p)
+    let (m1, e3) = mem.alloc[f64](a, 3usize)
+    let (m0, e4) = mem.alloc[f64](a, 3usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok {
+        out[0usize] = 0.0f64 / 0.0f64
+        out[1usize] = 0.0f64 / 0.0f64
+        ret
+    }
+    var k = 0usize
+    while k < p {
+        ja[k] = 0.0f64
+        jb[k] = 0.0f64
+        k += 1usize
+    }
+    var ma = 0.0f64
+    var mb = 0.0f64
+    var i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        k = 0usize
+        while k < p {
+            eta += x[k * n + i] * beta[k]
+            k += 1usize
+        }
+        mu_d(link, eta + beta[j] * (1.0f64 - x[j * n + i]), m1)
+        mu_d(link, eta - beta[j] * x[j * n + i], m0)
+        ma += m1[0usize] / nf
+        mb += m0[0usize] / nf
+        k = 0usize
+        while k < p {
+            var x1 = x[k * n + i]
+            var x0 = x[k * n + i]
+            if k == j {
+                x1 = 1.0f64
+                x0 = 0.0f64
+            }
+            ja[k] += m1[1usize] * x1 / nf
+            jb[k] += m0[1usize] * x0 / nf
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let r = ma / mb
+    var est = r
+    if kind == 1usize { est = math.log[f64](r) }
+    if kind == 2usize { est = r - 1.0f64 }
+    var v = 0.0f64
+    var u = 0usize
+    while u < p {
+        var gu = ja[u] / mb - ma * jb[u] / (mb * mb)
+        if kind == 1usize { gu = ja[u] / ma - jb[u] / mb }
+        var w = 0usize
+        while w < p {
+            var gw = ja[w] / mb - ma * jb[w] / (mb * mb)
+            if kind == 1usize { gw = ja[w] / ma - jb[w] / mb }
+            v += gu * vcov[w * p + u] * gw
+            w += 1usize
+        }
+        u += 1usize
+    }
+    out[0usize] = est
+    out[1usize] = math.sqrt[f64](v)
+}

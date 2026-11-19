@@ -4379,4 +4379,5 @@ D7375	811	lavaan: path analysis of observed variables
 D7521	727	marginaleffects for four more links
 D7522	512	marginaleffects predictions at new rows
 D7523	648	marginaleffects hypotheses with equality constraints
-D7524	585	marginaleffects unit-change comparisons
+D7524	586	marginaleffects unit-change comparisons
+D7525	808	marginaleffects ratio, lnratio and lift comparisons

@@ -81,4 +81,23 @@ for (rep in 1:21) {
   if (is.null(cmp)) next
   for (w in 0:1) { v <- if (w == 0) cmp$estimate[1] else cmp$std.error[1]; if (is.finite(v)) add(c(n, p, 2, w, link, 2, b, V, Xm), v) }
 }
+# ratio, lnratio and lift comparisons of a 0 / 1 variable: "mrat" args (n, p, link, kind 0 ratio 1 lnratio 2 lift, which, beta[p], vcov[p p], X[n p])
+options(marginaleffects_safe = FALSE)
+set.seed(20262497)
+for (rep in 1:21) {
+  link <- c(1, 2, 3, 4, 6)[rep %% 5 + 1]; n <- sample(100:220, 1); k <- sample(2:3, 1); X <- matrix(round(rnorm(n * k), 3), n, k); X[, 1] <- rbinom(n, 1, 0.5)
+  eta <- 0.3 + X %*% c(0.6, -0.4, 0.3)[1:k] * 0.8
+  y <- switch(link, NA, rbinom(n, 1, plogis(eta)), rpois(n, exp(eta * 0.6)), rbinom(n, 1, pnorm(eta)), rbinom(n, 1, 1 - exp(-exp(eta))), NA, rpois(n, (0.8 + 0.15 * X[, 2])^2 * 3))
+  d <- data.frame(y = y, X); names(d) <- c("y", paste0("v", 1:k))
+  fam <- list(NA, binomial(), poisson(), binomial(link = "probit"), binomial(link = "cloglog"), NA, poisson(link = "sqrt"))[[link]]
+  m <- tryCatch(suppressWarnings(glm(as.formula(paste("y ~", paste0("v", 1:k, collapse = " + "))), fam, d)), error = function(e) NULL)
+  if (is.null(m) || !m$converged) next
+  Xm <- cbind(1, X); b <- coef(m); V <- vcov(m); p <- length(b)
+  for (kd in 0:2) {
+    cp <- c("ratio", "lnratio", "lift")[kd + 1]
+    r <- tryCatch(as.data.frame(avg_comparisons(m, variables = list(v1 = 0:1), comparison = cp)), error = function(e) NULL)
+    if (is.null(r)) next
+    for (w in 0:1) { v <- if (w == 0) r$estimate[1] else r$std.error[1]; if (is.finite(v)) cases[[length(cases) + 1]] <- case("mrat", c(n, p, link - 1, kd, w, b, V, Xm), v, rel = 1e-5, abs = 1e-8) }
+  }
+}
 emit("margeff", "marginaleffects", list(cases))
