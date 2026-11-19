@@ -437,3 +437,42 @@ fn se(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize
     }
     ret true
 }
+
+// poLCA.entropy(lc): -sum of P log P over every cell of the cross-classification of the manifest variables, P the model probability of the cell, sum over classes of prior times the product of the response probabilities
+// (probs R by sum(ncat) row-major, as `em`)
+fn entropy(a: *mem.Arena, ncat: []const usize, nr: usize, probs: []const f64, prior: []const f64) -> f64 {
+    let nj = ncat.len
+    var tc = 0usize
+    var cells = 1usize
+    var v = 0usize
+    while v < nj {
+        tc += ncat[v]
+        cells *= ncat[v]
+        v += 1usize
+    }
+    var h = 0.0f64
+    var cell = 0usize
+    while cell < cells {
+        var rem = cell
+        var pc = 0.0f64
+        var r = 0usize
+        while r < nr {
+            var pr = prior[r]
+            var off = 0usize
+            var rr = rem
+            v = 0usize
+            while v < nj {
+                let cat = rr % ncat[v]
+                rr = rr / ncat[v]
+                pr *= probs[r * tc + off + cat]
+                off += ncat[v]
+                v += 1usize
+            }
+            pc += pr
+            r += 1usize
+        }
+        if pc > 0.0f64 { h -= pc * math.log[f64](pc) }
+        cell += 1usize
+    }
+    ret h
+}

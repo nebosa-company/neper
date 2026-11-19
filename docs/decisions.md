@@ -50563,3 +50563,9 @@ The geometric count is the negative binomial with theta fixed at 1, so `NbCtx` g
 **Decision.** `psych.fa_parallel` reproduces `fa.parallel(x, fa = "pc", n.iter = k)` of raw data under `set.seed`: each iteration resamples every column with replacement (R's `sample`, column by column) and keeps the correlation eigenvalues, then fills an n by p matrix with `rnorm` (by column) and keeps its eigenvalues; the outputs are the eigenvalues of the data and the means over the iterations of the resampled (`pc.simr`) and simulated (`pc.sim`) ones. psych's `mclapply` runs serially on Windows, so the random stream follows the iteration order.
 
 **Result.** `oracle_psych` (4129 cases, 168 of them fa.parallel values on 12 data sets; the new draws moved the random stream, so the later generated cases changed size and data) equals psych on Windows to 1e-8. Linux pending (a forked `mclapply` there could reorder the stream, so the Linux run needs a look). L312 stays partial: the factor-analytic eigenvalues of fa.parallel (fa = "fa"), the suggested numbers of factors and components, missing data and overlapping keys in scoreItems, minres, ml, wls and gls extraction, oblique rotations, smoothing, omega, VSS.
+
+## D7343 — poLCA: entropy
+
+**Decision.** `polcapkg.entropy` is `poLCA.entropy(lc)`: -sum P log P over every cell of the cross-classification of the manifest variables, P the sum over classes of the class size times the product of the response probabilities.
+
+**Result.** `oracle_polca` (272 cases, 20 new) equals poLCA on Windows to 1e-4 (the tolerance of the fitted probabilities). Linux pending. L512 stays partial: covariates (latent class regression), the generalised inverse for singular information, missing responses.

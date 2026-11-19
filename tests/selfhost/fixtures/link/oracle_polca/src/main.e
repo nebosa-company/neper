@@ -115,6 +115,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "gsq") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 2usize) }
     if str.eq(c.name, "chisq") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 3usize) }
     if str.eq(c.name, "rdf") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 4usize) }
+    if str.eq(c.name, "entropy") { ret pl.entropy(a, ncat, nr, probs, prior) }
     if str.eq(c.name, "pred") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 5usize) }
     if str.eq(c.name, "se_probs") || str.eq(c.name, "se_prior") {
         let (so, soe) = mem.alloc[f64](a, nr * tc + nr)

@@ -19,6 +19,7 @@ for (rep in 1:20) {
   add("ll", a, f$llik); add("prior", a, sum(f$P * seq_along(f$P))); add("probs", a, sum(pr * seq_along(pr))); add("bic", a, f$bic)
   add("npar", a, f$npar); add("aic", a, f$aic); add("gsq", a, f$Gsq); add("chisq", a, f$Chisq); add("rdf", a, f$resid.df)
   add("pred", a, sum(f$predclass * 1))
+  add("entropy", a, poLCA.entropy(f))
   if (f$npar <= prod(ncat) - 4 && min(unlist(f$probs)) > 0.02 && min(f$P) > 0.05) {  # the information matrix needs an identified model away from the boundary
   fs <- suppressMessages(poLCA(as.formula(paste("cbind(", paste(names(d), collapse = ","), ") ~ 1")), d, nclass = R, probs.start = st, tol = 1e-13, maxiter = 20000, verbose = FALSE, calc.se = TRUE))
   se <- unlist(lapply(fs$probs.se, function(m) as.vector(t(m))))
