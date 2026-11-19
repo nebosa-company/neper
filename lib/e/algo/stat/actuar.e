@@ -499,3 +499,29 @@ fn ph_moment(a: *mem.Arena, prob: []const f64, t: []const f64, m: usize, k: usiz
     }
     ret f * r
 }
+
+// ---- loggamma (shapelog a, ratelog r; x > 1): F = pgamma(log x, a, rate r)
+fn lg_d(x: f64, a: f64, r: f64) -> f64 {
+    if x <= 1.0f64 { ret 0.0f64 }
+    ret math.exp[f64](a * math.log[f64](r) + (a - 1.0f64) * math.log[f64](math.log[f64](x)) - (r + 1.0f64) * math.log[f64](x) - lgam(a))
+}
+
+fn lg_p(x: f64, a: f64, r: f64) -> f64 {
+    if x <= 1.0f64 { ret 0.0f64 }
+    ret nm.pgamma(math.log[f64](x), a, 1.0f64 / r, true, false)
+}
+
+fn lg_q(p: f64, a: f64, r: f64) -> f64 { ret math.exp[f64](nm.qgamma(p, a, 1.0f64 / r, true, false)) }
+
+// the raw moment (r / (r - k))^a, finite for k < r
+fn lg_m(k: f64, a: f64, r: f64) -> f64 { ret math.pow[f64](r / (r - k), a) }
+
+// ---- Gumbel (alpha location, scale)
+fn gu_d(x: f64, al: f64, sc: f64) -> f64 {
+    let u = (x - al) / sc
+    ret math.exp[f64](0.0f64 - (u + math.exp[f64](0.0f64 - u))) / sc
+}
+
+fn gu_p(x: f64, al: f64, sc: f64) -> f64 { ret math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - (x - al) / sc)) }
+
+fn gu_q(p: f64, al: f64, sc: f64) -> f64 { ret al - sc * math.log[f64](0.0f64 - math.log[f64](p)) }

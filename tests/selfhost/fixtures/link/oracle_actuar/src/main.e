@@ -99,6 +99,19 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         let mq = usize(x[0usize])
         ret ac.ph_moment(ar, x[1usize..1usize + mq], x[1usize + mq..1usize + mq + mq * mq], mq, usize(x[1usize + mq + mq * mq]))
     }
+    if str.eq(c.name, "lf") {
+        let kd = usize(x[0usize])
+        let sg = usize(x[4usize])
+        if kd == 0usize {
+            if sg == 0usize { ret ac.lg_d(x[3usize], x[1usize], x[2usize]) }
+            if sg == 1usize { ret ac.lg_p(x[3usize], x[1usize], x[2usize]) }
+            if sg == 2usize { ret ac.lg_q(x[3usize], x[1usize], x[2usize]) }
+            ret ac.lg_m(x[3usize], x[1usize], x[2usize])
+        }
+        if sg == 0usize { ret ac.gu_d(x[3usize], x[1usize], x[2usize]) }
+        if sg == 1usize { ret ac.gu_p(x[3usize], x[1usize], x[2usize]) }
+        ret ac.gu_q(x[3usize], x[1usize], x[2usize])
+    }
     if str.eq(c.name, "pj") {
         let m = usize(x[3usize])
         let nn = usize(x[4usize + m])

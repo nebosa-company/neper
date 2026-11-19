@@ -119,6 +119,18 @@ for (rep in 1:30) {
   T <- matrix(runif(m * m, 0, 1.5), m); diag(T) <- 0; ex <- runif(m, 0.2, 2); diag(T) <- -(rowSums(T) + ex); k <- sample(1:4, 1)
   cases[[length(cases) + 1]] <- case("pm", c(m, pr, as.vector(t(T)), k), mphtype(k, pr, T), rel = 1e-9, abs = 1e-12)
 }
+# loggamma and Gumbel: "lf" args (kind 0 loggamma 1 gumbel, p1, p2, x, stat 0 d 1 p 2 q 3 moment (loggamma)), q takes the probability as x
+for (rep in 1:30) {
+  a <- runif(1, 0.8, 4); r <- runif(1, 2.5, 6); xx <- exp(runif(1, 0.05, 1.5)); pp <- runif(1, 0.05, 0.95); k <- runif(1, 0.1, 0.9) * r
+  cases[[length(cases) + 1]] <- case("lf", c(0, a, r, xx, 0), dlgamma(xx, a, r), rel = 1e-9, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("lf", c(0, a, r, xx, 1), plgamma(xx, a, r), rel = 1e-9, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("lf", c(0, a, r, pp, 2), qlgamma(pp, a, r), rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("lf", c(0, a, r, k, 3), mlgamma(k, a, r), rel = 1e-9, abs = 1e-13)
+  al <- rnorm(1, 0, 2); sc <- runif(1, 0.4, 3); x2 <- al + rnorm(1) * sc
+  cases[[length(cases) + 1]] <- case("lf", c(1, al, sc, x2, 0), dgumbel(x2, al, sc), rel = 1e-9, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("lf", c(1, al, sc, x2, 1), pgumbel(x2, al, sc), rel = 1e-9, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("lf", c(1, al, sc, pp, 2), qgumbel(pp, al, sc), rel = 1e-9, abs = 1e-12)
+}
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
   m <- sample(3:7, 1); fx <- c(runif(1, 0, 0.4), runif(m - 1)); fx <- fx / sum(fx); np <- sample(3:8, 1); pn <- runif(np); pn <- pn / sum(pn); nn <- sample(6:20, 1)

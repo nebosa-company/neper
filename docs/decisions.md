@@ -51112,3 +51112,6 @@ For grouped data with class boundaries c_0 .. c_r and counts n_j: `grouped_ogive
 
 ## D7539 — actuar phase-type moments
 `ph_moment` answers mphtype: k! pi (-T)^(-k) 1 by repeated multiplication with the inverse of -T (gparot.invert). Equal to actuar on 30 random phase-type laws, orders 1 to 4 (29 values added to oracle_actuar, 3908 in all). The generator rphtype and phase-type ruin stay open.
+
+## D7540 — actuar loggamma and Gumbel
+`lg_d`, `lg_p`, `lg_q`, `lg_m` (loggamma: F = pgamma(log x, shapelog, rate ratelog) on x > 1, raw moment (r / (r - k))^a) and `gu_d`, `gu_p`, `gu_q` (Gumbel) equal actuar on 30 draws each of the loggamma and Gumbel laws (210 values added to oracle_actuar, 4118 in all). Limited moments of the loggamma, the Gumbel moments, the inverse Gaussian, generalised beta, zero-modified and zero-truncated families stay open.
