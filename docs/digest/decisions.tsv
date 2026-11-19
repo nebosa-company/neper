@@ -4476,4 +4476,5 @@ D7618	866	actuar rcompound and the simulation aggregate
 D7619	825	actuar linear Bayes credibility (bayes)
 D7620	1283	actuar regression credibility (Hachemeister, hache.origin)
 D7621	592	sm.density variability band
-D7622	1378	nnet hidden-layer regression network
+D7622	1379	nnet hidden-layer regression network
+D7376	1268	mediation: quasi-Bayesian mediate for linear models

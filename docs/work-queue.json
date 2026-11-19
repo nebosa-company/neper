@@ -97,10 +97,10 @@
       "group": "CRAN parity",
       "order": 631,
       "title": "mediation: causal mediation analysis",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 755). Small to mid. Needs lm and glm fits. Acceptance, equal to mediation under set.seed: mediate with quasi-Bayesian and bootstrap intervals, ACME, ADE and total effects for continuous and binary mediators and outcomes, treatment-mediator interaction, medsens sensitivity."
+      "evidence": "Partial (D7376): e.algo.stat.mediationpkg.mediate_lm (quasi-Bayesian mediate for linear mediator and outcome models without interaction: ACME, ADE, total effect and proportion mediated with percentile limits and simulation p values) equals mediation under set.seed on 384 values on Windows (oracle_mediation; Linux pending). Open: treatment-mediator interaction, binary and other families, factors, bootstrap, mixed models, medsens. Open (CRAN rank 755). Small to mid. Needs lm and glm fits. Acceptance, equal to mediation under set.seed: mediate with quasi-Bayesian and bootstrap intervals, ACME, ADE and total effects for continuous and binary mediators and outcomes, treatment-mediator interaction, medsens sensitivity."
     },
     {
       "id": "L452",
