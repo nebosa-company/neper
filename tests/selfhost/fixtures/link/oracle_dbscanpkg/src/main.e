@@ -31,6 +31,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "frcount") { ret f64(cnt) }
         ret sm
     }
+    if str.eq(c.name, "jpc") {
+        let k = usize(x[2usize])
+        let (lb, h1) = mem.alloc[usize](a, n)
+        let (ids, h2) = mem.alloc[usize](a, n * k)
+        let (adj, h3) = mem.alloc[u8](a, n * n)
+        let (near, h4) = mem.alloc[usize](a, n)
+        let (nd, h5) = mem.alloc[f64](a, n)
+        let (qu, h6) = mem.alloc[usize](a, n)
+        if h1 != ok || h2 != ok || h3 != ok || h4 != ok || h5 != ok || h6 != ok { os.exit(14) }
+        let nc = dn.jp_cluster(x[5usize..5usize + n * d], n, d, k, usize(x[3usize]), lb, ids, adj, near, nd, qu)
+        if usize(x[4usize]) == 1usize { ret f64(nc) }
+        var tot = 0.0f64
+        var i = 0usize
+        while i < n {
+            tot += f64(i + 1usize) * f64(lb[i] + 1usize)
+            i += 1usize
+        }
+        ret tot
+    }
     if str.eq(c.name, "snnc") {
         let k = usize(x[2usize])
         let q = usize(x[5usize])

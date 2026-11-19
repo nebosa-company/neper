@@ -4487,4 +4487,5 @@ D7701	749	read.octave lists, structs and cells
 D7626	489	VGAM: cumulative probit and cloglog links
 D7627	458	VGAM: multinomial logit
 D7681	883	nnet multinom standard errors (summary.multinom)
-D7702	659	dbscan sNNclust
+D7702	660	dbscan sNNclust
+D7703	727	dbscan jpclust

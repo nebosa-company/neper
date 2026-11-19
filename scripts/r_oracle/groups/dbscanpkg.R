@@ -25,4 +25,11 @@ for (rep in 1:30) {
   cases[[length(cases) + 1]] <- case("snnc", c(a, 0, as.vector(t(x))), sum(seq_len(n) * r$cluster), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("snnc", c(a, 1, as.vector(t(x))), max(r$cluster), rel = 0, abs = 0)
 }
+# jpclust: "jpc" (n, d, k, kt, q, x row-major...) q 0 the sum of (row position) * cluster id, q 1 the number of clusters
+for (rep in 1:30) {
+  n <- sample(30:100, 1); d <- sample(2:3, 1); x <- rbind(matrix(rnorm(n * d, 0, 0.5), ncol = d), matrix(rnorm(n * d, 3, 0.5), ncol = d)); x <- round(x[sample(nrow(x), n), , drop = FALSE], 5)
+  k <- sample(4:12, 1); kt <- sample(1:k, 1); r <- jpclust(x, k = k, kt = kt)
+  cases[[length(cases) + 1]] <- case("jpc", c(n, d, k, kt, 0, as.vector(t(x))), sum(seq_len(n) * r$cluster), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("jpc", c(n, d, k, kt, 1, as.vector(t(x))), max(r$cluster), rel = 0, abs = 0)
+}
 emit("dbscanpkg", "dbscan", list(cases))

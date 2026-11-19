@@ -300,7 +300,7 @@ fn frnn_count(x: []const f64, n: usize, d: usize, row: usize, eps: f64) -> (usiz
 // sNNclust(x, k, eps, minPts) of dbscan (Jarvis-Patrick shared neighbours, borderPoints = TRUE): two rows are linked when each is among the other's k nearest and they
 // share at least eps neighbours (the common members of the two lists, plus one for the other row itself); DBSCAN with min_points on those links (a row's own count plus one).
 // labels receives a cluster index per row or NOISE; the cluster count is answered. ids is scratch of n * k, adj of n * n, near and queue of n, nd of n.
-fn snn_cluster(x: []const f64, n: usize, d: usize, k: usize, eps: f64, min_points: usize, labels: []usize, ids: []usize, adj: []u8, near: []usize, nd: []f64, queue: []usize) -> usize {
+fn snn_links(x: []const f64, n: usize, d: usize, k: usize, eps: f64, ids: []usize, adj: []u8, near: []usize, nd: []f64) {
     var i = 0usize
     while i < n {
         knn_list(x, n, d, k, i, near, nd)
@@ -338,6 +338,11 @@ fn snn_cluster(x: []const f64, n: usize, d: usize, k: usize, eps: f64, min_point
         }
         i += 1usize
     }
+}
+
+fn snn_cluster(x: []const f64, n: usize, d: usize, k: usize, eps: f64, min_points: usize, labels: []usize, ids: []usize, adj: []u8, near: []usize, nd: []f64, queue: []usize) -> usize {
+    snn_links(x, n, d, k, eps, ids, adj, near, nd)
+    var i = 0usize
     let unvisited = NOISE - 1usize
     i = 0usize
     while i < n {
@@ -388,4 +393,41 @@ fn adj_count(adj: []const u8, n: usize, i: usize) -> usize {
         j += 1usize
     }
     ret c
+}
+
+// jpclust(x, k, kt) of dbscan (Jarvis-Patrick): the same links as snn_cluster with kt as the threshold, every connected component a cluster (a row with no link is a cluster of its own), numbered by the first row
+// each contains; labels receives the 0-based cluster per row and the count is answered. Scratch as snn_cluster.
+fn jp_cluster(x: []const f64, n: usize, d: usize, k: usize, kt: usize, labels: []usize, ids: []usize, adj: []u8, near: []usize, nd: []f64, queue: []usize) -> usize {
+    snn_links(x, n, d, k, f64(kt), ids, adj, near, nd)
+    var i = 0usize
+    while i < n {
+        labels[i] = NOISE
+        i += 1usize
+    }
+    var clusters = 0usize
+    i = 0usize
+    while i < n {
+        if labels[i] == NOISE {
+            labels[i] = clusters
+            var head = 0usize
+            var tail = 1usize
+            queue[0usize] = i
+            while head < tail {
+                let p = queue[head]
+                head += 1usize
+                var j = 0usize
+                while j < n {
+                    if adj[p * n + j] == 1u8 && labels[j] == NOISE {
+                        labels[j] = clusters
+                        queue[tail] = j
+                        tail += 1usize
+                    }
+                    j += 1usize
+                }
+            }
+            clusters += 1usize
+        }
+        i += 1usize
+    }
+    ret clusters
 }
