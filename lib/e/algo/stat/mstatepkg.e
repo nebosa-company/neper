@@ -77,3 +77,71 @@ fn probtrans_forward(a: *mem.Arena, s: usize, ntrans: usize, from: []const usize
     }
     ret (rows, ok)
 }
+
+// msprep: the long format of multi-state data. trans is K by K row-major (0 for no transition, else the transition number); time and status are n by K row-major (the
+// starting state's column is ignored); every subject starts in state 0 at time 0. out receives rows of 7 values (id from to trans Tstart Tstop status), ids and states
+// 1-based as in R, sorted by id, Tstart, from, to; the answer is the row count (out holds at least n * K * K * 7 values).
+fn msprep(a: *mem.Arena, k: usize, n: usize, trans: []const usize, time: []const f64, status: []const f64, out: []f64) -> (usize, err) {
+    var rows = 0usize
+    var sub = 0usize
+    while sub < n {
+        var state = 0usize
+        var tstart = 0.0f64
+        var go = true
+        while go {
+            var reach = 0usize
+            var to = 0usize
+            while to < k {
+                if trans[state * k + to] > 0usize { reach += 1usize }
+                to += 1usize
+            }
+            if reach == 0usize { break }
+            var smallest = math.inf64()
+            var nexttime = math.inf64()
+            var best = k
+            to = 0usize
+            while to < k {
+                if trans[state * k + to] > 0usize {
+                    var ts = time[sub * k + to]
+                    if ts < tstart { ts = math.inf64() }
+                    if ts < smallest { smallest = ts }
+                    var h = math.inf64()
+                    if status[sub * k + to] != 0.0f64 { h = ts / status[sub * k + to] }
+                    if ts == 0.0f64 && status[sub * k + to] == 0.0f64 { h = math.inf64() }
+                    if h < nexttime {
+                        nexttime = h
+                        best = to
+                    }
+                }
+                to += 1usize
+            }
+            var censored = false
+            if nexttime == math.inf64() {
+                censored = true
+                nexttime = smallest
+            }
+            to = 0usize
+            while to < k {
+                if trans[state * k + to] > 0usize {
+                    var st = 0.0f64
+                    if !censored && to == best { st = 1.0f64 }
+                    let r = rows * 7usize
+                    out[r] = f64(sub + 1usize)
+                    out[r + 1usize] = f64(state + 1usize)
+                    out[r + 2usize] = f64(to + 1usize)
+                    out[r + 3usize] = f64(trans[state * k + to])
+                    out[r + 4usize] = tstart
+                    out[r + 5usize] = nexttime
+                    out[r + 6usize] = st
+                    rows += 1usize
+                }
+                to += 1usize
+            }
+            if censored { break }
+            state = best
+            tstart = nexttime
+        }
+        sub += 1usize
+    }
+    ret (rows, ok)
+}
