@@ -3,6 +3,7 @@
 // Not here: shift-invert, general (Arnoldi) and complex eigs, sparse and operator inputs, restarts and augmentation settings.
 
 use e.algo.linalg.decomp as dc
+use e.algo.rand.r as rr
 use e.algo.linalg.matrix as mx
 use e.math
 use e.mem
@@ -163,4 +164,174 @@ fn eigs_general(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize,
         c += 1usize
     }
     ret ok
+}
+
+// orthonormalise the columns of the r by c row-major matrix y in place (modified Gram-Schmidt, twice): the same column space as R's qr.Q, which is all the power iteration of svdr depends on
+fn orth_cols(y: []f64, r: usize, c: usize) {
+    var pass = 0usize
+    while pass < 2usize {
+        var j = 0usize
+        while j < c {
+            var l = 0usize
+            while l < j {
+                var dot = 0.0f64
+                var i = 0usize
+                while i < r {
+                    dot += y[i * c + l] * y[i * c + j]
+                    i += 1usize
+                }
+                i = 0usize
+                while i < r {
+                    y[i * c + j] = y[i * c + j] - dot * y[i * c + l]
+                    i += 1usize
+                }
+                l += 1usize
+            }
+            var nrm = 0.0f64
+            var i2 = 0usize
+            while i2 < r {
+                nrm += y[i2 * c + j] * y[i2 * c + j]
+                i2 += 1usize
+            }
+            nrm = math.sqrt[f64](nrm)
+            if nrm > 0.0f64 {
+                i2 = 0usize
+                while i2 < r {
+                    y[i2 * c + j] = y[i2 * c + j] / nrm
+                    i2 += 1usize
+                }
+            }
+            j += 1usize
+        }
+        pass += 1usize
+    }
+}
+
+// irlba::svdr(x, k, tol, it, extra): the randomised SVD by power iteration on a Gaussian start Q (n by min(n, k + extra), column-major draws of the generator g, as matrix(rnorm(...), ncol(x)) fills it);
+// x is m by n row-major, d receives the k singular values; the answer is the number of iterations plus the final pass (R's mprod = 2 j + 1 is 2 * iterations + 1)
+fn svdr(a: *mem.Arena, g: *rr.Rng, x: []const f64, m: usize, n: usize, k: usize, extra: usize, tol: f64, it: usize, d: []f64) -> (usize, err) {
+    var nq = k + extra
+    if n < nq { nq = n }
+    let (q, e0) = mem.alloc[f64](a, n * nq)
+    let (y, e1) = mem.alloc[f64](a, m * nq)
+    let (b, e2) = mem.alloc[f64](a, n * nq)
+    let (dd, e3) = mem.alloc[f64](a, k)
+    let (u1, e4) = mem.alloc[f64](a, n * k)
+    let (v1, e5) = mem.alloc[f64](a, nq * k)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (0usize, mem.Full) }
+    var j = 0usize
+    while j < nq {
+        var i = 0usize
+        while i < n {
+            q[i * nq + j] = rr.rnorm(g, 0.0f64, 1.0f64)
+            i += 1usize
+        }
+        j += 1usize
+    }
+    var s = 0usize
+    while s < k {
+        d[s] = 0.0f64
+        s += 1usize
+    }
+    let eps2 = math.pow[f64](2.220446049250313e-16f64, 0.8f64)
+    var iter = 1usize
+    while iter <= it {
+        // y = x q, orthonormalised; b = x' y; q = orth(b)
+        var r = 0usize
+        while r < m {
+            var c = 0usize
+            while c < nq {
+                var v = 0.0f64
+                var l = 0usize
+                while l < n {
+                    v += x[r * n + l] * q[l * nq + c]
+                    l += 1usize
+                }
+                y[r * nq + c] = v
+                c += 1usize
+            }
+            r += 1usize
+        }
+        orth_cols(y, m, nq)
+        r = 0usize
+        while r < n {
+            var c = 0usize
+            while c < nq {
+                var v = 0.0f64
+                var l = 0usize
+                while l < m {
+                    v += x[l * n + r] * y[l * nq + c]
+                    l += 1usize
+                }
+                b[r * nq + c] = v
+                q[r * nq + c] = v
+                c += 1usize
+            }
+            r += 1usize
+        }
+        orth_cols(q, n, nq)
+        let es = svds(a, b, n, nq, k, dd, u1, v1)
+        if es != ok { ret (0usize, es) }
+        var any = false
+        var worst = 0.0f64
+        s = 0usize
+        while s < k {
+            if dd[s] > eps2 {
+                any = true
+                var rel = math.abs[f64]((dd[s] - d[s]) / d[s])
+                if d[s] == 0.0f64 { rel = math.inf64() }
+                if rel > worst { worst = rel }
+            }
+            s += 1usize
+        }
+        if !any { break }
+        if worst < tol { break }
+        s = 0usize
+        while s < k {
+            d[s] = dd[s]
+            s += 1usize
+        }
+        iter += 1usize
+    }
+    if iter > it { iter = it }
+    // the final pass: q = orth(x q), b = q' x (nq by n), d = its k largest singular values
+    var r = 0usize
+    while r < m {
+        var c = 0usize
+        while c < nq {
+            var v = 0.0f64
+            var l = 0usize
+            while l < n {
+                v += x[r * n + l] * q[l * nq + c]
+                l += 1usize
+            }
+            y[r * nq + c] = v
+            c += 1usize
+        }
+        r += 1usize
+    }
+    orth_cols(y, m, nq)
+    let (bt, e6) = mem.alloc[f64](a, nq * n)
+    if e6 != ok { ret (0usize, mem.Full) }
+    r = 0usize
+    while r < nq {
+        var c = 0usize
+        while c < n {
+            var v = 0.0f64
+            var l = 0usize
+            while l < m {
+                v += y[l * nq + r] * x[l * n + c]
+                l += 1usize
+            }
+            bt[r * n + c] = v
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let (uu, e7) = mem.alloc[f64](a, nq * k)
+    let (vv, e8) = mem.alloc[f64](a, n * k)
+    if e7 != ok || e8 != ok { ret (0usize, mem.Full) }
+    let ef = svds(a, bt, nq, n, k, d, uu, vv)
+    if ef != ok { ret (0usize, ef) }
+    ret (iter, ok)
 }

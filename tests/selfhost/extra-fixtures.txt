@@ -554,3 +554,4 @@ oracle_rgamma
 oracle_pscl_nb
 oracle_lavaan_cfa
 oracle_spectra_gen
+oracle_spectra_svdr
