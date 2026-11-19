@@ -16,4 +16,15 @@ for (rep in 1:30) {
   args <- c(method, N, K, sd, size, g, w)
   add(args, 0, nrow(r)); add(args, 1, sum(id)); add(args, 2, sum(id * r[[1]]))
 }
+# srswr (method 3).
+for (rep in 1:12) {
+  K <- sample(4:9, 1); N <- sample(25:60, 1); sd <- sample(1:100000, 1)
+  g <- c(1:K, sample(1:K, N - K, replace = TRUE)); g <- sample(g)
+  w <- round(runif(K, 0.5, 3), 3); size <- sample(2:(K - 1), 1)
+  set.seed(sd)
+  r <- tryCatch(suppressWarnings(cluster(data.frame(g = g), "g", size = size, method = "srswr")), error = function(e) NULL)
+  if (is.null(r)) next
+  args <- c(3, N, K, sd, size, g, w)
+  add(args, 0, nrow(r)); add(args, 1, sum(r$ID_unit)); add(args, 2, sum(r$ID_unit * r[[1]]))
+}
 emit("sampling_cluster", "sampling", list(cases))

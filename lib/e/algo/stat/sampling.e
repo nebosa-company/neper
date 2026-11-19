@@ -699,7 +699,9 @@ fn strata(a: *mem.Arena, g: *rr.Rng, label: []const f64, w: []const f64, size: [
             }
             i += 1usize
         }
-        if method == 0usize {
+        if method == 3usize {
+            srswr(g, usize(size[st]), m, s[0usize..m])
+        } else if method == 0usize {
             let sz = usize(size[st])
             if m < sz { ret (cnt, mem.Full) }
             let er = srswor(a, g, sz, m, s[0usize..m])
@@ -715,9 +717,18 @@ fn strata(a: *mem.Arena, g: *rr.Rng, label: []const f64, w: []const f64, size: [
         }
         i = 0usize
         while i < m {
-            if s[i] == 1.0f64 {
-                ids[cnt] = f64(y[i] + 1usize)
-                cnt += 1usize
+            if method == 3usize {
+                var rep = 0usize
+                while f64(rep) < s[i] {
+                    ids[cnt] = f64(y[i] + 1usize)
+                    cnt += 1usize
+                    rep += 1usize
+                }
+            } else {
+                if s[i] == 1.0f64 {
+                    ids[cnt] = f64(y[i] + 1usize)
+                    cnt += 1usize
+                }
             }
             i += 1usize
         }
@@ -757,7 +768,9 @@ fn cluster(a: *mem.Arena, g: *rr.Rng, label: []const f64, pik: []const f64, size
         }
         i += 1usize
     }
-    if method == 0usize {
+    if method == 3usize {
+        srswr(g, usize(size), m, s[0usize..m])
+    } else if method == 0usize {
         let er = srswor(a, g, usize(size), m, s[0usize..m])
         if er != ok { ret (0usize, er) }
     } else {
@@ -772,7 +785,7 @@ fn cluster(a: *mem.Arena, g: *rr.Rng, label: []const f64, pik: []const f64, size
     var cnt = 0usize
     var c = 0usize
     while c < m {
-        if s[c] == 1.0f64 {
+        if s[c] == 1.0f64 || (method == 3usize && s[c] > 0.0f64) {
             i = 0usize
             while i < n {
                 if label[i] == lv[c] {

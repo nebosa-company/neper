@@ -16,4 +16,16 @@ for (rep in 1:30) {
   args <- c(method, N, K, sd, sz, g, d$w)
   add(args, 0, nrow(r)); add(args, 1, sum(r$ID_unit * seq_len(nrow(r))))
 }
+# srswr (method 3): sizes small enough for R's inversion binomial sampler.
+for (rep in 1:12) {
+  K <- sample(2:4, 1); N <- sample(30:60, 1); sd <- sample(1:100000, 1)
+  g <- sample(1:K, N, replace = TRUE); if (length(unique(g)) < K) next
+  d <- data.frame(g = g, w = round(runif(N, 0.5, 3), 3)); order_first <- unique(g)
+  sz <- vapply(order_first, function(l) sample(2:min(12, sum(g == l)), 1), 1)
+  set.seed(sd)
+  r <- tryCatch(suppressWarnings(strata(d, "g", size = sz, method = "srswr")), error = function(e) NULL)
+  if (is.null(r)) next
+  args <- c(3, N, K, sd, sz, g, d$w)
+  add(args, 0, nrow(r)); add(args, 1, sum(r$ID_unit * seq_len(nrow(r))))
+}
 emit("sampling_strata", "sampling", list(cases))
