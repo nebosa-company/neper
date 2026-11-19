@@ -1292,3 +1292,82 @@ fn hselect_cv_2d_separate(a: *mem.Arena, x1: []const f64, x2: []const f64, which
     let _ = fail
     ret math.exp[f64](xo[which])
 }
+
+// the 2-d local-linear smoother row of sm.weight2 at point i of (x1, x2), bandwidths h1, h2; cross drops the point itself. sii receives the diagonal entry (0 when cross), the answer is the fit of y
+fn smooth_row_2d(x1: []const f64, x2: []const f64, y: []const f64, i: usize, h1: f64, h2: f64, cross: bool, sii: *f64) -> f64 {
+    let n = x1.len
+    var a11 = 0.0f64
+    var a12 = 0.0f64
+    var a13 = 0.0f64
+    var a22 = 0.0f64
+    var a23 = 0.0f64
+    var a33 = 0.0f64
+    var j = 0usize
+    while j < n {
+        var w = math.exp[f64](0.0f64 - 0.5f64 * ((x1[i] - x1[j]) / h1) * ((x1[i] - x1[j]) / h1)) * math.exp[f64](0.0f64 - 0.5f64 * ((x2[i] - x2[j]) / h2) * ((x2[i] - x2[j]) / h2))
+        if cross && j == i { w = 0.0f64 }
+        let d1 = x1[i] - x1[j]
+        let d2 = x2[i] - x2[j]
+        a11 += w
+        a12 += w * d1
+        a13 += w * d2
+        a22 += w * d1 * d1
+        a23 += w * d1 * d2
+        a33 += w * d2 * d2
+        j += 1usize
+    }
+    let d = a22 * a33 - a23 * a23
+    let b1 = 1.0f64 / (a11 - ((a12 * a33 - a13 * a23) * a12 + (a13 * a22 - a12 * a23) * a13) / d)
+    let b2 = (a13 * a23 - a12 * a33) * b1 / d
+    let b3 = (a12 * a23 - a13 * a22) * b1 / d
+    var fit = 0.0f64
+    *sii = 0.0f64
+    j = 0usize
+    while j < n {
+        let d1 = x1[i] - x1[j]
+        let d2 = x2[i] - x2[j]
+        var w = math.exp[f64](0.0f64 - 0.5f64 * (d1 / h1) * (d1 / h1)) * math.exp[f64](0.0f64 - 0.5f64 * (d2 / h2) * (d2 / h2))
+        if cross && j == i { w = 0.0f64 }
+        let s = (b1 + b2 * d1 + b3 * d2) * w
+        fit += s * y[j]
+        if j == i { *sii = s }
+        j += 1usize
+    }
+    ret fit
+}
+
+type Crit2Ctx = struct { x1: []const f64, x2: []const f64, y: []const f64, kind: usize, df: f64, s1: f64, s2: f64 }
+
+// the 2-d regression criteria of h.select (scaled structure): kind 0 cv, 1 df, 2 aicc, as functions of the log factor
+fn crit2_log(c: *Crit2Ctx, lh: f64) -> f64 {
+    let n = c.x1.len
+    let h = math.exp[f64](lh)
+    var tr = 0.0f64
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        var sii = 0.0f64
+        let fit = smooth_row_2d(c.x1, c.x2, c.y, i, h * c.s1, h * c.s2, c.kind == 0usize, &sii)
+        tr += sii
+        rss += (c.y[i] - fit) * (c.y[i] - fit)
+        i += 1usize
+    }
+    let nn = f64(n)
+    if c.kind == 0usize {
+        let v = rss / nn
+        if v != v { ret 1.0e10f64 }
+        ret v
+    }
+    if c.kind == 1usize { ret (tr - c.df) * (tr - c.df) }
+    let v = math.log[f64](rss / nn) + 1.0f64 + 2.0f64 * (tr + 1.0f64) / (nn - tr - 2.0f64)
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+// h.select(cbind(x1, x2), y, method = "cv" / "df" / "aicc") with the default scaled structure (start 0.5, df 12), unbinned: the bandwidth for variable which
+fn hselect_reg_2d(x1: []const f64, x2: []const f64, y: []const f64, kind: usize, df: f64, which: usize) -> f64 {
+    var c = Crit2Ctx { x1: x1, x2: x2, y: y, kind: kind, df: df, s1: sd_of(x1), s2: sd_of(x2) }
+    let f = math.exp[f64](fd.brent_min[Crit2Ctx](&c, crit2_log, math.log[f64](0.5f64 / 8.0f64), math.log[f64](0.5f64 * 4.0f64)))
+    if which == 0usize { ret f * c.s1 }
+    ret f * c.s2
+}

@@ -4314,4 +4314,5 @@ D7460	553	sm.survival
 D7461	618	sm.regression reference-band tests
 D7462	574	sm h.select cv for two variables
 D7463	414	sm h.select cv, common 2-d structure
-D7464	432	sm h.select cv, separate 2-d structure
+D7464	433	sm h.select cv, separate 2-d structure
+D7465	676	sm h.select for two covariates (regression)

@@ -111,4 +111,12 @@ for (rep in 1:20) {
   r <- tryCatch(h.select(cbind(x, y), method = "cv", structure.2d = "separate"), error = function(e) NULL)
   if (!is.null(r) && all(is.finite(r))) for (w in 1:2) cases[[length(cases) + 1]] <- case("hc2s", c(n, w - 1, x, y), r[w], rel = 1e-6, abs = 1e-10)
 }
+# hr2 (n, kind 0 cv 1 df 2 aicc, which, x[n], y[n], z[n]): h.select(cbind(x, y), z, method) scaled structure, df 12 by default
+for (rep in 1:30) {
+  n <- sample(40:90, 1); x <- rnorm(n); y <- 0.5 * x + rnorm(n, 0, 0.8); z <- sin(x) + 0.5 * y + rnorm(n, 0, 0.3)
+  for (kd in 0:2) {
+    r <- tryCatch(h.select(cbind(x, y), z, method = c("cv", "df", "aicc")[kd + 1]), error = function(e) NULL)
+    if (!is.null(r) && all(is.finite(r))) for (w in 1:2) cases[[length(cases) + 1]] <- case("hr2", c(n, kd, w - 1, x, y, z), r[w], rel = 1e-5, abs = 1e-9)
+  }
+}
 emit("sm_hsel", "sm", list(cases))
