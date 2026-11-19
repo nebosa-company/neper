@@ -27,6 +27,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret 0.0f64
     }
     if str.eq(k, "anc") { ret f64(dg.ancestors(adj, n, dg.bit(yi))) }
+    if str.eq(k, "nci") || str.eq(k, "sci") {
+        let (ni, si) = dg.implied_independencies(adj, n)
+        if str.eq(k, "nci") { ret f64(ni) }
+        ret si
+    }
     if str.eq(k, "neq") { ret f64(dg.equivalent_dag_count(a, adj, n)) }
     if str.eq(k, "canon") {
         let (cm, cv) = dg.canonical_adjustment_set(a, adj, n, xi, yi)

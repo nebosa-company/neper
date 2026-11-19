@@ -353,3 +353,49 @@ fn equivalent_dag_count(a: *mem.Arena, adj: []const bool, n: usize) -> usize {
     }
     ret count
 }
+
+// impliedConditionalIndependencies (type "missing.edge"): for every non-adjacent pair (x < y) every minimal d-separating set. Answers the number of statements and a
+// signature, the sum over the statements of zmask + 256 x + 2048 y (the nodes 0-based), which the oracle recomputes from dagitty's output.
+fn implied_independencies(adj: []const bool, n: usize) -> (usize, f64) {
+    var count = 0usize
+    var sig = 0.0f64
+    var x = 0usize
+    while x < n {
+        var y = x + 1usize
+        while y < n {
+            if !has(adj, n, x, y) && !has(adj, n, y, x) {
+                let rest = ((1u32 << u32(n)) - 1u32) & ~(bit(x) | bit(y))
+                var z = 0u32
+                let total = 1u32 << u32(n)
+                while z < total {
+                    if (z & ~rest) == 0u32 && dseparated(adj, n, bit(x), bit(y), z) {
+                        // minimal: no proper subset separates
+                        var minimal = true
+                        if z != 0u32 {
+                            var sub = (z - 1u32) & z
+                            var more = true
+                            while more {
+                                if dseparated(adj, n, bit(x), bit(y), sub) {
+                                    minimal = false
+                                    more = false
+                                } else if sub == 0u32 {
+                                    more = false
+                                } else {
+                                    sub = (sub - 1u32) & z
+                                }
+                            }
+                        }
+                        if minimal {
+                            count += 1usize
+                            sig += f64(z) + 256.0f64 * f64(x) + 2048.0f64 * f64(y)
+                        }
+                    }
+                    z += 1u32
+                }
+            }
+            y += 1usize
+        }
+        x += 1usize
+    }
+    ret (count, sig)
+}

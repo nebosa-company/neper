@@ -4125,4 +4125,5 @@ D7329	1273	agricolae: AMMI from raw data, the grouped Kruskal and Friedman tests
 D7330	1064	fpc: dbscan
 D7331	1787	fpc: ncoord, and R's solve() in the LU order
 D7332	1061	dagitty: every adjustment set, the canonical set and path enumeration
-D7333	687	dagitty: equivalentDAGs
+D7333	688	dagitty: equivalentDAGs
+D7334	716	dagitty: impliedConditionalIndependencies

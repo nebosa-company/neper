@@ -50066,3 +50066,9 @@ The sign of an eigenvector still flips on a few data sets even with R's inverse 
 `e.algo.stat.dagitty` gains `equivalent_dag_count`: the number of DAGs in the Markov equivalence class of a DAG (the DAG itself included), found by orienting every edge of the skeleton both ways (up to 20 edges, n at most 8) and keeping the acyclic orientations whose set of v-structures (non-adjacent parents of a common child) equals the original's; `length(equivalentDAGs(g))` is the oracle.
 
 **Result.** `oracle_dagitty` has 680 values (adding the class size of 40 random DAGs with at most 14 edges) and equals dagitty on Windows. Linux pending. L478 stays partial: impliedConditionalIndependencies, instrumentalVariables and localTests remain.
+
+## D7334 — dagitty: impliedConditionalIndependencies
+
+`e.algo.stat.dagitty` gains `implied_independencies` (type "missing.edge"): for every non-adjacent pair of nodes, every minimal d-separating set (a set that separates the pair and no proper subset of which does), which is what dagitty lists, the empty set included. The oracle compares the number of statements and a signature (the sum over statements of the set's bit mask plus 256 and 2048 times the pair's node indices).
+
+**Result.** `oracle_dagitty` has 760 values (adding, for 40 random DAGs of 4 to 8 nodes, the statement count and signature) and equals dagitty on Windows. Linux pending. L478 stays partial: instrumentalVariables and localTests remain.

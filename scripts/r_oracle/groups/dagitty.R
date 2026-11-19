@@ -54,4 +54,20 @@ for (rep in 1:40) {
   g <- dagitty(txt)
   add("neq", c(n, 0, 1, 0, as.vector(t(A))), length(equivalentDAGs(g)))
 }
+# "nci"/"sci": the number of implied conditional independencies (impliedConditionalIndependencies(g), one per non-adjacent pair and minimal separator) and their signature
+for (rep in 1:40) {
+  n <- sample(4:8, 1); nodes <- paste0("v", seq_len(n))
+  A <- matrix(0, n, n); for (i in 1:(n - 1)) for (j in (i + 1):n) if (runif(1) < 0.4) A[i, j] <- 1
+  edges <- which(A == 1, arr.ind = TRUE)
+  txt <- paste("dag {", paste(nodes, collapse = " "), if (nrow(edges)) paste(sprintf("%s -> %s", nodes[edges[, 1]], nodes[edges[, 2]]), collapse = " "), "}")
+  g <- dagitty(txt)
+  ci <- impliedConditionalIndependencies(g)
+  sg <- 0
+  for (s0 in ci) {
+    xi <- match(s0$X, nodes); yi <- match(s0$Y, nodes); lo <- min(xi, yi) - 1; hi <- max(xi, yi) - 1
+    sg <- sg + (if (length(s0$Z)) sum(2^(match(s0$Z, nodes) - 1)) else 0) + 256 * lo + 2048 * hi
+  }
+  zz <- c(n, 0, 1, 0, as.vector(t(A)))
+  add("nci", zz, length(ci)); add("sci", zz, sg)
+}
 emit("dagitty", "dagitty", list(cases))
