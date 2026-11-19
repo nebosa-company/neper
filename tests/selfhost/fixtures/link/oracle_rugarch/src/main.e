@@ -1,4 +1,4 @@
-// e.algo.stat.vgampkg's sGARCH(1,1) fit against rugarch::ugarchfit. tests/oracle/rugarch.json comes from
+// e.algo.stat.rugarchpkg's sGARCH(1,1) fit against rugarch::ugarchfit. tests/oracle/rugarch.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R rugarch`; the layout is at the top of scripts/r_oracle/groups/rugarch.R.
 
 use e.algo.stat.rugarchpkg as rg
@@ -7,44 +7,60 @@ use e.mem
 use e.os
 use e.test.oracle as oracle
 
-fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+// every case of one fit repeats its series and asks for another number, so the fit is kept and reused while the name and all arguments but the last (the index into its output) are unchanged
+fn fit_case(a: *mem.Arena, c: *const oracle.Case, out: []f64) -> bool {
     let z = c.args
     let n = usize(z[0usize])
-    if c.name.len == 7usize {
-        var o9: [5]f64 = zero
-        if !rg.igarch11(a, z[1usize..1usize + n], n, o9[0usize..5usize]) { ret 0.0f64 / 0.0f64 }
-        ret o9[usize(z[1usize + n])]
+    if c.name.len == 7usize { ret rg.igarch11(a, z[1usize..1usize + n], n, out) }
+    if c.name.len == 6usize { ret rg.egarch11(a, z[1usize..1usize + n], n, out) }
+    if c.name.len == 4usize { ret rg.garch11_t(a, z[1usize..1usize + n], n, out) }
+    if c.name.len == 3usize { ret rg.gjrgarch11(a, z[1usize..1usize + n], n, out) }
+    ret rg.garch11(a, z[1usize..1usize + n], n, out)
+}
+
+fn same_key(c: *const oracle.Case, key: []const f64, key_len: usize, key_name: usize) -> bool {
+    if key_len != c.args.len || key_name != c.name.len { ret false }
+    var i = 0usize
+    while i + 1usize < key_len {
+        if key[i] != c.args[i] { ret false }
+        i += 1usize
     }
-    if c.name.len == 6usize {
-        var o8: [6]f64 = zero
-        if !rg.egarch11(a, z[1usize..1usize + n], n, o8[0usize..6usize]) { ret 0.0f64 / 0.0f64 }
-        ret o8[usize(z[1usize + n])]
-    }
-    if c.name.len == 4usize {
-        var o7: [6]f64 = zero
-        if !rg.garch11_t(a, z[1usize..1usize + n], n, o7[0usize..6usize]) { ret 0.0f64 / 0.0f64 }
-        ret o7[usize(z[1usize + n])]
-    }
-    if c.name.len == 3usize {
-        var o6: [6]f64 = zero
-        if !rg.gjrgarch11(a, z[1usize..1usize + n], n, o6[0usize..6usize]) { ret 0.0f64 / 0.0f64 }
-        ret o6[usize(z[1usize + n])]
-    }
-    var out: [5]f64 = zero
-    if !rg.garch11(a, z[1usize..1usize + n], n, out[0usize..5usize]) { ret 0.0f64 / 0.0f64 }
-    ret out[usize(z[1usize + n])]
+    ret true
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/rugarch.json")
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
+    var longest = 0usize
+    var q = 0usize
+    while q < golden.cases.len {
+        if golden.cases[q].args.len > longest { longest = golden.cases[q].args.len }
+        q += 1usize
+    }
+    let (key, e1) = mem.alloc[f64](a, longest)
+    let (cached, e2) = mem.alloc[f64](a, 256usize)
+    if e1 != ok || e2 != ok { os.exit(4) }
+    var key_len = 0usize
+    var key_name = 0usize
+    var have_ok = false
     var failures = 0usize
     var at = 0usize
     while at < golden.cases.len {
         let start = mem.mark(a)
         let c = &golden.cases[at]
-        let got = answer(a, c)
+        if !same_key(c, key, key_len, key_name) {
+            have_ok = fit_case(a, c, cached)
+            var t = 0usize
+            while t < c.args.len {
+                key[t] = c.args[t]
+                t += 1usize
+            }
+            key_len = c.args.len
+            key_name = c.name.len
+        }
+        var got = 0.0f64 / 0.0f64
+        if have_ok { got = cached[usize(c.args[c.args.len - 1usize])] }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

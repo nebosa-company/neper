@@ -4573,4 +4573,5 @@ D7672	1029	emmeans: additive second factor
 D7673	1277	emmeans: contrasts in an interaction model
 D7674	521	emmeans: mean_chg and identity coefficient matrices
 D7675	1023	mirt: analytic graded gradient
-D7676	738	oracle fixtures: reuse a fit across the cases that share it
+D7676	739	oracle fixtures: reuse a fit across the cases that share it
+D7677	841	fit reuse in the other slow oracle fixtures
