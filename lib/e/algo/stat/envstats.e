@@ -1695,3 +1695,67 @@ fn e_qnorm(x: []const f64, p: f64, conf: f64, ci_type: usize, lognormal: bool, o
     out[1usize] = lcl
     out[2usize] = ucl
 }
+
+// tolIntNorm(x, coverage, conf.level, cov.type, ti.type): mean -/+ K sd with K from tol_k (cov_type 0 content, 1 expectation; ti_type 0 two-sided, 1 lower, 2 upper); out = (LTL, UTL)
+fn e_tol_int(x: []const f64, coverage: f64, conf: f64, cov_type: usize, ti_type: usize, out: []f64) {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        m += x[i]
+        i += 1usize
+    }
+    m = m / n
+    var ss = 0.0f64
+    i = 0usize
+    while i < x.len {
+        ss += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    let s = math.sqrt[f64](ss / (n - 1.0f64))
+    var kind = 0i64
+    if cov_type == 0usize && ti_type == 0usize { kind = 1i64 }
+    if cov_type == 1usize { kind = 2i64 }
+    if cov_type == 1usize && ti_type == 0usize { kind = 3i64 }
+    let kf = tol_k(n, coverage, conf, kind)
+    if ti_type == 0usize {
+        out[0usize] = m - kf * s
+        out[1usize] = m + kf * s
+    } else if ti_type == 1usize {
+        out[0usize] = m - kf * s
+        out[1usize] = math.inf64()
+    } else {
+        out[0usize] = 0.0f64 - math.inf64()
+        out[1usize] = m + kf * s
+    }
+}
+
+// predIntNorm(x, k, n.mean, conf.level, pi.type): mean -/+ K sd with K from pred_k (pi_type 0 two-sided, 1 lower, 2 upper); out = (LPL, UPL)
+fn e_pred_int(x: []const f64, k: f64, n_mean: f64, conf: f64, pi_type: usize, out: []f64) {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        m += x[i]
+        i += 1usize
+    }
+    m = m / n
+    var ss = 0.0f64
+    i = 0usize
+    while i < x.len {
+        ss += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    let s = math.sqrt[f64](ss / (n - 1.0f64))
+    let kf = pred_k(n, n_mean, k, pi_type == 0usize, conf)
+    if pi_type == 0usize {
+        out[0usize] = m - kf * s
+        out[1usize] = m + kf * s
+    } else if pi_type == 1usize {
+        out[0usize] = m - kf * s
+        out[1usize] = math.inf64()
+    } else {
+        out[0usize] = 0.0f64 - math.inf64()
+        out[1usize] = m + kf * s
+    }
+}

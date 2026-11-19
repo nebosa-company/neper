@@ -50317,3 +50317,6 @@ Method 3 of `strata` and `cluster` draws srswr(size, N_stratum or K) with the sa
 
 ## D7394 — EnvStats eqnorm and eqlnorm
 `e_qnorm` is the mvue quantile mean + qnorm(p) sd with the exact limits mean + sd qnt(., n - 1, qnorm(p) sqrt(n)) / sqrt(n) (alpha / 2 and 1 - alpha / 2, or alpha for the one-sided types); the lognormal version works on log(x) and exponentiates the estimate and the limits. Equal to EnvStats to 1e-8 on 40 samples across p in {0.1, 0.5, 0.9, 0.95} and confidence 0.9 and 0.95. L466 stays at 0.3.
+
+## D7395 — EnvStats tolIntNorm and predIntNorm on data
+`e_tol_int` and `e_pred_int` wrap the existing factors (`tol_k` for content one- and two-sided and expectation one- and two-sided, `pred_k` for one future mean or the Bonferroni k means) into mean -/+ K sd intervals for two-sided, lower and upper types. Equal to EnvStats to 1e-7 on 50 samples. L466 stays at 0.3.
