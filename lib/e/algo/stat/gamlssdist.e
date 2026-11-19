@@ -2163,3 +2163,96 @@ fn pzibnb(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if q == 1.0f64 / 0.0f64 { ret 1.0f64 }
     ret tau + (1.0f64 - tau) * pbnb(q, mu, sigma, nu)
 }
+
+// the double Poisson DPO of gamlss.dist (Efron's form, mean mu, dispersion sigma): the unnormalised mass of x, and the normalising sum over 0 .. top (the package sums in compiled code to a fixed
+// bound, so this sums until the terms vanish)
+fn dpo_u(x: f64, mu: f64, sigma: f64) -> f64 {
+    var lx = 0.0f64
+    if x > 0.0f64 { lx = math.log[f64](x) }
+    ret math.exp[f64](0.0f64 - 0.5f64 * math.log[f64](sigma) - mu / sigma - nm.lgammafn(x + 1.0f64) + x * lx - x + x * math.log[f64](mu) / sigma + x / sigma - x * lx / sigma)
+}
+
+fn dpo_max(a: f64, b: f64) -> f64 {
+    if a > b { ret a }
+    ret b
+}
+
+fn dpo_sum(mu: f64, sigma: f64, top: f64) -> f64 {
+    var s = 0.0f64
+    var y = 0.0f64
+    while y <= top {
+        s += dpo_u(y, mu, sigma)
+        y += 1.0f64
+    }
+    ret s
+}
+
+fn ddpo(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret dpo_u(x, mu, sigma) / dpo_sum(mu, sigma, dpo_max(x * 3.0f64, 500.0f64) + 20.0f64 * mu / sigma + 20.0f64 * mu)
+}
+
+fn pdpo(q: f64, mu: f64, sigma: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    let top = dpo_max(q * 3.0f64, 500.0f64)
+    ret dpo_sum(mu, sigma, math.floor[f64](q)) / dpo_sum(mu, sigma, top)
+}
+
+fn qdpo(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p + 1.0e-9f64 >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var j = 0.0f64
+    while j <= 10000.0f64 {
+        if p <= pdpo(j, mu, sigma) { ret j }
+        j += 1.0f64
+    }
+    ret 10000.0f64
+}
+
+// the double binomial DBI of gamlss.dist (mean mu, dispersion sigma, binomial denominator bd): the package's density carries a normalising constant of the proper Efron form (compiled code) but its own
+// R expression has (bd - x) * 1 where the proper one has (bd - x) log(bd - x), so the density is exp(quirk(x) + normaliser); the distribution is the plain sum of those masses
+fn dbi_prop(x: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    var lx = 1.0f64
+    if x != 0.0f64 { lx = math.log[f64](x) }
+    var lb = 1.0f64
+    if bd > x { lb = math.log[f64](bd - x) }
+    ret (nm.lgammafn(bd + 1.0f64) - nm.lgammafn(x + 1.0f64) - nm.lgammafn(bd - x + 1.0f64)) + x * lx + (bd - x) * lb - bd * math.log[f64](bd) + (bd / sigma) * math.log[f64](bd) + (x / sigma) * math.log[f64](mu) + ((bd - x) / sigma) * math.log[f64](1.0f64 - mu) - (x / sigma) * lx - ((bd - x) / sigma) * lb
+}
+
+fn ddbi(x: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if x < 0.0f64 || x > bd { ret 0.0f64 }
+    if math.abs[f64](sigma - 1.0f64) < 0.001f64 { ret nb.dbinom(x, bd, mu, false) }
+    var tot = 0.0f64
+    var y = 0.0f64
+    while y <= bd {
+        tot += math.exp[f64](dbi_prop(y, mu, sigma, bd))
+        y += 1.0f64
+    }
+    var lx = 1.0f64
+    if x != 0.0f64 { lx = math.log[f64](x) }
+    let lq = (nm.lgammafn(bd + 1.0f64) - nm.lgammafn(x + 1.0f64) - nm.lgammafn(bd - x + 1.0f64)) + x * lx + (bd - x) * 1.0f64 - bd * math.log[f64](bd) + (bd / sigma) * math.log[f64](bd) + (x / sigma) * math.log[f64](mu) + ((bd - x) / sigma) * math.log[f64](1.0f64 - mu) - (x / sigma) * lx - ((bd - x) / sigma) * 1.0f64
+    ret math.exp[f64](lq - math.log[f64](tot))
+}
+
+fn pdbi(q: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q > bd { ret 1.0f64 }
+    var s = 0.0f64
+    var y = 0.0f64
+    while y <= math.floor[f64](q) {
+        s += ddbi(y, mu, sigma, bd)
+        y += 1.0f64
+    }
+    ret s
+}
+
+fn qdbi(p: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if p + 1.0e-9f64 >= 1.0f64 { ret bd }
+    var j = 0.0f64
+    var res = 0.0f64
+    while j <= bd {
+        res = j
+        if p <= pdbi(j, mu, sigma, bd) { ret res }
+        j += 1.0f64
+    }
+    ret res
+}

@@ -50437,3 +50437,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `polcapkg.se` is `poLCA.se` for an intercept-only fit: the information is the cross product of the per-case scores of the free response logits and the class logits, inverted; the response probability errors come from the delta method through the softmax Jacobian, the class size errors from the class-logit block.
 
 **Result.** `oracle_polca` (252 cases, 16 new standard-error values on 8 fits) equals poLCA on Windows to 1e-3 relative. A fit with a probability at the boundary or an unidentified model has a singular information matrix, where poLCA uses a generalised inverse and this inverse does not apply, so the oracle keeps to identified fits away from the boundary. Linux pending. L512 stays partial: covariates (latent class regression), the generalised inverse for singular information, missing responses, poLCA.entropy.
+
+## D7324 — gamlss.dist: DPO and DBI
+
+**Decision.** `gamlssdist.ddpo`, `pdpo`, `qdpo` give the double Poisson mass as Efron's unnormalised form divided by its sum over the support, and `ddbi`, `pdbi`, `qdbi` the double binomial. The package normalises both in compiled code; the sums reproduce its constants. dDBI carries a quirk that the port copies: its R expression has (bd - x) where the proper form has (bd - x) log(bd - x), while the constant is the proper one, so the masses of dDBI do not add up to one (the quantile and distribution follow them as written).
+
+**Result.** `oracle_gamlss_dpo` (240 cases) equals gamlss.dist on Windows: DPO to 1e-7, DBI to 1e-9, quantiles exactly. Linux pending. L464 stays partial: GAF, MN3-5, SEP, SI, ST3C, ZASICHEL, ZISICHEL, DEL, the remaining random-number generators, moments.

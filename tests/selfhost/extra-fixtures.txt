@@ -481,6 +481,7 @@ oracle_tsa_cpgram
 oracle_vcd_goodfit
 oracle_gamlss_exp
 oracle_gamlss_exgaus
+oracle_gamlss_dpo
 oracle_ade4_dudi
 oracle_quadpack
 oracle_stabledist
