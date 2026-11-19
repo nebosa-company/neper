@@ -77,9 +77,9 @@ for (rep in 1:12) {
   v <- c(f$objective, f$STATISTIC, f$dof, f$PVAL, f$BIC, f$null.chisq, f$RMSEA[1], f$TLI, f$CFI, f$rms, f$crms)
   for (k in 1:11) cases[[length(cases) + 1]] <- case("famlstatistics", c(p, q, N, as.vector(t(R)), k - 1), as.numeric(v[k]), rel = 1e-3, abs = 1e-5)
 }
-# splitHalf(r, brute = TRUE), even p: "splithalf" args (p, r[p * p] row-major, k) k 0 maxrb, 1 minrb, 2 meanr, 3 med.r, 4 lambda6
+# splitHalf(r, brute = TRUE), any p from 4 to 10 (odd p: halves of floor(p / 2) and the rest): "splithalf" args (p, r[p * p] row-major, k) k 0 maxrb, 1 minrb, 2 meanr, 3 med.r, 4 lambda6
 for (rep in 1:12) {
-  p <- sample(c(4, 6, 8, 10), 1); N <- sample(150:400, 1); L <- runif(p, 0.3, 0.8); X <- outer(rnorm(N), L) + matrix(rnorm(N * p, 0, 0.7), N, p); R <- cor(X)
+  p <- sample(4:10, 1); N <- sample(150:400, 1); L <- runif(p, 0.3, 0.8); X <- outer(rnorm(N), L) + matrix(rnorm(N * p, 0, 0.7), N, p); R <- cor(X)
   s <- suppressWarnings(splitHalf(R, raw = TRUE, brute = TRUE)); v <- c(s$maxrb, s$minrb, s$meanr, s$med.r, s$lambda6)
   for (k in 1:5) cases[[length(cases) + 1]] <- case("splithalf", c(p, as.vector(t(R)), k - 1), as.numeric(v[k]), rel = 1e-9, abs = 1e-11)
 }
