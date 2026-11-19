@@ -584,7 +584,7 @@
       "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6187). epi.2by2 cohort.count: risk ratio, odds ratio, risk difference, NNT, population attributable risk, Wald tests and chi-squared equal epiR on Windows (oracle_epir; Linux pending). Open: score and exact intervals, attributable fractions, stratified tables, other designs, the other epi.* functions. Was: Open (CRAN rank 773). Mid. Acceptance, equal to epiR: epi.2by2 for cohort, case-control and cross-sectional tables with exact, Wald and Mantel-Haenszel measures, epi.tests, epi.conf for every interval method, epi.ccc, epi.dsl, epi.iv, the sample-size family epi.sscohortc, epi.sscc and epi.sssimpleestb."
+      "evidence": "Partial (D6187). epi.2by2 cohort.count: risk ratio, odds ratio, risk difference, NNT, population attributable risk, Wald tests and chi-squared equal epiR on Windows (oracle_epir; Linux pending). Population attributable fraction and risk with Wald, Pirikahu and exact intervals (D7551) equal epiR. Open: score intervals, the attributable fraction in the exposed (its interval is the score one), stratified tables, other designs, the other epi.* functions. Was: Open (CRAN rank 773). Mid. Acceptance, equal to epiR: epi.2by2 for cohort, case-control and cross-sectional tables with exact, Wald and Mantel-Haenszel measures, epi.tests, epi.conf for every interval method, epi.ccc, epi.dsl, epi.iv, the sample-size family epi.sscohortc, epi.sscc and epi.sssimpleestb."
     },
     {
       "id": "L465",

@@ -8,6 +8,7 @@
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
+use e.math.nmath_beta as nb
 
 // the table is exposed with outcome (a), exposed without (b), unexposed with (c), unexposed without (d); units scales the risk difference
 type Table2 = struct { a: f64, b: f64, c: f64, d: f64 }
@@ -87,4 +88,45 @@ fn chi2(t: Table2, yates: bool) -> (f64, f64) {
     if yates && num < 0.0f64 { num = 0.0f64 }
     let x = n * num * num / (r1 * r2 * c1 * c2)
     ret (x, nm.pchisq(x, 1.0f64, false, false))
+}
+
+// Clopper-Pearson interval of x successes in n trials: (est, lower, upper)
+fn exact_prop(x: f64, n: f64, level: f64) -> (f64, f64, f64) {
+    let al = 1.0f64 - level
+    var lo = 0.0f64
+    var hi = 1.0f64
+    if x > 0.0f64 { lo = nb.qbeta(al / 2.0f64, x, n - x + 1.0f64, true, false) }
+    if x < n { hi = nb.qbeta(1.0f64 - al / 2.0f64, x + 1.0f64, n - x, true, false) }
+    ret (x / n, lo, hi)
+}
+
+// population attributable fraction as epiR reports it for the 2 by 2 table: (risk in the population - risk in the unexposed) / risk in the
+// population, the bounds taken over the exact intervals of the two risks (min and max of the two limit ratios): (est, lower, upper)
+fn paf_risk(t: Table2, level: f64) -> (f64, f64, f64) {
+    let n = t.a + t.b + t.c + t.d
+    let (po, ol, ou) = exact_prop(t.c, t.c + t.d, level)
+    let (pp, pl, pu) = exact_prop(t.a + t.c, n, level)
+    let r1 = (pl - ol) / pl
+    let r2 = (pu - ou) / pu
+    ret ((pp - po) / pp, math.min[f64](r1, r2), math.max[f64](r1, r2))
+}
+
+// population attributable risk with its Wald interval (kind 0) or Pirikahu's delta-method interval (kind 1): (est, lower, upper)
+fn par_risk_ci(t: Table2, level: f64, units: f64, kind: usize) -> (f64, f64, f64) {
+    let n = t.a + t.b + t.c + t.d
+    let m1 = t.a + t.c
+    let n0 = t.c + t.d
+    let est = (m1 / n - t.c / n0) * units
+    var se = 0.0f64
+    if kind == 0usize {
+        se = math.sqrt[f64](m1 * (n - m1) / (n * n * n) + t.c * (n0 - t.c) / (n0 * n0 * n0)) * units
+    } else {
+        let d1 = 1.0f64 / n - m1 / (n * n)
+        let d2 = 0.0f64 - m1 / (n * n)
+        let d3 = t.c / (n0 * n0) - m1 / (n * n) + 1.0f64 / n - 1.0f64 / n0
+        let d4 = t.c / (n0 * n0) - m1 / (n * n)
+        se = math.sqrt[f64](d1 * d1 * t.a + d2 * d2 * t.b + d3 * d3 * t.c + d4 * d4 * t.d) * units
+    }
+    let z = z_of(level)
+    ret (est, est - z * se, est + z * se)
 }

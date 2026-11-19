@@ -51145,3 +51145,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7550 — actuar transformed beta generators under set.seed
 `rand_tb` draws rburr, rpareto, rllogis and rparalogis by inverting the cdf at 1 - u and rinvburr, rinvpareto and rinvparalogis at u, through the tb parameter maps; equal to actuar draw for draw on 70 seeded runs (64 values added to oracle_actuar, 5185 in all). Probed and not matched yet: rgenpareto, rtrbeta, rgenbeta, rinvweibull, rinvexp and rinvtrgamma (the vectorised C code draws its gamma pairs in a different order than a plain loop), so they stay open.
+
+## D7551 — epiR population attributable fraction and risk
+`paf_risk` is the population attributable fraction as epi.2by2 reports it for cohort.count: the source shows a Jewell variance, but the result comes from the crude path, which takes (risk in the population - risk in the unexposed) / risk in the population with the bounds the min and max over the Clopper-Pearson intervals of the two risks (`exact_prop`). `par_risk_ci` gives the population attributable risk with its Wald and Pirikahu intervals. Equal to epiR on 25 tables (75 values added to oracle_epir, 750 in all). The attributable fraction in the exposed stays open: epiR takes its interval from the score (Koopman) risk-ratio interval, not the Wald one, and that interval is not ported.
