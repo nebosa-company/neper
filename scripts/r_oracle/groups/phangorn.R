@@ -61,4 +61,14 @@ for (rep in 1:30) {
   ll <- pml(tr, d, model = "GTR", bf = bf, Q = rt)$logLik
   cases[[length(cases) + 1]] <- case("gtrloglik", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, tr$edge.length, bf, rt, as.vector(t(matrix(bits[M], nt, ns)))), as.numeric(ll), rel = 1e-8, abs = 1e-8)
 }
+# the same with discrete gamma rates ("gtrgamma": nt, ns, ne, parent, child, edge length, bf[4], rates[6], shape, k, data)
+for (rep in 1:25) {
+  nt <- sample(4:10, 1); ns <- sample(10:60, 1)
+  tr <- reorder(rtree(nt), "cladewise"); tr$edge.length <- round(runif(nrow(tr$edge), 0.01, 0.8), 4)
+  M <- matrix(sample(codes, nt * ns, TRUE), nt, ns, dimnames = list(tr$tip.label, NULL)); d <- phyDat(M, type = "DNA")
+  bf <- runif(4, 0.1, 0.5); bf <- round(bf / sum(bf), 5); bf[4] <- 1 - sum(bf[1:3]); rt <- round(runif(6, 0.3, 4), 3)
+  shape <- round(runif(1, 0.2, 4), 3); k <- sample(2:6, 1)
+  ll <- pml(tr, d, model = "GTR", bf = bf, Q = rt, k = k, shape = shape)$logLik
+  cases[[length(cases) + 1]] <- case("gtrgammall", c(nt, ns, nrow(tr$edge), tr$edge[, 1] - 1, tr$edge[, 2] - 1, tr$edge.length, bf, rt, shape, k, as.vector(t(matrix(bits[M], nt, ns)))), as.numeric(ll), rel = 1e-8, abs = 1e-8)
+}
 emit("phangorn", "phangorn", list(cases))

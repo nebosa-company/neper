@@ -4502,4 +4502,5 @@ D7632	525	phangorn: Hamming and Jukes-Cantor distances
 D7633	610	phangorn: Sankoff parsimony
 D7634	553	phangorn: Jukes-Cantor tree likelihood
 D7686	732	segmented pscore.test with two breaks for a linear model
-D7635	694	phangorn: general time-reversible tree likelihood
+D7635	695	phangorn: general time-reversible tree likelihood
+D7636	676	phangorn: discrete gamma rates

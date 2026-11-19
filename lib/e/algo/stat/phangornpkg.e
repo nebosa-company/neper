@@ -4,6 +4,7 @@
 // Not here: the other cost matrices (sankoff), non-binary trees, pratchet and the search, pml and the likelihood models, model selection, bootstrap.
 
 use e.math
+use e.math.nmath as nm
 use e.mem
 
 fn fitch(a: *mem.Arena, par: []const f64, chd: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize) -> f64 {
@@ -312,7 +313,7 @@ fn expm4(q: []const f64, t: f64, o: []f64) {
 }
 
 // the log-likelihood phangorn::pml(tree, data, model = "GTR", bf, Q) gives: base frequencies bf (A C G T) and the six exchangeabilities rates (AC AG AT CG CT GT), the rate matrix scaled to one expected change per unit length
-fn gtr_loglik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bf: []const f64, rates: []const f64) -> f64 {
+fn gtr_site_lik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bf: []const f64, rates: []const f64, mult: f64, sl: []f64) -> bool {
     var q: [16]f64 = zero
     var r: [16]f64 = zero
     r[1usize] = rates[0usize]
@@ -354,13 +355,12 @@ fn gtr_loglik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64
     let nn = ne + 1usize
     let (lv, e1) = mem.alloc[f64](a, nn * 4usize)
     let (pm, e2) = mem.alloc[f64](a, ne * 16usize)
-    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    if e1 != ok || e2 != ok { ret false }
     var k = 0usize
     while k < ne {
-        expm4(q[0usize..16usize], bl[k], pm[k * 16usize..k * 16usize + 16usize])
+        expm4(q[0usize..16usize], bl[k] * mult, pm[k * 16usize..k * 16usize + 16usize])
         k += 1usize
     }
-    var ll = 0.0f64
     var s = 0usize
     while s < ns {
         i = 0usize
@@ -399,7 +399,51 @@ fn gtr_loglik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64
             site += bf[st] * lv[nt * 4usize + st]
             st += 1usize
         }
-        ll += math.log[f64](site)
+        sl[s] = site
+        s += 1usize
+    }
+    ret true
+}
+
+fn gtr_loglik(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bf: []const f64, rates: []const f64) -> f64 {
+    ret gtr_loglik_gamma(a, par, chd, bl, ne, nt, data, ns, bf, rates, 1.0f64, 1usize)
+}
+
+// as gtr_loglik with the rate over sites discretised gamma(shape) in k categories, each the mean of its bin of the distribution (phangorn's discrete.gamma) and equally likely; k = 1 is a single rate of one
+fn gtr_loglik_gamma(a: *mem.Arena, par: []const f64, chd: []const f64, bl: []const f64, ne: usize, nt: usize, data: []const f64, ns: usize, bf: []const f64, rates: []const f64, shape: f64, k: usize) -> f64 {
+    let (sl, e1) = mem.alloc[f64](a, ns)
+    let (acc, e2) = mem.alloc[f64](a, ns)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var s = 0usize
+    while s < ns {
+        acc[s] = 0.0f64
+        s += 1usize
+    }
+    var prev = 0.0f64
+    var c = 0usize
+    while c < k {
+        var mult = 1.0f64
+        var cur = 1.0f64
+        if k > 1usize {
+            if c + 1usize < k {
+                let qt = nm.qgamma(f64(c + 1usize) / f64(k), shape, 1.0f64 / shape, true, false)
+                cur = nm.pgamma(qt * shape, shape + 1.0f64, 1.0f64, true, false)
+            }
+            mult = (cur - prev) * f64(k)
+            prev = cur
+        }
+        if !gtr_site_lik(a, par, chd, bl, ne, nt, data, ns, bf, rates, mult, sl) { ret 0.0f64 / 0.0f64 }
+        s = 0usize
+        while s < ns {
+            acc[s] += sl[s] / f64(k)
+            s += 1usize
+        }
+        c += 1usize
+    }
+    var ll = 0.0f64
+    s = 0usize
+    while s < ns {
+        ll += math.log[f64](acc[s])
         s += 1usize
     }
     ret ll
