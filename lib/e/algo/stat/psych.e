@@ -1339,3 +1339,157 @@ fn fa_ml_oblimin(a: *mem.Arena, r: []const f64, p: usize, q: usize, out: []f64) 
     }
     ret true
 }
+
+type FaRCtx = struct { a: *mem.Arena, r: []const f64, si: []const f64, p: usize, q: usize, fm: usize, s: []f64, w: []f64, z: []f64, mdl: []f64 }
+
+// psych's fit.residuals for fm 0 minres, 1 uls, 2 ols, 3 wls, 4 gls at the uniquenesses psi = fa_psi(u): the correlation matrix with 1 - psi on its diagonal, its q largest eigenpairs as the model loadings L L', and the sum of the (weighted)
+// squared residuals (minres without the diagonal, ols over the lower triangle, wls scaled by the inverse diagonal of R^-1 on both sides, gls through R^-1)
+fn fa_r_f(c: *FaRCtx, u: []const f64) -> f64 {
+    let p = c.p
+    var i = 0usize
+    while i < p * p {
+        c.s[i] = c.r[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        c.s[i * p + i] = 1.0f64 - fa_psi(u[i])
+        i += 1usize
+    }
+    let mk = mem.mark(c.a)
+    let e4 = sy.dsyevr_all(c.a, c.s, p, c.w, c.z)
+    mem.reset(c.a, mk)
+    if e4 != ok { ret 1.0e300f64 }
+    var k = 0usize
+    while k < p * p {
+        c.mdl[k] = 0.0f64
+        k += 1usize
+    }
+    k = 0usize
+    while k < c.q {
+        let col = p - 1usize - k
+        var ev = c.w[col]
+        if ev < 2.220446049250313e-14f64 { ev = 2.220446049250313e-14f64 }
+        i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < p {
+                c.mdl[i * p + j] += c.z[col * p + i] * c.z[col * p + j] * ev
+                j += 1usize
+            }
+            i += 1usize
+        }
+        k += 1usize
+    }
+    var err0 = 0.0f64
+    if c.fm == 4usize {
+        // gls: sum of ((R^-1 (S - model)) ^ 2) entries
+        i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < p {
+                var t = 0.0f64
+                var l = 0usize
+                while l < p {
+                    t += c.si[i * p + l] * (c.s[l * p + j] - c.mdl[l * p + j])
+                    l += 1usize
+                }
+                err0 += t * t
+                j += 1usize
+            }
+            i += 1usize
+        }
+    } else if c.fm == 3usize {
+        i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < p {
+                let d = c.s[i * p + j] - c.mdl[i * p + j]
+                err0 += d * d / (c.si[i * p + i] * c.si[j * p + j])
+                j += 1usize
+            }
+            i += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < p {
+                let d = c.s[i * p + j] - c.mdl[i * p + j]
+                if c.fm == 0usize {
+                    if i != j { err0 += d * d }
+                } else if c.fm == 1usize {
+                    err0 += d * d
+                } else {
+                    if j < i { err0 += d * d }
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    ret err0
+}
+
+type FaRGrad = struct { c: *FaRCtx, x: []f64 }
+
+fn fa_r_fw(t: *FaRGrad, u: []const f64) -> f64 { ret fa_r_f(t.c, u) }
+
+fn fa_r_g(t: *FaRGrad, u: []const f64, g: []f64) {
+    let m = u.len
+    var i = 0usize
+    while i < m {
+        t.x[i] = u[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        let h = 1.0e-6f64
+        t.x[i] = u[i] + h
+        let fp = fa_r_f(t.c, t.x[0usize..m])
+        t.x[i] = u[i] - h
+        let fm = fa_r_f(t.c, t.x[0usize..m])
+        t.x[i] = u[i]
+        g[i] = (fp - fm) / (2.0f64 * h)
+        i += 1usize
+    }
+}
+
+// psych::fa(r, nfactors = q, fm, rotate = "none") for the residual-based methods fm 0 "minres", 1 "uls", 2 "ols", 3 "wls", 4 "gls": the uniquenesses minimising `fa_r_f` within [0.005, 1] from (1 - q / (2 p)) / diag(r^-1), by BFGS on a
+// logistic map; out = the p uniquenesses then the objective at the optimum
+fn fa_resid(a: *mem.Arena, r: []const f64, p: usize, q: usize, fm: usize, out: []f64) -> bool {
+    let (ri, e1) = mem.alloc[f64](a, p * p)
+    let (s, e2) = mem.alloc[f64](a, p * p)
+    let (w, e3) = mem.alloc[f64](a, p)
+    let (z, e4) = mem.alloc[f64](a, p * p)
+    let (mdl, e5) = mem.alloc[f64](a, p * p)
+    let (u, e6) = mem.alloc[f64](a, p)
+    let (xx, e7) = mem.alloc[f64](a, p)
+    let (scr, e8) = mem.alloc[f64](a, p * p + 6usize * p + 16usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret false }
+    if !invert(a, r, p, ri) { ret false }
+    var i = 0usize
+    while i < p {
+        var st = (1.0f64 - 0.5f64 * f64(q) / f64(p)) / ri[i * p + i]
+        if st < 0.006f64 { st = 0.006f64 }
+        if st > 0.999f64 { st = 0.999f64 }
+        let t = (st - 0.005f64) / 0.995f64
+        u[i] = math.log[f64](t / (1.0f64 - t))
+        i += 1usize
+    }
+    var c = FaRCtx { a: a, r: r, si: ri, p: p, q: q, fm: fm, s: s, w: w, z: z, mdl: mdl }
+    var t = FaRGrad { c: &c, x: xx }
+    var round = 0usize
+    while round < 3usize {
+        let (rr, e9) = opt.bfgs[FaRGrad](&t, fa_r_fw, fa_r_g, u, 1.0e-12f64, 200u32, scr)
+        if e9 != ok { ret false }
+        round += 1usize
+    }
+    i = 0usize
+    while i < p {
+        out[i] = fa_psi(u[i])
+        i += 1usize
+    }
+    out[p] = fa_r_f(&c, u)
+    ret true
+}
