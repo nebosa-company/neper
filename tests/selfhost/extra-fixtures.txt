@@ -578,3 +578,4 @@ oracle_systemfit_2sls
 oracle_systemfit_wald
 oracle_tm_stop
 oracle_tm_stoplang
+oracle_snowball

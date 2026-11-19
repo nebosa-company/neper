@@ -4373,4 +4373,5 @@ D7515	676	tm removePunctuation
 D7516	656	tm stopword lists for the thirteen languages
 D7517	743	tm removePunctuation preserve options
 D7518	872	tidytext word tokenisation (ASCII)
-D7519	708	tidytext n-gram tokenisation
+D7519	709	tidytext n-gram tokenisation
+D7520	512	stemming equals SnowballC

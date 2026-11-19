@@ -51046,3 +51046,6 @@ The log-likelihood, gradient and Hessian carry each observation's weight (`logli
 
 ## D7519 — tidytext n-gram tokenisation
 `tokenize_ngrams(text, nmin, nmax)` is tokenizers::tokenize_ngrams(n = nmax, n_min = nmin) (what unnest_tokens(token = "ngrams") calls): the word tokens of `tokenize_words`, then from each start position the n-grams of nmin to nmax tokens that still fit, in that order (a, a b, a b c, b, b c, ...), joined by single spaces, newline-separated, none when the text has fewer than nmin tokens (R answers NA). Equal to tokenizers on 80 random texts with random nmin and nmax up to 4 (length and position-weighted code sum, 160 values added to oracle_tm_stop, 830 in all). Open for L380: non-ASCII text, the sentence and regex tokenisers, stemming, corpora, topic models.
+
+## D7520 — stemming equals SnowballC
+`e.text.stem`'s `porter` (the 1980 rules) and `snowball` (Porter2, what tm stemDocument calls through SnowballC's "english") already existed without an oracle against R; 655 words from R's COPYING text, each stemmed in both languages, give identical stems to SnowballC wordStem (1310 answers, the stem length and position-weighted byte sum, in oracle_snowball). No library change. Open for L380: non-ASCII text and the sentence and regex tokenisers, corpora, topic models.
