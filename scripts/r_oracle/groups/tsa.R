@@ -28,4 +28,17 @@ for (rep in 1:30) {
   pv <- sapply((fd + 1):gl, function(i) Box.test(x, lag = i, type = "Ljung-Box", fitdf = fd)$p.value)
   cases[[length(cases) + 1]] <- case("bl", c(n, gl, fd, x), sum(pv * ((fd + 1):gl)), rel = 1e-9, abs = 1e-12)
 }
+# stats::ar.ols for one series: "aro" args (n, x[n], aic, order.max (0 the default), demean, intercept, which, idx) with which 0 order, 1 var.pred, 2 x.mean, 3 x.intercept, 4 ar[idx + 1], 5 resid[idx + 1] (idx past the NA)
+for (rep in 1:20) {
+  n <- sample(40:200, 1); x <- as.numeric(arima.sim(list(ar = c(0.5, -0.3)[seq_len(1 + rep %% 2)]), n)) + (rep %% 3) * 2; x <- round(x, 4)
+  aic <- rep %% 4 != 0; om <- c(0, 5, 8, 0)[1 + rep %% 4]; dm <- rep %% 5 != 0
+  r <- tryCatch(suppressWarnings(ar.ols(x, aic = aic, order.max = if (om > 0) om else NULL, demean = dm, intercept = dm)), error = function(e) NULL); if (is.null(r)) next
+  a <- c(n, x, aic, om, dm, dm)
+  cases[[length(cases) + 1]] <- case("aro", c(a, 0, 0), r$order, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("aro", c(a, 1, 0), r$var.pred, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("aro", c(a, 2, 0), r$x.mean, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("aro", c(a, 3, 0), if (is.null(r$x.intercept)) 0 else r$x.intercept, rel = 1e-9, abs = 1e-12)
+  for (k in seq_len(r$order)) cases[[length(cases) + 1]] <- case("aro", c(a, 4, k - 1), as.numeric(r$ar)[k], rel = 1e-8, abs = 1e-10)
+  for (k in sample(seq(r$order + 1, n), 3)) cases[[length(cases) + 1]] <- case("aro", c(a, 5, k - 1), as.numeric(r$resid)[k], rel = 1e-8, abs = 1e-10)
+}
 emit("tsa", "TSA", list(cases))

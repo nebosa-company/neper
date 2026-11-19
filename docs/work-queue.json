@@ -111,7 +111,7 @@
       "score": 0.35,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6190, D6406 McLeod.Li.test). periodogram equals TSA on Windows (oracle_tsa; Linux pending). D6870: eacf equals TSA. D7129, D7130: detectAO and detectIO on the fitted pieces equal to TSA (oracle_tsa_detectao, 72 values). D7131: the cumulative periodogram values (cpgram body) equal R (oracle_tsa_cpgram, 48 values). D7527: the tsdiag Ljung-Box p-values equal Box.test. Open: armasubsets, arimax, BIC table. Was: Open (CRAN rank 735). Small to mid. Acceptance, equal to TSA: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax with intervention terms, periodogram, cumulative periodogram data, eacf, BIC table, tsdiag statistics."
+      "evidence": "Partial (D6190, D6406 McLeod.Li.test). periodogram equals TSA on Windows (oracle_tsa; Linux pending). D6870: eacf equals TSA. D7129, D7130: detectAO and detectIO on the fitted pieces equal to TSA (oracle_tsa_detectao, 72 values). D7131: the cumulative periodogram values (cpgram body) equal R (oracle_tsa_cpgram, 48 values). D7527: the tsdiag Ljung-Box p-values equal Box.test. D7713: stats::ar.ols for one series (the AR fit armasubsets builds on) equals R. Open: armasubsets (leaps regsubsets with its collinearity handling), arimax, BIC table. Was: Open (CRAN rank 735). Small to mid. Acceptance, equal to TSA: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax with intervention terms, periodogram, cumulative periodogram data, eacf, BIC table, tsdiag statistics."
     },
     {
       "id": "L453",

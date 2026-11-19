@@ -9,6 +9,7 @@ use e.math
 use e.math.nmath as nm
 use e.math.dist as dist
 use e.algo.linalg.decomp as decomp
+use e.algo.stat.gparot as gp
 use e.mem
 
 error Malformed
@@ -419,6 +420,246 @@ fn box_ljung(a: *mem.Arena, x: []const f64, gof: usize, fitdf: usize, out: []f64
             out[lag - 1usize] = 0.0f64 / 0.0f64
         }
         lag += 1usize
+    }
+    ret ok
+}
+
+// stats::ar.ols for one series (the unconstrained least squares AR fit of ar()): the series is divided by its standard deviation and centered (demean), for each order m from 0 (or order_max
+// when aic is off) to order_max (0 asks for min(n - 1, floor(10 log10 n))) the regression of x_t on an intercept (when intercept) and x_{t-1} .. x_{t-m} is solved by the normal equations,
+// the innovations variance is the mean square residual, AIC = 2 (m + intercept) + n log(variance) and the first order with the smallest AIC is kept. out = (order, innovations variance,
+// series mean, intercept, ar_1 .. ar_m); resid (length n) holds NaN for the first m values and the residuals otherwise, all back on the original scale
+fn ar_ols(a: *mem.Arena, x: []const f64, aic: bool, order_max0: usize, demean: bool, intercept: bool, out: []f64, resid: []f64) -> err {
+    let n = x.len
+    var ob = order_max0
+    if ob == 0usize {
+        ob = usize(math.floor[f64](10.0f64 * math.log10[f64](f64(n))))
+        if n - 1usize < ob { ob = n - 1usize }
+    }
+    var mean0 = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean0 += x[i]
+        i += 1usize
+    }
+    mean0 /= f64(n)
+    var ssd = 0.0f64
+    i = 0usize
+    while i < n {
+        ssd += (x[i] - mean0) * (x[i] - mean0)
+        i += 1usize
+    }
+    var sc = math.sqrt[f64](ssd / f64(n - 1usize))
+    if sc == 0.0f64 { sc = 1.0f64 }
+    let (z, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret e0 }
+    var xm = 0.0f64
+    if demean { xm = mean0 / sc }
+    i = 0usize
+    while i < n {
+        z[i] = x[i] / sc - xm
+        i += 1usize
+    }
+    var imin = ob
+    if aic { imin = 0usize }
+    var best_aic = 1.0e308f64
+    var best_m = ob
+    var m = imin
+    while m <= ob {
+        let start = mem.mark(a)
+        var q = m
+        if intercept { q += 1usize }
+        let rows = n - m
+        var vv = 0.0f64
+        var okfit = true
+        if q > 0usize {
+            let (xtx, e1) = mem.alloc[f64](a, q * q)
+            let (xty, e2) = mem.alloc[f64](a, q)
+            if e1 != ok || e2 != ok { ret e1 }
+            var r = 0usize
+            while r < q * q {
+                xtx[r] = 0.0f64
+                r += 1usize
+            }
+            r = 0usize
+            while r < q {
+                xty[r] = 0.0f64
+                r += 1usize
+            }
+            var t = m
+            while t < n {
+                var c1 = 0usize
+                while c1 < q {
+                    var v1 = 1.0f64
+                    if !intercept || c1 > 0usize {
+                        var lag = c1 + 1usize
+                        if intercept { lag = c1 }
+                        v1 = z[t - lag]
+                    }
+                    xty[c1] += v1 * z[t]
+                    var c2 = 0usize
+                    while c2 < q {
+                        var v2 = 1.0f64
+                        if !intercept || c2 > 0usize {
+                            var lag2 = c2 + 1usize
+                            if intercept { lag2 = c2 }
+                            v2 = z[t - lag2]
+                        }
+                        xtx[c1 * q + c2] += v1 * v2
+                        c2 += 1usize
+                    }
+                    c1 += 1usize
+                }
+                t += 1usize
+            }
+            let (inv, ie) = gp.invert(a, xtx, q)
+            if ie != ok { okfit = false }
+            if okfit {
+                var bh: [64]f64 = zero
+                var c1 = 0usize
+                while c1 < q {
+                    var c2 = 0usize
+                    while c2 < q {
+                        bh[c1] += inv[c1 * q + c2] * xty[c2]
+                        c2 += 1usize
+                    }
+                    c1 += 1usize
+                }
+                var rss = 0.0f64
+                t = m
+                while t < n {
+                    var fit = 0.0f64
+                    var c = 0usize
+                    while c < q {
+                        var v = 1.0f64
+                        if !intercept || c > 0usize {
+                            var lag = c + 1usize
+                            if intercept { lag = c }
+                            v = z[t - lag]
+                        }
+                        fit += bh[c] * v
+                        c += 1usize
+                    }
+                    rss += (z[t] - fit) * (z[t] - fit)
+                    t += 1usize
+                }
+                vv = rss / f64(rows)
+                let aicm = 2.0f64 * f64(q) + f64(n) * math.log[f64](vv)
+                if aicm < best_aic {
+                    best_aic = aicm
+                    best_m = m
+                }
+            }
+        } else {
+            var rss = 0.0f64
+            var t = 0usize
+            while t < n {
+                rss += z[t] * z[t]
+                t += 1usize
+            }
+            vv = rss / f64(n)
+            let aicm = f64(n) * math.log[f64](vv)
+            if aicm < best_aic {
+                best_aic = aicm
+                best_m = m
+            }
+        }
+        mem.reset(a, start)
+        if !okfit { break }
+        m += 1usize
+    }
+    // refit at the chosen order and report
+    m = best_m
+    var q = m
+    if intercept { q += 1usize }
+    var bh2: [64]f64 = zero
+    if q > 0usize {
+        let (xtx, e1) = mem.alloc[f64](a, q * q)
+        let (xty, e2) = mem.alloc[f64](a, q)
+        if e1 != ok || e2 != ok { ret e1 }
+        var r = 0usize
+        while r < q * q {
+            xtx[r] = 0.0f64
+            r += 1usize
+        }
+        r = 0usize
+        while r < q {
+            xty[r] = 0.0f64
+            r += 1usize
+        }
+        var t = m
+        while t < n {
+            var c1 = 0usize
+            while c1 < q {
+                var v1 = 1.0f64
+                if !intercept || c1 > 0usize {
+                    var lag = c1 + 1usize
+                    if intercept { lag = c1 }
+                    v1 = z[t - lag]
+                }
+                xty[c1] += v1 * z[t]
+                var c2 = 0usize
+                while c2 < q {
+                    var v2 = 1.0f64
+                    if !intercept || c2 > 0usize {
+                        var lag2 = c2 + 1usize
+                        if intercept { lag2 = c2 }
+                        v2 = z[t - lag2]
+                    }
+                    xtx[c1 * q + c2] += v1 * v2
+                    c2 += 1usize
+                }
+                c1 += 1usize
+            }
+            t += 1usize
+        }
+        let (inv, ie) = gp.invert(a, xtx, q)
+        if ie != ok { ret ie }
+        var c1 = 0usize
+        while c1 < q {
+            var c2 = 0usize
+            while c2 < q {
+                bh2[c1] += inv[c1 * q + c2] * xty[c2]
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+    }
+    var t = 0usize
+    while t < m {
+        resid[t] = 0.0f64 / 0.0f64
+        t += 1usize
+    }
+    var rss = 0.0f64
+    t = m
+    while t < n {
+        var fit = 0.0f64
+        var c = 0usize
+        while c < q {
+            var v = 1.0f64
+            if !intercept || c > 0usize {
+                var lag = c + 1usize
+                if intercept { lag = c }
+                v = z[t - lag]
+            }
+            fit += bh2[c] * v
+            c += 1usize
+        }
+        resid[t] = (z[t] - fit) * sc
+        rss += (z[t] - fit) * (z[t] - fit)
+        t += 1usize
+    }
+    out[0usize] = f64(m)
+    out[1usize] = rss / f64(n - m) * sc * sc
+    out[2usize] = xm * sc
+    var xint = 0.0f64
+    if intercept { xint = bh2[0usize] * sc }
+    out[3usize] = xint
+    var j = 0usize
+    while j < m {
+        var cc = j
+        if intercept { cc = j + 1usize }
+        out[4usize + j] = bh2[cc]
+        j += 1usize
     }
     ret ok
 }

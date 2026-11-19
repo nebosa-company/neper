@@ -26,6 +26,20 @@ fn mcl_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "mcl") { ret mcl_case(a, c) }
+    if str.eq(c.name, "aro") {
+        let ax = c.args
+        let an = usize(ax[0usize])
+        let (ao, ae) = mem.alloc[f64](a, 40usize)
+        let (ar_, ae2) = mem.alloc[f64](a, an)
+        if ae != ok || ae2 != ok { os.exit(11) }
+        let bs = 1usize + an
+        if ts.ar_ols(a, ax[1usize..1usize + an], ax[bs] != 0.0f64, usize(ax[bs + 1usize]), ax[bs + 2usize] != 0.0f64, ax[bs + 3usize] != 0.0f64, ao, ar_) != ok { os.exit(12) }
+        let wh = usize(ax[bs + 4usize])
+        let ix = usize(ax[bs + 5usize])
+        if wh == 4usize { ret ao[4usize + ix] }
+        if wh == 5usize { ret ar_[ix] }
+        ret ao[wh]
+    }
     if str.eq(c.name, "bl") {
         let bx = c.args
         let bn = usize(bx[0usize])
