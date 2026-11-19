@@ -540,3 +540,67 @@ fn epi_dsl_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f
     out[5usize] = 1.0f64 - nm.pchisq(q, df, true, false)
     out[6usize] = (hsq - 1.0f64) / hsq * 100.0f64
 }
+
+// ln odds ratio and its variance of study i with epiR's half-correction (a half added to every cell of a table with a cell below 1): (ln OR, variance)
+fn study_lnor(evt: f64, nt: f64, evc: f64, nc: f64) -> (f64, f64) {
+    var a = evt
+    var b = nt - evt
+    var c = evc
+    var d = nc - evc
+    if a < 1.0f64 || b < 1.0f64 || c < 1.0f64 || d < 1.0f64 {
+        a += 0.5f64
+        b += 0.5f64
+        c += 0.5f64
+        d += 0.5f64
+    }
+    ret (math.log[f64](a * d / (b * c)), 1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / d)
+}
+
+// epi.iv for odds ratios (inverse-variance fixed effect); out = (pooled OR, lower, upper, Q, heterogeneity p, I squared, H squared, H squared lower,
+// H squared upper, I squared lower, I squared upper, effect z, effect p two-sided)
+fn epi_iv_or(evt: []const f64, nt: []const f64, evc: []const f64, nc: []const f64, level: f64, out: []f64) {
+    let k = f64(evt.len)
+    let z = z_of(level)
+    var sw = 0.0f64
+    var swl = 0.0f64
+    var i = 0usize
+    while i < evt.len {
+        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i])
+        sw += 1.0f64 / v
+        swl += l / v
+        i += 1usize
+    }
+    let lniv = swl / sw
+    var q = 0.0f64
+    i = 0usize
+    while i < evt.len {
+        let (l, v) = study_lnor(evt[i], nt[i], evc[i], nc[i])
+        q += (l - lniv) * (l - lniv) / v
+        i += 1usize
+    }
+    let se = 1.0f64 / math.sqrt[f64](sw)
+    let df = k - 1.0f64
+    let hsq = q / df
+    var lse = 0.0f64
+    if q > k {
+        lse = (math.log[f64](q) - math.log[f64](k - 1.0f64)) / (2.0f64 * math.sqrt[f64](2.0f64 * q) - math.sqrt[f64](2.0f64 * (k - 3.0f64)))
+    } else {
+        lse = math.sqrt[f64](1.0f64 / (2.0f64 * (k - 2.0f64)) * (1.0f64 - 1.0f64 / (3.0f64 * (k - 2.0f64) * (k - 2.0f64))))
+    }
+    let hl = math.exp[f64](math.log[f64](hsq) - z * lse)
+    let hu = math.exp[f64](math.log[f64](hsq) + z * lse)
+    let ez = lniv / se
+    out[0usize] = math.exp[f64](lniv)
+    out[1usize] = math.exp[f64](lniv - z * se)
+    out[2usize] = math.exp[f64](lniv + z * se)
+    out[3usize] = q
+    out[4usize] = 1.0f64 - nm.pchisq(q, df, true, false)
+    out[5usize] = (hsq - 1.0f64) / hsq * 100.0f64
+    out[6usize] = hsq
+    out[7usize] = hl
+    out[8usize] = hu
+    out[9usize] = (hl - 1.0f64) / hl * 100.0f64
+    out[10usize] = (hu - 1.0f64) / hu * 100.0f64
+    out[11usize] = ez
+    out[12usize] = 2.0f64 * dist.pnorm(math.abs[f64](ez), 0.0f64, 1.0f64, false, false)
+}

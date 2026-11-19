@@ -87,4 +87,12 @@ for (rep in 1:25) {
   if (any(!is.finite(v))) next
   for (w in 0:6) cases[[length(cases) + 1]] <- case("dsl", c(k, evt, nt, evc, nc, w), v[w + 1], rel = 1e-8, abs = 1e-10)
 }
+# epi.iv (odds ratios): "iv" args (k, ev_t[k], n_t[k], ev_c[k], n_c[k], which 0 OR 1 2 interval, 3 Q, 4 p, 5 I2, 6 7 8 H2 (est, lower, upper), 9 10 I2 (lower, upper), 11 z, 12 p)
+for (rep in 1:25) {
+  k <- sample(4:10, 1); nt <- sample(60:300, k); nc <- sample(60:300, k); evt <- rbinom(k, nt, runif(1, 0.05, 0.2)); evc <- rbinom(k, nc, runif(1, 0.1, 0.3))
+  m <- suppressWarnings(epi.iv(evt, nt, evc, nc, names = as.character(1:k), method = "odds.ratio"))
+  v <- c(m$OR.summary$est, m$OR.summary$lower, m$OR.summary$upper, unname(m$heterogeneity["Q"]), unname(m$heterogeneity["p.value"]), m$Isq$est, m$Hsq$est, m$Hsq$lower, m$Hsq$upper, m$Isq$lower, m$Isq$upper, unname(m$effect["z"]), unname(m$effect["p.value"]))
+  if (any(!is.finite(v))) next
+  for (w in 0:12) cases[[length(cases) + 1]] <- case("iv", c(k, evt, nt, evc, nc, w), v[w + 1], rel = 1e-8, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))

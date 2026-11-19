@@ -51172,3 +51172,6 @@ The count helpers of D7541 take two more base laws, kind 2 binomial and kind 3 g
 
 ## D7559 — epiR epi.dsl for odds ratios
 `epi_dsl_or` pools k two-by-two tables by DerSimonian-Laird: study log odds ratios weighted by their inverse variance for Cochran's Q, tau squared as (Q - (k - 1)) over the weight spread (zero when Q is below k - 1), random-effects weights 1 / (v + tau squared), the pooled odds ratio with its Wald interval, the heterogeneity p value and I squared. Equal to epiR on 25 meta-analyses of 4 to 10 studies (175 values added to oracle_epir, 3105 in all). The risk-ratio method, the Mantel-Haenszel summary and the H squared interval stay open.
+
+## D7560 — epiR epi.iv for odds ratios
+`epi_iv_or` is the inverse-variance fixed-effect summary of k two-by-two tables: pooled odds ratio and Wald interval, Cochran's Q with its p value, H squared and I squared with the intervals epiR derives from the standard error of ln H squared (a different formula when Q exceeds k), and the effect z and its two-sided p. `study_lnor` is the shared per-study log odds ratio and variance with the half correction. Equal to epiR on 25 meta-analyses (325 values added to oracle_epir, 3430 in all). The risk-ratio method stays open.

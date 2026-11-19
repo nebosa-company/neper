@@ -4414,4 +4414,5 @@ D7555	694	epiR case-control score odds ratio and attributable fraction
 D7556	479	epiR epi.ccc
 D7557	529	epiR epi.sscohortc sample size and power
 D7558	550	epiR epi.sscc unmatched sample size and power
-D7559	582	epiR epi.dsl for odds ratios
+D7559	583	epiR epi.dsl for odds ratios
+D7560	570	epiR epi.iv for odds ratios
