@@ -20,7 +20,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 6usize { ret gd.dgaf(z[3usize], z[1usize], z[2usize], z[4usize]) }
     if which == 7usize { ret gd.pgaf(z[3usize], z[1usize], z[2usize], z[4usize]) }
     if which == 8usize { ret gd.qgaf(z[3usize], z[1usize], z[2usize], z[4usize]) }
-    ret gd.dzisichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize])
+    if which == 9usize { ret gd.dzisichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize]) }
+    if which == 10usize { ret gd.dsep(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize]) }
+    ret gd.dzasichel(z[3usize], z[1usize], z[2usize], z[4usize], z[5usize])
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

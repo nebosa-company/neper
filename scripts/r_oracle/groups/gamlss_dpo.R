@@ -28,4 +28,11 @@ for (rep in 1:40) {
   tau <- runif(1, 0.05, 0.6); nu2 <- runif(1, -1.5, 1); xi <- rpois(1, mu)
   add("dp", c(9, mu, sg, xi, nu2, tau), dZISICHEL(xi, mu = mu, sigma = sg, nu = nu2, tau = tau), 1e-7, 1e-12)
 }
+# SEP (fn 10; mu, sigma, nu, tau, x) and ZASICHEL (fn 11; mu, sigma, nu, tau, x)
+for (rep in 1:40) {
+  mu <- rnorm(1, 0, 2); sg <- runif(1, 0.4, 2); nu <- rnorm(1, 0, 1.5); tau <- runif(1, 0.8, 4); x <- rnorm(1, mu, sg)
+  add("dp", c(10, mu, sg, x, nu, tau), dSEP(x, mu = mu, sigma = sg, nu = nu, tau = tau), 1e-9, 1e-14)
+  mu2 <- runif(1, 0.5, 6); sg2 <- runif(1, 0.3, 2); nu2 <- runif(1, -1.5, 1); t2 <- runif(1, 0.05, 0.6); xi <- rpois(1, mu2)
+  add("dp", c(11, mu2, sg2, xi, nu2, t2), dZASICHEL(xi, mu = mu2, sigma = sg2, nu = nu2, tau = t2), 1e-7, 1e-12)
+}
 emit("gamlss_dpo", "gamlss.dist", list(cases))

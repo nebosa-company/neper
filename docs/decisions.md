@@ -50449,3 +50449,9 @@ Both use the Welch t of each pair (separate variances, Welch-Satterthwaite df). 
 **Decision.** `gamlssdist.dgaf`, `pgaf`, `qgaf` are the gamma with sigma1 = sigma mu^(nu/2 - 1). `dzisichel` follows the package, whose x > 0 branch is a comparison (`logfy[x != 0] < ...`) and not an assignment, so dZISICHEL returns 1 for every positive x; the port returns the same.
 
 **Result.** `oracle_gamlss_dpo` (400 cases, 160 new) equals gamlss.dist on Windows. Linux pending. L464 stays partial: SI, SEP, MN3-5, ST3C, ZASICHEL, ZISICHEL p and q, DEL, the remaining random-number generators, moments.
+
+## D7326 — gamlss.dist: SEP and ZASICHEL densities
+
+**Decision.** `gamlssdist.dsep` (mu, sigma, nu, tau with w = sign(z) |z|^(tau/2) nu sqrt(2/tau)) and `dzasichel` (point mass tau at 0, the zero-truncated Sichel elsewhere).
+
+**Result.** `oracle_gamlss_dpo` (480 cases, 80 new) equals gamlss.dist on Windows. Linux pending. L464 stays partial: SEP and ZASICHEL p and q, SI, MN3-5, ST3C, ZISICHEL p and q, DEL, the remaining random-number generators, moments.

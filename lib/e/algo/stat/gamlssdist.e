@@ -2270,3 +2270,21 @@ fn dzisichel(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if x == 0.0f64 { ret tau + (1.0f64 - tau) * dsichel(0.0f64, mu, sigma, nu) }
     ret 1.0f64
 }
+
+// SEP of gamlss.dist (the unnamed power exponential skew family of the package, mu, sigma, nu, tau): with z = (x - mu) / sigma and w = sign(z) |z|^(tau / 2) nu sqrt(2 / tau)
+fn dsep(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    var sg = 0.0f64
+    if z > 0.0f64 { sg = 1.0f64 }
+    if z < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    let w = sg * math.pow[f64](math.abs[f64](z), tau / 2.0f64) * nu * math.sqrt[f64](2.0f64 / tau)
+    let ll = math.log[f64](dist.pnorm(w, 0.0f64, 1.0f64, true, false)) - math.pow[f64](math.abs[f64](z), tau) / tau - math.log[f64](sigma) - sp.lgamma(1.0f64 / tau) - (1.0f64 / tau - 1.0f64) * math.log[f64](tau)
+    ret math.exp[f64](ll)
+}
+
+// ZASICHEL density: a point mass tau at 0 and the zero-truncated Sichel (1 - tau) dSICHEL(x) / (1 - dSICHEL(0)) elsewhere
+fn dzasichel(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret tau }
+    ret (1.0f64 - tau) * dsichel(x, mu, sigma, nu) / (1.0f64 - dsichel(0.0f64, mu, sigma, nu))
+}
