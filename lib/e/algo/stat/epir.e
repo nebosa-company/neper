@@ -731,3 +731,45 @@ fn strata_mh_rd(a: []const f64, b: []const f64, c: []const f64, d: []const f64, 
     out[4usize] = nl
     out[5usize] = math.max[f64](n1v, n2v)
 }
+
+// Mantel-Haenszel risk difference of K cohort tables with the Sato (kind 0) or Greenland-Robins (kind 1) variance: (RD, lower, upper) scaled by units
+fn strata_mh_rd_var(a: []const f64, b: []const f64, c: []const f64, d: []const f64, level: f64, units: f64, kind: usize) -> (f64, f64, f64) {
+    let k = a.len
+    let z = z_of(level)
+    var num = 0.0f64
+    var w = 0.0f64
+    var p = 0.0f64
+    var q = 0.0f64
+    var i = 0usize
+    while i < k {
+        let c1 = a[i]
+        let c2 = a[i] + b[i]
+        let c3 = c[i]
+        let c4 = c[i] + d[i]
+        num += (c1 * c4 - c3 * c2) / (c2 + c4)
+        w += c2 * c4 / (c2 + c4)
+        p += (c2 * c2 * c3 - c4 * c4 * c1 + 0.5f64 * c2 * c4 * (c4 - c2)) / ((c2 + c4) * (c2 + c4))
+        q += (c1 * (c4 - c3) + c3 * (c2 - c1)) / (2.0f64 * (c2 + c4))
+        i += 1usize
+    }
+    let dm = num / w
+    var v = (dm * p + q) / (w * w)
+    if kind == 1usize {
+        var s = 0.0f64
+        i = 0usize
+        while i < k {
+            let c1 = a[i]
+            let c2 = a[i] + b[i]
+            let c3 = c[i]
+            let c4 = c[i] + d[i]
+            let dn = c2 * c4 / (c2 + c4)
+            let p1 = c1 / c2
+            let p2 = c3 / c4
+            s += dn * dn * (p1 * (1.0f64 - p1) / c2 + p2 * (1.0f64 - p2) / c4)
+            i += 1usize
+        }
+        v = s / (w * w)
+    }
+    let h = z * math.sqrt[f64](v)
+    ret (dm * units, (dm - h) * units, (dm + h) * units)
+}

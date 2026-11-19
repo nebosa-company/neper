@@ -154,4 +154,12 @@ for (rep in 1:25) {
   v <- c(unlist(r$ARisk.mh.wald[1, ]), unlist(r$NNT.mh.wald[1, ]))
   for (w in 0:5) cases[[length(cases) + 1]] <- case("mr", c(K, un, a, b, cc, d, w), unname(v[w + 1]), rel = 1e-8, abs = 1e-10)
 }
+# Sato and Greenland-Robins Mantel-Haenszel risk differences: "ms" args (K, units, a[K], b[K], c[K], d[K], which 0..2 Sato, 3..5 Greenland-Robins)
+for (rep in 1:25) {
+  K <- sample(2:5, 1); a <- sample(8:120, K, TRUE); b <- sample(40:600, K, TRUE); cc <- sample(5:100, K, TRUE); d <- sample(40:700, K, TRUE); un <- c(100, 1000, 1)[rep %% 3 + 1]
+  arr <- array(0, dim = c(2, 2, K)); for (s in 1:K) arr[, , s] <- matrix(c(a[s], b[s], cc[s], d[s]), 2, byrow = TRUE)
+  r <- suppressWarnings(epi.2by2(as.table(arr), method = "cohort.count", interpret = FALSE, outcome = "as.columns", units = un))$massoc.detail
+  v <- c(unlist(r$ARisk.mh.sato[1, ]), unlist(r$ARisk.mh.green[1, ]))
+  for (w in 0:5) cases[[length(cases) + 1]] <- case("ms", c(K, un, a, b, cc, d, w), unname(v[w + 1]), rel = 1e-8, abs = 1e-10)
+}
 emit("epir", "epiR", list(cases))

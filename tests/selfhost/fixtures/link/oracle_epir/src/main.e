@@ -11,6 +11,14 @@ use e.test.oracle as oracle
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "sb") { ret ep.sssimpleestb(x[0usize], x[1usize], x[2usize], x[3usize] > 0.5f64, x[4usize], x[5usize], x[6usize] > 0.5f64, 0.95f64) }
+    if str.eq(c.name, "ms") {
+        let ks = usize(x[0usize])
+        let wsel = usize(x[2usize + 4usize * ks])
+        let (se1, sl1, su1) = ep.strata_mh_rd_var(x[2usize..2usize + ks], x[2usize + ks..2usize + 2usize * ks], x[2usize + 2usize * ks..2usize + 3usize * ks], x[2usize + 3usize * ks..2usize + 4usize * ks], 0.95f64, x[1usize], wsel / 3usize)
+        if wsel % 3usize == 0usize { ret se1 }
+        if wsel % 3usize == 1usize { ret sl1 }
+        ret su1
+    }
     if str.eq(c.name, "mr") {
         let kr = usize(x[0usize])
         var rv: [8]f64 = zero
