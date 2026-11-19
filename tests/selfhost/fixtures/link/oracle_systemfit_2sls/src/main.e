@@ -11,6 +11,46 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "s3i") {
+        let n3 = usize(z[0usize])
+        let m3 = usize(z[1usize])
+        let q3 = usize(z[2usize])
+        let mi = usize(z[3usize])
+        let tl = z[4usize]
+        let (ks, ek) = mem.alloc[usize](a, m3)
+        let (qs, eq) = mem.alloc[usize](a, m3)
+        if ek != ok || eq != ok { ret nan }
+        var kt = 0usize
+        var e = 0usize
+        while e < m3 {
+            ks[e] = usize(z[5usize + e])
+            qs[e] = q3
+            kt += ks[e]
+            e += 1usize
+        }
+        let xo = 5usize + m3
+        let zo = xo + n3 * kt
+        let yo = zo + n3 * q3
+        let (zs, ez) = mem.alloc[f64](a, m3 * n3 * q3)
+        let (cf3, e1) = mem.alloc[f64](a, kt)
+        let (se3, e2) = mem.alloc[f64](a, kt)
+        var itn: [1]usize = zero
+        if ez != ok || e1 != ok || e2 != ok { ret nan }
+        e = 0usize
+        while e < m3 {
+            var i = 0usize
+            while i < n3 * q3 {
+                zs[e * n3 * q3 + i] = z[zo + i]
+                i += 1usize
+            }
+            e += 1usize
+        }
+        if sf.threesls_it(a, z[xo..zo], ks, zs, qs, z[yo..yo + n3 * m3], n3, m3, mi, tl, itn[0usize..1usize], cf3, se3) != ok { ret nan }
+        let w3 = usize(z[yo + n3 * m3])
+        if w3 < kt { ret cf3[w3] }
+        if w3 < 2usize * kt { ret se3[w3 - kt] }
+        ret f64(itn[0usize])
+    }
     if str.eq(c.name, "s3z") {
         let nz = usize(z[0usize])
         let mz = usize(z[1usize])

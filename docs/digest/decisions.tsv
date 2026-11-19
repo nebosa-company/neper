@@ -4355,4 +4355,5 @@ D7498	766	systemfit SUR max and Theil residual covariance divisors
 D7499	656	systemfit OLS and WLS
 D7500	502	systemfit W2SLS
 D7501	1084	systemfit SUR with linear restrictions
-D7502	613	systemfit 3SLS with per-equation instruments
+D7502	614	systemfit 3SLS with per-equation instruments
+D7503	794	systemfit iterated 3SLS

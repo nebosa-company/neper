@@ -448,6 +448,12 @@ fn twosls(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usiz
 // systemfit method "3SLS" with one instrument set z (n by q) for every equation: equation-wise 2SLS residuals give the residual covariance (the geometric-mean divisor sqrt((n - k_i)(n - k_j))), then the GLS
 // estimator on the projected regressors, beta = [X_hat'(S^-1 x I)X_hat]^-1 X_hat'(S^-1 x I) y; xs and y are laid out as for `sur` (equation after equation); coef and se hold sum(ks) values
 fn threesls_z(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64, qs: []const usize, y: []const f64, n: usize, m: usize, coef: []f64, se: []f64) -> err {
+    var itn: [1]usize = zero
+    ret threesls_it(a, xs, ks, zs, qs, y, n, m, 1usize, 0.0f64 - 1.0f64, itn[0usize..1usize], coef, se)
+}
+
+// iterated 3SLS (control maxiter, tol): passes GLS steps at most, the residual covariance of each step taken from the previous coefficients (the 2SLS ones for the first), stopping once the relative change sqrt(sum((b - b_old)^2) / sum(b_old^2)) is at most tol (tol < 0 never stops early); itn[0] receives the passes made
+fn threesls_it(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64, qs: []const usize, y: []const f64, n: usize, m: usize, passes: usize, tol: f64, itn: []usize, coef: []f64, se: []f64) -> err {
     var kt = 0usize
     var e = 0usize
     while e < m {
@@ -462,6 +468,8 @@ fn threesls_z(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64
     let (g, e5) = mem.alloc[f64](a, kt * kt)
     let (gi, e6) = mem.alloc[f64](a, kt * kt)
     let (r, e7) = mem.alloc[f64](a, kt)
+    let (old, e7b) = mem.alloc[f64](a, kt)
+    if e7b != ok { ret mem.Full }
     if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
     off[0usize] = 0usize
     e = 0usize
@@ -483,6 +491,11 @@ fn threesls_z(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64
         let (v, et) = twosls(a, xe, z, y[e * n..(e + 1usize) * n], n, k, q, cf, sf)
         let _ = v
         if et != ok { ret et }
+        var cq = 0usize
+        while cq < k {
+            old[off[e] + cq] = cf[cq]
+            cq += 1usize
+        }
         var i = 0usize
         while i < n {
             var f = 0.0f64
@@ -543,84 +556,118 @@ fn threesls_z(a: *mem.Arena, xs: []const f64, ks: []const usize, zs: []const f64
         zoff += n * q
         e += 1usize
     }
-    var p1 = 0usize
-    while p1 < m {
-        var p2 = 0usize
-        while p2 < m {
-            var s = 0.0f64
-            var i = 0usize
-            while i < n {
-                s += res[p1 * n + i] * res[p2 * n + i]
-                i += 1usize
-            }
-            sg[p1 * m + p2] = s / math.sqrt[f64](f64(n - ks[p1]) * f64(n - ks[p2]))
-            sgi[p1 * m + p2] = 0.0f64
-            p2 += 1usize
-        }
-        sgi[p1 * m + p1] = 1.0f64
-        p1 += 1usize
-    }
-    gj_solve(sg, m, sgi, m)
-    var i1 = 0usize
-    while i1 < m {
-        var j1 = 0usize
-        while j1 < m {
-            var a1 = 0usize
-            while a1 < ks[i1] {
-                var b1 = 0usize
-                while b1 < ks[j1] {
-                    var s = 0.0f64
-                    var i = 0usize
-                    while i < n {
-                        s += xh[i * kt + off[i1] + a1] * xh[i * kt + off[j1] + b1]
-                        i += 1usize
-                    }
-                    g[(off[i1] + a1) * kt + off[j1] + b1] = sgi[i1 * m + j1] * s
-                    b1 += 1usize
-                }
-                a1 += 1usize
-            }
-            j1 += 1usize
-        }
-        var a2 = 0usize
-        while a2 < ks[i1] {
-            var s = 0.0f64
-            var j2 = 0usize
-            while j2 < m {
+    var pass3 = 0usize
+    while pass3 < passes {
+        var p1 = 0usize
+        while p1 < m {
+            var p2 = 0usize
+            while p2 < m {
+                var s = 0.0f64
                 var i = 0usize
                 while i < n {
-                    s += sgi[i1 * m + j2] * xh[i * kt + off[i1] + a2] * y[j2 * n + i]
+                    s += res[p1 * n + i] * res[p2 * n + i]
                     i += 1usize
                 }
-                j2 += 1usize
+                sg[p1 * m + p2] = s / math.sqrt[f64](f64(n - ks[p1]) * f64(n - ks[p2]))
+                sgi[p1 * m + p2] = 0.0f64
+                p2 += 1usize
             }
-            r[off[i1] + a2] = s
-            a2 += 1usize
+            sgi[p1 * m + p1] = 1.0f64
+            p1 += 1usize
         }
-        i1 += 1usize
-    }
-    var q2 = 0usize
-    while q2 < kt {
-        var w2 = 0usize
-        while w2 < kt {
-            gi[q2 * kt + w2] = 0.0f64
-            w2 += 1usize
+        gj_solve(sg, m, sgi, m)
+        var i1 = 0usize
+        while i1 < m {
+            var j1 = 0usize
+            while j1 < m {
+                var a1 = 0usize
+                while a1 < ks[i1] {
+                    var b1 = 0usize
+                    while b1 < ks[j1] {
+                        var s = 0.0f64
+                        var i = 0usize
+                        while i < n {
+                            s += xh[i * kt + off[i1] + a1] * xh[i * kt + off[j1] + b1]
+                            i += 1usize
+                        }
+                        g[(off[i1] + a1) * kt + off[j1] + b1] = sgi[i1 * m + j1] * s
+                        b1 += 1usize
+                    }
+                    a1 += 1usize
+                }
+                j1 += 1usize
+            }
+            var a2 = 0usize
+            while a2 < ks[i1] {
+                var s = 0.0f64
+                var j2 = 0usize
+                while j2 < m {
+                    var i = 0usize
+                    while i < n {
+                        s += sgi[i1 * m + j2] * xh[i * kt + off[i1] + a2] * y[j2 * n + i]
+                        i += 1usize
+                    }
+                    j2 += 1usize
+                }
+                r[off[i1] + a2] = s
+                a2 += 1usize
+            }
+            i1 += 1usize
         }
-        gi[q2 * kt + q2] = 1.0f64
-        q2 += 1usize
-    }
-    gj_solve(g, kt, gi, kt)
-    q2 = 0usize
-    while q2 < kt {
-        var s = 0.0f64
-        var w3 = 0usize
-        while w3 < kt {
-            s += gi[q2 * kt + w3] * r[w3]
-            w3 += 1usize
+        var q2 = 0usize
+        while q2 < kt {
+            var w2 = 0usize
+            while w2 < kt {
+                gi[q2 * kt + w2] = 0.0f64
+                w2 += 1usize
+            }
+            gi[q2 * kt + q2] = 1.0f64
+            q2 += 1usize
         }
-        coef[q2] = s
-        se[q2] = math.sqrt[f64](gi[q2 * kt + q2])
-        q2 += 1usize
+        gj_solve(g, kt, gi, kt)
+        q2 = 0usize
+        while q2 < kt {
+            var s = 0.0f64
+            var w3 = 0usize
+            while w3 < kt {
+                s += gi[q2 * kt + w3] * r[w3]
+                w3 += 1usize
+            }
+            coef[q2] = s
+            se[q2] = math.sqrt[f64](gi[q2 * kt + q2])
+            q2 += 1usize
+        }
+
+        // residuals from the new coefficients, and the change of the coefficient vector
+        var num = 0.0f64
+        var den = 0.0f64
+        var qq0 = 0usize
+        while qq0 < kt {
+            num += (coef[qq0] - old[qq0]) * (coef[qq0] - old[qq0])
+            den += old[qq0] * old[qq0]
+            old[qq0] = coef[qq0]
+            qq0 += 1usize
+        }
+        var xo2 = 0usize
+        var eq5 = 0usize
+        while eq5 < m {
+            var t5 = 0usize
+            while t5 < n {
+                var f5 = 0.0f64
+                var j5 = 0usize
+                while j5 < ks[eq5] {
+                    f5 += xs[xo2 + t5 * ks[eq5] + j5] * coef[off[eq5] + j5]
+                    j5 += 1usize
+                }
+                res[eq5 * n + t5] = y[eq5 * n + t5] - f5
+                t5 += 1usize
+            }
+            xo2 += n * ks[eq5]
+            eq5 += 1usize
+        }
+        itn[0usize] = pass3 + 1usize
+        if tol >= 0.0f64 && math.sqrt[f64](num / den) <= tol { break }
+        pass3 += 1usize
     }
     ret ok
 }
