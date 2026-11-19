@@ -71,4 +71,11 @@ for (rep in 1:100) {
     cases[[length(cases) + 1]] <- case("lc", c(n, cp, md, 1), sum(r * seq_along(r)), rel = 0, abs = 0)
   }
 }
+# Latin-ASCII: "la" args (n, cp[n], what 0 length 1 weighted code-point sum) of stri_trans_general(x, "Latin-ASCII"), the scalars drawn from the ranges the table was generated over plus ASCII
+lpool <- c(0x41, 0x20, 0x61, 0xE9, 0xDF, 0xE6, 0xC5, 0xD8, 0x152, 0x153, 0x2018, 0x2019, 0x201C, 0x201D, 0x2013, 0x2014, 0x2026, 0x20AC, 0x1E9E, 0x1EA0, 0x2460, 0xFB01, 0xFF21, 0x3000, 0x131, 0x141, 0x142, 0xA0, 0xA9, 0xAE, 0xBD)
+for (rep in 1:100) {
+  n <- sample(1:10, 1); cp <- sample(lpool, n, TRUE); r <- utf8ToInt(stri_trans_general(intToUtf8(cp), "Latin-ASCII"))
+  cases[[length(cases) + 1]] <- case("la", c(n, cp, 0), length(r), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("la", c(n, cp, 1), sum(r * seq_along(r)), rel = 0, abs = 0)
+}
 emit("stringi", "stringi", list(cases))

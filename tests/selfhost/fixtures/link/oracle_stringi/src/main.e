@@ -141,6 +141,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if usize(x[2usize + n]) == 0usize { ret f64(cnt2) }
         ret sum2
     }
+    if str.eq(c.name, "la") {
+        let (la, lae) = uc.latin_ascii(a, s)
+        if lae != ok { os.exit(16) }
+        var cnt3 = 0usize
+        var sum3 = 0.0f64
+        var at3 = 0usize
+        while at3 < la.len {
+            let (sc3, adv3) = uc.read_utf8(la, at3)
+            cnt3 += 1usize
+            sum3 += f64(sc3) * f64(cnt3)
+            at3 += adv3
+        }
+        if usize(x[1usize + n]) == 0usize { ret f64(cnt3) }
+        ret sum3
+    }
     let f = usize(x[1usize + n])
     var form = nz.Form.Nfc
     if f == 1usize { form = nz.Form.Nfd }

@@ -4454,4 +4454,5 @@ D7596	730	simple case mapping equals ICU
 D7597	554	single-byte decoding equals ICU
 D7598	621	single-byte encoding equals ICU
 D7599	731	ICU Any-Hex transliteration
-D7600	1039	full lower- and upper-casing of strings
+D7600	1040	full lower- and upper-casing of strings
+D7601	791	ICU Latin-ASCII transliteration over the common ranges

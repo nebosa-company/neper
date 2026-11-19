@@ -265,7 +265,7 @@
       "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases; Linux pending). Grapheme clusters (D7594) and word boundaries without the colon (D7595) and simple case mapping (D7596) and single-byte decoding (D7597) and encoding (D7598) Any-Hex (D7599) and full lower- and upper-casing (D7600) equal stringi. Open: everything else in the acceptance. Needs L264. e.text.collate has codepoint, byte and natural compare only. Acceptance: stri_sort, stri_order, stri_compare with UCA and locale tailoring (en, de, sv, tr), stri_trans_general for Latin-ASCII, Any-Lower, Any-Hex and Any-NFD, stri_enc_detect and stri_encode over the shared charsets, sentence and grapheme splitting, all equal to stringi on a seeded multilingual corpus."
+      "evidence": "Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases; Linux pending). Grapheme clusters (D7594) and word boundaries without the colon (D7595) and simple case mapping (D7596) and single-byte decoding (D7597) and encoding (D7598) Any-Hex (D7599) and full lower- and upper-casing (D7600) and Latin-ASCII over the common ranges (D7601) equal stringi. Open: everything else in the acceptance. Needs L264. e.text.collate has codepoint, byte and natural compare only. Acceptance: stri_sort, stri_order, stri_compare with UCA and locale tailoring (en, de, sv, tr), stri_trans_general for Latin-ASCII, Any-Lower, Any-Hex and Any-NFD, stri_enc_detect and stri_encode over the shared charsets, sentence and grapheme splitting, all equal to stringi on a seeded multilingual corpus."
     },
     {
       "id": "L274",
