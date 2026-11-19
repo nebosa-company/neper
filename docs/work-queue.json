@@ -482,10 +482,10 @@
       "group": "CRAN parity",
       "order": 716,
       "title": "pscl: zero-inflated and hurdle count models",
-      "score": 0.45,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6617). e.algo.stat.psclpkg zeroinfl and hurdle with Poisson counts and a logit zero part equal pscl on Windows: log-likelihood and both coefficient sets to 1e-4, by Newton with step halving on the exact Hessians (oracle_pscl, 72 values; Linux pending). The standard errors (square roots of the diagonal of the inverse exact Hessian; blockwise for the hurdle) equal sqrt(diag(vcov)) to 2e-3, the tolerance of R's numeric Hessian. predict types response, count and zero (24 fits) equal pscl for both models. vuong of a zero-inflated Poisson fit against the Poisson glm (raw, AIC- and BIC-corrected z, 12 fits) equals pscl. Open: negative binomial and geometric counts, the other zero links, offsets and weights, vuong. Was: Open (CRAN rank 584). Mid. Acceptance, equal to pscl: zeroinfl and hurdle with Poisson, negative binomial and geometric counts and logit, probit and cloglog zero parts, standard errors, vuong, pR2, predict types."
+      "evidence": "Partial (D6617). e.algo.stat.psclpkg zeroinfl and hurdle with Poisson counts and a logit zero part equal pscl on Windows: log-likelihood and both coefficient sets to 1e-4, by Newton with step halving on the exact Hessians (oracle_pscl, 72 values; Linux pending). The standard errors (square roots of the diagonal of the inverse exact Hessian; blockwise for the hurdle) equal sqrt(diag(vcov)) to 2e-3, the tolerance of R's numeric Hessian. predict types response, count and zero (24 fits) equal pscl for both models. vuong of a zero-inflated Poisson fit against the Poisson glm (raw, AIC- and BIC-corrected z, 12 fits) equals pscl. zeroinfl with the negative binomial count (logit zero part; log-likelihood and theta within 2e-3 of R on 8 data sets, oracle_pscl_nb). Open: the negative binomial hurdle, geometric counts, the other zero links, offsets and weights, vuong. Was: Open (CRAN rank 584). Mid. Acceptance, equal to pscl: zeroinfl and hurdle with Poisson, negative binomial and geometric counts and logit, probit and cloglog zero parts, standard errors, vuong, pR2, predict types."
     },
     {
       "id": "L413",

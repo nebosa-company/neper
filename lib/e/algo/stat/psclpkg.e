@@ -1,9 +1,10 @@
 // R pscl: zero-inflated Poisson (zeroinfl, logit zero part) and the Poisson hurdle model (hurdle, zero-truncated count part and logit zero part), fitted by Newton's method with step halving on the exact Hessian (R uses BFGS from glm starting values; the likelihood optimum is what is compared). Matrices are row-major with their own constant columns.
 //
-// Not here: negative binomial and geometric counts, the other zero links, offsets and weights, prediction types beyond response, count and zero.
+// Not here: the negative binomial hurdle, geometric counts, the other zero links, offsets and weights, prediction types beyond response, count and zero.
 
 use e.algo.stat.gparot as gp
 use e.math
+use e.math.opt as opt
 use e.math.nmath as nm
 use e.mem
 
@@ -419,4 +420,86 @@ fn vuong_zip_poisson(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f
         c += 1usize
     }
     ret ok
+}
+
+// zeroinfl(y ~ x | z, dist = "negbin"): the zero-inflated negative binomial (logit zero part, theta on the log scale as the last parameter) by BFGS on the exact log-likelihood with central-difference
+// gradients, started from the zero-inflated Poisson fit. par receives beta (p), gamma (q), log theta; returns the log-likelihood (NaN on failure)
+type NbCtx = struct { x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize }
+
+fn nb_loglik(c: *NbCtx, par: []const f64) -> f64 {
+    var ll = 0.0f64
+    let theta = math.exp[f64](par[c.p + c.q])
+    var i = 0usize
+    while i < c.n {
+        var eta = 0.0f64
+        var j = 0usize
+        while j < c.p {
+            eta += c.x[i * c.p + j] * par[j]
+            j += 1usize
+        }
+        var zeta = 0.0f64
+        j = 0usize
+        while j < c.q {
+            zeta += c.z[i * c.q + j] * par[c.p + j]
+            j += 1usize
+        }
+        let mu = math.exp[f64](eta)
+        let pi = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - zeta))
+        let lq = theta * math.log[f64](theta / (theta + mu))
+        if c.y[i] == 0.0f64 {
+            ll += math.log[f64](pi + (1.0f64 - pi) * math.exp[f64](lq))
+        } else {
+            ll += math.log[f64](1.0f64 - pi) + nm.lgammafn(theta + c.y[i]) - nm.lgammafn(theta) - nm.lgammafn(c.y[i] + 1.0f64) + lq + c.y[i] * math.log[f64](mu / (theta + mu))
+        }
+        i += 1usize
+    }
+    ret ll
+}
+
+fn nb_neg(c: *NbCtx, par: []const f64) -> f64 {
+    let v = nb_loglik(c, par)
+    if v != v { ret 1.0e300f64 }
+    ret 0.0f64 - v
+}
+
+fn nb_grad(c: *NbCtx, par: []const f64, g: []f64) {
+    let m = par.len
+    var w: [32]f64 = zero
+    var k = 0usize
+    while k < m {
+        w[k] = par[k]
+        k += 1usize
+    }
+    k = 0usize
+    while k < m {
+        var h = 1.0e-6f64
+        if math.abs[f64](par[k]) > 1.0f64 { h = 1.0e-6f64 * math.abs[f64](par[k]) }
+        w[k] = par[k] + h
+        let f1 = nb_neg(c, w[0usize..m])
+        w[k] = par[k] - h
+        let f2 = nb_neg(c, w[0usize..m])
+        w[k] = par[k]
+        g[k] = (f1 - f2) / (2.0f64 * h)
+        k += 1usize
+    }
+}
+
+fn zeroinfl_nb(a: *mem.Arena, x: []const f64, z: []const f64, y: []const f64, n: usize, p: usize, q: usize, par: []f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let m = p + q + 1usize
+    if m > 32usize { ret nan }
+    let l0 = zeroinfl(a, x, z, y, n, p, q, par[0usize..p + q])
+    if l0 != l0 { ret nan }
+    par[p + q] = 0.0f64
+    var c = NbCtx { x: x, z: z, y: y, n: n, p: p, q: q }
+    let (scr, e0) = mem.alloc[f64](a, m * m + 6usize * m)
+    if e0 != ok { ret nan }
+    var round = 0usize
+    while round < 2usize {
+        let (r, e1) = opt.bfgs[NbCtx](&c, nb_neg, nb_grad, par, 1.0e-8f64, 400u32, scr)
+        let _ = r
+        if e1 != ok { ret nan }
+        round += 1usize
+    }
+    ret nb_loglik(&c, par)
 }
