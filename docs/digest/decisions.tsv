@@ -4443,4 +4443,5 @@ D7584	689	strucchange efp Rec-CUSUM with sctest
 D7585	1009	strucchange sctest(Fstats): statistics and p values
 D7586	508	strucchange Fstats p values for up to forty regressors
 D7587	920	strucchange efp OLS-MOSUM with sctest
-D7588	821	strucchange efp Rec-MOSUM with sctest
+D7588	822	strucchange efp Rec-MOSUM with sctest
+D7589	773	cubature integrals with infinite limits

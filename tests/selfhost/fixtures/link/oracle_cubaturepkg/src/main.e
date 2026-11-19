@@ -18,7 +18,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let x = c.args
         let d = usize(x[1usize])
-        let got = cb.integral_box(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], 4usize)
+        var got = cb.integral_box(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], 4usize)
+        if c.name.len == 3usize && c.name[0usize] == 105u8 { got = cb.integral_inf(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], 8usize) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

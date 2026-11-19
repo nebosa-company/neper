@@ -112,3 +112,69 @@ fn integral_box(a: *mem.Arena, id: usize, d: usize, lo: []const f64, hi: []const
     }
     ret total
 }
+
+// the integral over a box whose ends may be infinite (an end at or beyond 1e99 in magnitude counts as infinite): each dimension is mapped from s in (0, 1) the way cubature
+// does (finite: linear; one infinite end: a + s / (1 - s) or b - (1 - s) / s; both: u / (1 - u^2) with u = 2 s - 1), then `cells` sub-intervals with a 12-point rule each
+fn integral_inf(a: *mem.Arena, id: usize, d: usize, lo: []const f64, hi: []const f64, cells: usize) -> f64 {
+    let q = 12usize
+    let (gx, e1) = mem.alloc[f64](a, q)
+    let (gw, e2) = mem.alloc[f64](a, q)
+    let (pt, e3) = mem.alloc[f64](a, d)
+    let (cell, e4) = mem.alloc[usize](a, d)
+    let (node, e5) = mem.alloc[usize](a, d)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+    gauss_legendre(q, gx, gw)
+    var total = 0.0f64
+    var ncell = 1usize
+    var nnode = 1usize
+    var k = 0usize
+    while k < d {
+        ncell *= cells
+        nnode *= q
+        k += 1usize
+    }
+    var c = 0usize
+    while c < ncell {
+        var rem = c
+        k = 0usize
+        while k < d {
+            cell[k] = rem % cells
+            rem = rem / cells
+            k += 1usize
+        }
+        var nd = 0usize
+        while nd < nnode {
+            var r2 = nd
+            var wt = 1.0f64
+            k = 0usize
+            while k < d {
+                node[k] = r2 % q
+                r2 = r2 / q
+                let h = 1.0f64 / f64(cells)
+                let s = h * f64(cell[k]) + h * (gx[node[k]] + 1.0f64) / 2.0f64
+                wt = wt * gw[node[k]] * h / 2.0f64
+                let lin = lo[k] > -1.0e99f64
+                let hin = hi[k] < 1.0e99f64
+                if lin && hin {
+                    pt[k] = lo[k] + (hi[k] - lo[k]) * s
+                    wt = wt * (hi[k] - lo[k])
+                } else if lin {
+                    pt[k] = lo[k] + s / (1.0f64 - s)
+                    wt = wt / ((1.0f64 - s) * (1.0f64 - s))
+                } else if hin {
+                    pt[k] = hi[k] - (1.0f64 - s) / s
+                    wt = wt / (s * s)
+                } else {
+                    let u = 2.0f64 * s - 1.0f64
+                    pt[k] = u / (1.0f64 - u * u)
+                    wt = wt * 2.0f64 * (1.0f64 + u * u) / ((1.0f64 - u * u) * (1.0f64 - u * u))
+                }
+                k += 1usize
+            }
+            total += wt * integrand(id, d, pt)
+            nd += 1usize
+        }
+        c += 1usize
+    }
+    ret total
+}

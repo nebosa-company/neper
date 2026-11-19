@@ -10,4 +10,11 @@ for (rep in 1:24) {
   r <- if (rep %% 2 == 0) hcubature(fs[[id + 1]], lo, hi, tol = 1e-10, maxEval = 2e5) else pcubature(fs[[id + 1]], lo, hi, tol = 1e-10, maxEval = 2e5)
   add("box", c(id, d, lo, hi), r$integral)
 }
+# infinite limits: "inf" args as "box" with an infinite end written as +-1e100; the integrand exp(-sum x^2) (id 0) over boxes with one or two infinite ends per dimension
+for (rep in 1:16) {
+  d <- sample(1:2, 1); lo <- numeric(d); hi <- numeric(d)
+  for (k in 1:d) { kind <- sample(1:3, 1); if (kind == 1) { lo[k] <- -Inf; hi[k] <- Inf } else if (kind == 2) { lo[k] <- runif(1, -1, 0.5); hi[k] <- Inf } else { lo[k] <- -Inf; hi[k] <- runif(1, -0.5, 1) } }
+  r <- hcubature(fs[[1]], lo, hi, tol = 1e-10, maxEval = 5e5)
+  cases[[length(cases) + 1]] <- case("inf", c(0, d, ifelse(is.infinite(lo), -1e100, lo), ifelse(is.infinite(hi), 1e100, hi)), r$integral, rel = 1e-7, abs = 1e-9)
+}
 emit("cubaturepkg", "cubature", list(cases))
