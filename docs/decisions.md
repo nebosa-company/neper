@@ -50782,3 +50782,6 @@ The BFGS likelihood of `zero_link_fit` multiplies each observation's log-likelih
 
 ## D7439 — sm h.select with the cross-validation criterion
 `hselect_cv` is h.select(x, method = "cv") for one unbinned variable: R's optimise (the existing Brent minimiser in e.algo.stat.fdrtool) of the density cross-validation score over log(start / 8) to log(start * 4), start = sd / 2. Equal to sm on 30 samples (oracle_sm_hsel) at rel 1e-7, not 1e-9: one sample differed by 1.2e-9 because the score is flat near its minimum and the matrix-order sum in R rounds differently. Open: the regression, df and aicc criteria, binning above 100 observations, 2-d structures.
+
+## D7440 — sm h.select cv for regression
+`hselect_cv_reg` is h.select(x, y, method = "cv") for one unbinned covariate: the same optimise over log(sd / 16) to log(2 sd), minimising the leave-one-out squared error over n. Equal to sm on 20 samples added to oracle_sm_hsel. Open for L505: df and aicc criteria, binning, 2-d.

@@ -266,3 +266,18 @@ fn hselect_cv(x: []const f64) -> f64 {
     var c = CvCtx { x: x }
     ret math.exp[f64](fd.brent_min[CvCtx](&c, cv_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
 }
+
+type CvRegCtx = struct { x: []const f64, y: []const f64 }
+
+fn cv_reg_log(c: *CvRegCtx, lh: f64) -> f64 {
+    let v = cv_regression(c.x, c.y, math.exp[f64](lh)) / f64(c.x.len)
+    if v != v { ret 1.0e10f64 }
+    ret v
+}
+
+// h.select(x, y, method = "cv") for one unbinned covariate: optimise of the leave-one-out squared error over the same log interval
+fn hselect_cv_reg(x: []const f64, y: []const f64) -> f64 {
+    let start = sd_of(x) / 2.0f64
+    var c = CvRegCtx { x: x, y: y }
+    ret math.exp[f64](fd.brent_min[CvRegCtx](&c, cv_reg_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+}

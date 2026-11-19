@@ -5,6 +5,7 @@ use e.algo.stat.sm as sm
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -17,7 +18,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let n = usize(c.args[0usize])
-        let got = sm.hselect_cv(c.args[1usize..1usize + n])
+        var got = 0.0f64
+        if str.eq(c.name, "hcvreg") { got = sm.hselect_cv_reg(c.args[1usize..1usize + n], c.args[1usize + n..1usize + 2usize * n]) } else { got = sm.hselect_cv(c.args[1usize..1usize + n]) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
