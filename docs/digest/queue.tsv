@@ -430,4 +430,4 @@ L283	library	0	538	CommonMark and GFM conformance with xml, latex and man render
 L276	library	0	418	Sass/SCSS compiler (sass, libsass)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
 L518	library	0.2	552	tweedie: powers above 2 and the series beyond statmod	Partial (D7368): dtweedie_series for power above 2 (the Wright-type series with its reliability check) equal to tweedie on 59 values on Windows (oracle_gaussq;
 L519	library	0	389	caret remainder: numeric-response folds, ica and varImp for other models	Open.
-L520	library	0	231	isotone remainder: list responses, the Chebyshev and Poisson activeSet solvers	Open.
+L520	library	0	311	isotone remainder: list responses, the Chebyshev and Poisson activeSet solvers	Open.

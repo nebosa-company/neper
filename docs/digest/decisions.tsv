@@ -4299,4 +4299,5 @@ D7445	322	sm.density on binned data
 D7446	441	sm h.select cv on binned data
 D7447	700	sm h.select df and aicc on binned regression data
 D7448	499	isotone activeSet Poisson solver
-D7449	840	isotone activeSet Chebyshev solver
+D7449	841	isotone activeSet Chebyshev solver
+D7450	576	isotone gpava with a list response

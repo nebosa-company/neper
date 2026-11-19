@@ -100,4 +100,19 @@ for (rep in 1:30) {
   st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
   for (j in 0:3) cases[[length(cases) + 1]] <- case("ac", c(a, j, 1, 1), st[j + 1], rel = 1e-9, abs = 1e-10)
 }
+# gpava with a list response and ties primary: ("rowl") args (solver, p, n, len[n], x[n], y flat, w flat, stat 0..4 as rows)
+set.seed(20262342)
+for (rep in 1:40) {
+  n <- sample(5:20, 1); x <- if (rep %% 2 == 0) sample(1:round(n * 0.6), n, TRUE) else sample(n)
+  len <- sample(1:4, n, TRUE); Y <- lapply(len, function(l) round(rnorm(l) , 3)); Y <- Map(function(v, xx) v + 0.1 * xx, Y, x); W <- lapply(len, function(l) round(runif(l, 0.5, 3), 2))
+  for (sv in 0:2) {
+    p <- c(0, 0.5, 0.25)[sv + 1]; if (sv == 2) p <- c(0.25, 0.75)[rep %% 2 + 1]
+    solver <- switch(sv + 1, weighted.mean, weighted.median, function(y, w) weighted.fractile(y, w, p))
+    r <- tryCatch(gpava(x, Y, W, solver = solver)$x, error = function(e) NULL)
+    if (is.null(r)) next
+    v <- as.numeric(r); a <- c(sv, p, n, len, x, unlist(Y), unlist(W))
+    st <- c(length(v), sum(v), sum(seq_along(v) * v), v[1], v[length(v)])
+    for (j in 0:4) cases[[length(cases) + 1]] <- case("rowl", c(a, j), st[j + 1], rel = 1e-10, abs = 1e-12)
+  }
+}
 emit("isotone", "isotone", list(cases))

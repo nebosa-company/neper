@@ -67,6 +67,34 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if c.name.len == 2usize { ret active(a, c) }
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if c.name.len == 4usize && c.name[3usize] == 108u8 {
+        let svl = u8(z[0usize])
+        let nl = usize(z[2usize])
+        var tl = 0usize
+        let (lens, le) = mem.alloc[usize](a, nl)
+        if le != ok { ret nan }
+        var q = 0usize
+        while q < nl {
+            lens[q] = usize(z[3usize + q])
+            tl += lens[q]
+            q += 1usize
+        }
+        let (ol, ole) = mem.alloc[f64](a, nl)
+        if ole != ok { ret nan }
+        let xl = z[3usize + nl..3usize + 2usize * nl]
+        if iso.gpava_list(a, xl, z[3usize + 2usize * nl..3usize + 2usize * nl + tl], z[3usize + 2usize * nl + tl..3usize + 2usize * nl + 2usize * tl], lens, svl, z[1usize], ol) != ok { ret nan }
+        let stl = usize(z[3usize + 2usize * nl + 2usize * tl])
+        if stl == 0usize { ret f64(nl) }
+        if stl == 3usize { ret ol[0usize] }
+        if stl == 4usize { ret ol[nl - 1usize] }
+        var sl = 0.0f64
+        q = 0usize
+        while q < nl {
+            if stl == 1usize { sl += ol[q] } else { sl += f64(q + 1usize) * ol[q] }
+            q += 1usize
+        }
+        ret sl
+    }
     if c.name.len == 4usize && c.name[0usize] == 114u8 {
         let sv2 = u8(z[0usize])
         let n2 = usize(z[3usize])

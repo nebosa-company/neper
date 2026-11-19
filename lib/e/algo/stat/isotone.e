@@ -1154,3 +1154,94 @@ fn fsolve(a: *mem.Arena, z: []const f64, w: []const f64, xo: []const f64, lab: [
     }
     ret fmin
 }
+
+// gpava with a list response and ties = "primary": row i holds len[i] replicates (flattened in yv / wv, rows in the input order); out receives the block value of each row in the input order
+fn gpava_list(a: *mem.Arena, x: []const f64, yv: []const f64, wv: []const f64, len: []const usize, kind: u8, p: f64, out: []f64) -> err {
+    let n = len.len
+    let (off, e0) = mem.alloc[usize](a, n + 1usize)
+    let (ord, e1) = mem.alloc[usize](a, n)
+    let (key, e2) = mem.alloc[f64](a, n)
+    let (ys, e3) = mem.alloc[f64](a, yv.len)
+    let (ws, e4) = mem.alloc[f64](a, yv.len)
+    let (os, e5) = mem.alloc[usize](a, n + 1usize)
+    let (st, e6) = mem.alloc[usize](a, n)
+    let (en, e7) = mem.alloc[usize](a, n)
+    let (vals, e8) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    off[0usize] = 0usize
+    var i = 0usize
+    while i < n {
+        off[i + 1usize] = off[i] + len[i]
+        ord[i] = i
+        key[i] = solve(a, yv[off[i]..off[i + 1usize]], wv[off[i]..off[i + 1usize]], kind, p)
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let v = ord[i]
+        var j = i
+        while j > 0usize && (x[ord[j - 1usize]] > x[v] || (x[ord[j - 1usize]] == x[v] && key[ord[j - 1usize]] > key[v])) {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = v
+        i += 1usize
+    }
+    os[0usize] = 0usize
+    i = 0usize
+    while i < n {
+        let r = ord[i]
+        var c = 0usize
+        while c < len[r] {
+            ys[os[i] + c] = yv[off[r] + c]
+            ws[os[i] + c] = wv[off[r] + c]
+            c += 1usize
+        }
+        os[i + 1usize] = os[i] + len[r]
+        st[i] = i
+        en[i] = i + 1usize
+        vals[i] = key[r]
+        i += 1usize
+    }
+    var nb = n
+    i = 0usize
+    while i + 1usize < nb {
+        if vals[i] > vals[i + 1usize] {
+            en[i] = en[i + 1usize]
+            vals[i] = solve(a, ys[os[st[i]]..os[en[i]]], ws[os[st[i]]..os[en[i]]], kind, p)
+            var j = i + 1usize
+            while j + 1usize < nb {
+                st[j] = st[j + 1usize]
+                en[j] = en[j + 1usize]
+                vals[j] = vals[j + 1usize]
+                j += 1usize
+            }
+            nb -= 1usize
+            while i > 0usize && vals[i - 1usize] > vals[i] {
+                en[i - 1usize] = en[i]
+                vals[i - 1usize] = solve(a, ys[os[st[i - 1usize]]..os[en[i - 1usize]]], ws[os[st[i - 1usize]]..os[en[i - 1usize]]], kind, p)
+                var q = i
+                while q + 1usize < nb {
+                    st[q] = st[q + 1usize]
+                    en[q] = en[q + 1usize]
+                    vals[q] = vals[q + 1usize]
+                    q += 1usize
+                }
+                nb -= 1usize
+                i -= 1usize
+            }
+        } else {
+            i += 1usize
+        }
+    }
+    var b = 0usize
+    while b < nb {
+        var r = st[b]
+        while r < en[b] {
+            out[ord[r]] = vals[b]
+            r += 1usize
+        }
+        b += 1usize
+    }
+    ret ok
+}
