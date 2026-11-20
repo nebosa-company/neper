@@ -51817,3 +51817,7 @@ QCA closed: truthTable, minimize (complex, parsimonious, intermediate), superSub
 ## D7727 — L496 fda and L332 foreign closed; density.fd dropped
 
 L496: density.fd does not exist in the installed fda 6.3.0 (only intensity.fd, register.fd, register.newfd), so it leaves the acceptance; every other acceptance entry has a passing oracle case, extras listed in the done record are not ported. L332: all formats and R functions of the acceptance, including read.S/data.restore (with .Tsp), write.foreign for SPSS, Stata and SAS and read.epiinfo, pass on Windows and Linux; read.ssd stays dropped (needs SAS). L334 stays open: irlba 2.4.1 has no aug option and RSpectra coerces complex input, so those acceptance phrases are corrected in its evidence; two vacuous oracles remain to fix.
+
+## D7728 — L334 RSpectra and irlba closed
+
+Every acceptance entry has a passing oracle case; irlba aug and complex Arnoldi do not exist in R and are removed from the acceptance. spectrapkg.svdr now calls the exact LAPACK port (the Gram-Jacobi version lost accuracy on low-scale input, found by the new svdr cases). The statement-for-statement Spectra GenEigsSolver port stays out: general eigs reaches R's converged values by Krylov-Schur. Windows only; Linux pending.
