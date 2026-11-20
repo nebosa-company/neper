@@ -51821,3 +51821,7 @@ L496: density.fd does not exist in the installed fda 6.3.0 (only intensity.fd, r
 ## D7728 — L334 RSpectra and irlba closed
 
 Every acceptance entry has a passing oracle case; irlba aug and complex Arnoldi do not exist in R and are removed from the acceptance. spectrapkg.svdr now calls the exact LAPACK port (the Gram-Jacobi version lost accuracy on low-scale input, found by the new svdr cases). The statement-for-statement Spectra GenEigsSolver port stays out: general eigs reaches R's converged values by Krylov-Schur. Windows only; Linux pending.
+
+## D7729 — L344 randomForest, L458 earth, L394 ipred and L309 nloptr closed
+
+First-implementation workflow round: each item's acceptance entries all have passing oracle cases on Windows (Linux pending). ipred needed a change in the shared rpart port (node risk summed in R's sorted-predictor order, as in partition.c) which oracle_rpart* and oracle_rpartfull still pass. L497 gamlss, L453 cubature and L376 gam stay open with scores .82, .86 and .85 and their gap lists in the queue evidence.

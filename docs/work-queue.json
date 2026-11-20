@@ -273,10 +273,10 @@
       "group": "CRAN parity",
       "order": 634,
       "title": "cubature: adaptive multidimensional integration",
-      "score": 0.1,
+      "score": 0.86,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6475 box integrals of four fixed integrands agree with hcubature and pcubature to 1e-8 on Windows through a tensor Gauss-Legendre rule, not the package's adaptive algorithms; oracle_cubaturepkg; Linux pending). Infinite limits (D7589) equal hcubature for the fixed integrand. The adaptive Genz-Malik recursion of hcubature (2 and 3 dimensions) equals the package in integral, error estimate and evaluation count (D7694). The one-dimensional Gauss-Kronrod 7-15 case equals too (D7695). pcubature in one dimension (nested Clenshaw-Curtis rules; D7709) equals too. hcubature with vector integrands of 2 and 3 components (D7710) equals too. pcubature in two and three dimensions (tensor rules grown one dimension at a time; D7714) equals too. The maxEval rule of pcubature (D7715) equals too. Open: the box splitting of pcubature, cuhre, vegas, suave, divonne. Was: Open (CRAN rank 753). Small to mid. Acceptance, equal to cubature: hcubature, pcubature, cuhre and vegas, suave, divonne with vector-valued integrands and infinite limits, the returned integral, error estimate, evaluation counts and return codes."
+      "evidence": "Partial (2026-11-20, merged 108fcd2c5): hcubature, pcubature, cuhre, vegas, suave and divonne equal cubature (integral, error, evaluations, chi-square probability, return code, vector integrands, infinite limits) on fixed integrand ids (oracle_cubaturepkg; Windows only). Remaining: see the verifier gap list: arbitrary user integrands, pcubature box splitting beyond what the cases hit, Suave/Divonne sampler exactness, Linux. Verifier gaps: (1) pcubature box splitting is not implemented: pcubature_nd is documented 'without box splitting' and the oracle generator skips every R pcubature run that needs more than 4000/20000  | (2) pcubature box splitting was NOT ported: it does not exist. cubature-1.0.4 pcubature.c is purely p-adaptive (grows the Clenshaw-Curtis degree in one dimension at a time and never su | (3) Loose tolerance: cuhre chi-square probability and divonne evaluation count/error estimate in unstable cases (20 neval and 34 error cases of 570 dv cases) remain loosened; the optim | (4) Linux run of oracle_cubaturepkg not done (only x64-windows). | (5) Divonne non-default features not ported (outside the Acceptance list, skipped): cubature-rule keys 7, 9, 11, 13 (return -3), Sobol and Mersenne-Twister samples (negative keys), xGi | (6) docs/work-queue.json not edited (repo rules). Suggested L453 update: delete 'Open: the box splitting of pcubature ...', note pcubature has no splitting in the C source, hcubature/p"
     },
     {
       "id": "L454",
@@ -367,17 +367,6 @@
       "evidence": "Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg); Linux pending. D6866, D6867: summary.rq se nid and ker equal quantreg. Open: summary.rq rank, iid and boot, anova.rq, several taus, lasso, nlrq, rrq, rqss, dynrq. Original: Open (CRAN rank 131). Mid. One pinball-loss fit exists in e.ml.linear. Acceptance, equal to quantreg: rq with method br (Barrodale-Roberts simplex), fn and pfn (Frisch-Newton), lasso; summary.rq with se rank, iid, nid, ker and boot (seeded); anova.rq, rq with several taus, nlrq, rrq, rqss for the total-variation penalty, dynrq."
     },
     {
-      "id": "L309",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 670,
-      "title": "nloptr: gradient-based and constrained optimizers",
-      "score": 0.1,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6054): e.algo.stat.dfree.auglag (augmented Lagrangian over the box minimiser, no gradients) equals nloptr on HS071 and two more constrained problems on Windows (oracle_auglag); Linux pending. Open: SLSQP, MMA, CCSA, L-BFGS, truncated Newton, variable-metric with Jacobians, status codes, check_derivatives. Original: Open (CRAN rank 120). Mid. Acceptance: SLSQP, MMA and CCSA, the augmented Lagrangian (with local and sub-solvers), L-BFGS, truncated Newton, variable-metric, with equality and inequality constraints and their Jacobians, reaching the nloptr optimum within the per-function tolerance and returning the same status codes on the nloptr test suite; check_derivatives equals R."
-    },
-    {
       "id": "L314",
       "category": "library",
       "group": "CRAN parity",
@@ -442,17 +431,6 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open. Needs L264 and L265. e.math.mcmc has sampler basics; no autodiff, no ADVI. Acceptance: reverse-mode gradients of a closed set of Stan math functions (distributions from L265, matrix ops, log-sum-exp) agree with R-computed numDeriv gradients to 1e-8; NUTS with dual-averaging step size and diagonal mass-matrix adaptation recovers posterior means and sds of a seeded hierarchical model within Monte Carlo error of rstan; ADVI meanfield and fullrank match rstan vb ELBO trajectory shape and final means within tolerance. Stan language compiler is out of scope."
-    },
-    {
-      "id": "L394",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 688,
-      "title": "ipred: bagging and error estimation",
-      "score": 0.05,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred; oracle_ipred; Linux pending). Open: bagging, errorest with cv, boot and .632+, ipredknn, inbagg, out-of-bag predictions, ties in sbrier. Was: Open (CRAN rank 439). Small to mid. Needs L337. Acceptance, equal to ipred under set.seed: bagging, errorest with cv, boot and .632+, sbrier, ipredknn, inbagg, and their out-of-bag predictions."
     },
     {
       "id": "L338",
@@ -559,10 +537,10 @@
       "group": "CRAN parity",
       "order": 711,
       "title": "gam: backfitting generalized additive models",
-      "score": 0.03,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Started (D7686: smooth.spline with a target df, the smoother s() of gam rests on: the trace of the smoother and R's Brent search for spar equal to smooth.spline(x, y, df) to about 1e-4 in the fit and 1e-3 in the df, 635 values in oracle_smspline; Linux pending). Open: the backfitting itself, lo() on loess, families, step.Gam, anova and predict with standard errors. Was: Open (CRAN rank 388). Mid. mgcv is L353. Acceptance, equal to gam: gam with s and lo terms (smoothing spline and loess), the Gaussian, binomial and Poisson families, backfitting convergence, step.Gam, anova and predict with standard errors."
+      "evidence": "Partial (2026-11-20, merged 108fcd2c5): gam s() and lo() backfitting (gaussian, binomial, poisson), mixed s+lo, predict at newdata, step.Gam paths, anova Chisq/F and summary equal gam in the oracle groups gam, gam_lo, gam_mix, gam_pred and gam_step. Remaining: predict se.fit only at the training points; step.Gam only over 1/linear/s/lo regimens; weights and offset variants beyond the generated cases; some df-matched s() tolerances loosened; Linux pending. Verifier gaps: (1) lo(x1, x2) of two or more variables is not ported: loessfit.e is 1-D only, and it needs the loessf.f kd-tree and blending. Outside the Acceptance list, skipped. | (2) random() smoother, offsets and NA handling are not ported. Outside the Acceptance list, skipped. | (3) Some df-matched s() cases keep a per-case tolerance above 1e-9 (up to 1.5e-6 in gam_pred) because R's Brent search is unstable under 1e-11 weight changes. R cannot be matched more  | (4) Degree 2 lo() is oracle-checked only for a single lo term in Gaussian fits, because R crashes on other combinations. | (5) A rank-deficient local fit in a lo() basis is not checked against R. | (6) Linux and the full suite were not run. | (7) L376 is not closed in docs/work-queue.json, docs/decisions.md or docs/progress.html: the task rules forbid touching them."
     },
     {
       "id": "L378",
@@ -662,17 +640,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "D7367: Wald tests of conditional logit coefficients (statistic and p value from the covariance matrix) equal to mlogit. D7336: nested logit standard errors (numerical Hessian) equal to mlogit. D7335: nested logit (one inclusive value per nest of two or more alternatives) equal to mlogit. D7334: likelihood-ratio test of nested conditional logits equal to lmtest::lrtest. D7333: fitted probabilities (shares) and marginal effects of the conditional logit equal to mlogit. Partial (D6639, D7283 the multinomial logit with individual-specific covariates). e.algo.stat.mlogitpkg.clogit (conditional logit with alternative-specific covariates, optional alternative-specific constants, Newton on the exact Hessian) equals mlogit on Windows to 1e-4: coefficients, standard errors, log-likelihood (oracle_mlogit, 60 values; Linux pending; R stops short of the optimum for large coefficients, hence the tolerance). Open: nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, predictions and marginal effects. Was: Open (CRAN rank 723). Mid. Acceptance, equal to mlogit: multinomial, conditional and nested logit with alternative-specific and individual-specific variables, heteroskedastic logit, mixed logit by simulated maximum likelihood (Halton draws), panel data, hypothesis tests and predictions."
-    },
-    {
-      "id": "L458",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 728,
-      "title": "earth: multivariate adaptive regression splines",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 780). Mid. Acceptance, equal to earth: earth with degree, penalty, nk, thresh, minspan and pmethod, GCV and pruning, glm responses, cross-validation, evimp, predict, model.matrix and the basis-function printout."
     },
     {
       "id": "L465",
@@ -827,17 +794,6 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Partly done (D6061, D7266: triad_census, which_mutual, bridges, edge_connectivity, vertex_connectivity, similarity invlogweighted, motifs of size 3 and dominator_tree equal igraph, 1612 values): e.algo.graph.metrics has transitivity (global, local, average), coreness, degree assortativity, jaccard and dice similarity, eccentricity, radius and diameter, equal to igraph on 585 values on Windows (oracle_igraph); Linux pending. Open: walktrap, fast_greedy, infomap, optimal, gomory_hu_tree, cohesive_blocks, directed motifs and weighted forms. Original: Open (CRAN rank 109). Mid to large. Louvain, Leiden, label propagation, Girvan-Newman, centralities, isomorphism and flows exist under e.algo.graph. Acceptance, equal to igraph: cluster_walktrap, cluster_fast_greedy, cluster_infomap, cluster_optimal; assortativity and assortativity_degree, transitivity (global, local, average), coreness, dominator_tree, motifs and triad_census, similarity (jaccard, dice, invlogweighted), eccentricity, radius, bridges, gomory_hu_tree, which_mutual, edge_connectivity, vertex_connectivity, cohesive_blocks."
-    },
-    {
-      "id": "L344",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 757,
-      "title": "randomForest: Breiman forests equal to R",
-      "score": 0,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 255; ranger 299 is not bit-portable). Mid to large. Verify e.ml.tree forests first. Acceptance, equal to randomForest under set.seed: classification and regression, mtry, nodesize, sampsize, replace, OOB predictions and error, importance (type 1 and 2), proximity, votes, predict, partialPlot data, with the R RNG sampling order of the C code."
     },
     {
       "id": "L345",
@@ -1307,10 +1263,10 @@
       "group": "CRAN parity",
       "order": 820,
       "title": "gamlss: GAMLSS model fitting",
-      "score": 0,
+      "score": 0.82,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 836). Large. Needs L464. Acceptance, equal to gamlss: gamlss fitted by the RS and CG algorithms with pb, cs, lo and ga smoothers, centiles, lms, stepGAIC, the diagnostics and the worm plot data."
+      "evidence": "Partial (2026-11-20, merged 108fcd2c5): RS, CG and mixed fits with pb/cs/lo smoothers, centiles, lms (BCCG), stepGAIC, residual diagnostics and worm-plot data equal gamlss (oracle_gamlss_fit, _smooth, _diag, _lms, _step; Windows only). Remaining: (1) ga() smoother (gamlss.add, mgcv gam) not implemented, mgcv's REML/GCV Newton search is unlikely to match to 1e-9: implement it or narrow the acceptance to pb, cs and lo; (2) cs df/GCV scenarios at 1e-8 (sbart spar tolerance), pb df=4 at 1e-4 (R's uniroot tolerance), lms BCCG fit values at 1e-4 (R's nu-smoother lambda stop at the noise floor); (3) lms only BCCG without calibration; fits limited to NO, GA, PO, WEI, BCCG with identity and log links; (4) Linux not run."
     },
     {
       "id": "L515",

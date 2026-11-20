@@ -23,7 +23,7 @@ L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
 L448	library	0.25	676	mcmc: Metropolis and tempering samplers	D7337: morph and morph.metrop (subexponential and exponential maps, centre) equal to mcmc under set.seed.
 L450	library	0.2	722	mediation: causal mediation analysis	Partial (D7376): e.algo.stat.mediationpkg.mediate_lm (quasi-Bayesian mediate for linear mediator and outcome models without interaction: ACME, ADE, total effect and proportion mediated with percentile
 L452	library	0.35	775	TSA: time-series analysis toolkit	Partial (D6190, D6406 McLeod.Li.test).
-L453	library	0.1	1118	cubature: adaptive multidimensional integration	Partial (D6475 box integrals of four fixed integrands agree with hcubature and pcubature to 1e-8 on Windows through a tensor Gauss-Legendre rule, not the package's adaptive algorithms;
+L453	library	0.86	1442	cubature: adaptive multidimensional integration	Partial (2026-11-20, merged 108fcd2c5): hcubature, pcubature, cuhre, vegas, suave and divonne equal cubature (integral, error, evaluations, chi-square probability, return code, vector integrands, infi
 L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).
 L468	library	0.66	3256	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
 L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
@@ -32,14 +32,12 @@ L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D616
 L505	library	0.35	1173	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
 L306	library	0.88	2868	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
 L307	library	0.25	658	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);
-L309	library	0.1	702	nloptr: gradient-based and constrained optimizers	Partly done (D6054): e.algo.stat.dfree.auglag (augmented Lagrangian over the box minimiser, no gradients) equals nloptr on HS071 and two more constrained problems on Windows (oracle_auglag);
 L314	library	0.15	1107	lubridate and timeDate: date-time parsing, periods, business calendars	Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the month-end rules, quarter, semester, decimal_date, epiweek, isoweek, floor_date and ceiling_date for dates, equal to lubridat
 L317	library	0.08	687	igraph: random graph generators and layouts	Partly done (D6062): e.algo.graph.layout has layout_in_circle (with order), as_star, on_grid and on_sphere, equal to igraph on 580 summaries on Windows (oracle_layout);
 L275	library	0.08	825	Unicode collation, transliteration and encoding detection (stringi)	Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases;
 L274	library	0.1	688	General linear mixed models (lme4)	Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and ML, equal to lme4 on deviance, sigma, sigma_b, fixed effects and conditional modes at optimiser tolerance;
 L342	library	0.42	1013	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lme
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
-L394	library	0.05	448	ipred: bagging and error estimation	Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred;
 L338	library	0.2	756	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
 L339	library	0.24	1899	bayestestR, performance and parameters: model summary indices	D7705: performance check_outliers by the iqr method (the row flags) equal to performance.
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
@@ -49,7 +47,7 @@ L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial 
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
 L367	library	0.67	3915	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
-L376	library	0.03	613	gam: backfitting generalized additive models	Started (D7686: smooth.spline with a target df, the smoother s() of gam rests on: the trace of the smoother and R's Brent search for spar equal to smooth.spline(x, y, df) to about 1e-4 in the fit and 
+L376	library	0.85	1300	gam: backfitting generalized additive models	Partial (2026-11-20, merged 108fcd2c5): gam s() and lo() backfitting (gaussian, binomial, poisson), mixed s+lo, predict at newdata, step.Gam paths, anova Chisq/F and summary equal gam in the oracle gr
 L378	library	0.2	651	uwot and Rtsne: embeddings equal to R	Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases;
 L393	library	0.3	926	ordinal: cumulative link models	Partial (D6616).
 L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
@@ -59,7 +57,6 @@ L434	library	0.1	735	qgraph: network estimation	Partial (D6646).
 L436	library	0.1	756	MatchIt: matching for causal inference	Partial (D6638).
 L437	library	0.25	565	gstat: geostatistics	Partial (D6468 vgm Sph, Exp, Gau, Lin, the empirical variogram and ordinary, D6470 universal and simple kriging equal gstat on Windows;
 L456	library	0.15	1322	mlogit: discrete-choice models	D7367: Wald tests of conditional logit coefficients (statistic and p value from the covariance matrix) equal to mlogit.
-L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN rank 780).
 L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L486	library	0.25	473	mixtools: mixture models by EM	Partial (D6194).
 L488	library	0.2	475	drc: dose-response models	Partial (D6411).
@@ -74,7 +71,6 @@ L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D
 L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).
 L315	library	0.1	744	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix);
 L316	library	0.1	1096	igraph: deterministic structure and community detection	Partly done (D6061, D7266: triad_census, which_mutual, bridges, edge_connectivity, vertex_connectivity, similarity invlogweighted, motifs of size 3 and dominator_tree equal igraph, 1612 values): e.alg
-L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
 L345	library	0.15	809	FactoMineR and factoextra: multivariate exploration	Partial (D6633).
 L347	library	0.15	752	locfit: local regression and likelihood	Partial (D6635).
 L366	library	0.15	734	kernlab: kernel methods	Partial (D6634).
@@ -117,7 +113,7 @@ L441	library	0.35	1116	msm and mstate: multi-state models	Partial (D7352).
 L442	library	0.2	1006	phangorn: phylogenetic inference	Started (D7630 to D7639: the Robinson-Foulds distance of two trees, optimised edge lengths under Jukes-Cantor (optim.pml optEdge), the Jukes-Cantor and general time-reversible (with discrete gamma rat
 L466	library	0.3	2928	EnvStats: environmental statistics	D6723: e.algo.stat.envstats has rosnerTest, tolIntNormK (one-sided content, Wald-Wolfowitz, expectation) and predIntNormK (one future mean, Bonferroni), equal to EnvStats on 1852 values on Windows (or
 L495	library	0.1	721	mirt: item response theory	Started (D7653 to D7655: the unidimensional 2PL, Rasch (free latent variance) and graded response models on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows;
-L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
+L497	library	0.82	720	gamlss: GAMLSS model fitting	Partial (2026-11-20, merged 108fcd2c5): RS, CG and mixed fits with pb/cs/lo smoothers, centiles, lms (BCCG), stepGAIC, residual diagnostics and worm-plot data equal gamlss (oracle_gamlss_fit, _smooth,
 L515	library	0.14	741	unmarked: occupancy and abundance models	Started (D7651 to D7702: occu, the single-season occupancy model (with visit-level detection covariates and missing visits), pcount, the Poisson N-mixture model, and occuRN, the Royle-Nichols model, w
 L353	library	0.34	2182	mgcv: generalized additive models	Partial (D7340).
 L354	library	0.15	1475	lavaan: structural equation models	D7375: path analysis of an observed outcome on observed predictors (slopes, residual variance, standard errors) equal to lavaan.
