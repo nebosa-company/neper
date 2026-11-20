@@ -51813,3 +51813,7 @@ All acceptance entries (FLXMRglm four families, FLXMRglmfix, concomitant models,
 ## D7726 — L511 QCA closed; read.ssd dropped
 
 QCA closed: truthTable, minimize (complex, parsimonious, intermediate), superSubset, pof and necessity tests all have exact or 1e-10 oracle cases (Windows; Linux pending). In foreign (L332) read.ssd is dropped from the scope: it needs SAS, so no oracle can exist.
+
+## D7727 — L496 fda and L332 foreign closed; density.fd dropped
+
+L496: density.fd does not exist in the installed fda 6.3.0 (only intensity.fd, register.fd, register.newfd), so it leaves the acceptance; every other acceptance entry has a passing oracle case, extras listed in the done record are not ported. L332: all formats and R functions of the acceptance, including read.S/data.restore (with .Tsp), write.foreign for SPSS, Stata and SAS and read.epiinfo, pass on Windows and Linux; read.ssd stays dropped (needs SAS). L334 stays open: irlba 2.4.1 has no aug option and RSpectra coerces complex input, so those acceptance phrases are corrected in its evidence; two vacuous oracles remain to fix.

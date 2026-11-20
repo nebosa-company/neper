@@ -4622,4 +4622,5 @@ D7722	792	Handover files folded into the work queue
 D7723	1154	Handover leftovers placed
 D7724	546	Block-ellipsis keeps the clamped-line prefix; ellipsis-alone references are an older encoding
 D7725	509	L413 flexmix closed
-D7726	312	L511 QCA closed; read.ssd dropped
+D7726	313	L511 QCA closed; read.ssd dropped
+D7727	702	L496 fda and L332 foreign closed; density.fd dropped
