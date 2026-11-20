@@ -2,7 +2,7 @@
 suppressMessages(library(irlba))
 cases <- list()
 set.seed(20262404)
-add <- function(args, want) cases[[length(cases) + 1]] <<- case("irlbadefl", args, want, rel = 1e-7, abs = 1e-9)
+add <- function(args, want) cases[[length(cases) + 1]] <<- case("irlbadefl", args, want, rel = 1e-9, abs = 1e-11)
 w <- function(M) sum(M * seq_along(M))
 for (rep in 1:14) {
   m <- sample(24:40, 1); n <- sample(10:16, 1); if (rep %% 4 == 0) { t <- m; m <- n; n <- t }

@@ -8,4 +8,10 @@ for (rep in 1:20) {
   set.seed(sd); r <- svdr(X, k, extra = ex)
   for (j in 1:k) add(c(m, n, k, ex, sd, j - 1, as.vector(t(X))), r$d[j])
 }
+# Singular values 1e-10 scale sit between pow(eps, 0.8) and pow(eps, 0.5): svdr keeps iterating on them to the tol stop, so the eps^0.8 cut-off is pinned. abs = 0, the values are tiny.
+for (rep in 1:8) {
+  m <- sample(20:40, 1); n <- sample(10:18, 1); k <- sample(2:4, 1); ex <- sample(3:8, 1); sd <- sample(1:100000, 1); X <- matrix(round(rnorm(m * n), 4), m) * 1e-10
+  set.seed(sd); r <- svdr(X, k, extra = ex)
+  for (j in 1:k) cases[[length(cases) + 1]] <- case("sr", c(m, n, k, ex, sd, j - 1, as.vector(t(X))), r$d[j], rel = 1e-9, abs = 0)
+}
 emit("spectra_svdr", "irlba", list(cases))

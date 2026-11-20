@@ -6,12 +6,14 @@ cases <- list()
 set.seed(20262611)
 add <- function(args, want) cases[[length(cases) + 1]] <<- case("irlbasp", args, want, rel = 1e-9, abs = 1e-11)
 w <- function(M) sum(as.vector(M) * seq_along(M))
-for (rep in 1:24) {
+# reps 25-36: smallest = TRUE on larger, tall problems with a small work space, so the iteration does not converge on its first pass and the harmonic Ritz restart runs
+for (rep in 1:36) {
   m <- sample(30:60, 1); n <- sample(12:20, 1); if (rep %% 4 == 0) { t <- m; m <- n; n <- t }
   nv <- sample(2:4, 1); work <- nv + sample(3:7, 1); smallest <- as.integer(rep %% 5 == 0)
+  if (rep > 24) { m <- sample(80:120, 1); n <- sample(40:60, 1); work <- nv + sample(2:3, 1); smallest <- 1L }
   A <- rsparsematrix(m, n, density = 0.3, rand.x = function(q) round(rnorm(q), 4))
   sd1 <- sample(1:100000, 1); set.seed(sd1)
-  cen <- as.integer(rep > 16 && rep %% 2 == 1); sc <- as.integer(rep > 16 && rep %% 3 != 1)
+  cen <- as.integer(rep > 16 && rep <= 24 && rep %% 2 == 1); sc <- as.integer(rep > 16 && rep <= 24 && rep %% 3 != 1)
   cv <- Matrix::colMeans(A); sv <- sqrt(Matrix::colSums((A - rep(cv, each = m))^2) / (m - 1)); if (!cen) cv <- rep(0, n); if (!sc) sv <- rep(1, n)
   ia <- list(A = A, nv = nv, work = work, smallest = smallest == 1, tol = 1e-12, maxit = 5000); if (cen) ia$center <- cv; if (sc) ia$scale <- sv
   r <- tryCatch(suppressWarnings(do.call(irlba, ia)), error = function(e) NULL); if (is.null(r)) next
