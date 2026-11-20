@@ -66,6 +66,38 @@ fn integrand(id: usize, d: usize, p: []const f64) -> f64 {
     if id == 1usize { ret c }
     if id == 2usize { ret 1.0f64 / (1.0f64 + s) }
     if id == 4usize { ret s * s * math.exp[f64](0.0f64 - s2) }
+    if id >= 5usize && id <= 9usize {
+        // the stress integrands: 5 a narrow peak exp(-50 sum (x - 0.5)^2), 6 a kink sum |x - 0.6|, 7 sin(8 sum x), 8 a step 1 (sum x < 1), 9 sqrt(sum x)
+        // R sums in long double, so the terms are added in double-double and rounded once
+        var terms: [8]f64 = zero
+        var j = 0usize
+        while j < d {
+            terms[j] = p[j]
+            if id == 5usize { terms[j] = (p[j] - 0.5f64) * (p[j] - 0.5f64) }
+            if id == 6usize { terms[j] = math.abs[f64](p[j] - 0.6f64) }
+            j += 1usize
+        }
+        var shi = 0.0f64
+        var slo = 0.0f64
+        j = 0usize
+        while j < d {
+            let t = shi + terms[j]
+            let bb = t - shi
+            slo += (shi - (t - bb)) + (terms[j] - bb)
+            shi = t
+            j += 1usize
+        }
+        let q = shi + slo
+        if id == 7usize { ret math.sin[f64](8.0f64 * q) }
+        if id == 9usize { ret math.sqrt[f64](q) }
+        if id == 8usize {
+            var step = 0.0f64
+            if q < 1.0f64 { step = 1.0f64 }
+            ret step
+        }
+        if id == 5usize { ret math.exp[f64](0.0f64 - 50.0f64 * q) }
+        ret q
+    }
     ret s * s * math.exp[f64](0.0f64 - pr)
 }
 
@@ -935,8 +967,8 @@ fn cc_tensor(id: usize, d: usize, lo: []const f64, hi: []const f64, sz: []const 
         total *= sz[i]
         i += 1usize
     }
-    var wts: [8][130]f64 = zero
-    var nds: [8][130]f64 = zero
+    var wts: [8][1100]f64 = zero
+    var nds: [8][1100]f64 = zero
     let pi = 3.141592653589793f64
     i = 0usize
     while i < d {
@@ -1050,8 +1082,8 @@ fn cc_tensor_v(id: usize, d: usize, lo: []const f64, hi: []const f64, sz: []cons
         total *= sz[i]
         i += 1usize
     }
-    var wts: [8][130]f64 = zero
-    var nds: [8][130]f64 = zero
+    var wts: [8][1100]f64 = zero
+    var nds: [8][1100]f64 = zero
     let pi = 3.141592653589793f64
     i = 0usize
     while i < d {

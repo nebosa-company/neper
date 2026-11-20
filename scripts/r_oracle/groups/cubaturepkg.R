@@ -41,7 +41,7 @@ assign(".Random.seed", sv0, envir = globalenv())
 for (rep in 1:24) {
   id <- (rep - 1) %% 4; lo <- round(runif(1, 0, 0.5), 3); hi <- lo + round(runif(1, 0.4, 1.5), 3); tl <- c(1e-3, 1e-6, 1e-9)[1 + rep %% 3]
   r <- pcubature(fs[[id + 1]], lo, hi, tol = tl, maxEval = 20000)
-  if (r$functionEvaluations >= 4000) next
+  if (r$functionEvaluations >= 20000) next
   a <- c(id, 1, lo, hi, tl, 20000)
   cases[[length(cases) + 1]] <- case("pc", c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("pc", c(a, 1), r$error, rel = 1e-9, abs = 1e-13)
@@ -73,7 +73,7 @@ assign(".Random.seed", sv0, envir = globalenv())
 for (rep in 1:24) {
   id <- (rep - 1) %% 4; d <- 2 + rep %% 2; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); tl <- c(1e-3, 1e-5, 1e-7)[1 + rep %% 3]
   r <- pcubature(fs[[id + 1]], lo, hi, tol = tl, maxEval = 1e6)
-  if (r$functionEvaluations > 20000) next
+  if (r$functionEvaluations > 60000) next
   a <- c(id, d, lo, hi, tl, 1e6)
   cases[[length(cases) + 1]] <- case("pn", c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("pn", c(a, 1), r$error, rel = 1e-9, abs = 1e-13)
@@ -207,11 +207,12 @@ dvcase <- function(f, nc, id, vec, lo, hi, rt, at, mn, mx, k1 = 47, k2 = 1, k3 =
   # Divonne's partitioning follows an optimiser whose steps compare function values: a libm that differs in the last bit can move one step, which leaves the integral (Korobov samples of a fixed partition) alone
   # but moves the evaluation count by a few and the error estimate in its sixth digit. A case whose own R result moves when the integrand is perturbed by 1e-15 gets those two loosened (stated here, once); the others are exact.
   r2 <- dv(function(x) f(x) * (1 + 1e-15 * ((sum(x) * 1e9) %% 1)))
-  stable <- r2$neval == r$neval && all(abs(r2$error - r$error) <= 1e-9 * abs(r$error)) && all(abs(r2$integral - r$integral) <= 1e-9 * abs(r$integral))
+  r3 <- dv(function(x) f(x) * (1 + 1e-14 * ((sum(x) * 7e8) %% 1)))
+  stable <- r2$neval == r$neval && all(abs(r2$error - r$error) <= 1e-9 * abs(r$error)) && all(abs(r2$integral - r$integral) <= 1e-9 * abs(r$integral)) && r3$neval == r$neval && all(abs(r3$error - r$error) <= 1e-9 * abs(r$error))
   a <- c(id, vec, d, ifelse(lo <= -1e100, -1e100, lo), ifelse(hi >= 1e100, 1e100, hi), rt, at, mn, mx, k1, k2, k3, mp, bd, mc, md)
   put <- function(w, v, rl, ab) cases[[length(cases) + 1]] <<- case("dv", c(a, w), v, rel = rl, abs = ab)
   for (k in 1:nc) { put(k - 1, r$integral[k], 1e-9, 1e-13); put(nc + k - 1, r$error[k], if (stable) 1e-9 else 1e-5, 1e-14); put(2 * nc + 1 + k, r$prob[k], 1e-8, 2e-2) }
-  put(2 * nc, r$neval, 0, if (stable) 0 else ceiling(0.002 * r$neval) + 3); put(3 * nc + 2, r$returnCode, 0, 0)
+  put(2 * nc, r$neval, 0, if (stable) 0 else ceiling(0.002 * r$neval) + 3); put(3 * nc + 2, r$returnCode, 0, if (!stable && abs(r$returnCode) > 10) ceiling(0.01 * abs(r$returnCode)) else 0)
 }
 set.seed(20262020)
 for (rep in 1:16) {
@@ -249,7 +250,7 @@ for (rep in 1:30) {
   if (r$functionEvaluations < 40000) hgput(a, r)
   r <- pcubature(fi[[id]], b$lo, b$hi, tol = tl, maxEval = 40000)
   nm <- if (d == 1) "pc" else "pn"
-  if (r$functionEvaluations > 20000) next
+  if (r$functionEvaluations > 60000) next
   cases[[length(cases) + 1]] <- case(nm, c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case(nm, c(a, 1), r$error, rel = 1e-9, abs = 1e-13)
   cases[[length(cases) + 1]] <- case(nm, c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
@@ -262,14 +263,58 @@ for (rep in 1:16) {
   a <- c(102, d, atan(b$lo), atan(b$hi), tl, 40000)
   if (r$functionEvaluations < 40000) hvput(a, r, 3)
   r <- pcubature(fv[[3]], b$lo, b$hi, tol = tl, maxEval = 40000, fDim = 3)
-  if (r$functionEvaluations > 20000) next
+  if (r$functionEvaluations > 60000) next
   hvput(a, r, 3, "pv", 1e-13)
 }
 for (rep in 1:20) {
   id <- (rep - 1) %% 2; nc <- c(2, 3)[id + 1]; d <- 1 + rep %% 3; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); tl <- c(1e-3, 1e-5, 1e-7)[1 + rep %% 3]
   me <- c(1e6, 200)[1 + (rep %% 5 == 0)]
   r <- pcubature(fv[[id + 1]], lo, hi, tol = tl, maxEval = me, fDim = nc)
-  if (r$functionEvaluations > 20000) next
+  if (r$functionEvaluations > 60000) next
   hvput(c(id, d, lo, hi, tl, me), r, nc, "pv", 1e-13)
+}
+# stress integrands (ids 5 to 9: a narrow peak, a kink, an oscillation, a step, a corner root) so the adaptive splitting of every method is exercised on more than smooth functions
+gs <- list(function(x) exp(-50 * sum((x - 0.5)^2)), function(x) sum(abs(x - 0.6)), function(x) sin(8 * sum(x)), function(x) as.numeric(sum(x) < 1), function(x) sqrt(sum(x)))
+set.seed(20262030)
+for (rep in 1:30) {
+  id <- 5 + (rep - 1) %% 5; d <- 1 + (rep %/% 5) %% 3; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); tl <- c(1e-4, 1e-6)[1 + rep %% 2]
+  r <- hcubature(gs[[id - 4]], lo, hi, tol = tl, maxEval = 20000)
+  hgput(c(id, d, lo, hi, tl, 20000), r)
+  me <- sample(c(1, 20, 150, 1000), 1)
+  r <- hcubature(gs[[id - 4]], lo, hi, tol = 1e-12, maxEval = me)
+  hgput(c(id, d, lo, hi, 1e-12, me), r)
+}
+for (rep in 1:30) {
+  id <- 5 + (rep - 1) %% 5; d <- 1 + (rep %/% 5) %% 3; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); tl <- c(1e-3, 1e-5)[1 + rep %% 2]
+  r <- pcubature(gs[[id - 4]], lo, hi, tol = tl, maxEval = 100000)
+  nm <- if (d == 1) "pc" else "pn"
+  if (r$functionEvaluations <= 60000) {
+    a <- c(id, d, lo, hi, tl, 100000)
+    cases[[length(cases) + 1]] <- case(nm, c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
+    cases[[length(cases) + 1]] <- case(nm, c(a, 1), r$error, rel = 1e-9, abs = 1e-13)
+    cases[[length(cases) + 1]] <- case(nm, c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case(nm, c(a, 3), r$returnCode, rel = 0, abs = 0)
+  }
+  me <- sample(c(1, 10, 60, 300), 1)
+  r <- pcubature(gs[[id - 4]], lo, hi, tol = 1e-12, maxEval = me)
+  a <- c(id, d, lo, hi, 1e-12, me)
+  cases[[length(cases) + 1]] <- case(nm, c(a, 0), r$integral, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case(nm, c(a, 1), r$error, rel = 1e-9, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case(nm, c(a, 2), r$functionEvaluations, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case(nm, c(a, 3), r$returnCode, rel = 0, abs = 0)
+}
+for (rep in 1:20) {
+  id <- 5 + (rep - 1) %% 5; d <- 1 + (rep %/% 5) %% 3; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3)
+  keys <- c(0, 7, 9, if (d == 2) 13, if (d == 3) 11); key <- keys[1 + (rep %/% 3) %% length(keys)]
+  chcase(gs[[id - 4]], 1, id, 0, lo, hi, c(1e-3, 1e-5)[1 + rep %% 2], 1e-12, 0, 1e5, key)
+}
+for (rep in 1:15) {
+  id <- 5 + (rep - 1) %% 5; d <- 1 + (rep %/% 5) %% 3; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3)
+  vgcase(gs[[id - 4]], 1, id, 0, lo, hi, 1e-2, 1e-12, 0, 20000, 1000, 500, c(12345, 7, 0)[1 + rep %% 3])
+  svcase(gs[[id - 4]], 1, id, 0, lo, hi, 1e-2, 1e-12, 0, 20000, 500, 2, 25, c(12345, 7, 0)[1 + rep %% 3])
+}
+for (rep in 1:15) {
+  id <- 5 + (rep - 1) %% 5; d <- 2 + rep %% 2; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3)
+  dvcase(gs[[id - 4]], 1, id, 0, lo, hi, c(1e-3, 1e-4)[1 + rep %% 2], 1e-12, 0, 100000)
 }
 emit("cubaturepkg", "cubature", list(cases))

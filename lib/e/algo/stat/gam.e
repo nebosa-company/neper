@@ -9,7 +9,7 @@
 // lo() terms of one variable (degree 1 or 2) follow the package loess (kd-tree vertices, Hermite interpolation, exact leverages); a model mixing s() and lo() runs the package general.wam order.
 //
 // predict at newdata (gam_predict, values only: R gives no standard errors there) covers s() terms and lo() terms of degree 1 or 2 inside the data box.
-// Not here: lo() of two or more variables, the random() smoother, offsets, NA handling, knot thinning above 3199 unique x.
+// Not here: lo() of two or more variables, the random() smoother, NA handling, knot thinning above 3199 unique x.
 
 use e.math
 use e.mem
@@ -1442,6 +1442,13 @@ fn general_wam(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64
 // gam.fit for y ~ x (columns of the model matrix, the first the intercept) with the columns `which` smoothed by s(., df) (df > 0) or s(., spar) (df = 0).
 // y is the response (0/1 for binomial), w the prior weights. out arrays are allocated in a.
 fn gam_fit(a: *mem.Arena, xin_: []const f64, n: usize, p: usize, y0: []const f64, w: []const f64, fam: usize, q: usize, which: []const usize, df: []const f64, spar0: []const f64, eps: f64, maxit: usize, bf_eps: f64, bf_maxit: usize, out: *GamFit) -> err {
+    let off = zal(a, n)
+    ret gam_fit_off(a, xin_, n, p, y0, w, off, fam, q, which, df, spar0, eps, maxit, bf_eps, bf_maxit, out)
+}
+
+// gam with offset(): the working response is z = eta - offset + (y - mu) / mu.eta, the backfit fits z, and eta is that fit plus the offset.
+// As in the package, the starting eta ignores the offset and null.deviance is the weighted-mean one.
+fn gam_fit_off(a: *mem.Arena, xin_: []const f64, n: usize, p: usize, y0: []const f64, w: []const f64, off: []const f64, fam: usize, q: usize, which: []const usize, df: []const f64, spar0: []const f64, eps: f64, maxit: usize, bf_eps: f64, bf_maxit: usize, out: *GamFit) -> err {
     let x = zal(a, n * p)
     var i = 0usize
     while i < n * p {
@@ -1511,7 +1518,7 @@ fn gam_fit(a: *mem.Arena, xin_: []const f64, n: usize, p: usize, y0: []const f64
             let me = mu_eta(fam, eta[i])
             if w[i] > 0.0f64 && me != 0.0f64 { g = 1.0f64 }
             good[i] = g
-            z[i] = eta[i]
+            z[i] = eta[i] - off[i]
             wz[i] = 0.0f64
             if g > 0.0f64 {
                 z[i] = z[i] + (y[i] - mu[i]) / me
@@ -1540,7 +1547,7 @@ fn gam_fit(a: *mem.Arena, xin_: []const f64, n: usize, p: usize, y0: []const f64
         bfi[iter - 1usize] = bf.nit
         i = 0usize
         while i < n {
-            eta[i] = bfeta[i]
+            eta[i] = bfeta[i] + off[i]
             mu[i] = linkinv(fam, eta[i])
             i += 1usize
         }
@@ -1585,7 +1592,7 @@ fn gam_fit(a: *mem.Arena, xin_: []const f64, n: usize, p: usize, y0: []const f64
     let resid = zal(a, n)
     i = 0usize
     while i < n {
-        resid[i] = z[i] - eta[i]
+        resid[i] = z[i] - (eta[i] - off[i])
         if gen { resid[i] = bf.res[i] }
         i += 1usize
     }
