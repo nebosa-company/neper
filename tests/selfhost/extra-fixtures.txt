@@ -694,3 +694,13 @@ oracle_mass_nbx
 oracle_mass_util
 oracle_mass_loglm
 oracle_mass_probe
+oracle_flexmix_wo
+oracle_gslcon
+oracle_gslnu
+oracle_gslhyp
+oracle_arpack
+oracle_spectra_irlba_sp
+oracle_lpsolveapi_sens
+oracle_clue_more
+oracle_clue_gv3
+oracle_lpsolve_sensint
