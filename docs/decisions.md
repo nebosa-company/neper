@@ -51805,3 +51805,7 @@ The leftovers the D7722 audit found in the handover files were placed once. Open
 ## D7724 — Block-ellipsis keeps the clamped-line prefix; ellipsis-alone references are an older encoding
 
 User verdict of 2026-11-05 (css-overflow section 6, block-ellipsis): follow the spec and keep the clamped-line prefix. The block-ellipsis references that encode an ellipsis-alone line (-016, the ::first-letter files) are accepted as an older encoding, the same verdict as hanging-punctuation-first-and-last-together. Measured cost of the alternative: 318 to 319 of 501 while contradicting passing clamp tests, so it is not worth taking.
+
+## D7725 — L413 flexmix closed
+
+All acceptance entries (FLXMRglm four families, FLXMRglmfix, concomitant models, EM and CEM, BIC and ICL, posterior and clusters) have passing oracle cases plus SEM, weights, offsets and EIC. Concomitant and stepFlexmix tolerances derive from R's sensitivity to a 2-ulp perturbation of the covariate (nnet BFGS is not reproduced to rounding). refit, boot, LR_test, rflexmix and summary standard errors are outside the acceptance and not ported. Windows only; Linux pending.
