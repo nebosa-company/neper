@@ -373,7 +373,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if same { ret 1.0f64 }
         ret 0.0f64
     }
-    if str.eq(k, "merr") || str.eq(k, "mn") || str.eq(k, "mname") || str.eq(k, "mdim") || str.eq(k, "msum") {
+    if str.eq(k, "merr") || str.eq(k, "mn") || str.eq(k, "mname") || str.eq(k, "mdim") || str.eq(k, "msum") || str.eq(k, "msums") || str.eq(k, "msumn") {
         let (mb, mr) = fs.read_file(a, path_of(a, "mtp", idx, ".mtp"), 1048576usize)
         if mr != ok { os.exit(14) }
         let (mt, mp) = mtp.parse(a, mb)
@@ -399,9 +399,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         var ms = 0.0f64
         var q = 0usize
         while q < mt.vals[col].len {
-            ms += f64(q + 1usize) * mt.vals[col][q]
+            var sc = 1.0f64
+            if str.eq(k, "msumn") { sc = 1.0e-300f64 }
+            ms += f64(q + 1usize) * (mt.vals[col][q] * sc)
             q += 1usize
         }
+        if str.eq(k, "msums") { ret ms * 1.0e300f64 }
         ret ms
     }
     if str.eq(k, "serr") || str.eq(k, "sn") || str.eq(k, "sname") || str.eq(k, "sstr") || str.eq(k, "snum") || str.eq(k, "snas") || str.eq(k, "slen") || str.eq(k, "shash") {

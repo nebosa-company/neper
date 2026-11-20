@@ -34,6 +34,47 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "memrow") || str.eq(c.name, "memcol") {
+        let n = usize(x[0usize])
+        let kc = usize(x[1usize])
+        let k = usize(x[2usize])
+        let (lab, e0) = mem.alloc[usize](a, n)
+        let (out, e1) = mem.alloc[f64](a, n * k)
+        if e0 != ok || e1 != ok { os.exit(5) }
+        var i = 0usize
+        while i < n {
+            lab[i] = usize(x[3usize + i])
+            i += 1usize
+        }
+        cl.membership_hard(lab, n, k, out)
+        let at = usize(x[3usize + n]) - 1usize
+        var s = 0.0f64
+        if str.eq(c.name, "memrow") {
+            var j = 0usize
+            while j < k {
+                s += out[at * k + j] * f64(j + 1usize)
+                j += 1usize
+            }
+        } else {
+            i = 0usize
+            while i < n {
+                s += out[i * k + at]
+                i += 1usize
+            }
+        }
+        ret s
+    }
+    if str.eq(c.name, "softat") {
+        let n = usize(x[0usize])
+        let k0 = usize(x[1usize])
+        let k = usize(x[2usize])
+        let (out, e1) = mem.alloc[f64](a, n * k)
+        if e1 != ok { os.exit(5) }
+        cl.membership_soft(x[3usize..(3usize + n * k0)], n, k0, k, out)
+        let i = usize(x[3usize + n * k0]) - 1usize
+        let j = usize(x[4usize + n * k0]) - 1usize
+        ret out[i * k + j]
+    }
     var nr = 0usize
     var nc = 0usize
     var mx = false
@@ -53,6 +94,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e2 != ok { os.exit(6) }
     let (total, e3) = cl.solve_lsap(a, x[at..(at + nr * nc)], nr, nc, mx, asg)
     if e3 != ok { os.exit(7) }
+    if str.eq(c.name, "lsapat") {
+        ret f64(asg[usize(x[at + nr * nc]) - 1usize] + 1usize)
+    }
     if str.eq(c.name, "lsapcols") {
         var s = 0.0f64
         var i = 0usize

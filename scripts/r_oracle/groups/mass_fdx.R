@@ -1,5 +1,5 @@
 # MASS fitdistr with fixed parameters, user starts, lower / upper bounds (L-BFGS-B) and forced methods.
-# Tolerances F/t 1e-4, negative binomial 1e-6, rest 1e-8: the same ceiling as mass_fdt.R and mass_fdbf.R, set by the one-ulp libm differences measured in mass_probe.R
+# Tolerances: F and t 1e-5 (1e-6 fails 7 cases: flat df ridge amplifies one-ulp density differences at the BFGS stop point), negative binomial 1e-6, rest 1e-8; see mass_probe.R
 #   "fdx" (kind 0 gamma 1 weibull 2 logistic 3 cauchy 4 nbinom 5 beta 6 F 7 chisq 8 t, n, free[3], fixed[3], use.start, start[3], bounded, lower[3], upper[3], method 0 auto 1 BFGS 2 NM 3 LBFGSB, which, x[n])
 #   which 0 .. nf - 1 estimates, nf .. 2 nf - 1 standard errors, 2 nf the log-likelihood (nf = number of free parameters), 50 the position-weighted sum of vcov, 51 vcov[2] (column-major), 100 n
 suppressMessages(library(MASS))
@@ -10,7 +10,7 @@ dn <- c("gamma", "weibull", "logistic", "cauchy", "negative binomial", "beta", "
 gen <- function(kind, n) switch(kind + 1, rgamma(n, 3, 1.5), rweibull(n, 2, 3), rlogis(n, 1, 2), rcauchy(n, 0.5, 1.2), rnbinom(n, size = 4, mu = 5), rbeta(n, 2.5, 4), rf(n, 7, 11), rchisq(n, 4), 1 + 2 * rt(n, 6))
 defst <- list(NULL, NULL, NULL, NULL, NULL, c(2, 2), c(3, 3), 3, NULL)
 # the likelihood is a sum of R-identical densities except negative binomial, F and t, whose last bits differ; optim stops at its reltol (1.5e-8) and the F and t degrees of freedom sit on a flat ridge of the likelihood (a last-bit change of the objective moves the stop by ~1e-5 relative): F and t 1e-4, negative binomial 1e-6, the rest 1e-8
-rel_for <- function(kind, w, nf) if (kind %in% c(6, 8)) 1e-4 else if (kind == 4) 1e-6 else 1e-8
+rel_for <- function(kind, w, nf) if (kind %in% c(6, 8)) 1e-5 else if (kind == 4) 1e-6 else 1e-8
 for (rep in 1:90) {
   kind <- rep %% 9; n <- sample(60:160, 1); x <- gen(kind, n)
   np <- length(pn[[kind + 1]]); free <- rep(1, np); fixed <- rep(0, np)

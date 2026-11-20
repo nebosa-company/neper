@@ -20,7 +20,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let z = c.args
         var got = 0.0f64
-        if str.eq(c.name, "qpm") {
+        if str.eq(c.name, "qopt") {
+            got = sd.qstable_opt(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], true, false, z[5usize], i64(z[6usize]), z[7usize], usize(z[8usize]))
+        } else if str.eq(c.name, "dopt") {
+            got = sd.dstable_opt(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], z[5usize], z[6usize], usize(z[7usize]))
+        } else if str.eq(c.name, "popt") {
+            got = sd.pstable_tol(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], z[5usize], usize(z[6usize]))
+        } else if str.eq(c.name, "mode") {
+            got = sd.stable_mode(a, z[0usize], z[1usize])
+        } else if str.eq(c.name, "qpm") {
             got = sd.qstable_pm(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], usize(z[5usize]))
         } else if str.eq(c.name, "rpm") {
             let nn = usize(z[5usize])

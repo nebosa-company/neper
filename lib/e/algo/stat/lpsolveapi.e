@@ -397,3 +397,16 @@ fn add_column(a: *mem.Arena, md: *Model, xt: []const f64) -> err {
     md.n = n + 1usize
     ret ok
 }
+
+// get.sensitivity.rhs (duals, dualsfrom, dualstill: m rows then n variables) and get.sensitivity.obj (objfrom, objtill: n) of a model of real variables in [0, Inf); get.dual.solution is 1
+// then duals and get.primal.solution(orig = TRUE) is the m row values then x. Models with bounds or integer columns answer an error.
+fn sensitivity(a: *mem.Arena, md: *const Model, x: []f64, duals: []f64, dfrom: []f64, dto: []f64, cfrom: []f64, cto: []f64) -> err {
+    var j = 0usize
+    while j < md.n {
+        if md.lo[j] != 0.0f64 || md.hi[j] < 1.0e29f64 || md.kind[j] != 0usize { ret lp.Malformed }
+        j += 1usize
+    }
+    let (v, e) = lp.lp_sens(a, md.obj, md.a, md.rhs, md.rel, md.m, md.n, md.maximise, x, duals, dfrom, dto, cfrom, cto)
+    let _ = v
+    ret e
+}

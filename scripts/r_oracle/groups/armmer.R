@@ -2,6 +2,9 @@
 #   "simmer" (seed, nsims, n, p, ng, reml, which, from, len, X[n p] column-major, group codes 0-based[n], y[n]): after set.seed(seed), sim(lmer fit, nsims) with which 0 the sigma draws,
 #       1 the fixef draw `from`, 2 the ranef draw `from`; the weighted sum 1 * v[1] + 2 * v[2] + ... of `len` values
 #   "semer" (n, p, ng, reml, which, X, g, y) with which 0 se.fixef, 1 se.ranef (the weighted sum); "dicmer" (n, p, ng, reml, X, g, y) extractDIC
+#   "simmert" (seed, nsims, n, p, ng, theta, which, from, len, X, g, y): the same draws with the REML fit taken at R's own theta (1e-9)
+#   "semert" (n, p, ng, theta, which, X, g, y): se.fixef (which 0) and se.ranef (1) of the REML fit at R's theta (1e-9)
+#   "simglmer" (seed, nsims, n, p, ng, theta, which, from, len, beta[p], u[ng], w[n], X, g): sim of a glmer random-intercept fit from R's final theta, beta, u and working weights, which 1 fixef 2 ranef (1e-9)
 # lmer's own optimiser (bobyqa) stops at theta within about 1e-4 of the optimum, which Neper's Brent search (1e-10) does not copy, so the tolerance is lmer's oracle's, 2e-3.
 suppressMessages(library(arm)); suppressMessages(library(lme4))
 cases <- list()
@@ -17,15 +20,39 @@ for (rep in 1:18) {
   body <- c(as.vector(X), g, y)
   se <- c(wsum(se.fixef(m)), wsum(as.vector(se.ranef(m)$g)))
   for (w in 0:1) cases[[length(cases) + 1]] <- case("semer", c(n, p, ng, reml, w, body), se[w + 1], rel = 2e-3, abs = 1e-6)
+  if (reml) for (w in 0:1) cases[[length(cases) + 1]] <- case("semert", c(n, p, ng, getME(m, "theta")[[1]], w, body), se[w + 1], rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("dicmer", c(n, p, ng, reml, body), extractDIC(m), rel = 1e-5, abs = 1e-5)
   if (reml) {
     ns <- 4; sd0 <- sample(1:100000, 1); set.seed(sd0); sm <- sim(m, ns)
     pre <- c(sd0, ns, n, p, ng, 1)
     cases[[length(cases) + 1]] <- case("simmer", c(pre, 0, 0, ns, body), wsum(sm@sigma), rel = 2e-3, abs = 1e-6)
+    th <- getME(m, "theta")[[1]]; pret <- c(sd0, ns, n, p, ng, th)
+    cases[[length(cases) + 1]] <- case("simmert", c(pret, 0, 0, ns, body), wsum(sm@sigma), rel = 1e-9, abs = 1e-12)
+    for (i in 1:ns) {
+      cases[[length(cases) + 1]] <- case("simmert", c(pret, 1, i - 1, p, body), wsum(sm@fixef[i, ]), rel = 1e-9, abs = 1e-12)
+      cases[[length(cases) + 1]] <- case("simmert", c(pret, 2, i - 1, ng, body), wsum(sm@ranef$g[i, , 1]), rel = 1e-9, abs = 1e-12)
+    }
     for (i in 1:ns) {
       cases[[length(cases) + 1]] <- case("simmer", c(pre, 1, i - 1, p, body), wsum(sm@fixef[i, ]), rel = 2e-3, abs = 1e-4)
       cases[[length(cases) + 1]] <- case("simmer", c(pre, 2, i - 1, ng, body), wsum(sm@ranef$g[i, , 1]), rel = 2e-3, abs = 1e-4)
     }
+  }
+}
+set.seed(20262501)
+for (rep in 1:12) {
+  ng <- sample(6:12, 1); per <- sample(5:10, ng, TRUE); n <- sum(per); g <- rep(seq_len(ng) - 1, per); p <- sample(1:2, 1)
+  X <- cbind(1, matrix(round(rnorm(n * (p - 1)), 3), n, p - 1)); b <- rnorm(ng, 0, runif(1, 0.5, 1.5)); eta <- as.vector(X %*% c(0.3, 0.6)[1:p]) + b[g + 1]
+  pois <- rep %% 2 == 0; y <- if (pois) rpois(n, exp(eta / 2)) else rbinom(n, 1, plogis(eta))
+  d <- data.frame(y = y, g = factor(g)); for (j in seq_len(p - 1)) d[[paste0("x", j)]] <- X[, j + 1]
+  f <- if (p == 1) y ~ 1 + (1 | g) else as.formula(paste("y ~", paste0("x", seq_len(p - 1), collapse = " + "), "+ (1 | g)"))
+  m <- suppressWarnings(suppressMessages(glmer(f, d, family = if (pois) poisson else binomial)))
+  th <- getME(m, "theta")[[1]]; if (th < 0.2) next
+  mu <- fitted(m); w <- if (pois) mu else mu * (1 - mu)
+  ns <- 4; sd0 <- sample(1:100000, 1); set.seed(sd0); sm <- sim(m, ns)
+  pre <- c(sd0, ns, n, p, ng, th, 0, 0, 0)
+  for (i in 1:ns) {
+    cases[[length(cases) + 1]] <- case("simglmer", c(sd0, ns, n, p, ng, th, 1, i - 1, p, as.vector(fixef(m)), getME(m, "u"), w, as.vector(X), g), wsum(sm@fixef[i, ]), rel = 1e-9, abs = 1e-12)
+    cases[[length(cases) + 1]] <- case("simglmer", c(sd0, ns, n, p, ng, th, 2, i - 1, ng, as.vector(fixef(m)), getME(m, "u"), w, as.vector(X), g), wsum(sm@ranef$g[i, , 1]), rel = 1e-9, abs = 1e-12)
   }
 }
 emit("armmer", "arm", list(cases))

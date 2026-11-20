@@ -27,6 +27,10 @@ record <- function(sense, A, relc, b, cc, lo, hi, kind, lin = TRUE) {
     if (lin) {
       add("x", a, sum(get.variables(lpm) * seq_len(ncol(A))))
       add("cons", a, sum(get.constraints(lpm) * seq_len(nrow(A))))
+      if (length(cases) < 1400) {  # entry by entry (unique optima), the index appended
+        for (j in seq_len(ncol(A))) add("xe", c(a, j), get.variables(lpm)[j])
+        for (i in seq_len(nrow(A))) add("ce", c(a, i), get.constraints(lpm)[i])
+      }
     }
   }
   st

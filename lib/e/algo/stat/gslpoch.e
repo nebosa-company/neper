@@ -9,6 +9,7 @@ use e.algo.stat.gslairy as gy
 use e.algo.stat.gslerr as ge
 use e.algo.stat.gslerr2 as g2
 use e.algo.stat.gslpsi as gp
+use e.algo.stat.gslgam as gm
 
 fn p_eps() -> f64 { ret 2.2204460492503131e-16f64 }
 fn pa(x: f64) -> f64 { ret math.abs[f64](x) }
@@ -61,7 +62,7 @@ fn e_expm1(x: f64) -> (f64, f64) {
 fn e_gammainv(x: f64) -> (f64, f64) {
     if x <= 0.0f64 && x == math.floor[f64](x) { ret (0.0f64, 0.0f64) }
     if x < 0.5f64 {
-        let (lv, le, sg) = ge.e_lngamma_sgn(x)
+        let (lv, le, sg) = gm.lngamma_sgn(x)
         let (v, e) = gy.exp_mult_err(0.0f64 - lv, le, sg, 0.0f64)
         ret (v, e)
     }
@@ -211,7 +212,7 @@ fn lnpoch_sgn(ar: *mem.Arena, a: f64, x: f64) -> (f64, f64, f64) {
             ret (f - pv, pe + 2.0f64 * p_eps() * f, s)
         }
         if a + x == 0.0f64 {
-            let (lv, le, sg) = ge.e_lngamma_sgn(0.0f64 - a + 1.0f64)
+            let (lv, le, sg) = gm.lngamma_sgn(0.0f64 - a + 1.0f64)
             var s2 = -1.0f64
             if math.floor[f64](a / 2.0f64) * 2.0f64 == a { s2 = 1.0f64 }
             ret (lv, le, sg * s2)
@@ -232,8 +233,8 @@ fn lnpoch_sgn(ar: *mem.Arena, a: f64, x: f64) -> (f64, f64, f64) {
         if sin1 * sin2 < 0.0f64 { sg = -1.0f64 }
         ret (v, er, sg)
     }
-    let (l1, l1e, s1) = ge.e_lngamma_sgn(a + x)
-    let (l2, l2e, s2b) = ge.e_lngamma_sgn(a)
+    let (l1, l1e, s1) = gm.lngamma_sgn(a + x)
+    let (l2, l2e, s2b) = gm.lngamma_sgn(a)
     let v3 = l1 - l2
     ret (v3, l1e + l2e + 2.0f64 * p_eps() * pa(v3), s1 * s2b)
 }

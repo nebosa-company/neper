@@ -41,4 +41,49 @@ for (rep in 1:40) {
   d <- as.matrix(cl_ultrametric(res))
   add("maj", c(B, n, w, mm, unlist(lapply(pts, function(p) as.vector(t(p))))), sum(d * outer(seq_len(n), seq_len(n), function(i, j) 7 * i + 3 * j + 1)))
 }
+# the alternating optimisation methods SE, HE, SM, HM (kind 0 .. 3) on ensembles of hard or soft partitions, from given starts or R's own random starts:
+#   "ao" (kind, nruns, seed, B, n, k, w[B], memberships B by n by k row-major, [starts nruns by n by k row-major when seed is 0]): the checksum of the consensus membership
+#   seed above 0: set.seed(seed) then control = list(nruns = nruns), so the starts are runif draws in R's order (a column-major n by k matrix, rows scaled to one)
+mname <- c("SE", "HE", "SM", "HM")
+aocase <- function(kind, nruns, seed, B, n, k, w, Ms, starts) {
+  ens <- as.cl_ensemble(lapply(Ms, function(M) as.cl_partition(M)))
+  if (any(sapply(ens, n_of_classes) != k)) return(invisible())
+  if (seed > 0) { set.seed(seed); ctl <- list(nruns = nruns) } else ctl <- list(start = starts)
+  if (nruns > 1) {
+    # runs reaching the same criterion value by a different column order are chosen by rounding noise: leave those programs out
+    if (seed > 0) { set.seed(seed); st2 <- replicate(nruns, { S <- matrix(runif(n * k), n, k); S / rowSums(S) }, simplify = FALSE) } else st2 <- starts
+    vals <- sapply(st2, function(S) attr(unclass(cl_consensus(ens, method = mname[kind + 1], weights = w, control = list(start = list(S))))$.Data, "meta")$objval)
+    sv <- sort(vals)
+    if (any(diff(sv) < 1e-6 * (1 + abs(sv[-1])) & diff(sv) >= 0)) {
+      one <- lapply(st2, function(S) as.numeric(unclass(cl_membership(cl_consensus(ens, method = mname[kind + 1], weights = w, control = list(start = list(S))), k))))
+      if (length(unique(round(unlist(lapply(one, function(m) chk(matrix(m, n), n, k))), 6))) > 1) return(invisible())
+    }
+  }
+  if (seed > 0) set.seed(seed)
+  res <- tryCatch(cl_consensus(ens, method = mname[kind + 1], weights = w, control = ctl), error = function(e) NULL)
+  if (is.null(res)) return(invisible())
+  a <- c(kind, nruns, seed, B, n, k, w, unlist(lapply(Ms, function(M) as.vector(t(M)))))
+  if (seed == 0) a <- c(a, unlist(lapply(starts, function(S) as.vector(t(S)))))
+  add("ao", a, chk(matrix(as.numeric(unclass(cl_membership(res, k))), n), n, k))
+  if (seed == 0 && nruns > 1) for (r in seq_len(nruns)) {  # each run alone
+    r1 <- cl_consensus(ens, method = mname[kind + 1], weights = w, control = list(start = starts[r]))
+    add("ao", c(kind, 1, 0, B, n, k, w, unlist(lapply(Ms, function(M) as.vector(t(M)))), as.vector(t(starts[[r]]))), chk(matrix(as.numeric(unclass(cl_membership(r1, k))), n), n, k))
+  }
+}
+hardM <- function(lab, n, k) { M <- matrix(0, n, k); M[cbind(seq_len(n), lab)] <- 1; M }
+for (rep in 1:72) {
+  kind <- rep %% 4; B <- sample(3:5, 1); n <- sample(8:20, 1); k <- sample(2:4, 1)
+  w <- runif(B, 0.5, 3)  # unrounded: equal weight sums make the L1 fit of SM and HM ties that lp_solve breaks by its own path
+  soft <- rep %% 8 >= 4 && kind != 2  # soft SM inputs tie the L1 fit across columns (a flat face), where lp_solve picks a vertex by its own path
+  Ms <- lapply(seq_len(B), function(b) {
+    if (soft) { M <- matrix(rexp(n * k), n, k); M / rowSums(M) } else {
+      base <- c(seq_len(k), sample(seq_len(k), n - k, replace = TRUE)); lab <- base
+      flip <- sample(n, sample(1:4, 1)); lab[flip] <- sample(seq_len(k), length(flip), TRUE)
+      lab[seq_len(k)] <- seq_len(k); hardM(lab, n, k) } })
+  nruns <- sample(1:3, 1)
+  if (rep %% 2 == 0) {
+    starts <- lapply(seq_len(nruns), function(r) { S <- matrix(runif(n * k), n, k); S / rowSums(S) })
+    aocase(kind, nruns, 0, B, n, k, w, Ms, starts)
+  } else aocase(kind, nruns, sample(1000:99999, 1), B, n, k, w, Ms, NULL)
+}
 emit("clue_cons", "clue", list(cases))

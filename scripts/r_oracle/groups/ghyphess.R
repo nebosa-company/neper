@@ -21,11 +21,11 @@ for (rep in 1:6) {
       H <- tryCatch(if (fam == 0) hyperbHessian(x, setpar(gen, set), hessianMethod = c("exact", "tsHessian")[hm + 1], whichParam = set)
                     else nigHessian(x, setpar(gen, set), hessianMethod = "tsHessian", whichParam = set), error = function(e) NULL)
       if (is.null(H)) next
-      rl <- if (hm == 0) 1e-8 else 5e-3
+      rl <- if (hm == 0) 1e-9 else 5e-3
       pr <- setpar(gen, set)
       for (i in 1:4) for (j in i:4) cases[[length(cases) + 1]] <- case("hess", c(sd0, n, fam, set, hm, i - 1, j - 1, pr, gen), H[i, j], rel = rl, abs = if (hm == 0) rl * 1e-1 else 0.05)
       se <- if (min(eigen(-H, symmetric = TRUE)$values) > 0 && rcond(-H) > 1e-3) tryCatch(sqrt(diag(solve(-H))), error = function(e) NULL, warning = function(w) NULL) else NULL
-      if (!is.null(se) && all(is.finite(se))) for (j in 1:4) cases[[length(cases) + 1]] <- case("hess", c(sd0, n, fam, set, hm, 4, j - 1, pr, gen), se[j], rel = if (hm == 0) rl * 10 else 2e-2, abs = rl)
+      if (!is.null(se) && all(is.finite(se))) for (j in 1:4) cases[[length(cases) + 1]] <- case("hess", c(sd0, n, fam, set, hm, 4, j - 1, pr, gen), se[j], rel = if (hm == 0) rl else 2e-2, abs = rl)
     }
   }
   chi <- runif(1, 0.5, 3); psi <- runif(1, 0.5, 3); lam <- runif(1, -1.5, 2)

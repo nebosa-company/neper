@@ -29,6 +29,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     o.svtol = z[5usize]
     o.smallest = z[6usize] != 0.0f64
     o.maxit = usize(z[11usize])
+    o.reorth = z[14usize + m * n + 2usize * n] != 0.0f64
     let x = z[14usize..14usize + m * n]
     if z[7usize] != 0.0f64 { o.center = z[14usize + m * n..14usize + m * n + n] }
     if z[8usize] != 0.0f64 { o.scale = z[14usize + m * n + n..14usize + m * n + 2usize * n] }

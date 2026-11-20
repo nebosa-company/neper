@@ -17,6 +17,28 @@ fn mer_fit(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: u
     let (beta, e1) = mem.alloc[f64](a, p)
     let (b, e2) = mem.alloc[f64](a, ng)
     let (out, e3) = mem.alloc[f64](a, 4usize)
+    let (w, e4) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    let e = lm.lmer_ri(a, x, y, g, n, p, ng, reml, beta, b, out)
+    if e != ok { ret e }
+    var df = f64(n)
+    if reml { df = f64(n - p) }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let ef = mer_factor(a, x, w, g, n, p, ng, out[1usize], m)
+    if ef != ok { ret ef }
+    m.sigma = out[2usize]
+    m.beta = beta
+    m.b = b
+    m.pwrss = out[2usize] * out[2usize] * df
+    ret ok
+}
+
+// the factors of lme4's L, RZX and RX at a given theta and per-observation weights w (1 for a linear model, the working weights of a glmer's last PIRLS step)
+fn mer_factor(a: *mem.Arena, x: []const f64, w: []const f64, g: []const usize, n: usize, p: usize, ng: usize, theta: f64, m: *Mer) -> err {
     let (cnt, e4) = mem.alloc[f64](a, ng)
     let (lj, e5) = mem.alloc[f64](a, ng)
     let (sj, e6) = mem.alloc[f64](a, ng * p)
@@ -24,12 +46,7 @@ fn mer_fit(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: u
     let (rx, e8) = mem.alloc[f64](a, p * p)
     let (rinv, e9) = mem.alloc[f64](a, p * p)
     let (rzxinv, e10) = mem.alloc[f64](a, ng * p)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret mem.Full }
-    let e = lm.lmer_ri(a, x, y, g, n, p, ng, reml, beta, b, out)
-    if e != ok { ret e }
-    let theta = out[1usize]
-    var df = f64(n)
-    if reml { df = f64(n - p) }
+    if e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret mem.Full }
     var i = 0usize
     while i < ng * p {
         sj[i] = 0.0f64
@@ -42,10 +59,10 @@ fn mer_fit(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: u
     }
     i = 0usize
     while i < n {
-        cnt[g[i]] += 1.0f64
+        cnt[g[i]] += w[i]
         var c = 0usize
         while c < p {
-            sj[g[i] * p + c] += x[c * n + i]
+            sj[g[i] * p + c] += w[i] * x[c * n + i]
             c += 1usize
         }
         i += 1usize
@@ -63,7 +80,7 @@ fn mer_fit(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: u
             var s = 0.0f64
             i = 0usize
             while i < n {
-                s += x[c1 * n + i] * x[c2 * n + i]
+                s += w[i] * x[c1 * n + i] * x[c2 * n + i]
                 i += 1usize
             }
             j = 0usize
@@ -127,14 +144,10 @@ fn mer_fit(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: u
     m.p = p
     m.ng = ng
     m.theta = theta
-    m.sigma = out[2usize]
-    m.beta = beta
-    m.b = b
     m.rinv = rinv
     m.rzxinv = rzxinv
     m.cnt = cnt
     m.lj = lj
-    m.pwrss = out[2usize] * out[2usize] * df
     ret ok
 }
 
@@ -163,13 +176,172 @@ fn sim_mer(a: *mem.Arena, r: *rng.Rng, x: []const f64, y: []const f64, g: []cons
     var m: Mer = zero
     let e = mer_fit(a, x, y, g, n, p, ng, true, &m)
     if e != ok { ret e }
+    ret sim_draw(a, r, &m, true, nsims, fixef, ranef, sigma)
+}
+
+// sim of the REML fit at a given theta (lmer's own optimiser stops short of the optimum, so the oracle hands R's theta over): beta, u and pwrss follow from theta in closed form
+fn sim_mer_theta(a: *mem.Arena, r: *rng.Rng, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, theta: f64, nsims: usize, fixef: []f64, ranef: []f64, sigma: []f64) -> err {
+    var m: Mer = zero
+    let e = mer_at_theta(a, x, y, g, n, p, ng, theta, &m)
+    if e != ok { ret e }
+    ret sim_draw(a, r, &m, true, nsims, fixef, ranef, sigma)
+}
+
+// se.fixef and se.ranef of the REML fit at a given theta
+fn se_mer_theta(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, theta: f64, sefix: []f64, seran: []f64) -> err {
+    var m: Mer = zero
+    let e = mer_at_theta(a, x, y, g, n, p, ng, theta, &m)
+    if e != ok { ret e }
+    m.sigma = math.sqrt[f64](m.pwrss / f64(n - p))
+    ret se_from(&m, p, ng, sefix, seran)
+}
+
+fn mer_at_theta(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, theta: f64, m: *Mer) -> err {
+    let (w, e0) = mem.alloc[f64](a, n)
+    let (beta, e1) = mem.alloc[f64](a, p)
+    let (b, e2) = mem.alloc[f64](a, ng)
+    let (cu, e3) = mem.alloc[f64](a, ng)
+    let (rhs, e4) = mem.alloc[f64](a, p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let ef = mer_factor(a, x, w, g, n, p, ng, theta, m)
+    if ef != ok { ret ef }
+    var j = 0usize
+    while j < ng {
+        cu[j] = 0.0f64
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        cu[g[i]] += theta * y[i] / m.lj[g[i]]
+        i += 1usize
+    }
+    // RX'RX beta = X'y - RZX'cu, RZX_j = theta (sum of x_j) / L_j, solved through rinv
+    var c = 0usize
+    while c < p {
+        var s = 0.0f64
+        i = 0usize
+        while i < n {
+            s += x[c * n + i] * y[i]
+            i += 1usize
+        }
+        j = 0usize
+        while j < ng {
+            var sx = 0.0f64
+            i = 0usize
+            while i < n {
+                if g[i] == j { sx += x[c * n + i] }
+                i += 1usize
+            }
+            s -= theta * sx / m.lj[j] * cu[j]
+            j += 1usize
+        }
+        rhs[c] = s
+        c += 1usize
+    }
+    c = 0usize
+    while c < p {
+        var s = 0.0f64
+        var k = 0usize
+        while k < p {
+            s += m.rinv[c * p + k] * rinvt_rhs(m.rinv, rhs, p, k)
+            k += 1usize
+        }
+        beta[c] = s
+        c += 1usize
+    }
+    // u_j = (cu_j - RZX_j beta) / L_j, b = theta u, pwrss = |y - X beta - Z b|^2 + |u|^2
+    var pw = 0.0f64
+    j = 0usize
+    while j < ng {
+        var sx = cu[j]
+        c = 0usize
+        while c < p {
+            var sc = 0.0f64
+            i = 0usize
+            while i < n {
+                if g[i] == j { sc += x[c * n + i] }
+                i += 1usize
+            }
+            sx -= theta * sc / m.lj[j] * beta[c]
+            c += 1usize
+        }
+        let u = sx / m.lj[j]
+        b[j] = theta * u
+        pw += u * u
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var f = y[i] - b[g[i]]
+        c = 0usize
+        while c < p {
+            f -= x[c * n + i] * beta[c]
+            c += 1usize
+        }
+        pw += f * f
+        i += 1usize
+    }
+    m.beta = beta
+    m.b = b
+    m.pwrss = pw
+    ret ok
+}
+
+fn rinvt_rhs(rinv: []const f64, rhs: []const f64, p: usize, k: usize) -> f64 {
+    var s = 0.0f64
+    var q = 0usize
+    while q < p {
+        s += rinv[q * p + k] * rhs[q]
+        q += 1usize
+    }
+    ret s
+}
+
+// sim of a glmer fit with a random intercept given R's final state: theta, beta, u and the working weights w; the draws are standard normals (no common scale)
+fn sim_glmer(a: *mem.Arena, r: *rng.Rng, x: []const f64, w: []const f64, g: []const usize, n: usize, p: usize, ng: usize, theta: f64, beta: []const f64, u: []const f64, nsims: usize, fixef: []f64, ranef: []f64) -> err {
+    var m: Mer = zero
+    let ef = mer_factor(a, x, w, g, n, p, ng, theta, &m)
+    if ef != ok { ret ef }
+    let (b, e1) = mem.alloc[f64](a, ng)
+    let (sg, e2) = mem.alloc[f64](a, 1usize)
+    let (bt, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var c = 0usize
+    while c < p {
+        bt[c] = beta[c]
+        c += 1usize
+    }
+    var j = 0usize
+    while j < ng {
+        b[j] = theta * u[j]
+        j += 1usize
+    }
+    m.beta = bt
+    m.b = b
+    m.pwrss = 0.0f64
+    ret sim_draw(a, r, &m, false, nsims, fixef, ranef, sg)
+}
+
+// the draw loop in arm's order; scaled draws a common sigma first (a linear model), else the effects are standard normals
+fn sim_draw(a: *mem.Arena, r: *rng.Rng, m: *Mer, scaled: bool, nsims: usize, fixef: []f64, ranef: []f64, sigma: []f64) -> err {
+    let n = m.n
+    let p = m.p
+    let ng = m.ng
     let (sph, e1) = mem.alloc[f64](a, ng + p)
     if e1 != ok { ret e1 }
     var s = 0usize
     while s < nsims {
-        let gm = rng.rgamma(r, 0.5f64 * f64(n - p), 2.0f64 / m.pwrss)
-        let sd = math.sqrt[f64](1.0f64 / gm)
-        sigma[s] = sd
+        var sd = 1.0f64
+        if scaled {
+            let gm = rng.rgamma(r, 0.5f64 * f64(n - p), 2.0f64 / m.pwrss)
+            sd = math.sqrt[f64](1.0f64 / gm)
+            sigma[s] = sd
+        }
         var k = 0usize
         while k < ng + p {
             sph[k] = rng.rnorm(r, 0.0f64, sd)
@@ -207,6 +379,10 @@ fn se_mer(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: us
     var m: Mer = zero
     let e = mer_fit(a, x, y, g, n, p, ng, reml, &m)
     if e != ok { ret e }
+    ret se_from(&m, p, ng, sefix, seran)
+}
+
+fn se_from(m: *Mer, p: usize, ng: usize, sefix: []f64, seran: []f64) -> err {
     var c1 = 0usize
     while c1 < p {
         var v = 0.0f64

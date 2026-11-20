@@ -39,6 +39,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let st = api.solve(a, &model)
     if str.eq(c.name, "status") { ret f64(st) }
     if str.eq(c.name, "obj") { ret api.get_objective(&model) }
+    if str.eq(c.name, "xe") { ret api.get_variable(&model, usize(x[rk + n])) }
+    if str.eq(c.name, "ce") { ret api.get_constraint(&model, usize(x[rk + n])) }
     var s = 0.0f64
     if str.eq(c.name, "x") {
         j = 1usize

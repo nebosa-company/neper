@@ -114,14 +114,15 @@ fn fitdistr2(a: *mem.Arena, x: []const f64, kind: usize, out: []f64) -> err {
         s1 = q7(sorted, 0.5f64)
         s2 = (q7(sorted, 0.75f64) - q7(sorted, 0.25f64)) / 2.0f64
     }
-    ret fitdistr2_finish(a, x, kind, c, s1, s2, b, out)
+    ret fitdistr2_finish(a, x, kind, c, s1, s2, b, out, true)
 }
 
-fn fitdistr2_finish(a: *mem.Arena, x: []const f64, kind: usize, cin: FdCtx, s1: f64, s2: f64, b: []f64, out: []f64) -> err {
+fn fitdistr2_finish(a: *mem.Arena, x: []const f64, kind: usize, cin: FdCtx, s1: f64, s2: f64, b: []f64, out: []f64, run: bool) -> err {
     var c = cin
     b[0usize] = s1 / c.ps1
     b[1usize] = s2 / c.ps2
-    let fmin = bf.vmmin[FdCtx](a, &c, fd_f, fd_g, b, 1.4901161193847656e-08f64, 100usize)
+    var fmin = fd_f(&c, b)
+    if run { fmin = bf.vmmin[FdCtx](a, &c, fd_f, fd_g, b, 1.4901161193847656e-08f64, 100usize) }
     // optimHess on the scaled parameters
     let (h, e3) = mem.alloc[f64](a, 4usize)
     let (g1, e4) = mem.alloc[f64](a, 2usize)
@@ -217,8 +218,23 @@ fn fitdistr_t(a: *mem.Arena, x: []const f64, out: []f64) -> err {
     b[0usize] = q7(sorted, 0.5f64)
     b[1usize] = (q7(sorted, 0.75f64) - q7(sorted, 0.25f64)) / 2.0f64
     b[2usize] = 10.0f64
+    ret fitdistr_t_from(a, x, b, true, out)
+}
+
+// the standard errors and log-likelihood of fitdistr_t evaluated at the estimates (m, s, df) = b, no optimisation: what MASS reports at its own stop point
+fn fitdistr_t_at(a: *mem.Arena, x: []const f64, m: f64, s: f64, df: f64, out: []f64) -> err {
+    let (b, e) = mem.alloc[f64](a, 3usize)
+    if e != ok { ret e }
+    b[0usize] = m
+    b[1usize] = s
+    b[2usize] = df
+    ret fitdistr_t_from(a, x, b, false, out)
+}
+
+fn fitdistr_t_from(a: *mem.Arena, x: []const f64, b: []f64, run: bool, out: []f64) -> err {
     var c = TCtx{ x: x }
-    let fmin = bf.vmmin[TCtx](a, &c, t_f, t_g, b, 1.4901161193847656e-08f64, 100usize)
+    var fmin = t_f(&c, b)
+    if run { fmin = bf.vmmin[TCtx](a, &c, t_f, t_g, b, 1.4901161193847656e-08f64, 100usize) }
     var h: [9]f64 = zero
     var g1: [3]f64 = zero
     var g2: [3]f64 = zero
@@ -302,7 +318,7 @@ fn fitdistr2_start(a: *mem.Arena, x: []const f64, kind: usize, s1: f64, s2: f64,
     if e1 != ok { ret e1 }
     var c = FdCtx{ x: x, kind: kind, ps1: 1.0f64, ps2: 1.0f64 }
     if kind == 0usize { c.ps2 = s2 }
-    ret fitdistr2_finish(a, x, kind, c, s1, s2, b, out)
+    ret fitdistr2_finish(a, x, kind, c, s1, s2, b, out, true)
 }
 
 type ChiCtx = struct { x: []const f64 }
@@ -339,4 +355,12 @@ fn fitdistr_chisq(a: *mem.Arena, x: []const f64, df0: f64, out: []f64) -> err {
     out[1usize] = math.sqrt[f64](1.0f64 / h)
     out[2usize] = 0.0f64 - fv
     ret ok
+}
+
+// the standard errors and log-likelihood of fitdistr2_start evaluated at given estimates, no optimisation: what MASS reports at its own stop point
+fn fitdistr2_at(a: *mem.Arena, x: []const f64, kind: usize, e1: f64, e2: f64, out: []f64) -> err {
+    let (b, e) = mem.alloc[f64](a, 2usize)
+    if e != ok { ret e }
+    let c = FdCtx{ x: x, kind: kind, ps1: 1.0f64, ps2: 1.0f64 }
+    ret fitdistr2_finish(a, x, kind, c, e1, e2, b, out, false)
 }

@@ -101,11 +101,38 @@ for (rep in 1:10) {  # infeasible: supplies (<=) cannot meet the demands (=)
   s <- lp.transport(cost, "min", rep("<=", m), sup, rep("=", n), dem)
   add("trstat", c(m, n, 0, as.vector(t(cost)), rep(0, m), sup, rep(2, n), dem), s$status)
 }
-# lp.assign("min")
-for (rep in 1:40) {
+# lp.transport(compute.sens = TRUE): the first m * n entries of lpSolve's duals, duals.from and duals.to (its wrapper reshapes the longer vector into the m by n matrix) and the sens.coef matrices,
+# row-major; "trsens" takes the trsol arguments then (field, index): 0 duals, 1 duals.from, 2 duals.to, 3 sens.coef.from, 4 sens.coef.to.
+# The unique solution is checked entry by entry ("trcell": the shipment of cell index).
+nts <- 0
+for (rep in 1:300) {
+  m <- sample(2:4, 1); n <- sample(2:5, 1)
+  cost <- matrix(round(runif(m * n, 1, 20), 3), m, n)
+  sup <- sample(5:20, m, replace = TRUE); dem <- sample(3:15, n, replace = TRUE)
+  mode <- 1 + (rep %/% 2) %% 2
+  rs <- if (mode == 0) rep("=", m) else rep("<=", m); cs <- if (mode == 1) rep(">=", n) else rep("=", n)
+  if (mode == 0) { tot <- sum(sup); dem <- round(dem / sum(dem) * tot); dem[1] <- dem[1] + tot - sum(dem) }
+  if (mode == 2) sup <- sup + 20
+  dirn <- if (rep %% 2 == 0) "max" else "min"
+  s <- tryCatch(suppressWarnings(lp.transport(cost, dirn, rs, sup, cs, dem, compute.sens = TRUE)), error = function(e) NULL)
+  if (is.null(s) || s$status != 0) next
+  a <- c(m, n, as.numeric(dirn == "max"), as.vector(t(cost)), code(rs), sup, code(cs), dem)
+  for (k in seq_len(m * n)) {
+    add("trsens", c(a, 0, k), c(t(s$duals))[k]); add("trsens", c(a, 1, k), c(t(s$duals.from))[k]); add("trsens", c(a, 2, k), c(t(s$duals.to))[k])
+    add("trsens", c(a, 3, k), c(t(s$sens.coef.from))[k]); add("trsens", c(a, 4, k), c(t(s$sens.coef.to))[k])
+    add("trsens", c(a, 5, k), c(t(s$solution))[k])
+  }
+  nts <- nts + 1
+  if (nts >= 8) break
+}
+# lp.assign: the full solution matrix entry by entry ("ascell": assigned flag of cell index, row-major), min and max ("asmax" objval)
+for (rep in 1:25) {
   n <- sample(2:9, 1); x <- matrix(round(runif(n * n, 0, 50), 3), n, n)
   s <- lp.assign(x, "min")
   add("asmin", c(n, as.vector(t(x))), s$objval, 1e-9, 1e-9)
-  add("asmincols", c(n, as.vector(t(x))), sum(s$solution * outer(seq_len(n), seq_len(n), function(i, j) 10 * i + j)), 1e-9, 1e-9)
+  for (k in seq_len(n * n)) add("ascell", c(n, 0, k, as.vector(t(x))), c(t(s$solution))[k], 1e-9, 1e-9)
+  s2 <- lp.assign(x, "max")
+  add("asmax", c(n, as.vector(t(x))), s2$objval, 1e-9, 1e-9)
+  for (k in seq_len(n * n)) add("ascell", c(n, 1, k, as.vector(t(x))), c(t(s2$solution))[k], 1e-9, 1e-9)
 }
 emit("lpsolve_more", "lpSolve", list(cases))

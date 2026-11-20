@@ -4,7 +4,7 @@
 #   11 entropy 12 wb.ratio 13 ch 14 widestgap 15 sindex 16 corrected.rand 17 vi
 suppressMessages(library(fpc))
 cases <- list()
-add <- function(args, want) if (is.finite(want)) cases[[length(cases) + 1]] <<- case("stat", args, want, rel = 1e-8, abs = 1e-10)
+add <- function(args, want) if (is.finite(want)) cases[[length(cases) + 1]] <<- case("stat", args, want, rel = 1e-9, abs = 1e-10)
 set.seed(20261215)
 nm <- c("average.between", "average.within", "max.diameter", "min.separation", "within.cluster.ss", "avg.silwidth", "g2", "g3", "pearsongamma", "dunn", "dunn2",
         "entropy", "wb.ratio", "ch", "widestgap", "sindex", "corrected.rand", "vi")

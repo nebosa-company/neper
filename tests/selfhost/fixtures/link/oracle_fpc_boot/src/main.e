@@ -33,7 +33,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var dlen = n * p
     if distances { dlen = n * n }
     let data = z[at + 15usize..at + 15usize + dlen]
-    let (res, e0) = mem.alloc[f64](a, 5usize * (n + 1usize) * bcount)
+    let (res, e0) = mem.alloc[f64](a, 5usize * (2usize * n + 1usize) * bcount)
     if e0 != ok { os.exit(4) }
     let (nc, e1) = fb.clusterboot(a, data, n, p, distances, bcount, methods, multipleboot, bscompare, jt, nt1, nt2, subtuning, cm, cp, noisemethod, seedv, res)
     if e1 != ok { os.exit(5) }

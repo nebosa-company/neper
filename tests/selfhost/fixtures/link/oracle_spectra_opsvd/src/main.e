@@ -25,15 +25,35 @@ fn apply(c: *Op, x: []const f64, y: []f64) {
     }
 }
 
+fn apply_t(c: *Op, x: []const f64, y: []f64) {
+    var su = 0.0f64
+    var i = 0usize
+    while i < c.m {
+        su += c.u[i] * x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < y.len {
+        y[i] = c.d[i] * x[i] + c.w[i] * su
+        i += 1usize
+    }
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let m = usize(z[0usize])
     let n = usize(z[1usize])
     let k = usize(z[2usize])
+    let part = usize(z[3usize])
     let (vals, e1) = mem.alloc[f64](a, k)
-    if e1 != ok { os.exit(4) }
-    var op = Op { d: z[3usize..3usize + n], u: z[3usize + n..3usize + n + m], w: z[3usize + n + m..3usize + 2usize * n + m], m: m }
-    if sp.svds_op[Op](a, &op, apply, m, n, k, vals) != ok { os.exit(5) }
+    let (u, e2) = mem.alloc[f64](a, m * k)
+    let (v, e3) = mem.alloc[f64](a, n * k)
+    if e1 != ok || e2 != ok || e3 != ok { os.exit(4) }
+    var op = Op { d: z[4usize..4usize + n], u: z[4usize + n..4usize + n + m], w: z[4usize + n + m..4usize + 2usize * n + m], m: m }
+    if sp.svds_op[Op](a, &op, apply, apply_t, m, n, k, vals, u, v) != ok { os.exit(5) }
+    sp.svd_sign(u, v, m, n, k)
+    if part == 1usize { ret sp.wsum(u, m, k) }
+    if part == 2usize { ret sp.wsum(v, n, k) }
     var s = 0.0f64
     var i = 0usize
     while i < k {

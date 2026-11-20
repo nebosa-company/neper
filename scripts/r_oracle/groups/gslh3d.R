@@ -13,9 +13,9 @@ asym <- function(l, lam, eta) { lsq <- lam^2; (l * l + lsq) / sqrt(1 + lsq) / co
 for (i in 1:200) {
   lam <- c(runif(1, 0.01, 1), runif(1, 1, 8), runif(1, 8, 60), 10^runif(1, -6, -3))[sample(1:4, 1)]
   eta <- c(runif(1, 1e-6, 1e-3), runif(1, 1e-3, 0.4), runif(1, 0.4, 4), runif(1, 4, 40))[sample(1:4, 1)]
-  add(0, 0, lam, eta, 0, g(legendre_H3d_0, lam, eta)); add(1, 0, lam, eta, 0, g(legendre_H3d_1, lam, eta), vrel = min(1e-6, max(1e-10, 50 * 2.2e-16 / eta^2)))  # H3d_1 subtracts two terms equal to O(eta^2): gsl itself carries 2e-16/eta^2 of noise, which a different libm moves
+  add(0, 0, lam, eta, 0, g(legendre_H3d_0, lam, eta), vrel = 1e-12); add(1, 0, lam, eta, 0, g(legendre_H3d_1, lam, eta), vrel = min(1e-6, max(1e-10, 50 * 2.2e-16 / eta^2)))  # H3d_1 subtracts two terms equal to O(eta^2): gsl itself carries 2e-16/eta^2 of noise, which a different libm moves
   l <- sample(2:40, 1)
-  if (!asym(l, lam, eta)) add(2, l, lam, eta, 0, g(legendre_H3d, l, lam, eta), vrel = 1e-9)
+  if (!asym(l, lam, eta)) add(2, l, lam, eta, 0, g(legendre_H3d, l, lam, eta), vrel = 1e-12)
 }
 for (i in 1:30) {
   lam <- runif(1, 0.2, 6); eta <- runif(1, 0.3, 3); lmax <- sample(2:12, 1)

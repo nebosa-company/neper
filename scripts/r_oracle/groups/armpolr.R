@@ -20,7 +20,7 @@ for (rep in 1:32) {
   nfit <- nfit + 1
   vc <- unname(vcov(f)); np <- pc + J - 1
   v <- list(unname(coef(f)), unname(f$zeta), f$deviance, unname(f$niter[1]), unname(f$niter[2]), as.vector(t(unname(f$Hessian))), as.vector(t(unname(f$fitted.values))), as.vector(t(vc)), sqrt(diag(vc)))
-  tol <- list(c(1e-6, 1e-8), c(1e-6, 1e-8), c(1e-8, 1e-8), c(0.1, 3), c(0.1, 3), c(1e-4, 1e-6), c(1e-6, 1e-8), c(1e-4, 1e-6), c(1e-5, 1e-7))
+  tol <- list(c(1e-9, 1e-11), c(1e-9, 1e-11), c(1e-9, 1e-11), c(1e-9, 0.5), c(1e-9, 0.5), c(1e-9, 1e-11), c(1e-9, 1e-11), c(1e-9, 1e-11), c(1e-9, 1e-11))
   pre <- c(n, pc, J, m, sc, wf, pmn, psc, pdf, y, as.vector(t(X)), if (wf) w)
   for (wh in 1:9) { vv <- v[[wh]]; cases[[length(cases) + 1]] <- case("bpolr", c(pre, wh - 1), sum(seq_along(vv) * vv), rel = tol[[wh]][1], abs = tol[[wh]][2]) }
   # sim() on the fit: "simpolr" (seed, nsims, <pre as above>, draw): draw i is the weighted sum of c(coef, zeta) of draw i, equal draw by draw. Equality draw by draw needs the covariance
@@ -31,9 +31,9 @@ for (rep in 1:32) {
   ev <- eigen(vcov(f), symmetric = TRUE); mu <- c(coef(f), f$zeta)
   for (i in 1:ns) {
     vv <- c(sm@coef[i, ], sm@zeta[i, ])
-    if (!(sd0 %in% c(62116))) cases[[length(cases) + 1]] <- case("simpolr", c(sd0, ns, pre, i - 1), sum(seq_along(vv) * vv), rel = 1e-6, abs = 1e-8)
+    if (!(sd0 %in% c(62116))) cases[[length(cases) + 1]] <- case("simpolr", c(sd0, ns, pre, i - 1), sum(seq_along(vv) * vv), rel = 1e-9, abs = 1e-11)
     zz <- abs(drop(t(ev$vectors) %*% (vv - mu)) / sqrt(ev$values))
-    cases[[length(cases) + 1]] <- case("simpolrz", c(sd0, ns, pre, i - 1), sum(seq_along(zz) * zz), rel = 1e-6, abs = 1e-8)
+    cases[[length(cases) + 1]] <- case("simpolrz", c(sd0, ns, pre, i - 1), sum(seq_along(zz) * zz), rel = 1e-9, abs = 1e-11)
   }
 }
 message("fits: ", nfit)

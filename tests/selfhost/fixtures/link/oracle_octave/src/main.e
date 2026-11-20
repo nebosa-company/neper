@@ -29,6 +29,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let v = m.vars[col]
     if str.eq(c.name, "count") { ret f64(v.count) }
     if str.eq(c.name, "isum") { ret v.isum }
+    if str.eq(c.name, "wsum") { ret v.wsum }
+    if str.eq(c.name, "wisum") { ret v.wisum }
+    if str.eq(c.name, "nhash") { ret v.nhash }
+    if str.eq(c.name, "dimr") { ret f64(v.rows * 1000usize + v.cols) }
     ret v.sum
 }
 

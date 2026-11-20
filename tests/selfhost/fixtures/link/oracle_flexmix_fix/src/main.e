@@ -26,7 +26,7 @@ fn prepare(a: *mem.Arena, z: []const f64) -> (Ctx, err) {
     let k = usize(z[5usize])
     let flip = z[6usize]
     let seed2 = i64(z[8usize])
-    var o = fx.Opt { fam: fam, cls: usize(z[9usize]), start: usize(z[10usize]), minprior: z[11usize], tol: z[12usize], itermax: usize(z[13usize]) }
+    var o = fx.Opt { fam: fam, cls: usize(z[9usize]), start: usize(z[10usize]), minprior: z[11usize], tol: z[12usize], itermax: usize(z[13usize]), wt: z[0usize..0usize], off: z[0usize..0usize] }
     let rmask = usize(z[14usize])
     let fmask = usize(z[15usize])
     let ng = usize(z[16usize])
@@ -104,6 +104,7 @@ fn answer(a: *mem.Arena, c: *const Ctx, z: []const f64) -> f64 {
     if what == 7usize { ret fx.aic(&f) }
     if what == 8usize { ret fx.bic(&f, n) }
     if what == 9usize { ret fx.icl(&f, n) }
+    if what == 30usize { ret fx.eic(&f, n) }
     if what == 15usize { ret c.ll[(usize(z[33usize]) - c.k1) * c.nrep + idx] }
     if what == 20usize { ret f64(pc) }
     if what == 22usize {

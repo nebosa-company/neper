@@ -35,8 +35,8 @@ for (rep in 1:9) {
   hd <- function(w, k) c(w, k, n, p, mode, startn, mnc, mer, distcut, ca, ca2, ind, ninit, ncmax, flat(x), if (ninit > 0) unlist(lapply(init, as.numeric)))
   for (k in 0:4) add("fm", hd(0, k), c(r$nc, r$tsc, r$ncoll, r$skc, r$stn)[k + 1], 0, 0)
   vecs <- list(r$nfound, r$er, r$imatrix, r$smatrix, r$struc, r$stfound, r$ser, r$sfpc, r$sto, if (ninit > 0) r$grto else 0, r$means, lapply(r$covs, function(m) flat(m)), if (ind) r$g else 0)
-  for (k in 0:12) { if ((k == 12 || k == 13) && !ind) next; add("fm", hd(1, k), chk(vecs[[k + 1]]), 1e-8, 1e-10) }
-  if (ind && r$stn > 0) add("fm", hd(1, 13), chk(lapply(fpclusters(r), as.numeric)), 1e-8, 1e-10)
-  if (r$stn > 0) add("fm", hd(1, 14), chk(simmatrix(r)), 1e-8, 1e-10)
+  for (k in 0:12) { if ((k == 12 || k == 13) && !ind) next; add("fm", hd(1, k), chk(vecs[[k + 1]]), 1e-9, 1e-10) }
+  if (ind && r$stn > 0) add("fm", hd(1, 13), chk(lapply(fpclusters(r), as.numeric)), 1e-9, 1e-10)
+  if (r$stn > 0) add("fm", hd(1, 14), chk(simmatrix(r)), 1e-9, 1e-10)
 }
 emit("fpc_fix", "fpc", list(cases))

@@ -578,3 +578,142 @@ fn euclid_soft(a: *mem.Arena, u: []const f64, v: []const f64, n: usize, k: usize
     }
     ret (math.sqrt[f64](d2), ok)
 }
+
+// membership u (n by ku, row-major) padded with zero columns to k columns
+fn pad_membership(a: *mem.Arena, u: []const f64, n: usize, ku: usize, k: usize) -> []f64 {
+    let (out, e) = mem.alloc[f64](a, n * k)
+    if e != ok { ret out }
+    var r = 0usize
+    while r < n {
+        var c = 0usize
+        while c < k {
+            out[r * k + c] = 0.0f64
+            if c < ku { out[r * k + c] = u[r * ku + c] }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret out
+}
+
+// the soft-partition measures of clue on membership matrices u (n by kx) and v (n by ky), row-major; the smaller one is padded with zero classes (cl_membership(x, k)).
+// kind 0 euclidean, 1 manhattan, 2 comemberships, 3 GV1 (dissimilarities); 4 euclidean, 5 manhattan, 6 angle, 7 diag (agreements)
+fn soft_measure(a: *mem.Arena, u: []const f64, v: []const f64, n: usize, kx: usize, ky: usize, kind: usize) -> (f64, err) {
+    var k = kx
+    if ky > k { k = ky }
+    if kind == 3usize {
+        // GV1: no padding of the memberships, dummy classes of cost zero in the cost matrix
+        let (costs, e0) = mem.alloc[f64](a, k * k)
+        let (asg, e1) = mem.alloc[usize](a, k)
+        let (scratch, e2) = mem.alloc[f64](a, 4usize * (k + 1usize))
+        let (used, e3) = mem.alloc[usize](a, 2usize * (k + 1usize))
+        if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, Malformed) }
+        var i = 0usize
+        while i < k {
+            var j = 0usize
+            while j < k {
+                costs[i * k + j] = 0.0f64
+                if i < kx && j < ky {
+                    var sx = 0.0f64
+                    var sy = 0.0f64
+                    var cr = 0.0f64
+                    var r = 0usize
+                    while r < n {
+                        sx += u[r * kx + i] * u[r * kx + i]
+                        sy += v[r * ky + j] * v[r * ky + j]
+                        cr += u[r * kx + i] * v[r * ky + j]
+                        r += 1usize
+                    }
+                    costs[i * k + j] = sx + sy - 2.0f64 * cr
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        let (tot, e4) = mt.hungarian(costs, k, asg, scratch, used)
+        if e4 != ok { ret (0.0f64, e4) }
+        ret (math.sqrt[f64](tot), ok)
+    }
+    let pu = pad_membership(a, u, n, kx, k)
+    let pv = pad_membership(a, v, n, ky, k)
+    if kind == 2usize {
+        // sqrt(|U'U|^2 - 2 |U'V|^2 + |V'V|^2)
+        var s = 0.0f64
+        var i = 0usize
+        while i < k {
+            var j = 0usize
+            while j < k {
+                var uu = 0.0f64
+                var vv = 0.0f64
+                var uv = 0.0f64
+                var r = 0usize
+                while r < n {
+                    uu += pu[r * k + i] * pu[r * k + j]
+                    vv += pv[r * k + i] * pv[r * k + j]
+                    uv += pu[r * k + i] * pv[r * k + j]
+                    r += 1usize
+                }
+                s += uu * uu - 2.0f64 * uv * uv + vv * vv
+                j += 1usize
+            }
+            i += 1usize
+        }
+        ret (math.sqrt[f64](s), ok)
+    }
+    let (costs, e0) = mem.alloc[f64](a, k * k)
+    let (asg, e1) = mem.alloc[usize](a, k)
+    let (scratch, e2) = mem.alloc[f64](a, 4usize * (k + 1usize))
+    let (used, e3) = mem.alloc[usize](a, 2usize * (k + 1usize))
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, Malformed) }
+    let manh = kind == 1usize || kind == 5usize
+    var i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            var c = 0.0f64
+            var r = 0usize
+            while r < n {
+                if manh {
+                    var d = pu[r * k + i] - pv[r * k + j]
+                    if d < 0.0f64 { d = 0.0f64 - d }
+                    c += d
+                } else {
+                    c += pu[r * k + i] * pv[r * k + j]
+                }
+                r += 1usize
+            }
+            costs[i * k + j] = c
+            if !manh { costs[i * k + j] = 0.0f64 - c }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (tot, e4) = mt.hungarian(costs, k, asg, scratch, used)
+    if e4 != ok { ret (0.0f64, e4) }
+    if manh {
+        if kind == 1usize { ret (tot, ok) }
+        ret (1.0f64 - tot / (2.0f64 * f64(n)), ok)
+    }
+    var d2 = 0.0f64
+    var cross = 0.0f64
+    var su = 0.0f64
+    var sv = 0.0f64
+    var r2 = 0usize
+    while r2 < n {
+        i = 0usize
+        while i < k {
+            let x = pu[r2 * k + i]
+            let y = pv[r2 * k + asg[i]]
+            d2 += (x - y) * (x - y)
+            cross += x * y
+            su += x * x
+            sv += y * y
+            i += 1usize
+        }
+        r2 += 1usize
+    }
+    if kind == 0usize { ret (math.sqrt[f64](d2), ok) }
+    if kind == 4usize { ret (1.0f64 - math.sqrt[f64](d2) / math.sqrt[f64](2.0f64 * f64(n)), ok) }
+    if kind == 6usize { ret (cross / math.sqrt[f64](su * sv), ok) }
+    ret (cross / f64(n), ok)
+}

@@ -1,5 +1,5 @@
 // R gsl: Bessel J0, J1, Y0, Y1 and Jn (the continued-fraction, asymptotic-in-x and large-x branches) with gsl's error estimates: ports of specfunc/bessel_J0.c, bessel_J1.c, bessel_Y0.c,
-// bessel_Y1.c, bessel_Jn.c and the helpers of bessel.c. Not here: the Taylor branch (x^2 < 10 (n+1) eps^(1/5), n >= 2) and the Olver branch (n > 50) of Jn.
+// bessel_Y1.c, bessel_Jn.c and the helpers of bessel.c. The Taylor branch (x^2 < 10 (n+1) eps^(1/5), n >= 2) and the Olver branch (n > 50) of Jn are in gslnu (jn_full).
 // Every function returns (value, error); a domain error returns (0, 0).
 
 use e.math
@@ -206,7 +206,7 @@ fn jnu_asympx(nu: f64, x: f64) -> (f64, f64) {
     ret (pre * (c * p - s * q), pre * c_eps() * (fa(c * p) + fa(s * q) + fa(t)) * (1.0f64 + fa(x)))
 }
 
-// J_n(x) for integer n, without the Taylor and Olver branches
+// J_n(x) for integer n, without the Taylor and Olver branches (gslnu.jn_full adds them)
 fn jn(n0: i64, x0: f64) -> (f64, f64) {
     var n = n0
     var x = x0

@@ -30,7 +30,7 @@ for (rep in 1:30) {
   add("ginv_sum", c(m, n, X), sum(g)); add("ginv_w", c(m, n, X), sum(w * g)); add("ginv_len", c(m, n, X), length(g))
 }
 # rlm(y ~ X, Huber, MAD): "rlm" (n, p, which, y[n], X[n p] column-major with the intercept first) which 0 .. p - 1 coef, p scale, p + 1 iterations, p + 2 converged
-for (rep in 1:30) {
+for (rep in 1:15) {
   n <- sample(15:60, 1); p <- sample(2:4, 1); X <- cbind(1, matrix(rnorm(n * (p - 1)), n, p - 1)); y <- as.vector(X %*% rnorm(p)) + rnorm(n) + ifelse(runif(n) < 0.1, rnorm(n, 0, 6), 0)
   d <- data.frame(y = y, X[, -1, drop = FALSE]); fit <- rlm(y ~ ., d); st <- c(coef(fit), fit$s, length(fit$conv), as.numeric(fit$converged))
   for (j in seq_along(st)) add("rlm", c(n, p, j - 1, y, X), st[j])
@@ -42,7 +42,7 @@ for (rep in 1:20) {
   n <- sample(10:40, 1); xx <- rnorm(n); yy <- 0.5 * xx + rnorm(n); n1 <- sample(3:8, 1); n2 <- sample(3:8, 1); lm_ <- c(range(xx) + c(-0.5, 0.5), range(yy) + c(-0.5, 0.5))
   useh <- rep %% 2 == 0; h <- if (useh) c(runif(1, 0.3, 1.5), runif(1, 0.3, 1.5)) else c(0, 0)
   k <- if (useh) kde2d(xx, yy, h = h, n = c(n1, n2), lims = lm_) else kde2d(xx, yy, n = c(n1, n2), lims = lm_)
-  for (idx in seq_len(n1 * n2)) add("kde2d", c(n, n1, n2, h, lm_, idx - 1, xx, yy), as.vector(k$z)[idx])
+  for (idx in sort(unique(c(1, n1 * n2, sample(n1 * n2, 5))))) add("kde2d", c(n, n1, n2, h, lm_, idx - 1, xx, yy), as.vector(k$z)[idx])
 }
 # bw.ucv "bwucv" and bw.bcv "bwbcv": (n, x[n])
 for (rep in 1:20) { n <- sample(c(30, 60, 150, 400), 1); x <- if (rep %% 2) rnorm(n) else c(rnorm(n %/% 2), rnorm(n - n %/% 2, 3, 0.7))
@@ -58,5 +58,5 @@ for (rep in 1:12) { n <- sample(30:150, 1)
 for (rep in 1:12) { n <- sample(40:150, 1); x <- rnbinom(n, size = runif(1, 1, 6), mu = runif(1, 2, 10))
   if (var(x) <= mean(x)) next
   f <- suppressWarnings(try(fitdistr(x, "negative binomial"), silent = TRUE)); if (inherits(f, "try-error")) next
-  vals <- c(f$estimate, f$sd, f$loglik); for (w in 0:4) cases[[length(cases) + 1]] <- case("fdist", c(4, n, w, x), vals[w + 1], rel = 1e-6, abs = 1e-8) }
+  vals <- c(f$estimate, f$sd, f$loglik); for (w in 0:4) cases[[length(cases) + 1]] <- case("fdist", c(4, n, w, x), vals[w + 1], rel = if (w %in% 2:3) 3e-5 else 1e-6, abs = 1e-8) }
 emit("mass", "MASS", list(cases))

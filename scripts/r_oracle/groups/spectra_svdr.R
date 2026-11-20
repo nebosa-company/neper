@@ -2,7 +2,7 @@
 suppressMessages(library(irlba))
 cases <- list()
 set.seed(20262351)
-add <- function(args, want) cases[[length(cases) + 1]] <<- case("sr", args, want, rel = 1e-8, abs = 1e-10)
+add <- function(args, want) cases[[length(cases) + 1]] <<- case("sr", args, want, rel = 1e-9, abs = 1e-11)
 for (rep in 1:20) {
   m <- sample(20:40, 1); n <- sample(10:18, 1); k <- sample(2:4, 1); ex <- sample(3:8, 1); sd <- sample(1:100000, 1); X <- matrix(round(rnorm(m * n), 4), m)
   set.seed(sd); r <- svdr(X, k, extra = ex)

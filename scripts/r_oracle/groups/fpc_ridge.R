@@ -10,7 +10,7 @@ cases <- list()
 set.seed(20269971)
 rs <- function(d, sc = 1) { A <- matrix(rnorm(d * d), d, d); (crossprod(A) + diag(d) * 0.3) * sc }
 flat <- function(m) as.vector(t(unclass(as.matrix(m))))
-add <- function(nm, args, want, rel = 1e-8, abs = 1e-10) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(nm, args, want, rel = rel, abs = abs)
+add <- function(nm, args, want, rel = 1e-9, abs = 1e-10) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(nm, args, want, rel = rel, abs = abs)
 for (rep in 1:20) {
   d <- sample(1:3, 1); m1 <- rnorm(d); m2 <- rnorm(d); S1 <- rs(d); S2 <- rs(d); al <- runif(1)
   add("rl", c(d, al, m1, m2, flat(S1), flat(S2)), sum(seq_len(d) * ridgeline(al, m1, m2, S1, S2)))
@@ -47,7 +47,7 @@ for (meth in c("ridge.uni", "ridge.ratio")) {
     z <- matrix(rexp(n * k), n, k)^2; z <- z / rowSums(z); cl <- apply(z, 1, which.max)
     if (length(unique(cl)) < k) next
     x <- matrix(rnorm(n * d), n, d); cutoff <- c(0.2, 0.4, 0.6)[rep %% 3 + 1]; by <- 0.01
-    r <- tryCatch(suppressWarnings(mergenormals(x, clustering = cl, probs = m$pr, muarray = m$mu, Sigmaarray = m$Sg, z = z, method = meth, cutoff = cutoff, by = by)), error = function(e) NULL)
+    r <- tryCatch(suppressWarnings(mergenormals(x, clustering = cl, probs = m$pr, muarray = m$mu, Sigmaarray = m$Sg, z = z, method = meth, cutoff = cutoff, by = by)), error = function(e) stop("mergenormals failed in R: ", conditionMessage(e)))
     if (is.null(r)) next
     made <- made + 1
     a <- c(n, d, k, cutoff, by, m$pr, flat(t(m$mu)), as.vector(aperm(m$Sg, c(2, 1, 3))), as.vector(t(z)), as.vector(t(x)))

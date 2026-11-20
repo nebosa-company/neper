@@ -1,5 +1,5 @@
 // R gsl, the integer-order Bessel functions Yn, Kn (scaled and plain) and In (scaled and plain) with gsl_sf_result.err: a port of specfunc/bessel_Yn.c, bessel_Kn.c, bessel_In.c and the
-// Taylor and continued-fraction helpers of bessel.c. The Olver uniform asymptotic branches (Yn and Kn with n > 50 or a large argument, In with n >= 150) are not here.
+// Taylor and continued-fraction helpers of bessel.c. The Olver uniform asymptotic branches (Yn and Kn with n > 50 or a large argument, In with n >= 150) are in gslnu (yn_full, kn_full, in_full).
 // Every function returns (value, error); a domain error returns (0, 0).
 
 use e.math

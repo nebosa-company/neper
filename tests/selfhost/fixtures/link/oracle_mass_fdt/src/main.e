@@ -12,8 +12,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(c.args[0usize])
     let (fo, fe) = mem.alloc[f64](a, 7usize)
     if fe != ok { ret nan }
-    if fdi.fitdistr_t(a, c.args[2usize..2usize + n], fo) != ok { ret nan }
-    ret fo[usize(c.args[1usize])]
+    let w = usize(c.args[1usize])
+    let x = c.args[5usize..5usize + n]
+    if w >= 10usize {
+        if fdi.fitdistr_t_at(a, x, c.args[2usize], c.args[3usize], c.args[4usize], fo) != ok { ret nan }
+        ret fo[w - 10usize]
+    }
+    if fdi.fitdistr_t(a, x, fo) != ok { ret nan }
+    ret fo[w]
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

@@ -146,13 +146,10 @@ mkdbf <- function(path, fields, recs, deleted = rep(FALSE, length(recs))) {
     hdr[d + seq_along(nm)] <- nm; hdr[d + 12] <- charToRaw(fields[[i]]$type); hdr[d + 17] <- as.raw(fields[[i]]$len); hdr[d + 18] <- as.raw(fields[[i]]$dec)
   }
   hdr[length(hdr)] <- as.raw(13)
-  body <- raw(0)
-  for (r in seq_along(recs)) {
-    body <- c(body, charToRaw(if (deleted[r]) "*" else " "))
-    for (i in seq_len(nf)) {
-      s <- sprintf(paste0("%-", fields[[i]]$len, "s"), recs[[r]][i]); rw <- charToRaw(s); rw[rw == charToRaw("~")] <- as.raw(0); body <- c(body, rw)
-    }
-  }
+  body <- unlist(lapply(seq_along(recs), function(r) {
+    c(charToRaw(if (deleted[r]) "*" else " "), unlist(lapply(seq_len(nf), function(i) {
+      s <- sprintf(paste0("%-", fields[[i]]$len, "s"), recs[[r]][i]); rw <- charToRaw(s); rw[rw == charToRaw("~")] <- as.raw(0); rw })))
+  }))
   writeBin(c(hdr, body, as.raw(26)), path)
 }
 fld <- function(name, type, len, dec = 0) list(name = name, type = type, len = len, dec = dec)
@@ -172,7 +169,8 @@ p8 <- file.path(root, "tests/oracle/data/foreign_dbf8.dbf")
 mkdbf(p8, list(fld("C", "C", 10), fld("1M", "M", 10), fld("D", "D", 8), fld("L", "L", 1), fld("C", "G", 6), fld("if", "T", 8)),
       list(c("  ab cd  ", "0000000001", "20110304", "T", "abc", "1"), c("ab~cd", "", "00000000", "?", "", ""), c("", "0000000012", "", " ", "   ", "20110304"),
            c("x", "7", "20110230", "y", "g~h", "2"), c("   z", "  42", "2011034", "F", "ab", "3"), c("tail", "9", "19700101", "x", "w", "4"), c("a", "1", "20240229", "n", "v", "5"),
-           c("b", "2", "19000101", "N", "u", "6")))
+           c("b", "2", "19000101", "N", "u", "6"), c("m12", "3", "20111231", "T", "p", "7"), c("m13", "4", "20111331", "T", "q", "8"),
+           c("m00", "5", "20110031", "T", "r", "9")))
 dbfcases(8, suppressWarnings(read.dbf(p8, as.is = TRUE))); dbfx(8, p8)
 p9 <- file.path(root, "tests/oracle/data/foreign_dbf9.dbf")
 mkdbf(p9, list(fld("A", "N", 5, 0), fld("B", "C", 4)), list(c("1", "aa"), c("2", "bb"), c("3", "c"), c("4", "dd")), deleted = c(FALSE, TRUE, TRUE, FALSE))
@@ -180,7 +178,8 @@ dbfcases(9, read.dbf(p9, as.is = TRUE)); dbfx(9, p9)
 # read.mtp (files foreign_mtp1 to 9): a Minitab portable worksheet of columns, constants and matrices written here in the layout Minitab writes (80 columns and a dot, five 16-wide numbers a line).
 #   "mn" (i, 0) the number of entries; "mname" (i, k) the position-weighted byte sum of entry k's name; "mdim" (i, k, 0 rows 1 columns); "msum" (i, k) the position-weighted sum of its values (column-major);
 #   "merr" (i, 0) 1 when read.mtp fails. Files 7 to 9 are a bad signature, a non-numeric data type and a truncated entry; file 5 has CRLF line ends.
-mtpline <- function(s) if (nchar(s) >= 80) s else sprintf("%-79s.", s)
+mtpw <- 80
+mtpline <- function(s) if (nchar(s) >= mtpw) s else if (mtpw == 80) sprintf("%-79s.", s) else sprintf(paste0("%-", mtpw, "s"), s)
 mtpfile <- function(path, ents, crlf = FALSE, head = "Minitab Portable Worksheet P1.1             1994 522 Release 9.1") {
   ln <- c(mtpline(head))
   for (e in ents) {
@@ -202,6 +201,8 @@ mtpcases <- function(i, path) {
     v <- r[[k]]; nm <- charToRaw(names(r)[k]); add("mname", c(i, k - 1), sum(seq_along(nm) * as.numeric(nm)))
     add("mdim", c(i, k - 1, 0), if (is.matrix(v)) nrow(v) else length(v)); add("mdim", c(i, k - 1, 1), if (is.matrix(v)) ncol(v) else 1)
     add("msum", c(i, k - 1), sum(seq_along(v) * as.vector(v)))
+    if (i == 13 || i == 14) add("msums", c(i, k - 1), sum(seq_along(v) * as.vector(v) * 1e300))
+    if (i == 15) add("msumn", c(i, k - 1), sum(seq_along(v) * (as.vector(v) * 1e-300)))   # values near 1e-307 vanish under the 1e-12 absolute tolerance of msum
   }
 }
 for (i in 1:6) {
@@ -225,6 +226,30 @@ mtpcases(10, p)
 p <- file.path(root, "tests/oracle/data/foreign_mtp11.mtp")
 mtpfile(p, list(list(type = 3, cnum = 1, dtype = 0, name = "HX", v = rep(0, 9), raw = c("0x1A", "0x1.8p3", "-0X10", "0x.8", "0xff", "0x1p-2", "0x1.fffffep127", "0x10p0", "0x123456789"))))
 mtpcases(11, p)
+# Values whose 8-digit mantissa rounds up at the sixth digit (x.xxxxx5x), far outside 1e+-306 where signif() is done by fprec's second branch (file 12)
+p <- file.path(root, "tests/oracle/data/foreign_mtp12.mtp")
+mtpfile(p, list(list(type = 3, cnum = 1, dtype = 0, name = "RU", v = c(7.1234557e307, 2.2222256e306, 3.3333355e307, 9.1111158e306, 1.8765455e307))))
+mtpcases(12, p)
+p <- file.path(root, "tests/oracle/data/foreign_mtp13.mtp")
+mtpfile(p, list(list(type = 3, cnum = 1, dtype = 0, name = "RS", v = c(5.1234557e-307, 2.3456555e-308, 3.3333355e-309, 4.4444456e-310, 8.1234556e-308))))
+mtpcases(13, p)
+# Ties at the sixth digit in 1e-303 to 1e-302 (the e10 > 308 branch of fprec, file 14) and values just under DBL_MAX where fprec's rounding switch turns off (file 15, 1e-6 against 1e-5 of headroom)
+p <- file.path(root, "tests/oracle/data/foreign_mtp14.mtp")
+mtpfile(p, list(list(type = 3, cnum = 1, dtype = 0, name = "TY", v = c(1.234565e-303, 2.345675e-303, 3.456785e-303, 4.567895e-303, 5.678905e-303, 6.789015e-303, 7.890125e-303, 8.901235e-303, 9.012345e-303, 1.111115e-302, 2.222225e-302, 3.333335e-303, 4.444445e-303, 5.555555e-303, 6.666665e-303, 7.777775e-303, 8.888885e-303, 9.999995e-303, 1.000005e-303, 1.500005e-303, 2.500005e-303, 3.500005e-303, 4.500005e-303, 5.500005e-303))))
+mtpcases(14, p)
+p <- file.path(root, "tests/oracle/data/foreign_mtp15.mtp")
+mtpfile(p, list(list(type = 3, cnum = 1, dtype = 0, name = "NM", v = c(1.797657e308, 1.797668e308, 1.797679e308, 1.797686e308, 1.797655e308, 1.797653e308, 1.797676e308, 1.797615e308, -1.797667e308, 1.797662e308))))
+mtpcases(15, p)
+# Lines of 83 and 90 characters (read with fgets(buf, 84): a line of 83 plus its newline is whole, a longer one splits)
+mtpw <- 83
+p <- file.path(root, "tests/oracle/data/foreign_mtp16.mtp")
+mtpfile(p, list(list(type = 3, cnum = 1, dtype = 0, name = "LW", v = c(1.5, 2.25, 3.125, 4.0625, 5.03125, 6.5, 7.5))), head = sprintf("%-83s", "Minitab Portable Worksheet P1.1             1994 522 Release 9.1"))
+mtpcases(16, p)
+mtpw <- 90
+p <- file.path(root, "tests/oracle/data/foreign_mtp17.mtp")
+mtpfile(p, list(list(type = 3, cnum = 1, dtype = 0, name = "LX", v = c(1.5, 2.25, 3.125, 4.0625, 5.03125, 6.5, 7.5))))
+mtpcases(17, p)
+mtpw <- 80
 # read.systat (files foreign_sys1 to 24): Systat files written here in the packet layout of R_systat.c (records of 128-byte packets between 0x81 marks, reals then strings, final 0x82) and the two files
 # that ship with foreign (Iris.syd, HillRace.SYD). The data frame is compared by "sn" (i, 0 rows / 1 columns), "sname" (i, j) the position-weighted byte sum of column j's name, "sstr" (i, j) 1 for a
 # character column, "snum" (i, j) the position-weighted sum of a numeric column (NA left out), "snas" (i, j) the NA count, "slen" the summed byte length of a character column and "shash" its
@@ -365,6 +390,10 @@ for (i in 1:24) syscases(i, if (i == 1) file.path(sysdir, "foreign_iris.syd") el
 # write.arff with an eol ("we", the layout of "wx", files foreign_arffe1 to 4): every line but @data ends in it
 eols <- c("\r\n", "\r", "||", "\n\n")
 for (i in 1:4) wxcase(i, "arffe", eols[i], "we")
+# A table of 65538 records: the header's record count reaches its third byte (file foreign_dbf11)
+p11 <- file.path(root, "tests/oracle/data/foreign_dbf11.dbf")
+mkdbf(p11, list(fld("A", "N", 1, 0)), lapply(0:65537, function(k) as.character(k %% 10)))
+dbfcases(11, read.dbf(p11, as.is = TRUE)); dbfx(11, p11)
 # write.dbf with factor columns and max_nchar: "wf" args (i, ncols, nrows, max_nchar, factor2char, kind[nc] (0 double 1 integer 2 logical 3 character of that many a's, 4 date as yyyymmdd, 5 factor with levels
 # L1 to L5, the value its code), values col-major, NaN for NA): 1 when the bytes Neper writes equal the file R wrote past the date bytes 1 to 3 (files foreign_dbff1 to 9; character lengths run to 300)
 maxns <- c(254, 254, 254, 5, 10, 1, 3, 254, 7)

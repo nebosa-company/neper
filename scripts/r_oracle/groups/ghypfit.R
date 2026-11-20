@@ -25,7 +25,7 @@ add <- function(seed, n, fam, kind, sm, method, gen, whats = c(0:4, 6, 7:10)) {
   if (method > 0 && r$res$param[2] < 0.2) return(invisible())
   res <- r$res
   vals <- c(as.numeric(res$param), res$maxLik, if (length(res$conv)) res$conv else NA, res$iter, as.numeric(res$paramStart))
-  tol <- c(1e-5, 1e-5, 1e-5, 1e-5, 1e-7, 0, 0, 1e-8, 1e-8, 1e-8, 1e-8)
+  tol <- c(1e-9, 1e-9, 1e-9, 1e-9, 1e-9, 0, 0, 1e-9, 1e-9, 1e-9, 1e-9)
   if (method > 0 && method != 4) tol[1:4] <- 2e-4
   # nlminb reports its convergence code in iter (and nothing in conv), exact; a bound-active run ends where finite-difference noise decides
   if (method == 4) tol[1:4] <- 3e-3
@@ -69,7 +69,11 @@ for (rep in 1:8) {
     if (mm == 1 && (any(abs(fit$param) > 1e3) || any(abs(fit$param[1:2]) < 1e-3))) next
     # R's gigFit reads the conv and iter of an nlm result at indices that do not exist: both are empty or NA, so only the fit is compared for nlm
     vals <- c(as.numeric(fit$param), fit$maxLik, if (length(fit$conv)) fit$conv else NA, fit$iter, as.numeric(fit$paramStart))
-    tol <- c(1e-5, 1e-5, 1e-5, 1e-7, 0, 0, 1e-8, 1e-8, 1e-8)
+    tol <- c(1e-9, 1e-9, 1e-9, 1e-9, 0, 0, 1e-9, 1e-9, 1e-9)
+    # nlm stops on a finite-difference gradient under 1e-6 and a last-bit besselK difference moves it a step: 1e-6 on its estimate and likelihood
+    if (mm == 1) tol[1:4] <- 1e-6
+    # the GammaIG start is two MASS::fitdistr gamma fits by optim BFGS on a finite-difference gradient: a last-bit lgamma difference moves its end point by 2e-9 relative, and the fit that starts there by 5e-8
+    if (kind == 1) tol[c(1:4, 8:9)] <- pmax(tol[c(1:4, 8:9)], 1e-7)
     for (w in 0:8) { if (mm == 1 && w %in% 4:5) next; cases[[length(cases) + 1]] <- case("gigfit", c(sd0, n, kind, stand + 2 * mm, w, gen, us), vals[w + 1], rel = tol[w + 1], abs = tol[w + 1] * 1e-2) }
   }
 }

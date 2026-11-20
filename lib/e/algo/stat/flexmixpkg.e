@@ -16,7 +16,18 @@ use e.mem
 error Malformed
 
 // coef is k by p (component-major), sigma has k entries, post is n by k row-major (the scaled posteriors), cluster the 1-based max.col of post
-type Fm = struct { k: usize, iter: usize, converged: bool, llh: f64, prior: []f64, coef: []f64, sigma: []f64, post: []f64, cluster: []usize, clog: f64, df: f64, k0: usize, pm: []f64, conc: []f64, pc: usize, des: []f64, xs: []f64 }
+type Fm = struct { k: usize, iter: usize, converged: bool, llh: f64, prior: []f64, coef: []f64, sigma: []f64, post: []f64, cluster: []usize, clog: f64, df: f64, k0: usize, pm: []f64, conc: []f64, pc: usize, des: []f64, xs: []f64, off: []const f64 }
+
+// flexmix(weights = w): the integer case weights, 1 where none are given; FLXMRglm(offset = o): the offset, recycled over the stacked rows of a FLXMRglmfix fit, 0 where none
+fn wg(v: []const f64, i: usize) -> f64 {
+    if v.len == 0usize { ret 1.0f64 }
+    ret v[i]
+}
+
+fn og(v: []const f64, i: usize) -> f64 {
+    if v.len == 0usize { ret 0.0f64 }
+    ret v[i - (i / v.len) * v.len]
+}
 
 // log(sum(exp(v))) of the k values at v[off..off + k], stable
 fn lse(v: []const f64, off: usize, k: usize) -> f64 {
@@ -199,6 +210,12 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
         }
         i += 1usize
     }
+    var sumw = 0.0f64
+    i = 0usize
+    while i < n {
+        sumw += wg(fxs.wt, i)
+        i += 1usize
+    }
     var llh = 0.0f64 - 1.0f64 / 0.0f64
     var llh_max = 0.0f64 - 1.0f64 / 0.0f64
     var kbest = k
@@ -239,10 +256,10 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
             var s = 0.0f64
             i = 0usize
             while i < n {
-                if q > 0usize { s += pm[i * k0 + j] } else { s += post[i * k0 + j] }
+                if q > 0usize { s += pm[i * k0 + j] * wg(fxs.wt, i) } else { s += post[i * k0 + j] * wg(fxs.wt, i) }
                 i += 1usize
             }
-            prior[j] = s / f64(n)
+            prior[j] = s / sumw
             if prior[j] >= minprior { keep += 1usize }
             j += 1usize
         }
@@ -341,10 +358,10 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
             var sw = 0.0f64
             i = 0usize
             while i < n {
-                let w = post[i * k0 + j]
+                let w = post[i * k0 + j] * wg(fxs.wt, i)
                 sw += w
                 let sq = math.sqrt[f64](w)
-                yw[i] = sq * y[i]
+                yw[i] = sq * (y[i] - og(fxs.off, i))
                 var c = 0usize
                 while c < p {
                     xw[c * n + i] = sq * x[c * n + i]
@@ -358,7 +375,7 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
                 if e15 != ok || e16 != ok { ret (out, Malformed) }
                 i = 0usize
                 while i < n {
-                    wj[i] = post[i * k0 + j]
+                    wj[i] = post[i * k0 + j] * wg(fxs.wt, i)
                     i += 1usize
                 }
                 var c0 = 0usize
@@ -370,11 +387,11 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
                 let (dv, e17) = mem.alloc[f64](a, 1usize)
                 if e17 != ok { ret (out, Malformed) }
                 if fam == 1usize {
-                    ge = pois_glm(a, x, n, p, y, wj, bj, iter > 1usize)
+                    ge = pois_glm(a, x, n, p, y, wj, bj, iter > 1usize, fxs.off)
                 } else if fam == 2usize {
-                    ge = binom_glm(a, x, n, p, y, sz, wj, bj, iter > 1usize)
+                    ge = binom_glm(a, x, n, p, y, sz, wj, bj, iter > 1usize, fxs.off)
                 } else {
-                    ge = gamma_glm(a, x, n, p, y, wj, bj, iter > 1usize, dv)
+                    ge = gamma_glm(a, x, n, p, y, wj, bj, iter > 1usize, fxs.off, dv)
                 }
                 if ge != ok { ret (out, ge) }
                 c0 = 0usize
@@ -414,6 +431,7 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
                         c += 1usize
                     }
                 }
+                mu += og(fxs.off, i)
                 var ld = 0.0f64
                 if fam == 1usize {
                     ld = nm.dpois(y[i], math.exp[f64](mu), true)
@@ -434,7 +452,7 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
         i = 0usize
         while i < n {
             let ls = lse(lp, i * k0, k)
-            llh += ls
+            llh += ls * wg(fxs.wt, i)
             j = 0usize
             while j < k {
                 post[i * k0 + j] = math.exp[f64](lp[i * k0 + j] - ls)
@@ -500,10 +518,10 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
         var s = 0.0f64
         i = 0usize
         while i < n {
-            s += post[i * k0 + j]
+            s += post[i * k0 + j] * wg(fxs.wt, i)
             i += 1usize
         }
-        prior[j] = s / f64(n)
+        prior[j] = s / sumw
         j += 1usize
     }
     // FLXfillConcomitant: the multinomial refitted on the final posteriors
@@ -528,6 +546,7 @@ fn flex_em(a: *mem.Arena, r: *rg.Rng, x: []const f64, n: usize, p: usize, y: []c
     out.post = post
     out.k0 = k0
     out.pc = p
+    out.off = fxs.off
     out.pm = pm
     out.conc = cc
     // the classification log-likelihood (the log unscaled posteriors of the assigned components) and the parameter count, for BIC and ICL
@@ -654,7 +673,7 @@ fn pois_dev(y: []const f64, mu: []const f64, w: []const f64, n: usize) -> f64 {
     ret s
 }
 
-fn pois_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w: []const f64, beta: []f64, has_start: bool) -> err {
+fn pois_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w: []const f64, beta: []f64, has_start: bool, off: []const f64) -> err {
     let (eta, e1) = mem.alloc[f64](a, n)
     let (mu, e2) = mem.alloc[f64](a, n)
     let (z, e3) = mem.alloc[f64](a, n)
@@ -669,6 +688,7 @@ fn pois_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w
                 t += x[c * n + i] * beta[c]
                 c += 1usize
             }
+            t += og(off, i)
             eta[i] = t
             mu[i] = math.exp[f64](t)
         } else {
@@ -684,7 +704,7 @@ fn pois_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w
         i = 0usize
         while i < n {
             let sq = math.sqrt[f64](w[i] * mu[i])
-            z[i] = (eta[i] + (y[i] - mu[i]) / mu[i]) * sq
+            z[i] = (eta[i] - og(off, i) + (y[i] - mu[i]) / mu[i]) * sq
             var c = 0usize
             while c < p {
                 xw[c * n + i] = x[c * n + i] * sq
@@ -707,6 +727,7 @@ fn pois_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w
                 t += x[c * n + i] * beta[c]
                 c += 1usize
             }
+            t += og(off, i)
             eta[i] = t
             mu[i] = math.exp[f64](t)
             i += 1usize
@@ -777,6 +798,24 @@ fn aic(f: *const Fm) -> f64 { ret 0.0f64 - 2.0f64 * f.llh + 2.0f64 * f.df }
 
 fn icl(f: *const Fm, n: usize) -> f64 { ret 0.0f64 - 2.0f64 * f.clog + f.df * math.log[f64](f64(n)) }
 
+// EIC: 1 + sum(post * log(post)) / (n * log(k)) over the n unweighted scaled posteriors, a zero posterior counting as log -1000
+fn eic(f: *const Fm, n: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < f.k {
+            let v = f.post[i * f.k0 + j]
+            var lv = 0.0f64 - 1000.0f64
+            if v > 0.0f64 { lv = math.log[f64](v) }
+            s += v * lv
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret 1.0f64 + s / (f64(n) * math.log[f64](f64(f.k)))
+}
+
 
 // R glm.fit for the binomial family with the logit link and a (successes, size) response: the proportion y / size with prior weights w * size, started from
 // mustart = (weights y + 0.5) / (weights + 1) or from the previous coefficients, the same deviance convergence as the Poisson fit
@@ -794,7 +833,7 @@ fn binom_dev(yp: []const f64, mu: []const f64, wt: []const f64, n: usize) -> f64
     ret s
 }
 
-fn binom_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64, size: []const f64, w: []const f64, beta: []f64, has_start: bool) -> err {
+fn binom_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64, size: []const f64, w: []const f64, beta: []f64, has_start: bool, off: []const f64) -> err {
     let (eta, e1) = mem.alloc[f64](a, n)
     let (mu, e2) = mem.alloc[f64](a, n)
     let (z, e3) = mem.alloc[f64](a, n)
@@ -813,6 +852,7 @@ fn binom_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f6
                 t += x[c * n + i] * beta[c]
                 c += 1usize
             }
+            t += og(off, i)
             eta[i] = t
             mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
         } else {
@@ -829,7 +869,7 @@ fn binom_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f6
         while i < n {
             let me = mu[i] * (1.0f64 - mu[i])
             let sq = math.sqrt[f64](wt[i] * me)
-            z[i] = (eta[i] + (yp[i] - mu[i]) / me) * sq
+            z[i] = (eta[i] - og(off, i) + (yp[i] - mu[i]) / me) * sq
             var c = 0usize
             while c < p {
                 xw[c * n + i] = x[c * n + i] * sq
@@ -852,6 +892,7 @@ fn binom_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f6
                 t += x[c * n + i] * beta[c]
                 c += 1usize
             }
+            t += og(off, i)
             eta[i] = t
             mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
             i += 1usize
@@ -904,7 +945,7 @@ fn gamma_dev(y: []const f64, mu: []const f64, w: []const f64, n: usize) -> f64 {
     ret s
 }
 
-fn gamma_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w: []const f64, beta: []f64, has_start: bool, dev_out: []f64) -> err {
+fn gamma_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, w: []const f64, beta: []f64, has_start: bool, off: []const f64, dev_out: []f64) -> err {
     let (eta, e1) = mem.alloc[f64](a, n)
     let (mu, e2) = mem.alloc[f64](a, n)
     let (z, e3) = mem.alloc[f64](a, n)
@@ -919,6 +960,7 @@ fn gamma_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
                 t += x[c * n + i] * beta[c]
                 c += 1usize
             }
+            t += og(off, i)
             eta[i] = t
             mu[i] = 1.0f64 / t
         } else {
@@ -936,7 +978,7 @@ fn gamma_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
         while i < n {
             // mu.eta = -mu^2 and variance mu^2: z = eta - (y - mu) / mu^2, weight sqrt(w) mu
             let sq = math.sqrt[f64](w[i]) * mu[i]
-            z[i] = (eta[i] - (y[i] - mu[i]) / (mu[i] * mu[i])) * sq
+            z[i] = (eta[i] - og(off, i) - (y[i] - mu[i]) / (mu[i] * mu[i])) * sq
             var c = 0usize
             while c < p {
                 xw[c * n + i] = x[c * n + i] * sq
@@ -959,6 +1001,7 @@ fn gamma_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
                 t += x[c * n + i] * beta[c]
                 c += 1usize
             }
+            t += og(off, i)
             eta[i] = t
             mu[i] = 1.0f64 / t
             i += 1usize
@@ -1027,7 +1070,7 @@ fn gaussian_cem(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usiz
 // ---- the flexmix() call with its options: family, classification, start, concomitant variables ----
 
 // start: 0 the cluster argument as 1-based codes (n values), 1 sample(seq_len(k), n, replace = TRUE) from r, 2 an n by k matrix of initial posteriors (row-major)
-type Opt = struct { fam: usize, cls: usize, start: usize, minprior: f64, tol: f64, itermax: usize }
+type Opt = struct { fam: usize, cls: usize, start: usize, minprior: f64, tol: f64, itermax: usize, wt: []const f64, off: []const f64 }
 
 fn to_colmajor(a: *mem.Arena, xr: []const f64, n: usize, p: usize) -> ([]f64, err) {
     let (xc, e1) = mem.alloc[f64](a, n * p)
@@ -1081,7 +1124,9 @@ fn run(a: *mem.Arena, r: *rg.Rng, o: *const Opt, xr: []const f64, n: usize, p: u
         }
     }
     var nofix: Fix = zero
-    let (f, fe) = flex_em(a, r, xc, n, p, y, p0, k, o.minprior, o.tol, o.itermax, o.fam + 10usize * o.cls, sz, cx, q, &nofix)
+    nofix.wt = o.wt
+    nofix.off = o.off
+    let (f, fe) = flex_em(a, r, xc,n, p, y, p0, k, o.minprior, o.tol, o.itermax, o.fam + 10usize * o.cls, sz, cx, q, &nofix)
     ret (f, fe)
 }
 
@@ -1178,6 +1223,7 @@ fn comp_mean(f: *const Fm, fam: usize, xr: []const f64, n: usize, p: usize, out:
                 mu += xr[i * p + c] * f.coef[j * p + c]
                 c += 1usize
             }
+            mu += og(f.off, i)
             var v = mu
             if fam == 1usize { v = math.exp[f64](mu) }
             if fam == 2usize { v = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - mu)) }
@@ -1447,7 +1493,7 @@ fn kldiv_disc(f: *const Fm, n: usize, out: []f64) {
 
 // xs is the stacked design, column-major with nr = k * n rows (component block m holds rows m * n .. m * n + n - 1) and pc columns; des is the k by pc incidence (row-major,
 // 1 where component m uses column c); vg holds the sizes of the ng variance groups (consecutive components sharing one sigma)
-type Fix = struct { on: bool, pc: usize, xs: []f64, des: []f64, vg: []usize, ng: usize }
+type Fix = struct { on: bool, pc: usize, xs: []f64, des: []f64, vg: []usize, ng: usize, wt: []const f64, off: []const f64 }
 
 // the joint M step: glm.fit (or lm.wfit) over the stacked rows with the posteriors as weights, no start values; beta (pc values) is the coefficient vector and sigma gets
 // the per component sigma (Gaussian, by variance group: weighted residual sum of squares over its rows / (rows - coefficients of the group's row of the incidence))
@@ -1463,8 +1509,9 @@ fn fix_mstep(a: *mem.Arena, fxs: *const Fix, post: []const f64, k0: usize, k: us
     while m < k {
         var i = 0usize
         while i < n {
-            w[m * n + i] = post[i * k0 + m]
+            w[m * n + i] = post[i * k0 + m] * wg(fxs.wt, i)
             ys[m * n + i] = y[i]
+            if fam == 0usize { ys[m * n + i] = y[i] - og(fxs.off, i) }
             zs[m * n + i] = sz[i]
             i += 1usize
         }
@@ -1532,11 +1579,11 @@ fn fix_mstep(a: *mem.Arena, fxs: *const Fix, post: []const f64, k0: usize, k: us
     let (dv, e6) = mem.alloc[f64](a, 1usize)
     if e6 != ok { ret Malformed }
     if fam == 1usize {
-        ge = pois_glm(a, fxs.xs, nr, pc, ys, w, beta, false)
+        ge = pois_glm(a, fxs.xs, nr, pc, ys, w, beta, false, fxs.off)
     } else if fam == 2usize {
-        ge = binom_glm(a, fxs.xs, nr, pc, ys, zs, w, beta, false)
+        ge = binom_glm(a, fxs.xs, nr, pc, ys, zs, w, beta, false, fxs.off)
     } else {
-        ge = gamma_glm(a, fxs.xs, nr, pc, ys, w, beta, false, dv)
+        ge = gamma_glm(a, fxs.xs, nr, pc, ys, w, beta, false, fxs.off, dv)
     }
     if ge != ok { ret ge }
     var sw = 0.0f64
@@ -1785,7 +1832,7 @@ fn run_fix(a: *mem.Arena, r: *rg.Rng, o: *const Opt, xr: []const f64, n: usize, 
             i += 1usize
         }
     }
-    var fxs = Fix { on: true, pc: pc, xs: xs, des: des, vg: vg, ng: ngv }
+    var fxs = Fix { on: true, pc: pc, xs: xs, des: des, vg: vg, ng: ngv, wt: o.wt, off: o.off }
     let (f, fe) = flex_em(a, r, xs, n, pc, y, p0, k, o.minprior, o.tol, o.itermax, o.fam + 10usize * o.cls, sz, cx, q, &fxs)
     ret (f, fe)
 }

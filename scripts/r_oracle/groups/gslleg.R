@@ -16,5 +16,5 @@ for (i in 1:150) {
   ls <- sample(1:60, 1); m <- sample(0:ls, 1); xs <- runif(1, -0.999, 0.999)
   add(1, ls, m, xs, g(legendre_sphPlm, ls, m, xs), vrel = 1e-9)
 }
-for (l in c(100001, 250000)) for (x in c(0.3, 1.5, 20)) add(0, l, 0, x, g(legendre_Ql, l, x), vrel = 1e-7)
+for (l in c(100001, 250000)) for (x in c(0.3, 1.5, 20)) add(0, l, 0, x, g(legendre_Ql, l, x), vrel = 1e-9)
 emit("gslleg", "gsl", list(cases))

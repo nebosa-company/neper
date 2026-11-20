@@ -42,6 +42,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
+    var far = 0usize
     var bad: [14]usize = zero
     var at = 0usize
     while at < golden.cases.len {
@@ -50,6 +51,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !oracle.agrees(got, c) {
             failures += 1usize
             bad[usize(c.args[0usize])] += 1usize
+            var d = got - c.want
+            if d < 0.0f64 { d = 0.0f64 - d }
+            var w = c.want
+            if w < 0.0f64 { w = 0.0f64 - w }
+            if !(d <= 1.0e-11f64 * w + 1.0e-13f64) { far += 1usize }
         }
         at += 1usize
     }
@@ -69,5 +75,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // The mismatch counts are the measurement (see the ceiling note in mass_probe.R); only the correctly rounded sqrt must be exact.
     if bad[12usize] > 0usize { os.exit(1) }
+    // every primitive stays within 1e-11 relative (1e-13 absolute) of R, so a wrong constant or guard cannot pass
+    if far > 0usize { os.exit(4) }
     ret ok
 }

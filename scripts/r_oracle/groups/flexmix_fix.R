@@ -60,8 +60,20 @@ run <- function(seed, n, dtype, fam, kg, rhs, fixed, rmask, fmask, nested = NULL
   hdr <- function(what, idx) c(seed, n, dtype, fam, kg, k, flip, 0, seed2, cls, start, minprior, tol, itermax, rmask, fmask, ng, gs, gmask, varfix, vsz, q, what, idx,
                                mode, k2, nrep, kcur, c(pr, rep(0, 3 - length(pr)))[1:3], as.vector(t(cbind(beta, matrix(0, nrow(beta), 4 - ncol(beta))))),
                                c(sg, rep(0, 3 - length(sg)))[1:3], as.vector(t(cbind(gc, matrix(0, nrow(gc), 2 - ncol(gc))))))
-  add <- function(what, idx, v, rel = if (q > 0) 1e-6 else 1e-9, abs = if (q > 0) 1e-6 else 1e-9) {
+  # a concomitant prior is nnet BFGS (reltol 1e-8): a concomitant value is held to 1e-8 or, where R's own value moves more than that when the concomitant covariate w is
+  # perturbed by 2 ulp (R refit on w * (1 + 4.4e-16), standing for a one ulp libm exp difference amplified by the optimiser's stopping rule: seeds 535 and 547 move by 1.7e-7 and
+  # 2.2e-8), to ten times that movement, never beyond the cap 1e-6
+  ctol <- 1e-6
+  rec <- NULL
+  pert <- list()
+  tq <- function(what, idx, v) {
+    s <- pert[[paste(what, idx, kcur)]]
+    if (is.null(s) || !is.finite(s)) return(1e-8)
+    min(ctol, max(1e-8, 10 * abs(v - s) / max(abs(v), 1e-300)))
+  }
+  add <- function(what, idx, v, rel = if (q > 0) tq(what, idx, v) else 1e-9, abs = if (q > 0) tq(what, idx, v) else 1e-9) {
     if (!is.finite(v) && !is.nan(v)) return(invisible())
+    if (!is.null(rec)) { rec[[paste(what, idx, kcur)]] <<- v; return(invisible()) }
     cases[[length(cases) + 1]] <<- case("fx", hdr(what, idx), v, rel = rel, abs = abs)
   }
   describe <- function(fit) {
@@ -71,6 +83,7 @@ run <- function(seed, n, dtype, fam, kg, rhs, fixed, rmask, fmask, nested = NULL
       v <- numeric(ncol(des)); v[des[j, ] == 1] <- unname(fit@components[[j]][[1]]@parameters$coef); v }, numeric(ncol(des)))
     add(0, 0, as.numeric(logLik(fit))); add(1, 0, fit@iter, 0, 0); add(2, 0, kk, 0, 0)
     add(7, 0, AIC(fit)); add(8, 0, BIC(fit)); add(9, 0, ICL(fit))
+    if (kk > 1) add(30, 0, EIC(fit))
     for (j in seq_len(kk)) add(3, j - 1, fit@prior[j])
     add(4, 0, cs(cf))
     if (fam == 0) add(5, 0, cs(vapply(fit@components, function(cp) cp[[1]]@parameters$sigma, 0)))
@@ -82,6 +95,9 @@ run <- function(seed, n, dtype, fam, kg, rhs, fixed, rmask, fmask, nested = NULL
     add(21, 0, cs(t(des)), 0, 0)
     add(22, 0, as.numeric(fit@converged), 0, 0)
   }
+  fitall <- function() {
+  set.seed(seed2)
+  kcur <<- k
   if (mode == 0) {
     fit <- tryCatch(flexmix(form, data = tr$d, k = k, cluster = if (start == 0) init else NULL, model = mk(), concomitant = conc, control = ctl), error = function(e) NULL)
     if (is.null(fit)) return(invisible(NULL))
@@ -92,12 +108,23 @@ run <- function(seed, n, dtype, fam, kg, rhs, fixed, rmask, fmask, nested = NULL
     for (kk in k:k2) {
       fit <- st@models[[as.character(kk)]]
       if (is.null(fit)) next
-      kcur <- kk
+      kcur <<- kk
       ll <- st@logLiks[as.character(kk), ]
       for (m in seq_along(ll)) if (is.finite(ll[m])) add(15, m - 1, ll[m])
       describe(fit)
     }
   }
+  }
+  if (q > 0) {
+    rec <- list()
+    d0 <- tr$d
+    tr$d$w <- tr$d$w * (1 + 4.4e-16)
+    fitall()
+    pert <- rec
+    rec <- NULL
+    tr$d <- d0
+  }
+  fitall()
 }
 
 B3 <- rbind(c(0, 2, 1), c(3, -1.5, 1), c(-2, 0.5, 1))

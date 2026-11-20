@@ -6,7 +6,7 @@
 suppressMessages(library(RSpectra))
 cases <- list()
 set.seed(20262403)
-add <- function(args, want, rel = 1e-8) cases[[length(cases) + 1]] <<- case("rspectra", args, want, rel = rel, abs = 1e-9)
+add <- function(args, want, rel = 1e-9) cases[[length(cases) + 1]] <<- case("rspectra", args, want, rel = rel, abs = 1e-11)
 w <- function(M) sum(M * seq_along(M))
 # column-wise sign-free: R's binary and a fresh build of the same Spectra and Eigen sources differ in the global sign of a few Ritz vector sets (rounding-level reduction order), so vectors are compared up to the sign of each column
 ws <- function(M) sum(abs(colSums(M * seq_len(nrow(M)))) * seq_len(ncol(M)))

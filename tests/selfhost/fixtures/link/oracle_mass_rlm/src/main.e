@@ -29,7 +29,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let p = usize(z[2usize])
     var o = mr.default_opts()
     o.psi = usize(z[3usize])
-    o.pa = z[4usize]
+    if !(o.psi == 0usize && z[4usize] == 1.345f64) {
+        o.pa = z[4usize]
+    }
     o.pb = z[5usize]
     o.pc = z[6usize]
     o.scale_est = usize(z[7usize])

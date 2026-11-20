@@ -11,12 +11,12 @@ for (rep in 1:15) {
   for (ord in 1:4) for (ab in 0:1) {
     about <- c(0, 0.5)[sample(1:2, 1)]
     v <- tryCatch(momIntegrated("ghyp", param = c(mu, delta, alpha, beta, lam), order = ord, about = about, absolute = ab == 1), error = function(e) NA_real_)
-    if (is.finite(v)) cases[[length(cases) + 1]] <- case("momint", c(0, ord, about, ab, mu, delta, alpha, beta, lam), v, rel = 1e-8, abs = 1e-10)
+    if (is.finite(v)) cases[[length(cases) + 1]] <- case("momint", c(0, ord, about, ab, mu, delta, alpha, beta, lam), v, rel = 1e-9, abs = 1e-12)
   }
   chi <- runif(1, 0.3, 3); psi <- runif(1, 0.3, 3)
   for (ord in 1:3) {
     v <- tryCatch(momIntegrated("gig", param = c(chi, psi, lam), order = ord, about = 0), error = function(e) NA_real_)
-    if (is.finite(v)) cases[[length(cases) + 1]] <- case("momint", c(1, ord, 0, 0, chi, psi, lam, 0, 0), v, rel = 1e-8, abs = 1e-10)
+    if (is.finite(v)) cases[[length(cases) + 1]] <- case("momint", c(1, ord, 0, 0, chi, psi, lam, 0, 0), v, rel = 1e-9, abs = 1e-12)
   }
 }
 for (rep in 1:120) {
@@ -35,6 +35,6 @@ for (rep in 1:8) {
   set.seed(sd0); x <- rhyperb(n, param = c(mu, delta, alpha, beta))
   res <- NULL
   invisible(capture.output(res <- hyperbCvMTest(x, param = c(mu, delta, alpha, beta))))
-  cases[[length(cases) + 1]] <- case("cvmw", c(sd0, n, mu, delta, alpha, beta), res$statistic, rel = 1e-6, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("cvmw", c(sd0, n, mu, delta, alpha, beta), res$statistic, rel = 1e-9, abs = 1e-12)
 }
 emit("ghypmisc", c("GeneralizedHyperbolic", "DistributionUtils"), list(cases))

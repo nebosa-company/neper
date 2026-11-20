@@ -1,7 +1,7 @@
-// R fpc: nselectboot and prediction.strength under set.seed, with hclustCBI or disthclustCBI as the clustering method, and classifnp / classifdist for the
-// classification step (averagedist, fn, knn with nnk = 1, and centroid on data points). Matrices are row-major.
+// R fpc: nselectboot and prediction.strength under set.seed, with hclustCBI, disthclustCBI, kmeansCBI, pamkCBI or claraCBI as the clustering method, and classifnp /
+// classifdist for the classification step (averagedist, fn, knn, centroid on data points, lda and qda with max.col's random ties). Matrices are row-major.
 //
-// Not here: kmeansCBI, claraCBI and the other clustering methods, the lda and qda classifications, knn with nnk > 1.
+// Not here: dbscanCBI, which R itself cannot run in either function (both hand it k, which dbscan rejects), and the clustering methods that need mclust, tclust or kernlab.
 
 use e.algo.rand.r as rg
 use e.algo.stat.classknn as ck
@@ -150,6 +150,259 @@ fn knn1_centroid(a: *mem.Arena, rng: *rg.Rng, data: []const f64, p: usize, cen: 
     ret index
 }
 
+// classifnp "lda" / "qda": MASS::lda and MASS::qda fitted on the labelled points (priors are the group shares) and applied to the others; the class is the
+// argmax of the posterior, so the linear (lda) or quadratic (qda) score replaces MASS's whitened distances. as.factor numbers the labels present, and
+// that factor code is what R stores, so a missing label shifts the codes. qda falls back to lda for a group of fewer than p + 1 points or a singular group
+// covariance, as fpc's try() does; lda stops on a variable constant within the groups.
+fn discr_classify(a: *mem.Arena, rng: *rg.Rng, data: []const f64, n: usize, p: usize, cl: []const i64, k0: usize, quad: bool, out: []usize) -> err {
+    // R's k is max(clustering), which can exceed the number of non-empty clusters
+    var k = k0
+    var mi = 0usize
+    while mi < n {
+        if cl[mi] > i64(k) { k = usize(cl[mi]) }
+        mi += 1usize
+    }
+    let (cnt, e1) = mem.alloc[usize](a, k + 1usize)
+    let (code, e2) = mem.alloc[usize](a, k + 1usize)
+    if e1 != ok || e2 != ok { ret Malformed }
+    var i = 0usize
+    while i <= k {
+        cnt[i] = 0usize
+        code[i] = 0usize
+        i += 1usize
+    }
+    var nt = 0usize
+    i = 0usize
+    while i < n {
+        if cl[i] > 0i64 {
+            cnt[usize(cl[i])] += 1usize
+            nt += 1usize
+        }
+        i += 1usize
+    }
+    var ng = 0usize
+    var j = 1usize
+    while j <= k {
+        if cnt[j] > 0usize {
+            ng += 1usize
+            code[j] = ng
+        }
+        j += 1usize
+    }
+    if ng < 2usize { ret Malformed }
+    let (mu, e3) = mem.alloc[f64](a, (k + 1usize) * p)
+    let (sw, e4) = mem.alloc[f64](a, p * p)
+    let (sinv, e5) = mem.alloc[f64](a, p * p)
+    let (gs, e6) = mem.alloc[f64](a, p * p)
+    let (ginv, e7) = mem.alloc[f64](a, p * p)
+    let (ch, e8) = mem.alloc[f64](a, p * p)
+    let (dv, e9) = mem.alloc[f64](a, p)
+    if e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret Malformed }
+    var q = 0usize
+    while q < (k + 1usize) * p {
+        mu[q] = 0.0f64
+        q += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if cl[i] > 0i64 {
+            q = 0usize
+            while q < p {
+                mu[usize(cl[i]) * p + q] += data[i * p + q] / f64(cnt[usize(cl[i])])
+                q += 1usize
+            }
+        }
+        i += 1usize
+    }
+    // pooled within-group covariance, divisor n - g
+    q = 0usize
+    while q < p * p {
+        sw[q] = 0.0f64
+        q += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if cl[i] > 0i64 {
+            let g = usize(cl[i])
+            var r = 0usize
+            while r < p {
+                var c = 0usize
+                while c < p {
+                    sw[r * p + c] += (data[i * p + r] - mu[g * p + r]) * (data[i * p + c] - mu[g * p + c])
+                    c += 1usize
+                }
+                r += 1usize
+            }
+        }
+        i += 1usize
+    }
+    q = 0usize
+    while q < p {
+        if math.sqrt[f64](sw[q * p + q] / f64(nt - 1usize)) < 0.0001f64 { ret Malformed }
+        q += 1usize
+    }
+    q = 0usize
+    while q < p * p {
+        sw[q] = sw[q] / f64(nt - ng)
+        q += 1usize
+    }
+    let el = fp.lu_inverse(a, sw, p, sinv)
+    if el != ok { ret el }
+    var useq = quad
+    if quad {
+        j = 1usize
+        while j <= k {
+            if cnt[j] > 0usize && cnt[j] < p + 1usize { useq = false }
+            j += 1usize
+        }
+    }
+    let (ld, e10) = mem.alloc[f64](a, k + 1usize)
+    let (ldet, e11) = mem.alloc[f64](a, k + 1usize)
+    let (qinv, e12) = mem.alloc[f64](a, (k + 1usize) * p * p)
+    if e10 != ok || e11 != ok || e12 != ok { ret Malformed }
+    if useq {
+        j = 1usize
+        while j <= k && useq {
+            if cnt[j] > 0usize {
+                q = 0usize
+                while q < p * p {
+                    gs[q] = 0.0f64
+                    q += 1usize
+                }
+                i = 0usize
+                while i < n {
+                    if cl[i] == i64(j) {
+                        var r = 0usize
+                        while r < p {
+                            var c = 0usize
+                            while c < p {
+                                gs[r * p + c] += (data[i * p + r] - mu[j * p + r]) * (data[i * p + c] - mu[j * p + c]) / f64(cnt[j] - 1usize)
+                                c += 1usize
+                            }
+                            r += 1usize
+                        }
+                    }
+                    i += 1usize
+                }
+                // Cholesky for the log determinant
+                var ld0 = 0.0f64
+                var r = 0usize
+                while r < p && useq {
+                    var c = 0usize
+                    while c <= r {
+                        var s = gs[r * p + c]
+                        var t = 0usize
+                        while t < c {
+                            s -= ch[r * p + t] * ch[c * p + t]
+                            t += 1usize
+                        }
+                        if r == c {
+                            if s <= 0.0f64 { useq = false } else {
+                                ch[r * p + r] = math.sqrt[f64](s)
+                                ld0 += 2.0f64 * math.log[f64](ch[r * p + r])
+                            }
+                        } else {
+                            ch[r * p + c] = s / ch[c * p + c]
+                        }
+                        c += 1usize
+                    }
+                    r += 1usize
+                }
+                if useq {
+                    ldet[j] = ld0
+                    let ei = fp.lu_inverse(a, gs, p, ginv)
+                    if ei != ok { ret ei }
+                    q = 0usize
+                    while q < p * p {
+                        qinv[j * p * p + q] = ginv[q]
+                        q += 1usize
+                    }
+                }
+            }
+            j += 1usize
+        }
+    }
+    let (diff, e13) = mem.alloc[f64](a, p)
+    if e13 != ok { ret Malformed }
+    i = 0usize
+    while i < n {
+        if cl[i] > 0i64 {
+            out[i] = usize(cl[i])
+        } else {
+            var best = 0usize
+            j = 1usize
+            while j <= k {
+                if cnt[j] > 0usize {
+                    var v = 0.0f64
+                    var r = 0usize
+                    while r < p {
+                        diff[r] = data[i * p + r] - mu[j * p + r]
+                        r += 1usize
+                    }
+                    r = 0usize
+                    while r < p {
+                        var c = 0usize
+                        while c < p {
+                            var w = sinv[r * p + c]
+                            if useq { w = qinv[j * p * p + r * p + c] }
+                            v += 0.5f64 * diff[r] * w * diff[c]
+                            c += 1usize
+                        }
+                        r += 1usize
+                    }
+                    if useq { v += 0.5f64 * ldet[j] }
+                    v -= math.log[f64](f64(cnt[j]) / f64(nt))
+                    ld[code[j]] = v
+                }
+                j += 1usize
+            }
+            // predict.lda / predict.qda: posterior = exp(-(dist - min)) / sum, then max.col(posterior) with ties.method "random" (R's maxcol.c, RELTOL 1e-5):
+            // a column within tol of the running maximum draws a uniform, which also moves the generator in the caller
+            var dmin = ld[1usize]
+            var cq = 2usize
+            while cq <= ng {
+                if ld[cq] < dmin { dmin = ld[cq] }
+                cq += 1usize
+            }
+            var tsum = 0.0f64
+            cq = 1usize
+            while cq <= ng {
+                ld[cq] = math.exp[f64](0.0f64 - (ld[cq] - dmin))
+                tsum += ld[cq]
+                cq += 1usize
+            }
+            var large = 0.0f64
+            cq = 1usize
+            while cq <= ng {
+                ld[cq] = ld[cq] / tsum
+                if ld[cq] > large { large = ld[cq] }
+                cq += 1usize
+            }
+            let tol = 0.00001f64 * large
+            var mm = 1usize
+            var am = ld[1usize]
+            var ntie = 1.0f64
+            cq = 2usize
+            while cq <= ng {
+                let bb = ld[cq]
+                if bb > am + tol {
+                    am = bb
+                    mm = cq
+                    ntie = 1.0f64
+                } else if bb >= am - tol {
+                    ntie += 1.0f64
+                    if ntie * rg.unif(rng) < 1.0f64 { mm = cq }
+                }
+                cq += 1usize
+            }
+            best = mm
+            out[i] = best
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
 // classifnp / classifdist for the n points: cl[i] is a label 1..k or -1 for a point to classify; method 1 averagedist, 2 centroid, 3 fn, 4 knn (nnk = 1).
 // d is the n by n dissimilarity matrix, data the n by p points (centroid only). out receives the completed labels.
 fn classify(a: *mem.Arena, rng: *rg.Rng, distances: bool, d: []const f64, data: []const f64, n: usize, p: usize, method0: usize, cl: []const i64, k: usize, out: []usize, gcen: []const f64) -> err {
@@ -164,6 +417,7 @@ fn classify(a: *mem.Arena, rng: *rg.Rng, distances: bool, d: []const f64, data: 
             q += 1usize
         }
     }
+    if method == 5usize || method == 6usize { ret discr_classify(a, rng, data, n, p, cl, k, method == 6usize, out) }
     let (cen, e1) = mem.alloc[f64](a, k * p)
     if e1 != ok { ret Malformed }
     var i = 0usize

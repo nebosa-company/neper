@@ -1,4 +1,4 @@
-# gsl: Bessel J0, J1, Y0, Y1 and Jn with error estimates (the Jn Taylor and Olver branches are not covered: x >= 1, n <= 50).
+# gsl: Bessel J0, J1, Y0, Y1 and Jn with error estimates (x >= 1, n <= 50; the Jn Taylor and Olver branches are checked in gslnu.R).
 #   "j" (code, part, x, n): part 0 value, 1 error; code 0 J0, 1 J1, 2 Y0, 3 Y1, 4 Jn(n, x)
 suppressMessages(library(gsl))
 cases <- list()

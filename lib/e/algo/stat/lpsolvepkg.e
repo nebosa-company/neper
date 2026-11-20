@@ -271,41 +271,158 @@ fn transport(a: *mem.Arena, cost: []const f64, m: usize, n: usize, maximise: boo
     ret (0.0f64 - v, ok)
 }
 
-// lp(direction, c, A, dir, b, compute.sens = 1) for <= and >= rows over x >= 0: the sensitivity output of lpSolve from the final simplex tableau of the maximisation form (min is c -> -c, a >= row is negated).
-// duals receive the m constraint prices then the n reduced costs; dfrom / dto the right-hand-side ranges (+-1e30 where lpSolve reports none), the variable entries ranging the variable's value;
-// cfrom / cto the objective coefficient ranges. The answer is the optimum value. Non-degenerate problems only: ties in the ratio tests are decided as lpSolve's basis does.
-fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, m: usize, n: usize, geq: []const bool, maximise: bool, x: []f64, duals: []f64, dfrom: []f64, dto: []f64, cfrom: []f64, cto: []f64) -> (f64, err) {
+// lp(direction, c, A, dir, b, compute.sens = 1) over x >= 0 with the row codes 0 (<=), 1 (>=) and 2 (=): the sensitivity output of lpSolve from the optimal basis of the maximisation form (min is c -> -c,
+// a >= row is negated; an equality row keeps a slack that never enters the basis). The basis is read off the optimum: the positive variables and the positive slacks, padded with zero
+// columns in index order when the program is degenerate. duals receive the m constraint prices then the n reduced costs; dfrom / dto the right-hand-side ranges (+-1e30 where lpSolve reports none),
+// the variable entries ranging the variable's value; cfrom / cto the objective coefficient ranges. The answer is the optimum value.
+fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, rel: []const usize, m: usize, n: usize, maximise: bool, x: []f64, duals: []f64, dfrom: []f64, dto: []f64, cfrom: []f64, cto: []f64) -> (f64, err) {
     let big = 1.0e30f64
     var sc = 1.0f64
     if !maximise { sc = 0.0f64 - 1.0f64 }
     let width = n + m + 2usize
-    let (c2, e0) = mem.alloc[f64](a, n)
-    let (a2, e1) = mem.alloc[f64](a, m * n)
-    let (b2, e2) = mem.alloc[f64](a, m)
+    let (c2, e0) = mem.alloc[f64](a, n + m)
     let (tab, e3) = mem.alloc[f64](a, (m + 2usize) * width)
     let (basis, e4) = mem.alloc[usize](a, m)
     let (sg, e5) = mem.alloc[f64](a, m)
-    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (0.0f64, mem.Full) }
+    let (isint, e7) = mem.alloc[bool](a, n)
+    let (inb, e8) = mem.alloc[bool](a, n + m)
+    let (rowdone, e9) = mem.alloc[bool](a, m)
+    if e0 != ok || e3 != ok || e4 != ok || e5 != ok || e7 != ok || e8 != ok || e9 != ok { ret (0.0f64, mem.Full) }
     var j = 0usize
+    while j < n {
+        isint[j] = false
+        j += 1usize
+    }
+    let (lv, st) = lp_general(a, maximise, c, am, rel, b, m, n, isint, x)
+    let _ = lv
+    if st != 0usize { ret (0.0f64, Malformed) }
+    j = 0usize
+    while j < n + m {
+        c2[j] = 0.0f64
+        inb[j] = false
+        j += 1usize
+    }
+    j = 0usize
     while j < n {
         c2[j] = sc * c[j]
         j += 1usize
     }
+    // the tableau [A2 | I | b2] with A2 and b2 the rows in the maximisation form (a >= row negated)
     var i = 0usize
     while i < m {
         sg[i] = 1.0f64
-        if geq[i] { sg[i] = 0.0f64 - 1.0f64 }
+        if rel[i] == 1usize { sg[i] = 0.0f64 - 1.0f64 }
+        rowdone[i] = false
         j = 0usize
-        while j < n {
-            a2[i * n + j] = sg[i] * am[i * n + j]
+        while j < n + m + 2usize {
+            tab[i * width + j] = 0.0f64
             j += 1usize
         }
-        b2[i] = sg[i] * b[i]
+        j = 0usize
+        while j < n {
+            tab[i * width + j] = sg[i] * am[i * n + j]
+            j += 1usize
+        }
+        tab[i * width + n + i] = 1.0f64
+        tab[i * width + width - 1usize] = sg[i] * b[i]
         i += 1usize
     }
-    let (v, es) = opt.simplex(c2, a2, b2, m, n, x, tab, basis)
-    let _ = v
-    if es != ok { ret (0.0f64, es) }
+    j = 0usize
+    while j < n {
+        if x[j] > 1.0e-9f64 { inb[j] = true }
+        j += 1usize
+    }
+    i = 0usize
+    while i < m {
+        if rel[i] != 2usize {
+            var ax = 0.0f64
+            j = 0usize
+            while j < n {
+                ax += am[i * n + j] * x[j]
+                j += 1usize
+            }
+            var sl = sg[i] * (b[i] - ax)
+            if sl < 0.0f64 { sl = 0.0f64 - sl }
+            var ab = b[i]
+            if ab < 0.0f64 { ab = 0.0f64 - ab }
+            if sl > 1.0e-9f64 * (1.0f64 + ab) { inb[n + i] = true }
+        }
+        i += 1usize
+    }
+    // pivot the basis columns in, each to the unassigned row where it is largest; a degenerate program takes zero columns in index order until m are basic
+    var assigned = 0usize
+    var pass = 0usize
+    var cq = 0usize
+    while pass < 3usize {
+        var ci = 0usize
+        while ci < n + m && assigned < m {
+            cq = ci
+            if pass >= 1usize && ci >= n { cq = n + m - 1usize - (ci - n) }
+            var want = inb[cq]
+            if pass >= 1usize {
+                want = !inb[cq]
+                if cq >= n && rel[cq - n] == 2usize && pass == 1usize { want = false }
+                if cq < n && pass == 2usize { want = false }
+            }
+            if want {
+                var best = m
+                var bv = 1.0e-9f64
+                var r = 0usize
+                while r < m {
+                    if !rowdone[r] {
+                        var v = tab[r * width + cq]
+                        if v < 0.0f64 { v = 0.0f64 - v }
+                        if v > bv {
+                            bv = v
+                            best = r
+                        }
+                    }
+                    r += 1usize
+                }
+                if best < m {
+                    let pv = tab[best * width + cq]
+                    var t = 0usize
+                    while t < width {
+                        if t != n + m { tab[best * width + t] = tab[best * width + t] / pv }
+                        t += 1usize
+                    }
+                    r = 0usize
+                    while r < m {
+                        if r != best {
+                            let f = tab[r * width + cq]
+                            if f != 0.0f64 {
+                                t = 0usize
+                                while t < width {
+                                    if t != n + m { tab[r * width + t] = tab[r * width + t] - f * tab[best * width + t] }
+                                    t += 1usize
+                                }
+                            }
+                        }
+                        r += 1usize
+                    }
+                    rowdone[best] = true
+                    basis[best] = cq
+                    inb[cq] = true
+                    assigned += 1usize
+                }
+            }
+            ci += 1usize
+        }
+        pass += 1usize
+    }
+    if assigned < m { ret (0.0f64, Malformed) }
+    // the objective row: z_q - c_q
+    cq = 0usize
+    while cq < n + m {
+        var z = 0.0f64
+        i = 0usize
+        while i < m {
+            z += c2[basis[i]] * tab[i * width + cq]
+            i += 1usize
+        }
+        tab[m * width + cq] = z - c2[cq]
+        cq += 1usize
+    }
     let rhs = width - 1usize
     var obj = 0.0f64
     j = 0usize
@@ -361,7 +478,7 @@ fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, m: us
             var hi = big
             var q = 0usize
             while q < n + m {
-                if rowof[q] == m {
+                if rowof[q] == m && !(q >= n && rel[q - n] == 2usize) {
                     let tq = tab[r * width + q]
                     let dq = tab[m * width + q]
                     if tq > 1.0e-12f64 && 0.0f64 - dq / tq > lo { lo = 0.0f64 - dq / tq }

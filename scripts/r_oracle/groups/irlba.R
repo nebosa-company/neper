@@ -1,8 +1,8 @@
-# irlba::irlba under set.seed: d, u, v (sign-exact, position-weighted sums), iter and mprod. Args: (m, n, nv, nu, work, tol, smallest, center, scale, hasshift, shift, maxit, seed, kind, x[m * n] column-major, center vector[n], scale vector[n]); kind 0 d, 1 u, 2 v, 3 iter, 4 mprod.
+# irlba::irlba under set.seed: d, u, v (sign-exact, position-weighted sums), iter and mprod. Args: (m, n, nv, nu, work, tol, smallest, center, scale, hasshift, shift, maxit, seed, kind, x[m * n] column-major, center vector[n], scale vector[n], reorth); kind 0 d, 1 u, 2 v, 3 iter, 4 mprod.
 suppressMessages(library(irlba))
 cases <- list()
 set.seed(20262401)
-add <- function(args, want) cases[[length(cases) + 1]] <<- case("irlba", args, want, rel = 1e-7, abs = 1e-9)
+add <- function(args, want) cases[[length(cases) + 1]] <<- case("irlba", args, want, rel = 1e-9, abs = 1e-11)
 w <- function(M) sum(M * seq_along(M))
 for (rep in 1:36) {
   m <- sample(24:44, 1); n <- sample(9:16, 1)
@@ -14,7 +14,8 @@ for (rep in 1:36) {
   maxit <- if (rep %% 9 == 0) 3 else 1000
   X <- matrix(round(rnorm(m * n) * runif(n, 0.5, 2), 4), m)
   sd1 <- sample(1:100000, 1)
-  args <- list(A = X, nv = nv, nu = nu, work = work, tol = tol, smallest = smallest == 1, maxit = maxit)
+  ro <- as.integer(rep %% 5 != 3)
+  args <- list(A = X, nv = nv, nu = nu, work = work, tol = tol, smallest = smallest == 1, maxit = maxit, reorth = ro == 1)
   if (cen) args$center <- colMeans(X)
   if (sc) args$scale <- apply(X, 2, function(v) sqrt(sum((v - if (cen) mean(v) else 0)^2) / (m - 1)))
   if (hs) args$shift <- sh
@@ -22,7 +23,7 @@ for (rep in 1:36) {
   r <- tryCatch(suppressWarnings(do.call(irlba, args)), error = function(e) NULL)
   if (is.null(r)) next
   cenv <- if (cen) args$center else rep(0, n); scv <- if (sc) args$scale else rep(1, n)
-  a <- function(kind) c(m, n, nv, nu, work, tol, smallest, cen, sc, hs, sh, maxit, sd1, kind, as.vector(X), cenv, scv)
+  a <- function(kind) c(m, n, nv, nu, work, tol, smallest, cen, sc, hs, sh, maxit, sd1, kind, as.vector(X), cenv, scv, ro)
   add(a(0), w(r$d)); add(a(1), w(r$u)); add(a(2), w(r$v)); add(a(3), r$iter); add(a(4), r$mprod)
 }
 emit("irlba", "irlba", list(cases))

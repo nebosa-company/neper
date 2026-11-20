@@ -1,6 +1,7 @@
 // e.algo.stat.cluecons against clue cl_consensus and cl_medoid. tests/oracle/clue_cons.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R clue_cons`; the layout is at the top of scripts/r_oracle/groups/clue_cons.R.
 
+use e.algo.rand.r as rr
 use e.algo.stat.cluecons as cc
 use e.algo.stat.cluelsap as ls
 use e.algo.stat.hclust as hc
@@ -64,8 +65,68 @@ fn checksum(m: []const f64, n: usize, k: usize) -> f64 {
     ret s
 }
 
+// "ao": see scripts/r_oracle/groups/clue_cons.R
+fn ao_case(a: *mem.Arena, z: []const f64) -> f64 {
+    let kind = usize(z[0usize])
+    let nruns = usize(z[1usize])
+    let seed = z[2usize]
+    let bn = usize(z[3usize])
+    let n = usize(z[4usize])
+    let k = usize(z[5usize])
+    let w = z[6usize..6usize + bn]
+    let mems = z[6usize + bn..6usize + bn + bn * n * k]
+    let (starts, e0) = mem.alloc[f64](a, nruns * n * k)
+    let (out, e1) = mem.alloc[f64](a, n * k)
+    if e0 != ok || e1 != ok { os.exit(12) }
+    var i = 0usize
+    if seed > 0.5f64 {
+        var g: rr.Rng = zero
+        rr.seed(&g, i64(seed))
+        var r = 0usize
+        while r < nruns {
+            // matrix(runif(n * k), n, k) is filled by column, then every row is scaled to sum one
+            var j = 0usize
+            while j < k {
+                i = 0usize
+                while i < n {
+                    starts[r * n * k + i * k + j] = rr.unif(&g)
+                    i += 1usize
+                }
+                j += 1usize
+            }
+            i = 0usize
+            while i < n {
+                var s = 0.0f64
+                j = 0usize
+                while j < k {
+                    s += starts[r * n * k + i * k + j]
+                    j += 1usize
+                }
+                j = 0usize
+                while j < k {
+                    starts[r * n * k + i * k + j] = starts[r * n * k + i * k + j] / s
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            r += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < nruns * n * k {
+            starts[i] = z[6usize + bn + bn * n * k + i]
+            i += 1usize
+        }
+    }
+    let (v, e) = cc.consensus_runs(a, mems, w, bn, n, k, starts, nruns, kind, 100usize, 1.4901161193847656e-8f64, out)
+    let _ = v
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret checksum(out, n, k)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if str.eq(c.name, "ao") { ret ao_case(a, z) }
     let bn = usize(z[0usize])
     let n = usize(z[1usize])
     if str.eq(c.name, "maj") {

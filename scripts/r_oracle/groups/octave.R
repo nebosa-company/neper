@@ -99,4 +99,27 @@ writeLines(c("# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host
 d <- read.octave(file.path(root, "tests/oracle/data/octave_14.txt"))
 add("nvars", c(14, 0), length(d))
 for (j in seq_along(d)) { v <- d[[j]]; add("count", c(14, j - 1), length(v)); add("sum", c(14, j - 1), sum(as.numeric(v))); add("isum", c(14, j - 1), 0) }
+# layout: wsum/wisum weight every value (imaginary part) by its 1-based position in R's own (column-major) order, recursively through lists and cells,
+# so a transposed matrix or reordered element fails; dimr is nrow*1000+ncol of a matrix, and nhash weights each name byte by its position.
+wl <- function(v) if (is.list(v)) sum(vapply(v, wl, 0)) else if (is.character(v) || is.null(v)) 0 else { x <- suppressWarnings(as.numeric(Re(v))); sum(x * seq_along(x)) }
+wi <- function(v) if (is.list(v)) sum(vapply(v, wi, 0)) else if (is.complex(v)) sum(Im(v) * seq_along(v)) else 0
+# multi-digit "# rows", "# columns", "# elements" and "# length" (file 15; no random draws, so earlier files are unchanged)
+m15 <- matrix(round(sin(1:132) * 7, 4), 12, 11)
+w15 <- c("abcdefghijkl", "x", "yz", "0123456789", "q", "rs", "tuv", "w", "mnopqrstuvwxyz", "a b", "end")
+writeLines(c("# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>",
+             "# name: big", "# type: matrix", "# rows: 12", "# columns: 11", apply(m15, 1, function(row) paste0(" ", paste(sprintf("%.15g", row), collapse = " "))),
+             "# name: words", "# type: string", sprintf("# elements: %d", length(w15)), as.vector(rbind(sprintf("# length: %d", nchar(w15)), w15))),
+           file.path(root, "tests/oracle/data/octave_15.txt"))
+d <- read.octave(file.path(root, "tests/oracle/data/octave_15.txt"))
+add("nvars", c(15, 0), length(d))
+for (j in seq_along(d)) { v <- d[[j]]; add("count", c(15, j - 1), length(v)); add("sum", c(15, j - 1), if (is.character(v)) sum(sapply(v, function(z) sum(utf8ToInt(z)))) else sum(as.numeric(v))); add("isum", c(15, j - 1), 0) }
+for (i in 1:15) {
+  d <- suppressWarnings(read.octave(file.path(root, sprintf("tests/oracle/data/octave_%d.txt", i))))
+  for (j in seq_along(d)) {
+    v <- d[[j]]
+    add("wsum", c(i, j - 1), wl(v)); add("wisum", c(i, j - 1), wi(v))
+    add("nhash", c(i, j - 1), sum(as.numeric(utf8ToInt(names(d)[j])) * seq_len(nchar(names(d)[j]))))
+    if (is.matrix(v)) add("dimr", c(i, j - 1), nrow(v) * 1000 + ncol(v))
+  }
+}
 emit("octave", "foreign", list(cases))

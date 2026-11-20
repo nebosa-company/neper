@@ -36,6 +36,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         cp[0usize] = 1.0f64
         cp[4usize] = 4.0f64
     }
+    // 11 pamkCBI and 12 claraCBI (pam) on the data
+    if hmeth > 10.5f64 {
+        cp[0usize] = 1.0f64
+        cp[4usize] = 5.0f64
+    }
     var tot = 0.0f64
     if fn_id == 1usize {
         let (stab, e1) = mem.alloc[f64](a, bcount * (kmax + 1usize))

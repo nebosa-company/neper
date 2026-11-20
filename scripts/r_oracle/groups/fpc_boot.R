@@ -8,12 +8,12 @@ cases <- list()
 set.seed(20269941)
 hm <- c("ward.D", "single", "complete", "average")
 nmv <- c("boot", "subset", "jitter", "bojit", "noise")
-run <- function(x, B, meths, cm, cp, multipleboot = FALSE, bscompare = TRUE, noisemethod = FALSE, distances = FALSE, subtuning = NULL, seed = 1) {
+run <- function(x, B, meths, cm, cp, multipleboot = FALSE, bscompare = TRUE, noisemethod = FALSE, distances = FALSE, subtuning = NULL, seed = 1, jt = 0.05, nz = c(0.05, 4), diss = 0.5, rec = 0.75) {
   n <- nrow(x); p <- ncol(x)
-  if (cm %in% c(6, 8, 9, 10, 11, 12)) distances <- TRUE
+  if (cm %in% c(6, 8, 9, 10, 11, 12, 15)) distances <- TRUE
   if (is.null(subtuning)) subtuning <- floor(n / 2)
   common <- list(B = B, bootmethod = nmv[meths], multipleboot = multipleboot, bscompare = bscompare, subtuning = subtuning, noisemethod = noisemethod, count = FALSE,
-                 showplots = FALSE, seed = seed, distances = distances)
+                 showplots = FALSE, seed = seed, distances = distances, jittertuning = jt, noisetuning = nz, dissolution = diss, recover = rec)
   r <- if (cm == 1) do.call(clusterboot, c(list(data = x, clustermethod = hclustCBI, method = hm[cp[1]], k = cp[2], scaling = cp[3] == 1, noisecut = cp[4]), common))
        else if (cm == 3) do.call(clusterboot, c(list(data = dist(x), clustermethod = disthclustCBI, method = hm[cp[1]], k = cp[2], noisecut = cp[4]), common))
        else if (cm == 4) do.call(clusterboot, c(list(data = x, clustermethod = kmeansCBI, k = cp[2], scaling = cp[3] == 1, runs = cp[1], criterion = c("ch", "asw")[cp[4] + 1]), common))
@@ -21,7 +21,10 @@ run <- function(x, B, meths, cm, cp, multipleboot = FALSE, bscompare = TRUE, noi
        else if (cm == 6) do.call(clusterboot, c(list(data = dist(x), clustermethod = pamkCBI, k = cp[2]), common))
        else if (cm == 7) do.call(clusterboot, c(list(data = x, clustermethod = claraCBI, k = cp[2]), common))
        else if (cm == 8) do.call(clusterboot, c(list(data = dist(x), clustermethod = claraCBI, k = cp[2]), common))
-       else if (cm >= 9) do.call(clusterboot, c(list(data = dist(x), clustermethod = list(stupidkcentroidsCBI, stupidknnCBI, stupidkfnCBI, stupidkavenCBI)[[cm - 8]], k = cp[2]), common))
+       else if (cm == 13) do.call(clusterboot, c(list(data = x, clustermethod = mahalCBI, method = c("fuzzy", "ml", "classical")[cp[1] + 1], ca = cp[2], ca2 = if (cp[1] == 0) cp[3] else NA, clustercut = cp[4], countmode = 1e9), common))
+       else if (cm == 14) do.call(clusterboot, c(list(data = x, clustermethod = hclusttreeCBI, method = hm[cp[1]], minlevel = cp[2], scaling = cp[3] == 1), common))
+       else if (cm == 15) do.call(clusterboot, c(list(data = dist(x), clustermethod = disthclusttreeCBI, method = hm[cp[1]], minlevel = cp[2]), common))
+       else if (cm >= 9 && cm <= 12) do.call(clusterboot, c(list(data = dist(x), clustermethod = list(stupidkcentroidsCBI, stupidknnCBI, stupidkfnCBI, stupidkavenCBI)[[cm - 8]], k = cp[2]), common))
        else do.call(clusterboot, c(list(data = x, clustermethod = dbscanCBI, eps = cp[1], MinPts = cp[2]), common))
   if (cm == 7) cm <- 5
   if (cm == 8) cm <- 6
@@ -32,8 +35,8 @@ run <- function(x, B, meths, cm, cp, multipleboot = FALSE, bscompare = TRUE, noi
   for (m in meths) {
     res <- r[[paste0(nm[m], "result")]]
     nc <- nrow(res)
-    hdr <- function(w) c(w, m, n, p, as.numeric(distances || cm == 3), B, length(meths), meths, as.numeric(multipleboot), as.numeric(bscompare), 0.05, 0.05, 4, subtuning, cm, cp,
-                         as.numeric(noisemethod), seed, 0.5, 0.75, dat)
+    hdr <- function(w) c(w, m, n, p, as.numeric(distances || cm == 3), B, length(meths), meths, as.numeric(multipleboot), as.numeric(bscompare), jt, nz[1], nz[2], subtuning, cm, cp,
+                         as.numeric(noisemethod), seed, diss, rec, dat)
     ck <- sum((seq_len(nc * B) - 1 + 1) * as.vector(t(res)))
     cases[[length(cases) + 1]] <<- case("cb", hdr(0), ck, rel = 1e-9, abs = 1e-9)
     mn <- r[[paste0(nm[m], "mean")]]; bd <- r[[paste0(nm[m], "brd")]]; rc <- r[[paste0(nm[m], "recover")]]
@@ -74,5 +77,23 @@ run(x, 10, 1:2, 8, c(0, 3, 0, 0), seed = 314)
 for (rep in 1:4) {
   x <- blobs(sample(28:40, 1), 2, 3)
   run(x, 10, c(1, 2), 8 + rep, c(0, 3, 0, 0), seed = 320 + rep)
+}
+# the tuning knobs: jittertuning, noisetuning, dissolution and recover away from their defaults
+x <- blobs(38, 2, 3)
+run(x, 12, 1:5, 1, c(3, 3, 1, 0), seed = 401, jt = 0.15, nz = c(0.1, 2), diss = 0.3, rec = 0.9)
+run(x, 12, 1:5, 1, c(4, 3, 0, 0), seed = 402, jt = 0.02, nz = c(0.02, 8), diss = 0.7, rec = 0.5)
+run(x, 12, 1:5, 4, c(1, 3, 0, 0), seed = 403, jt = 0.1, nz = c(0.2, 3), diss = 0.4, rec = 0.6)
+# hclusttreeCBI and disthclusttreeCBI: every merge of the tree is a cluster (R cm 14 and 15, Neper 12 and 13), with minlevel 2 and 1
+x <- blobs(30, 2, 3)
+run(x, 8, 1:5, 14, c(4, 2, 1, 0), seed = 501)
+run(x, 8, 1:2, 14, c(3, 1, 0, 0), seed = 502)
+run(x, 8, c(2, 1), 15, c(4, 2, 0, 0), seed = 503)
+run(x, 8, 1:2, 15, c(2, 1, 0, 0), seed = 504)
+# mahalCBI: fixmahal clusters (mode, ca, ca2, clustercut)
+for (rep in 1:3) {
+  x <- round(rbind(matrix(rnorm(70, 0, 0.8), 35, 2), matrix(rnorm(70, 6, 0.8), 35, 2)), 4)
+  mode <- rep - 1
+  ca <- if (mode == 0) qchisq(0.95, 2) else qchisq(0.99, 2); ca2 <- if (mode == 0) qchisq(0.995, 2) else 0
+  run(x, 6, c(1, 3, 5), 13, c(mode, ca, ca2, c(0.5, 0.3, 0.5)[rep]), seed = 510 + rep)
 }
 emit("fpc_boot", "fpc", list(cases))

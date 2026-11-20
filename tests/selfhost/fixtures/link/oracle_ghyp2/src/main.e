@@ -79,6 +79,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret gd.pghyp_tail(&qcx, x[0usize], x[6usize] == 1.0f64, gd.qc_mode(&qcx))
     }
     if str.eq(k, "qghypF") { ret gd.qghyp_full(a, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize] == 1.0f64, x[7usize] == 0.0f64, 501usize, 0.0001220703125f64, 100usize) }
+    if str.eq(k, "qopt") { ret gd.qghyp_full(a, x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], x[7usize] == 1.0f64, x[8usize] == 0.0f64, usize(x[9usize]), x[10usize], usize(x[11usize])) }
+    if str.eq(k, "famrange") {
+        var lm = 1.0f64
+        if x[2usize] == 1.0f64 { lm = 0.0f64 - 0.5f64 }
+        let (flo, fhi) = gd.ghyp_calc_range(a, x[3usize], x[4usize], x[5usize], x[6usize], lm, x[0usize])
+        if x[1usize] == 0.0f64 { ret flo }
+        ret fhi
+    }
     if str.eq(k, "ghypmode") { ret gh.ghyp_mode(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
     if str.eq(k, "ghyprange") {
         let (lo, hi) = gd.ghyp_calc_range(a, x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], x[0usize])

@@ -44,7 +44,7 @@ gen <- function(n, dtype, fam, k, q, pr, beta, sg, gc) {
 }
 
 run <- function(seed, n, dtype, fam, k, q, pr, beta, sg, gc, kg = k, flip = 0.15, nnew = 0, seed2 = seed + 1, mode = 0, cls = 0, start = 0, minprior = 0.05,
-                tol = 1e-6, itermax = 200, k2 = k, nrep = 3, method = 0, relab = FALSE, ctol = 1e-7) {
+                tol = 1e-6, itermax = 200, k2 = k, nrep = 3, method = 0, relab = FALSE, ctol = 1e-8, ctol3 = ctol) {
   set.seed(seed)
   tr <- gen(n, dtype, fam, kg, q, pr, beta, sg, gc)
   init <- tr$z
@@ -63,16 +63,27 @@ run <- function(seed, n, dtype, fam, k, q, pr, beta, sg, gc, kg = k, flip = 0.15
   hdr <- function(what, idx) c(seed, n, dtype, fam, k, q, flip, nnew, seed2, mode, cls, start, minprior, tol, itermax, k2, nrep, method, what, idx, kg, kcur,
                                c(pr, rep(0, 3 - length(pr)))[1:3], as.vector(t(cbind(beta, matrix(0, nrow(beta), 4 - ncol(beta))))), c(sg, rep(0, 3 - length(sg)))[1:3],
                                as.vector(t(cbind(gc, matrix(0, nrow(gc), 2 - ncol(gc))))))
-  # a concomitant prior is nnet BFGS (reltol 1e-8, at most 100 iterations), so its fits agree to the optimiser tolerance, not to rounding; where the k = 3 prior fit runs into
-  # the iteration cap its path is chaotic at the rounding level of exp (ctol 1e-3; the other concomitant cases are held to 1e-7)
-  add <- function(what, idx, v, rel = if (q > 0) ctol else 1e-9, abs = if (q > 0) ctol else 1e-9) {
+  # a concomitant prior is nnet BFGS (reltol 1e-8, at most 100 iterations), so its fits agree to the optimiser tolerance, not to rounding. A concomitant value is held to
+  # 1e-8, or, where R's own value moves more than that when the concomitant covariate w is perturbed by 2 ulp (R refit on w * (1 + 4.4e-16), the effect of a one ulp libm exp
+  # difference amplified by the optimiser's stopping rule), to ten times that movement, never beyond the cap (ctol3 1e-3 for the k = 3 stepFlexmix case, where R itself moves by 2e-3)
+  ct <- function() if (mode == 1 && kcur >= 3) ctol3 else ctol
+  rec <- NULL
+  pert <- list()
+  tq <- function(what, idx, v) {
+    s <- pert[[paste(what, idx, kcur)]]
+    if (is.null(s) || !is.finite(s)) return(ct())
+    min(ct(), max(1e-8, 10 * abs(v - s) / max(abs(v), 1e-300)))
+  }
+  add <- function(what, idx, v, rel = if (q > 0) tq(what, idx, v) else 1e-9, abs = if (q > 0) tq(what, idx, v) else 1e-9) {
     if (!is.finite(v) && !is.nan(v)) return(invisible())
+    if (!is.null(rec)) { rec[[paste(what, idx, kcur)]] <<- v; return(invisible()) }
     cases[[length(cases) + 1]] <<- case("fm", hdr(what, idx), v, rel = rel, abs = abs)
   }
   describe <- function(fit) {
     kk <- fit@k; prm <- parameters(fit)
     add(0, 0, as.numeric(logLik(fit))); add(1, 0, fit@iter, 0, 0); add(2, 0, kk, 0, 0)
     add(7, 0, AIC(fit)); add(8, 0, BIC(fit)); add(9, 0, ICL(fit))
+    if (kk > 1) add(30, 0, EIC(fit))
     for (j in seq_len(kk)) add(3, j - 1, fit@prior[j])
     P <- ncol(prm) # components
     cf <- if (fam == 0 || fam == 3) prm[seq_len(nrow(prm) - 1), , drop = FALSE] else prm
@@ -107,6 +118,9 @@ run <- function(seed, n, dtype, fam, k, q, pr, beta, sg, gc, kg = k, flip = 0.15
       if (q > 0) { rc <- relabel(fit, "concomitant", "w"); pc <- parameters(rc); add(27, 0, cs(if (fam == 0 || fam == 3) pc[seq_len(nrow(pc) - 1), , drop = FALSE] else pc)) }
     }
   }
+  fitall <- function() {
+  set.seed(seed2)
+  kcur <<- k
   if (mode == 0) {
     fit <- tryCatch(flexmix(form, data = tr$d, k = k, cluster = if (start == 0) init else NULL, model = mdl, concomitant = conc, control = ctl),
                     error = function(e) NULL)
@@ -119,7 +133,7 @@ run <- function(seed, n, dtype, fam, k, q, pr, beta, sg, gc, kg = k, flip = 0.15
     for (kk in k:k2) {
       fit <- st@models[[as.character(kk)]]
       if (is.null(fit)) next
-      kcur <- kk
+      kcur <<- kk
       ll <- st@logLiks[as.character(kk), ]
       for (m in seq_along(ll)) if (is.finite(ll[m])) add(15, m - 1, ll[m])
       describe(fit)
@@ -130,12 +144,23 @@ run <- function(seed, n, dtype, fam, k, q, pr, beta, sg, gc, kg = k, flip = 0.15
     if (is.null(st)) return(invisible(NULL))
     for (kk in k:k2) {
       fit <- st@models[[as.character(kk)]]
-      kcur <- kk
+      kcur <<- kk
       ll <- st@logLiks[as.character(kk), ]
       for (m in seq_along(ll)) if (is.finite(ll[m])) add(15, m - 1, ll[m])
       describe(fit)
     }
   }
+  }
+  if (q > 0) {
+    rec <- list()
+    d0 <- tr$d
+    tr$d$w <- tr$d$w * (1 + 4.4e-16)
+    fitall()
+    pert <- rec
+    rec <- NULL
+    tr$d <- d0
+  }
+  fitall()
 }
 
 B2 <- rbind(c(0, 2), c(3, -1.5), c(-2, 0.5))
@@ -181,7 +206,7 @@ for (m in 0:2) for (F in fams[1:2]) { sd <- sd + 1; run(sd, 150, 0, F$f, 2, 0, F
 # concomitant variables
 for (F in fams) for (cls in 0:1) { sd <- sd + 1; run(sd, 200, 0, F$f, 2, 2, F$pr[1:2], bsel(F, 0), F$sg, GCz, cls = cls, nnew = 50, relab = TRUE) }
 for (F in fams[c(1, 2)]) { sd <- sd + 1; run(sd, 240, 0, F$f, 3, 2, F$pr, bsel(F, 0), F$sg, GCz, nnew = 50, relab = TRUE)
-                         sd <- sd + 1; run(sd, 200, 0, F$f, 2, 2, F$pr[1:2], bsel(F, 0), F$sg, GCz, mode = 1, k2 = 3, nrep = 2, start = 1, ctol = 1e-3) }
+                         sd <- sd + 1; run(sd, 200, 0, F$f, 2, 2, F$pr[1:2], bsel(F, 0), F$sg, GCz, mode = 1, k2 = 3, nrep = 2, start = 1, ctol3 = 1e-3) }
 # minprior removal, loose tolerance, few iterations
 for (F in fams) { sd <- sd + 1; run(sd, 150, 0, F$f, 3, 0, c(0.5, 0.45, 0.05), bsel(F, 0), F$sg, GCz, minprior = 0.2, start = 1)
                   sd <- sd + 1; run(sd, 150, 0, F$f, 4, 0, c(0.5, 0.5), bsel(F, 0), F$sg, GCz, kg = 2, minprior = 0.3, start = 1)

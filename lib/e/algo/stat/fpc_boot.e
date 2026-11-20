@@ -1,14 +1,17 @@
 // R fpc: clusterboot under set.seed: the bootstrap, subset, jitter, bootstrap-plus-jitter and noise resampling with the Jaccard comparison of the original
 // clusters against their best match in each resampled clustering. The clustering methods are hclustCBI (scaled data, Euclidean distances), disthclustCBI
-// (a dissimilarity matrix) and dbscanCBI, each with R's noisecut and noise-cluster rules. Matrices are row-major.
+// (a dissimilarity matrix), dbscanCBI, kmeansCBI, pamkCBI, claraCBI and the stupidk methods, each with R's noisecut and noise-cluster rules. Matrices are row-major.
 //
-// Not here: kmeansCBI, claraCBI, pamkCBI, mahalCBI, noisemclustCBI and the other CBI wrappers, and dbscanCBI on a dissimilarity matrix.
+// The clusters compared are membership rows, so the overlapping lists of mahalCBI, hclusttreeCBI and disthclusttreeCBI work as the partitions do.
+//
+// Not here: the methods that need mclust, tclust, kernlab or pdfCluster (noisemclustCBI, distnoisemclustCBI, mergenormCBI, tclustCBI, speccCBI, pdfclustCBI), and dbscanCBI on a dissimilarity matrix.
 
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.rand.r as rg
 use e.algo.rand.rdist as rd
 use e.algo.stat.fpc as fp
 use e.algo.stat.fpc_coord as fc
+use e.algo.stat.fpc_fix as ff
 use e.algo.stat.fpc_km as fk
 use e.algo.stat.fpc_misc as fm
 use e.algo.stat.hclust as hc
@@ -78,6 +81,33 @@ fn cluster_run(a: *mem.Arena, g: *rg.Rng, data: []const f64, m: usize, p: usize,
         if es != ok { ret (0usize, 0usize, es) }
         ret (ks, 0usize, ok)
     }
+    if cm == 11usize {
+        // mahalCBI (cp: mode 0 fuzzy / 1 ml / 2 classical, ca, ca2, clustercut) with fixmahal's defaults: the clusters are the fixed point clusters whose weight exceeds
+        // clustercut; cent receives their 0/1 membership, m values each. No cluster found is an error (fpc answers the first group's weights then).
+        let (fo, ef) = mem.alloc[f64](a, ff.fx_len(m, m, p, 0usize))
+        let (i0, ei) = mem.alloc[f64](a, 1usize)
+        if ef != ok || ei != ok { ret (0usize, 0usize, Malformed) }
+        let startn = 18usize + p
+        let ex = ff.fixmahal(a, data, m, p, usize(cp[0usize]), cp[1usize], cp[2usize], true, startn, startn / 2usize, 0.1f64, 0.85f64, 5usize * m, f64(m) * 1.0e-5f64, i0[0usize..0usize], 0usize, true, m, fo)
+        if ex != ok { ret (0usize, 0usize, ex) }
+        let stn = usize(fo[4usize])
+        if stn == 0usize { ret (0usize, 0usize, Malformed) }
+        let sb = 5usize + 2usize * m + m * (m + 1usize)
+        let gb = 5usize + 7usize * m + m * (m + 1usize) + m * p + m * p * p
+        i = 0usize
+        while i < stn {
+            let c1 = usize(fo[sb + 4usize * m + i]) - 1usize
+            let g1 = usize(fo[sb + 3usize * m + c1]) - 1usize
+            var r = 0usize
+            while r < m {
+                cent[i * m + r] = 0.0f64
+                if fo[gb + g1 * m + r] > cp[3usize] { cent[i * m + r] = 1.0f64 }
+                r += 1usize
+            }
+            i += 1usize
+        }
+        ret (stn, stn, ok)
+    }
     if cm == 2usize {
         let (cv, e1) = mem.alloc[i64](a, m)
         let (sd, e2) = mem.alloc[bool](a, m)
@@ -100,7 +130,7 @@ fn cluster_run(a: *mem.Arena, g: *rg.Rng, data: []const f64, m: usize, p: usize,
     }
     let (d, e4) = mem.alloc[f64](a, m * m)
     if e4 != ok { ret (0usize, 0usize, Malformed) }
-    if cm == 3usize {
+    if cm == 3usize || cm == 13usize {
         i = 0usize
         while i < m * m {
             d[i] = data[i]
@@ -159,6 +189,42 @@ fn cluster_run(a: *mem.Arena, g: *rg.Rng, data: []const f64, m: usize, p: usize,
     }
     let (tree, e8) = hc.hclust(a, d, m, usize(cp[0usize]))
     if e8 != ok { ret (0usize, 0usize, e8) }
+    if cm >= 12usize {
+        // hclusttreeCBI and disthclusttreeCBI (cp: method, minlevel, scaling): every merge of the tree is a cluster, the singletons first when minlevel is 1; cent receives
+        // the 0/1 membership of the rows, m values each
+        var off = 0usize
+        if cp[1usize] < 1.5f64 { off = m }
+        i = 0usize
+        while i < (off + m) * m {
+            cent[i] = 0.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < off {
+            cent[i * m + i] = 1.0f64
+            i += 1usize
+        }
+        var s = 0usize
+        while s + 2usize < m {
+            var side = 0usize
+            while side < 2usize {
+                var v = tree.merge_a[s]
+                if side == 1usize { v = tree.merge_b[s] }
+                if v < 0i32 {
+                    cent[(off + s) * m + usize(0i32 - v) - 1usize] = 1.0f64
+                } else {
+                    i = 0usize
+                    while i < m {
+                        if cent[(off + usize(v) - 1usize) * m + i] > 0.5f64 { cent[(off + s) * m + i] = 1.0f64 }
+                        i += 1usize
+                    }
+                }
+                side += 1usize
+            }
+            s += 1usize
+        }
+        ret (off + m - 2usize, off + m - 2usize, ok)
+    }
     let e9 = hc.cutree(a, &tree, m, usize(cp[1usize]), part)
     if e9 != ok { ret (0usize, 0usize, e9) }
     i = 0usize
@@ -219,14 +285,32 @@ fn quantile7(v: []const f64, m: usize, prob: f64) -> f64 {
     ret qs
 }
 
-fn jaccard(part1: []const usize, idx1: []const usize, j: usize, bc: []const usize, idx2: []const usize, k: usize, len: usize) -> f64 {
+// the membership rows of a clustering: cluster j (0-based) of cm 11 .. 13 is row j of cent (m values), of the others the rows with label j + 1
+fn members(part: []const usize, cent: []const f64, m: usize, cm: usize, nc: usize, out: []usize) {
+    var j = 0usize
+    while j < nc {
+        var r = 0usize
+        while r < m {
+            out[j * m + r] = 0usize
+            if cm >= 11usize {
+                if cent[j * m + r] > 0.5f64 { out[j * m + r] = 1usize }
+            } else {
+                if part[r] == j + 1usize { out[j * m + r] = 1usize }
+            }
+            r += 1usize
+        }
+        j += 1usize
+    }
+}
+
+fn jaccard(m1: []const usize, st1: usize, j: usize, idx1: []const usize, m2: []const usize, st2: usize, k: usize, idx2: []const usize, len: usize) -> f64 {
     var s1 = 0.0f64
     var s2 = 0.0f64
     var both = 0.0f64
     var t = 0usize
     while t < len {
-        let x = part1[idx1[t]] == j
-        let y = bc[idx2[t]] == k
+        let x = m1[j * st1 + idx1[t]] == 1usize
+        let y = m2[k * st2 + idx2[t]] == 1usize
         if x { s1 += 1.0f64 }
         if y { s2 += 1.0f64 }
         if x && y { both += 1.0f64 }
@@ -241,13 +325,15 @@ fn jaccard(part1: []const usize, idx1: []const usize, j: usize, bc: []const usiz
 fn clusterboot(a: *mem.Arena, data: []const f64, n: usize, p: usize, distances: bool, bcount: usize, methods: []const f64, multipleboot: bool, bscompare: bool, jt: f64, nt1: f64, nt2: f64, subtuning: usize, cm: usize, cp: []const f64, noisemethod: bool, seedv: i64, res: []f64) -> (usize, err) {
     var rng: rg.Rng = zero
     rg.seed(&rng, seedv)
-    let (nocent0, enc) = mem.alloc[f64](a, 1usize)
-    if enc != ok { ret (0usize, Malformed) }
-    let nocent = nocent0[0usize..0usize]
+    let (nocent, enc) = mem.alloc[f64](a, 2usize * n * n)
+    let (mem1, em1) = mem.alloc[usize](a, 2usize * n * n)
+    let (mem2, em2) = mem.alloc[usize](a, 2usize * n * n)
+    if enc != ok || em1 != ok || em2 != ok { ret (0usize, Malformed) }
     let (part1, e1) = mem.alloc[usize](a, n)
     if e1 != ok { ret (0usize, Malformed) }
     let (nc, nccl0, e2) = cluster_run(a, &rng, data, n, p, cm, cp, part1, nocent)
     if e2 != ok { ret (0usize, e2) }
+    members(part1, nocent, n, cm, nc, mem1)
     var nccl = nccl0
     if !noisemethod { nccl = nc }
     var ri = 0usize
@@ -471,6 +557,7 @@ fn clusterboot(a: *mem.Arena, data: []const f64, n: usize, p: usize, distances: 
             }
             let (bnc, bnccl0, e28) = cluster_run(a, &rng, md0, msz, p, cm, cp, bc, nocent)
             if e28 != ok { ret (0usize, e28) }
+            members(bc, nocent, msz, cm, bnc, mem2)
             var bnccl = bnccl0
             if !noisemethod { bnccl = bnc }
             // the cases compared
@@ -534,7 +621,7 @@ fn clusterboot(a: *mem.Arena, data: []const f64, n: usize, p: usize, distances: 
                 var mg = 0.0f64
                 var k = 1usize
                 while k <= bnccl {
-                    let cg = jaccard(part1, idx1, j, bc, idx2, k, len)
+                    let cg = jaccard(mem1, n, j - 1usize, idx1, mem2, msz, k - 1usize, idx2, len)
                     if cg > mg { mg = cg }
                     k += 1usize
                 }
@@ -543,7 +630,7 @@ fn clusterboot(a: *mem.Arena, data: []const f64, n: usize, p: usize, distances: 
             }
             if noisemethod && nc > nccl {
                 var mg = 0.0f64
-                if bnc > bnccl { mg = jaccard(part1, idx1, nc, bc, idx2, bnc, len) }
+                if bnc > bnccl { mg = jaccard(mem1, n, nc - 1usize, idx1, mem2, msz, bnc - 1usize, idx2, len) }
                 res[base + (nc - 1usize) * bcount + rep] = mg
             }
             mem.reset(a, start)

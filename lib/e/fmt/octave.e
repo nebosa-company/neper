@@ -14,7 +14,7 @@ error Malformed
 error TooMany
 
 // kind: 0 scalar, 1 matrix, 2 string, 3 no elements (an unknown type), 4 list, struct or cell (count its elements, sum and isum those of everything inside)
-type Var = struct { kind: u8, rows: usize, cols: usize, count: usize, sum: f64, isum: f64 }
+type Var = struct { kind: u8, rows: usize, cols: usize, count: usize, sum: f64, isum: f64, wsum: f64, wisum: f64, nhash: f64 }
 
 type Octave = struct { nvars: usize, vars: []Var }
 
@@ -127,6 +127,7 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
         v.cols = 1usize
         v.count = 1usize
         v.sum = number(t, s, e)
+        v.wsum = v.sum
         cur = l2 + 1usize
     } else if is_line(t, ts, le, "matrix") && starts(t, cur, "# ndims:") {
         // an N-d array: the dimensions on one line, then prod(dims) numbers, one per line (read.octave scans them across lines)
@@ -154,8 +155,10 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
                 var q = p
                 while q < l2 && !is_space(t[q]) { q += 1usize }
                 if q > p {
-                    s += number(t, p, q)
+                    let x = number(t, p, q)
+                    s += x
                     got += 1usize
+                    v.wsum += x * f64(got)
                 }
                 p = q
             }
@@ -179,11 +182,17 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
         while r < v.rows {
             l2 = line_end(t, cur)
             var p = cur
+            var cc = 0usize
             while p < l2 {
                 while p < l2 && is_space(t[p]) { p += 1usize }
                 var q = p
                 while q < l2 && !is_space(t[q]) { q += 1usize }
-                if q > p { s += number(t, p, q) }
+                if q > p {
+                    let x = number(t, p, q)
+                    s += x
+                    v.wsum += x * f64(cc * v.rows + r + 1usize)
+                    cc += 1usize
+                }
                 p = q
             }
             cur = l2 + 1usize
@@ -202,6 +211,8 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
         let (re, im) = complex_tok(t, s, e)
         v.sum = re
         v.isum = im
+        v.wsum = re
+        v.wisum = im
         cur = l2 + 1usize
     } else if is_line(t, ts, le, "complex matrix") {
         var l2 = line_end(t, cur)
@@ -217,6 +228,7 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
         while r < v.rows {
             l2 = line_end(t, cur)
             var p = cur
+            var cc = 0usize
             while p < l2 {
                 while p < l2 && is_space(t[p]) { p += 1usize }
                 var q = p
@@ -225,6 +237,10 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
                     let (re, ci) = complex_tok(t, p, q)
                     s += re
                     im += ci
+                    let w = f64(cc * v.rows + r + 1usize)
+                    v.wsum += re * w
+                    v.wisum += ci * w
+                    cc += 1usize
                 }
                 p = q
             }
@@ -252,6 +268,7 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
         var j = 0usize
         while j < k {
             s += base + f64(j) * inc
+            v.wsum += (base + f64(j) * inc) * f64(j + 1usize)
             j += 1usize
         }
         v.rows = 1usize
@@ -296,6 +313,8 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
             let (c, nc) = read_item(t, cur)
             v.sum += c.sum
             v.isum += c.isum
+            v.wsum += c.wsum
+            v.wisum += c.wisum
             cur = nc
             e += 1usize
         }
@@ -317,6 +336,8 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
                 let (c, nx) = read_item(t, cur)
                 v.sum += c.sum
                 v.isum += c.isum
+                v.wsum += c.wsum
+                v.wisum += c.wisum
                 cur = nx
                 r += 1usize
             }
@@ -324,6 +345,8 @@ fn read_item(t: str, i: usize) -> (Var, usize) {
             j += 1usize
         }
         v.count = nr * nc
+        v.rows = nr
+        v.cols = nc
     } else {
         v.kind = 3u8
         cur = skip_to_name(t, cur)
@@ -337,11 +360,23 @@ fn parse(a: *mem.Arena, t: str) -> (Octave, err) {
     if e1 != ok { ret (out, e1) }
     var n = 0usize
     var i = 0usize
+    var nh = 0.0f64
     while i < t.len {
         let le = line_end(t, i)
-        if starts(t, i, "# type: ") {
+        if starts(t, i, "# name: ") {
+            // nhash: each byte of the name times its 1-based position, to compare against names(read.octave(...))
+            nh = 0.0f64
+            var k = i + 8usize
+            while k < le && t[k] != 13u8 {
+                nh += f64(t[k]) * f64(k - i - 7usize)
+                k += 1usize
+            }
+            i = le + 1usize
+        } else if starts(t, i, "# type: ") {
             if n >= 64usize { ret (out, TooMany) }
-            let (v, cur) = read_item(t, i)
+            let (v0, cur) = read_item(t, i)
+            var v = v0
+            v.nhash = nh
             vars[n] = v
             n += 1usize
             i = cur

@@ -69,8 +69,93 @@ fn assign_case(a: *mem.Arena, x: []const f64, cols: bool) -> f64 {
     ret s
 }
 
+// "ascell" (n, maximise, k, cost row-major): 1 when lp.assign sends row k / n to column k % n; "asmax" (n, cost): the maximum objective
+fn assign_cell(a: *mem.Arena, x: []const f64, objective: bool) -> f64 {
+    let n = usize(x[0usize])
+    var at = 1usize
+    var mx = true
+    var k = 0usize
+    if !objective {
+        mx = x[1usize] > 0.5f64
+        k = usize(x[2usize]) - 1usize
+        at = 3usize
+    }
+    let (asg, e0) = mem.alloc[usize](a, n)
+    if e0 != ok { os.exit(9) }
+    let (tot, e1) = cl.solve_lsap(a, x[at..at + n * n], n, n, mx, asg)
+    if e1 != ok { os.exit(10) }
+    if objective { ret tot }
+    if asg[k / n] == k % n { ret 1.0f64 }
+    ret 0.0f64
+}
+
+// "trsens" (the trsol arguments, field, index): lp.transport(compute.sens = TRUE) through lp_sens on the model with the supply rows then the demand rows
+fn transport_sens(a: *mem.Arena, x: []const f64) -> f64 {
+    let tm = usize(x[0usize])
+    let tn = usize(x[1usize])
+    let mx = x[2usize] > 0.5f64
+    let co = 3usize
+    let rso = co + tm * tn
+    let rro = rso + tm
+    let cso = rro + tm
+    let cro = cso + tn
+    let fo = cro + tn
+    let field = usize(x[fo])
+    let cell = usize(x[fo + 1usize]) - 1usize
+    let rows = tm + tn
+    let nv = tm * tn
+    let (am, g1) = mem.alloc[f64](a, rows * nv)
+    let (b, g2) = mem.alloc[f64](a, rows)
+    let (rel, g3) = mem.alloc[usize](a, rows)
+    let (sol, g4) = mem.alloc[f64](a, nv)
+    let (du, g5) = mem.alloc[f64](a, rows + nv)
+    let (df, g6) = mem.alloc[f64](a, rows + nv)
+    let (dt, g7) = mem.alloc[f64](a, rows + nv)
+    let (cf, g8) = mem.alloc[f64](a, nv)
+    let (ct, g9) = mem.alloc[f64](a, nv)
+    if g1 != ok || g2 != ok || g3 != ok || g4 != ok || g5 != ok || g6 != ok || g7 != ok || g8 != ok || g9 != ok { os.exit(11) }
+    let (cvec, g10) = mem.alloc[f64](a, nv)
+    if g10 != ok { os.exit(12) }
+    var i = 0usize
+    while i < rows * nv {
+        am[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < tm {
+        var j = 0usize
+        while j < tn {
+            am[i * nv + j * tm + i] = 1.0f64
+            cvec[j * tm + i] = x[co + i * tn + j]
+            am[(tm + j) * nv + j * tm + i] = 1.0f64
+            j += 1usize
+        }
+        rel[i] = usize(x[rso + i])
+        b[i] = x[rro + i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < tn {
+        rel[tm + i] = usize(x[cso + i])
+        b[tm + i] = x[cro + i]
+        i += 1usize
+    }
+    let (v, e) = lp.lp_sens(a, cvec, am, b, rel, rows, nv, mx, sol, du, df, dt, cf, ct)
+    let _ = v
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    if field == 0usize { ret du[cell] }
+    if field == 1usize { ret df[cell] }
+    if field == 2usize { ret dt[cell] }
+    if field == 3usize { ret cf[cell] }
+    if field == 4usize { ret ct[cell] }
+    ret sol[(cell % tn) * tm + cell / tn]
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "trsens") { ret transport_sens(a, x) }
+    if str.eq(c.name, "ascell") { ret assign_cell(a, x, false) }
+    if str.eq(c.name, "asmax") { ret assign_cell(a, x, true) }
     if str.eq(c.name, "trsol") { ret transport_case(a, x, false) }
     if str.eq(c.name, "trstat") { ret transport_case(a, x, true) }
     if str.eq(c.name, "asmin") { ret assign_case(a, x, false) }

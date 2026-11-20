@@ -35,7 +35,7 @@ for (rep in 1:14) {
   }
   for (i in seq_along(vnames)) {
     v <- r[[vnames[i]]]
-    if (!is.null(v)) cases[[length(cases) + 1]] <- case("cq", hdr(i - 1, 1), chk(v), rel = 1e-8, abs = 1e-10)
+    if (!is.null(v)) cases[[length(cases) + 1]] <- case("cq", hdr(i - 1, 1), chk(v), rel = 1e-9, abs = 1e-10)
   }
 }
 emit("fpc_cq", "fpc", list(cases))

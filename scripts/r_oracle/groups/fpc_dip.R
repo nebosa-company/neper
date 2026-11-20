@@ -48,16 +48,16 @@ for (meth in c("dipuni", "diptantrum")) {
     if (length(unique(cl)) < k) next
     cutoff <- c(0.05, 0.2)[rep %% 3 %% 2 + 1]; by <- 0.01; seed <- sample(1:100000, 1)
     set.seed(seed)
-    r <- tryCatch(suppressWarnings(mergenormals(x, clustering = cl, probs = pr, muarray = mu, Sigmaarray = Sg, z = z, method = meth, cutoff = cutoff, by = by)), error = function(e) NULL)
+    r <- tryCatch(suppressWarnings(mergenormals(x, clustering = cl, probs = pr, muarray = mu, Sigmaarray = Sg, z = z, method = meth, cutoff = cutoff, by = by)), error = function(e) stop("mergenormals failed in R: ", conditionMessage(e)))
     if (is.null(r)) next
     made <- made + 1
     a <- c(seed, n, d, k, cutoff, by)
     b <- c(pr, flat(t(mu)), as.vector(aperm(Sg, c(2, 1, 3))), as.vector(t(z)), as.vector(t(x)), cl)
     v <- c(length(r$valuemerged), sum(r$valuemerged * seq_along(r$valuemerged)), sum(r$mergedtonumbers * seq_along(r$mergedtonumbers)), length(r$clusternumbers), sum(r$clustering * seq_along(r$clustering)))
-    for (j in 0:4) add(if (meth == "dipuni") "mnd" else "mnt", c(a, j, b), v[j + 1], 1e-8)
+    for (j in 0:4) add(if (meth == "dipuni") "mnd" else "mnt", c(a, j, b), v[j + 1], 1e-9)
     rdg <- ridgeline.diagnosis(pr, mu, Sg, k = k, compute.ratio = TRUE, by = by, ridgelineplot = "none")$ratiomatrix
     add(if (meth == "dipuni") "mnd" else "mnt", c(a, 100, b), sum(upper.tri(rdg) & rdg == 1), 0, 0)
-    for (j in seq_along(r$valuemerged)) add(if (meth == "dipuni") "mnd" else "mnt", c(a, 4 + j, b), r$valuemerged[j], 1e-8)
+    for (j in seq_along(r$valuemerged)) add(if (meth == "dipuni") "mnd" else "mnt", c(a, 4 + j, b), r$valuemerged[j], 1e-9)
   }
 }
 emit("fpc_dip", c("fpc", "diptest"), list(cases))

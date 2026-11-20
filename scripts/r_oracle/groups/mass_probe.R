@@ -18,5 +18,7 @@ for (i in 1:300) {
   cases[[length(cases) + 1]] <- case("probe", c(11, x, a, 0), dchisq(x, a, log = TRUE), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("probe", c(12, x, 0, 0), sqrt(x), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("probe", c(13, x, a, 0), dgamma(x, a, scale = 0.7, log = TRUE), rel = 0, abs = 0)
+  s <- runif(1, 0.02, 0.98)
+  cases[[length(cases) + 1]] <- case("probe", c(13, x, s, 0), dgamma(x, s, scale = 0.7, log = TRUE), rel = 0, abs = 0)
 }
 emit("mass_probe", "MASS", list(cases))

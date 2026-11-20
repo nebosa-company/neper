@@ -22,39 +22,40 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (u, e2) = mem.alloc[f64](a, m * k)
     let (v, e3) = mem.alloc[f64](a, n * k)
     if e1 != ok || e2 != ok || e3 != ok { ret nan }
+    var rows = m
+    var src = u
     if kind == 1usize {
         var sigma = 0.0f64
         if wh == 4usize { sigma = z[5usize + m * n] }
         if sp.eigs_sym(a, x, n, k, wh, sigma, d, u) != ok { ret nan }
+        let (zi, e4) = mem.alloc[f64](a, n * k)
+        if e4 != ok { ret nan }
+        var q = 0usize
+        while q < n * k {
+            zi[q] = 0.0f64
+            q += 1usize
+        }
+        sp.rotate_phase(u, zi, n, k)
+        rows = n
+        src = u
     } else {
         if sp.svds(a, x, m, n, k, d, u, v) != ok { ret nan }
+        sp.svd_sign(u, v, m, n, k)
+        if str.eq(c.name, "v") {
+            rows = n
+            src = v
+        }
     }
-    var s = 0.0f64
-    var i = 0usize
     if str.eq(c.name, "d") {
+        var s = 0.0f64
+        var i = 0usize
         while i < k {
             s += d[i] * f64(i + 1usize)
             i += 1usize
         }
         ret s
     }
-    var rows = m
-    var src = u
-    if str.eq(c.name, "vabs") {
-        rows = n
-        src = v
-    }
-    // R lists the matrix row by row of t(vectors): column j of the vectors, entry i, at position j * rows + i
-    var j = 0usize
-    while j < k {
-        i = 0usize
-        while i < rows {
-            s += math.abs[f64](src[i * k + j]) * f64(j * rows + i + 1usize)
-            i += 1usize
-        }
-        j += 1usize
-    }
-    ret s
+    ret sp.wsum(src, rows, k)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

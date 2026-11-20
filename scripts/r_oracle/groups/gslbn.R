@@ -1,4 +1,4 @@
-# gsl: bessel_Yn, bessel_Kn, bessel_Kn_scaled, bessel_In and bessel_In_scaled with error estimates (the Olver branches are skipped: Yn and Kn n > 50 / x above 280, In n >= 150).
+# gsl: bessel_Yn, bessel_Kn, bessel_Kn_scaled, bessel_In and bessel_In_scaled with error estimates (n <= 50, x below 280, In n < 150; the Olver branches are checked in gslnu.R).
 #   "b" (code, part, n, x): part 0 value, 1 error; code 0 Yn, 1 Kn, 2 Kn_scaled, 3 In, 4 In_scaled
 suppressMessages(library(gsl))
 cases <- list()
@@ -19,4 +19,6 @@ for (i in 1:150) {
   xi <- c(runif(1, 1e-3, 3), runif(1, 3, 60), runif(1, 60, 1000), 10^runif(1, 3, 6.9))[sample(1:4, 1)] * sample(c(1, 1, -1), 1)
   add(4, ni, xi, g(bessel_In_scaled, ni, xi)); xp <- if (abs(xi) > 700) xi / 10^floor(log10(abs(xi)) - 2) else xi; add(3, ni, xp, g(bessel_In, ni, xp))
 }
+# Yn above 1/sqrt(eps): the asymptotic error scaling (x stays below 2e9: e.math.sin reduces larger arguments with an error that grows with x)
+for (i in 1:60) { n <- sample(2:9, 1); xb <- 10^runif(1, 7.85, 9.3); add(0, n, xb, g(bessel_Yn, n, xb), vrel = 1e-9) }
 emit("gslbn", "gsl", list(cases))

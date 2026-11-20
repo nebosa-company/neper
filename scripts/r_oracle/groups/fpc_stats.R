@@ -26,7 +26,7 @@ mk <- function(n, cn, single) {
   }
 }
 addcs <- function(n, cn, cn2, flags, noise, sepwn, sepprob, sel, cl, cl2, dv, want) {
-  cases[[length(cases) + 1]] <<- case("cs", c(n, cn, cn2, flags, as.numeric(noise), as.numeric(sepwn), sepprob, length(sel), sel, cl, if (cn2 > 0) cl2, dv), want, rel = 1e-8, abs = 1e-9)
+  cases[[length(cases) + 1]] <<- case("cs", c(n, cn, cn2, flags, as.numeric(noise), as.numeric(sepwn), sepprob, length(sel), sel, cl, if (cn2 > 0) cl2, dv), want, rel = 1e-9, abs = 1e-9)
 }
 for (rep in 1:30) {
   n <- sample(14:34, 1); noise <- rep %% 2 == 0; cn <- sample(if (noise) 3:5 else 2:5, 1)
@@ -65,6 +65,6 @@ while (done < 8 && rep < 200) {
   cl[cl == 0] <- max(cl) + 1; cn <- max(cl)
   s <- suppressWarnings(cluster.stats(dist(x), cl, noisecluster = TRUE, G2 = TRUE, G3 = TRUE))
   sl <- slots(s, cn); done <- done + 1
-  cases[[length(cases) + 1]] <- case("csdb", c(n, 2, eps, mp, length(sl$idx), sl$idx, as.vector(t(x))), chk(sl$val), rel = 1e-8, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("csdb", c(n, 2, eps, mp, length(sl$idx), sl$idx, as.vector(t(x))), chk(sl$val), rel = 1e-9, abs = 1e-9)
 }
 emit("fpc_stats", "fpc", list(cases))

@@ -13,7 +13,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let n = usize(z[0usize])
         let d = usize(z[1usize])
         let k = usize(z[2usize])
-        let cut = z[3usize]
+        var cut = z[3usize]
+        // a cutoff of 1 or more is numberstop
+        var nst = 0usize
+        if cut >= 1.0f64 {
+            nst = usize(cut)
+            cut = 0.0f64
+        }
         let (pr, e0) = mem.alloc[f64](a, k)
         let (mu, e1) = mem.alloc[f64](a, k * d)
         let (sg, e2) = mem.alloc[f64](a, k * d * d)
@@ -53,7 +59,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             q += 1usize
         }
         o += n * kp
-        let (nv, em) = fp.merge_bhat(a, z[o..o + n * d], n, d, k, pr, mu, sg, zz, cut, mp, vl, c.name[2usize] == 100u8, 0usize)
+        let (nv, em) = fp.merge_bhat(a, z[o..o + n * d], n, d, k, pr, mu, sg, zz, cut, mp, vl, c.name[2usize] == 100u8, nst)
         if em != ok { ret 0.0f64 / 0.0f64 }
         let stat = usize(z[o + n * d])
         var t = 0.0f64
@@ -79,6 +85,38 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         while q < k {
             if mp[q] > mx { mx = mp[q] }
             q += 1usize
+        }
+        if stat >= 4usize {
+            // the merged parameters of the surviving components: the lowest component of each merged group survives
+            var pos = 0usize
+            var sv = 0usize
+            while sv < k {
+                var fst = true
+                var q3 = 0usize
+                while q3 < sv {
+                    if mp[q3] == mp[sv] { fst = false }
+                    q3 += 1usize
+                }
+                if fst {
+                    var ra = 0usize
+                    if stat == 4usize { t += f64(pos + 1usize) * pr[sv] }
+                    while ra < d && stat == 5usize {
+                        t += f64(pos * d + ra + 1usize) * mu[sv * d + ra]
+                        ra += 1usize
+                    }
+                    while ra < d * d && stat == 6usize {
+                        t += f64(pos * d * d + ra + 1usize) * sg[sv * d * d + ra]
+                        ra += 1usize
+                    }
+                    while ra < n && stat == 7usize {
+                        t += f64(ra * mx + pos + 1usize) * zz[ra * k + sv]
+                        ra += 1usize
+                    }
+                    pos += 1usize
+                }
+                sv += 1usize
+            }
+            ret t
         }
         ret f64(mx)
     }

@@ -23,7 +23,7 @@ addfs <- function(seed, n, kind, sm, method, gen) {
     st <- GeneralizedHyperbolic:::hyperbFitStandStart(xs, startValues = svs[kind + 1], paramStart = c(us[1] - mean(x), us[2] / sd(x), sd(x) * us[3], sd(x) * us[4]), startMethodMoM = smn[sm + 1])
     as.numeric(st$paramStart)[1:2]}), error = function(e) c(NA, NA))
   vals <- c(as.numeric(res$param), res$maxLik, res$conv, res$iter, rz)
-  tol <- c(1e-5, 1e-5, 1e-5, 1e-5, 1e-7, 0, 0, 1e-8, 1e-8)
+  tol <- c(1e-9, 1e-9, 1e-9, 1e-9, 1e-9, 0, 0, 1e-9, 1e-9)
   if (method > 0) tol[1:4] <- 2e-4
   if (method == 4) tol[1:4] <- 3e-3
   if (method == 5) tol[1:4] <- 2e-4
@@ -57,7 +57,7 @@ addlm <- function(seed, n, method, ss, sm, b, gen) {
   res <- tryCatch(suppressWarnings(hyperblm(y ~ x1 + x2, data = d, method = meths[method + 1], startMethod = smn[sm + 1], startStarts = svs[ss + 1])), error = function(e) NULL)
   if (is.null(res) || is.null(res$MLE) || !all(is.finite(res$coefficients)) || !is.finite(res$MLE)) return(invisible())
   vals <- c(as.numeric(res$coefficients), as.numeric(res$distributionParams), res$MLE, res$convergence, res$iterations, as.numeric(res$residsParamStart))
-  tol <- c(rep(1e-5, 3), rep(1e-5, 4), 1e-7, 0, 0, rep(1e-8, 4))
+  tol <- c(rep(1e-9, 3), rep(1e-9, 4), 1e-9, 0, 0, rep(1e-9, 4))
   if (method == 1) tol[1:7] <- 2e-4
   if (method == 4) tol[1:7] <- 3e-3
   for (w in 0:13) {

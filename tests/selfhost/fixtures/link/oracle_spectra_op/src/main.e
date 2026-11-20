@@ -30,10 +30,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[0usize])
     let k = usize(z[1usize])
     let wh = usize(z[2usize])
+    let part = usize(z[3usize])
     let (vals, e1) = mem.alloc[f64](a, k)
-    if e1 != ok { os.exit(4) }
-    var op = Op { d: z[3usize..3usize + n], u: z[3usize + n..3usize + 2usize * n], w: z[3usize + 2usize * n..3usize + 3usize * n] }
-    if sp.eigs_sym_op[Op](a, &op, apply, n, k, wh, 0.0f64, vals) != ok { os.exit(5) }
+    let (vecs, e2) = mem.alloc[f64](a, n * k)
+    let (zi, e3) = mem.alloc[f64](a, n * k)
+    if e1 != ok || e2 != ok || e3 != ok { os.exit(4) }
+    var op = Op { d: z[4usize..4usize + n], u: z[4usize + n..4usize + 2usize * n], w: z[4usize + 2usize * n..4usize + 3usize * n] }
+    if sp.eigs_sym_op[Op](a, &op, apply, n, k, wh, vals, vecs) != ok { os.exit(5) }
+    if part == 1usize {
+        var q = 0usize
+        while q < n * k {
+            zi[q] = 0.0f64
+            q += 1usize
+        }
+        sp.rotate_phase(vecs, zi, n, k)
+        ret sp.wsum(vecs, n, k)
+    }
     var s = 0.0f64
     var i = 0usize
     while i < k {

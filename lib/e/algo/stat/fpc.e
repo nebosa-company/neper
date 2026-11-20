@@ -1,9 +1,9 @@
-// R fpc: cluster.stats (no noise cluster) from a full distance matrix and a clustering with labels 1..k: the within and between averages,
+// R fpc: cluster.stats (with its noise-cluster option) from a full distance matrix and a clustering with labels 1..k: the within and between averages,
 // diameters, separation, within-cluster sum of squares, the Calinski-Harabasz index, silhouette widths, Dunn indices, entropy, the
 // Pearson gamma, G2 and G3, the widest gap, the separation index, and against a second clustering the corrected Rand index and the
 // variation of information.
 //
-// Not here: noise clusters, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats and the plotting coordinates.
+// Not here: the plot coordinates batcoord and batvarcoord (they need LAPACK dgeev).
 
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.stat.wrs2 as wr

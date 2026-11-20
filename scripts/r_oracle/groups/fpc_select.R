@@ -2,12 +2,12 @@
 #   "sel": (fn, what, n, p, distances, B, hmethod, hscaling, kmin, kmax, classification, cutoff, seed, data n by p row-major or the n by n dissimilarities)
 #   fn 1 nselectboot: what 0 sum (rep * kmax + k) * stab[rep, k], 1 sum k * stabk[k], 2 kopt;
 #   fn 2 prediction.strength (B is M): what 0 sum ((k - kmin) * M + l) * corrpred[[k]][l] (l from 1), 1 sum k * mean.pred[k] for k in kmin..kmax, 2 optimalk
-#   classification 1 averagedist, 2 centroid, 3 fn, 4 knn
+#   classification 1 averagedist, 2 centroid, 3 fn, 4 knn, 5 lda, 6 qda
 suppressMessages(library(fpc))
 cases <- list()
 set.seed(20269951)
 hm <- c("ward.D", "single", "complete", "average")
-cn <- c("averagedist", "centroid", "fn", "knn")
+cn <- c("averagedist", "centroid", "fn", "knn", "lda", "qda")
 blobs <- function(n, p, k) {
   m <- rep(n %/% k, k); m[1] <- m[1] + n - sum(m); ctr <- matrix(runif(k * p, 0, 7), k, p)
   round(do.call(rbind, lapply(seq_len(k), function(g) matrix(rnorm(m[g] * p, 0, 0.8), m[g], p) + rep(ctr[g, ], each = m[g]))), 4)
@@ -16,8 +16,8 @@ one <- function(x, dist, B, hmeth, sc, kmin, kmax, cl, seed, cutoff = 0.8, nnk =
   n <- nrow(x); p <- ncol(x)
   dat <- if (dist) as.vector(t(as.matrix(dist(x)))) else as.vector(t(x))
   hdr <- function(f, w) c(f, w, n, p, as.numeric(dist), B, hmeth, as.numeric(sc), kmin, kmax, cl + 10 * (nnk - 1), cutoff, seed, dat)
-  cm <- if (dist) disthclustCBI else if (hmeth == 0) kmeansCBI else hclustCBI
-  ex <- if (dist) list(method = hm[hmeth]) else if (hmeth == 0) list(scaling = sc) else list(method = hm[hmeth], scaling = sc)
+  cm <- if (dist) disthclustCBI else if (hmeth == 0) kmeansCBI else if (hmeth == 11) pamkCBI else if (hmeth == 12) claraCBI else hclustCBI
+  ex <- if (dist) list(method = hm[hmeth]) else if (hmeth == 0 || hmeth == 11) list(scaling = sc) else if (hmeth == 12) list() else list(method = hm[hmeth], scaling = sc)
   set.seed(seed)
   r <- do.call(nselectboot, c(list(data = if (dist) dist(x) else x, B = B, clustermethod = cm, classification = cn[cl], krange = kmin:kmax, distances = dist, nnk = nnk), ex))
   add <- function(f, w, v) cases[[length(cases) + 1]] <<- case("sel", hdr(f, w), v, rel = 1e-9, abs = 1e-9)
@@ -58,5 +58,15 @@ for (rep in 1:5) {
 for (rep in 1:3) {
   x <- blobs(sample(28:40, 1), 2, 3)
   one(x, TRUE, 8, c(3, 4, 2)[rep], FALSE, 2, 4, 4, 700 + rep, cutoff = 0.5, nnk = c(2, 3, 4)[rep])
+}
+# lda and qda (MASS) as the classification, with hclustCBI and kmeansCBI
+for (rep in 1:10) {
+  k <- sample(2:3, 1); x <- blobs(sample(36:60, 1), c(2, 3)[rep %% 2 + 1], k)
+  try(one(x, FALSE, 8, c(3, 4, 1, 2, 0)[rep %% 5 + 1], rep %% 3 != 0, 2, 4, 5 + rep %% 2, 800 + rep, cutoff = 0.5), silent = TRUE)
+}
+# pamkCBI and claraCBI as the clustering method
+for (rep in 1:6) {
+  k <- sample(2:3, 1); x <- blobs(sample(30:44, 1), 2, k)
+  one(x, FALSE, 8, c(11, 12)[rep %% 2 + 1], rep %% 4 == 2, 2, 4, c(1, 2, 3, 4, 5, 6)[rep], 1000 + rep, cutoff = 0.5)
 }
 emit("fpc_select", "fpc", list(cases))

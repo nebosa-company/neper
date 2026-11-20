@@ -34,6 +34,8 @@ fn dghyp(x: f64, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64
     let gamma = math.sqrt[f64](alpha * alpha - beta * beta)
     let d = x - mu
     let r = math.sqrt[f64](delta * delta + d * d)
+    // variance gamma (delta = 0, lambda > 0): R forms Inf * (finite / Inf) and answers NaN
+    if delta == 0.0f64 && lambda > 0.0f64 { ret math.nan64() }
     let top = lambda * math.log[f64](gamma / delta) + log_bessel_k(lambda - 0.5f64, alpha * r) + beta * d
     let bot = 0.5f64 * math.log[f64](2.0f64 * 3.141592653589793238462643383279f64) + log_bessel_k(lambda, delta * gamma) + (0.5f64 - lambda) * math.log[f64](r / alpha)
     ret math.exp[f64](top - bot)

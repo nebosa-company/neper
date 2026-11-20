@@ -56,13 +56,13 @@ for (rep in 1:10) {
   tol("mf", hdr(4, 0), sum(seq_len(n) * r$md), 1e-9)
   for (i in sample(n, 3)) tol("mf", hdr(0, i - 1), r$md[i], 1e-9)
   for (j in 1:p) tol("mf", hdr(1, j - 1), r$mg[j], 1e-9)
-  for (rr in 1:p) for (cc in 1:p) { tol("mf", hdr(2, (rr - 1) * p + cc - 1), r$covg[rr, cc], 1e-9); tol("mf", hdr(3, (rr - 1) * p + cc - 1), r$covinv[rr, cc], 1e-8) }
+  for (rr in 1:p) for (cc in 1:p) { tol("mf", hdr(2, (rr - 1) * p + cc - 1), r$covg[rr, cc], 1e-9); tol("mf", hdr(3, (rr - 1) * p + cc - 1), r$covinv[rr, cc], 1e-9) }
 }
 for (rep in 1:9) {
   p <- sample(2:3, 1); n <- sample(30:45, 1); st <- c("trace", "det", "none")[rep %% 3 + 1]; pr <- c(0.1, 0.2, 0.3)[rep %% 3 + 1]
   x <- round(matrix(rnorm(n * p), n, p) %*% matrix(runif(p * p, -1, 1), p, p), 4)
   r <- localshape(x, proportion = pr, mscatter = "cov", covstandard = st)
-  for (rr in 1:p) for (cc in 1:p) tol("ls", c(pr, rep %% 3, (rr - 1) * p + cc - 1, n, p, flat(x)), r[rr, cc], 1e-8, 1e-12)
+  for (rr in 1:p) for (cc in 1:p) tol("ls", c(pr, rep %% 3, (rr - 1) * p + cc - 1, n, p, flat(x)), r[rr, cc], 1e-9, 1e-12)
 }
 for (rep in 1:20) {
   n <- sample(10:60, 1); ncat <- sample(2:6, 1); v <- sample(c(sort(sample(-5:20, ncat))), n, TRUE)

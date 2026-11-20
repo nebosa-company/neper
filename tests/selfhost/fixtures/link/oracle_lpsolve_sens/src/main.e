@@ -19,14 +19,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (dt, e3) = mem.alloc[f64](a, m + n)
     let (cf, e4) = mem.alloc[f64](a, n)
     let (ct, e5) = mem.alloc[f64](a, n)
-    let (geq, e6) = mem.alloc[bool](a, m)
+    let (geq, e6) = mem.alloc[usize](a, m)
     if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret nan }
     var i = 0usize
     while i < m {
-        geq[i] = z[3usize + n + m * n + m + i] == 1.0f64
+        geq[i] = usize(z[3usize + n + m * n + m + i])
         i += 1usize
     }
-    let (v, e) = lps.lp_sens(a, z[3usize..3usize + n], z[3usize + n..3usize + n + m * n], z[3usize + n + m * n..3usize + n + m * n + m], m, n, geq, mx, x, du, df, dt, cf, ct)
+    let (v, e) = lps.lp_sens(a, z[3usize..3usize + n], z[3usize + n..3usize + n + m * n], z[3usize + n + m * n..3usize + n + m * n + m], geq, m, n, mx, x, du, df, dt, cf, ct)
     let _ = v
     if e != ok { ret nan }
     let field = usize(z[3usize + n + m * n + 2usize * m])

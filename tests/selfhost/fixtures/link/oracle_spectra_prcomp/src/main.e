@@ -1,44 +1,38 @@
-// e.algo.stat.spectrapkg's prcomp_irlba against irlba. tests/oracle/spectra_prcomp.json comes from
+// e.algo.stat.irlba_extra's prcomp_irlba against irlba. tests/oracle/spectra_prcomp.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R spectra_prcomp`; the layout is at the top of scripts/r_oracle/groups/spectra_prcomp.R.
 
-use e.algo.stat.spectrapkg as sp
+use e.algo.rand.r as rr
+use e.algo.stat.irlba as il
+use e.algo.stat.irlba_extra as ex
 use e.io
 use e.math
 use e.mem
 use e.os
 use e.test.oracle as oracle
 
+fn wsum(v: []f64, cnt: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < cnt {
+        s += v[i] * f64(i + 1usize)
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let m = usize(z[0usize])
     let n = usize(z[1usize])
     let k = usize(z[2usize])
-    let kind = usize(z[4usize])
-    let (sd, e1) = mem.alloc[f64](a, k)
-    let (rot, e2) = mem.alloc[f64](a, n * k)
-    if e1 != ok || e2 != ok { os.exit(4) }
-    var tv = 0.0f64
-    if sp.prcomp_irlba(a, z[5usize..5usize + m * n], m, n, k, true, usize(z[3usize]) == 1usize, sd, rot, &tv) != ok { os.exit(5) }
-    var s = 0.0f64
-    var i = 0usize
-    if kind == 1usize { ret tv }
-    if kind == 0usize {
-        while i < k {
-            s += sd[i] * f64(i + 1usize)
-            i += 1usize
-        }
-        ret s
-    }
-    var jj = 0usize
-    while jj < k {
-        var ii = 0usize
-        while ii < n {
-            s += math.abs[f64](rot[ii * k + jj]) * f64(jj * n + ii + 1usize)
-            ii += 1usize
-        }
-        jj += 1usize
-    }
-    ret s
+    let kind = usize(z[5usize])
+    var g: rr.Rng = zero
+    rr.seed(&g, i64(z[4usize]))
+    var out: ex.Prcomp = zero
+    if ex.prcomp_irlba(a, &g, z[6usize..6usize + m * n], m, n, k, true, usize(z[3usize]) == 1usize, il.default_opts(k), &out) != ok { os.exit(5) }
+    if kind == 0usize { ret wsum(out.sdev, k) }
+    if kind == 1usize { ret out.totalvar }
+    ret wsum(out.rot, n * k)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

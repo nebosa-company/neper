@@ -78,12 +78,11 @@ fn tidy(mm: []f64, n: usize, k: usize) {
 }
 
 // cl_consensus(method = "SE", weights = w, control = list(start = start)): answers the objective value at the stopping point; the consensus membership goes to out (n by k)
-fn consensus_se(a: *mem.Arena, mems: []const f64, w: []const f64, bn: usize, n: usize, k: usize, start: []const f64, maxiter: usize, reltol: f64, out: []f64) -> (f64, err) {
+fn consensus_ao(a: *mem.Arena, mm: []f64, w: []const f64, bn: usize, n: usize, k: usize, start: []const f64, kind: usize, maxiter: usize, reltol: f64, out: []f64) -> (f64, err) {
     let sz = n * k
-    let (mm, e0) = mem.alloc[f64](a, bn * sz)
     let (tmp, e1) = mem.alloc[f64](a, sz)
     let (wn, e2) = mem.alloc[f64](a, bn)
-    if e0 != ok || e1 != ok || e2 != ok { ret (0.0f64, mem.Full) }
+    if e1 != ok || e2 != ok { ret (0.0f64, mem.Full) }
     var ws = 0.0f64
     var b = 0usize
     while b < bn {
@@ -96,18 +95,13 @@ fn consensus_se(a: *mem.Arena, mems: []const f64, w: []const f64, bn: usize, n: 
         b += 1usize
     }
     var i = 0usize
-    while i < bn * sz {
-        mm[i] = mems[i]
-        i += 1usize
-    }
-    i = 0usize
     while i < sz {
         out[i] = start[i]
         i += 1usize
     }
     b = 0usize
     while b < bn {
-        let e = align(a, out, mm[b * sz..(b + 1usize) * sz], n, k, tmp)
+        let e = match_cols(a, kind, out, mm[b * sz..(b + 1usize) * sz], n, k, tmp)
         if e != ok { ret (0.0f64, e) }
         i = 0usize
         while i < sz {
@@ -116,24 +110,30 @@ fn consensus_se(a: *mem.Arena, mems: []const f64, w: []const f64, bn: usize, n: 
         }
         b += 1usize
     }
-    var old = value(mm, wn, out, bn, sz)
+    var old = value_k(mm, wn, out, bn, sz, kind)
     var fresh = old
     var iter = 1usize
     while iter <= maxiter {
-        i = 0usize
-        while i < sz {
-            var s = 0.0f64
-            b = 0usize
-            while b < bn {
-                s += mm[b * sz + i] * wn[b]
-                b += 1usize
+        if kind == 2usize {
+            let ef = fit_l1(a, mm, wn, bn, n, k, out)
+            if ef != ok { ret (0.0f64, ef) }
+        } else {
+            i = 0usize
+            while i < sz {
+                var s = 0.0f64
+                b = 0usize
+                while b < bn {
+                    s += mm[b * sz + i] * wn[b]
+                    b += 1usize
+                }
+                out[i] = s
+                i += 1usize
             }
-            out[i] = s
-            i += 1usize
+            if kind == 1usize || kind == 3usize { harden(out, n, k) }
         }
         b = 0usize
         while b < bn {
-            let e = align(a, out, mm[b * sz..(b + 1usize) * sz], n, k, tmp)
+            let e = match_cols(a, kind, out, mm[b * sz..(b + 1usize) * sz], n, k, tmp)
             if e != ok { ret (0.0f64, e) }
             i = 0usize
             while i < sz {
@@ -142,7 +142,7 @@ fn consensus_se(a: *mem.Arena, mems: []const f64, w: []const f64, bn: usize, n: 
             }
             b += 1usize
         }
-        fresh = value(mm, wn, out, bn, sz)
+        fresh = value_k(mm, wn, out, bn, sz, kind)
         var d = old - fresh
         if d < 0.0f64 { d = 0.0f64 - d }
         var ao = old
@@ -169,9 +169,224 @@ fn consensus_se(a: *mem.Arena, mems: []const f64, w: []const f64, bn: usize, n: 
         }
         i += 1usize
     }
-    let obj = value(mm, wn, out, bn, sz)
     tidy(out, n, k)
-    ret (obj, ok)
+    ret (fresh, ok)
+}
+
+// the AO consensus of the methods SE (0, soft euclidean), HE (1, hard euclidean), SM (2, soft manhattan) and HM (3, hard manhattan) from one start; the value answered is clue's
+// criterion at the stopping point (the one runs are compared by)
+fn consensus_se(a: *mem.Arena, mems: []const f64, w: []const f64, bn: usize, n: usize, k: usize, start: []const f64, maxiter: usize, reltol: f64, out: []f64) -> (f64, err) {
+    let (work, ew) = mem.alloc[f64](a, bn * n * k)
+    if ew != ok { ret (0.0f64, mem.Full) }
+    var q = 0usize
+    while q < bn * n * k {
+        work[q] = mems[q]
+        q += 1usize
+    }
+    let (v, e) = consensus_ao(a, work, w, bn, n, k, start, 0usize, maxiter, reltol, out)
+    ret (v, e)
+}
+
+// nruns starts one after another in starts (n by k each): the run with the least criterion wins, the first of equals (clue keeps a run only when strictly better)
+fn consensus_runs(a: *mem.Arena, mems: []const f64, w: []const f64, bn: usize, n: usize, k: usize, starts: []const f64, nruns: usize, kind: usize, maxiter: usize, reltol: f64, out: []f64) -> (f64, err) {
+    let sz = n * k
+    let (tmp, e0) = mem.alloc[f64](a, sz)
+    let (work, e9) = mem.alloc[f64](a, bn * sz)
+    if e0 != ok || e9 != ok { ret (0.0f64, mem.Full) }
+    // the memberships carry over from run to run, as in clue (a later run matches the already matched columns, which only matters for ties)
+    var q = 0usize
+    while q < bn * sz {
+        work[q] = mems[q]
+        q += 1usize
+    }
+    var best = 0.0f64
+    var r = 0usize
+    while r < nruns {
+        let mark = mem.mark(a)
+        let (v, e) = consensus_ao(a, work, w, bn, n, k, starts[r * sz..(r + 1usize) * sz], kind, maxiter, reltol, tmp)
+        if e != ok { ret (0.0f64, e) }
+        if r == 0usize || v < best {
+            best = v
+            var i = 0usize
+            while i < sz {
+                out[i] = tmp[i]
+                i += 1usize
+            }
+        }
+        mem.reset(a, mark)
+        r += 1usize
+    }
+    ret (best, ok)
+}
+
+// the hard partition of a membership matrix: one in the first column of the row maximum
+fn harden(m: []f64, n: usize, k: usize) {
+    var i = 0usize
+    while i < n {
+        var bj = 0usize
+        var c = 1usize
+        while c < k {
+            if m[i * k + c] > m[i * k + bj] { bj = c }
+            c += 1usize
+        }
+        c = 0usize
+        while c < k {
+            m[i * k + c] = 0.0f64
+            if c == bj { m[i * k + c] = 1.0f64 }
+            c += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// match_memberships for the manhattan methods: the columns of mi permuted by solve_LSAP(.cxdist(N, mi, "manhattan")) and by crossprod for the euclidean ones
+fn match_cols(a: *mem.Arena, kind: usize, nm: []const f64, mi: []const f64, n: usize, k: usize, out: []f64) -> err {
+    if kind == 0usize || kind == 1usize { ret align(a, nm, mi, n, k, out) }
+    let (cost, e0) = mem.alloc[f64](a, k * k)
+    let (asg, e1) = mem.alloc[usize](a, k)
+    if e0 != ok || e1 != ok { ret mem.Full }
+    var r = 0usize
+    while r < k {
+        var c = 0usize
+        while c < k {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                var d = nm[i * k + r] - mi[i * k + c]
+                if d < 0.0f64 { d = 0.0f64 - d }
+                s += d
+                i += 1usize
+            }
+            cost[r * k + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let (v, e2) = ls.solve_lsap(a, cost, k, k, false, asg)
+    if e2 != ok { ret e2 }
+    let _ = v
+    r = 0usize
+    while r < k {
+        var i = 0usize
+        while i < n {
+            out[i * k + r] = mi[i * k + asg[r]]
+            i += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+// the criterion: weighted sum of squared (euclidean kinds) or absolute (manhattan kinds) differences of the matched memberships to m
+fn value_k(mm: []const f64, wn: []const f64, m: []const f64, bn: usize, sz: usize, kind: usize) -> f64 {
+    if kind == 0usize || kind == 1usize { ret value(mm, wn, m, bn, sz) }
+    var v = 0.0f64
+    var b = 0usize
+    while b < bn {
+        var s = 0.0f64
+        var i = 0usize
+        while i < sz {
+            var d = mm[b * sz + i] - m[i]
+            if d < 0.0f64 { d = 0.0f64 - d }
+            s += d
+            i += 1usize
+        }
+        v += wn[b] * s
+        b += 1usize
+    }
+    ret v
+}
+
+// .l1_fit_M: per object the stochastic row x minimising sum_b w_b sum_j |y_j(b) - x_j|. Separable convex piecewise linear in x_j, so the budget of one goes to the cheapest slopes:
+// every x_j runs through the breakpoints of the y_j(b) from zero (and on to one with slope sum w), the segments are taken in ascending slope until the budget is used
+fn fit_l1(a: *mem.Arena, mm: []const f64, wn: []const f64, bn: usize, n: usize, k: usize, out: []f64) -> err {
+    let sz = n * k
+    let ns = k * (bn + 1usize)
+    let (slope, e0) = mem.alloc[f64](a, ns)
+    let (len, e1) = mem.alloc[f64](a, ns)
+    let (col, e2) = mem.alloc[usize](a, ns)
+    let (ys, e3) = mem.alloc[f64](a, bn)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        var cnt = 0usize
+        var j = 0usize
+        while j < k {
+            var b = 0usize
+            while b < bn {
+                ys[b] = mm[b * sz + i * k + j]
+                b += 1usize
+            }
+            // insertion sort of the breakpoints, weights follow by recomputation
+            var p = 1usize
+            while p < bn {
+                let t = ys[p]
+                var q = p
+                while q > 0usize && ys[q - 1usize] > t {
+                    ys[q] = ys[q - 1usize]
+                    q -= 1usize
+                }
+                ys[q] = t
+                p += 1usize
+            }
+            var prev = 0.0f64
+            var s = 0usize
+            while s <= bn {
+                var hi = 1.0f64
+                if s < bn { hi = ys[s] }
+                if hi > 1.0f64 { hi = 1.0f64 }
+                if hi > prev {
+                    // slope on (prev, hi): weight of the y below prev (or equal) minus the weight of those at or above hi
+                    var sl = 0.0f64
+                    b = 0usize
+                    while b < bn {
+                        let y = mm[b * sz + i * k + j]
+                        if y <= prev { sl += wn[b] } else { sl -= wn[b] }
+                        b += 1usize
+                    }
+                    slope[cnt] = sl
+                    len[cnt] = hi - prev
+                    col[cnt] = j
+                    cnt += 1usize
+                    prev = hi
+                }
+                s += 1usize
+            }
+            if prev < 1.0f64 {
+                var tw = 0.0f64
+                b = 0usize
+                while b < bn {
+                    tw += wn[b]
+                    b += 1usize
+                }
+                slope[cnt] = tw
+                len[cnt] = 1.0f64 - prev
+                col[cnt] = j
+                cnt += 1usize
+            }
+            out[i * k + j] = 0.0f64
+            j += 1usize
+        }
+        // take the segments by ascending slope until one is used up
+        var left = 1.0f64
+        var taken = 0usize
+        while taken < cnt && left > 0.0f64 {
+            var bi = cnt
+            var q = 0usize
+            while q < cnt {
+                if len[q] >= 0.0f64 && (bi == cnt || slope[q] < slope[bi]) { bi = q }
+                q += 1usize
+            }
+            var take = len[bi]
+            if take > left { take = left }
+            out[i * k + col[bi]] += take
+            left -= take
+            len[bi] = 0.0f64 - 1.0f64
+            taken += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
 }
 
 fn value(mm: []const f64, wn: []const f64, m: []const f64, bn: usize, sz: usize) -> f64 {
