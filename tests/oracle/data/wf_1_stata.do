@@ -1,0 +1,1 @@
+infile comment:comment_fmt city:city_fmt flag:flag_fmt 1st x-y:x-y_fmt group income height:height_fmt score id price$:price$_fmt long_variable_name_number_one:long_variable_name_number_one_fmt  using  tests/oracle/data/wf_1_stata.csv , automatic

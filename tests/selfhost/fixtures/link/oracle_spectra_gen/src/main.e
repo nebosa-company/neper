@@ -19,7 +19,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (vr, e3) = mem.alloc[f64](a, n * k)
     let (vi, e4) = mem.alloc[f64](a, n * k)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok { os.exit(4) }
-    if sp.eigs_general(a, z[5usize..5usize + n * n], n, k, wh, sigma, re, im, vr, vi) != ok { os.exit(5) }
+    let cplx = usize(z[5usize])
+    var e5 = ok
+    if cplx == 1usize {
+        e5 = sp.eigs_complex(a, z[6usize..6usize + n * n], z[6usize + n * n..6usize + 2usize * n * n], n, k, wh, sigma, re, im, vr, vi)
+    } else {
+        e5 = sp.eigs_general(a, z[6usize..6usize + n * n], n, k, wh, sigma, re, im, vr, vi)
+    }
+    if e5 != ok { os.exit(5) }
     if part == 2usize || part == 3usize {
         sp.rotate_phase(vr, vi, n, k)
         if part == 2usize { ret sp.wsum(vr, n, k) }

@@ -1,7 +1,10 @@
 // R QCA: the models of minimize(): every minimum-cardinality set of prime implicants that covers the outcome-1 configurations, with the unobserved configurations
 // either excluded (the complex solution) or taken as don't cares (the parsimonious solution, include = "?"), on the prime implicants of e.algo.logic.
 //
-// Not here: the intermediate solution and directional expectations, inclusion and PRI cut-offs, necessity and sufficiency parameters of fit, superSubset and the case labels.
+// The models as text with the intermediate solution are in e.algo.stat.qcamin, superSubset in e.algo.stat.qcass. Here: the counts of those models, pof() of a sum of
+// products and its terms, and truthTable().
+//
+// Not here: the case labels and multi-value conditions.
 
 use e.algo.logic as lg
 use e.mem
@@ -126,6 +129,89 @@ fn pof(d: []const f64, y: []const f64, n: usize, nv: usize, spec: []const f64, r
         if which == 0usize { ret smin / sx }
         if which == 1usize { ret (smin - sminn) / (sx - sminn) }
         ret smin / sy
+    }
+    if which == 0usize { ret smin / sy }
+    if which == 1usize { ret s1x / s1m }
+    ret smin / sx
+}
+
+// the membership of row r in one term of the sum of products (the minimum of its literals)
+fn term_member(d: []const f64, nv: usize, r: usize, spec: []const f64, term: usize) -> f64 {
+    var at = 1usize
+    var t = 0usize
+    while t < term {
+        at += 1usize + 2usize * usize(spec[at])
+        t += 1usize
+    }
+    let nl = usize(spec[at])
+    at += 1usize
+    var m = 1.0f64
+    var l = 0usize
+    while l < nl {
+        var v = d[r * nv + usize(spec[at])]
+        if spec[at + 1usize] == 1.0f64 { v = 1.0f64 - v }
+        if v < m { m = v }
+        at += 2usize
+        l += 1usize
+    }
+    ret m
+}
+
+// pof() of one term (term < the number of terms) or of the whole expression (term == the number of terms) against y, negated when neg: relation 0 sufficiency (which 0 inclS,
+// 1 PRI, 2 covS, 3 covU: the coverage the term adds to the others, NaN for a single term), 1 necessity (0 inclN, 1 RoN, 2 covN)
+fn pof_term(d: []const f64, y0: []const f64, n: usize, nv: usize, spec: []const f64, term: usize, relation: usize, which: usize, neg: bool) -> f64 {
+    let nterms = usize(spec[0usize])
+    var sx = 0.0f64
+    var sy = 0.0f64
+    var smin = 0.0f64
+    var sminn = 0.0f64
+    var s1x = 0.0f64
+    var s1m = 0.0f64
+    var su_all = 0.0f64
+    var su_oth = 0.0f64
+    var r = 0usize
+    while r < n {
+        var yy = y0[r]
+        if neg { yy = 1.0f64 - yy }
+        var x = 0.0f64
+        if term == nterms {
+            x = expr_member(d, nv, r, spec)
+        } else {
+            x = term_member(d, nv, r, spec, term)
+        }
+        var mn = x
+        if yy < mn { mn = yy }
+        var mm = mn
+        if 1.0f64 - yy < mm { mm = 1.0f64 - yy }
+        sx += x
+        sy += yy
+        smin += mn
+        sminn += mm
+        s1x += 1.0f64 - x
+        s1m += 1.0f64 - mn
+        if which == 3usize && nterms > 1usize {
+            var all = 0.0f64
+            var oth = 0.0f64
+            var t = 0usize
+            while t < nterms {
+                let v = term_member(d, nv, r, spec, t)
+                if v > all { all = v }
+                if t != term && v > oth { oth = v }
+                t += 1usize
+            }
+            if yy < all { all = yy }
+            if yy < oth { oth = yy }
+            su_all += all
+            su_oth += oth
+        }
+        r += 1usize
+    }
+    if relation == 0usize {
+        if which == 0usize { ret smin / sx }
+        if which == 1usize { ret (smin - sminn) / (sx - sminn) }
+        if which == 2usize { ret smin / sy }
+        if nterms == 1usize { ret 0.0f64 / 0.0f64 }
+        ret (su_all - su_oth) / sy
     }
     if which == 0usize { ret smin / sy }
     if which == 1usize { ret s1x / s1m }

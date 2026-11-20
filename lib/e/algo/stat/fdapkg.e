@@ -8,6 +8,68 @@ use e.algo.stat.splines as sp
 use e.math
 use e.mem
 
+// create.monomial.basis: x^e of eval.basis, derivatives as fda's monomial() computes them: for 1 <= nderiv <= e the factor is e (e - 2) (e - 3) .. (e - nderiv), a quirk of fda that skips the (e - 1)
+fn eval_monomial(e: f64, x: f64, nderiv: usize) -> f64 {
+    if nderiv > 0usize {
+        if f64(nderiv) > e { ret 0.0f64 }
+        var fac = e
+        var k = 2usize
+        while k <= nderiv {
+            fac = fac * (e - f64(k))
+            k += 1usize
+        }
+        var q = 0usize
+        var pw = 1.0f64
+        while q < usize(e) - nderiv {
+            pw = pw * x
+            q += 1usize
+        }
+        ret fac * pw
+    }
+    var pw0 = 1.0f64
+    var q0 = 0usize
+    while q0 < usize(e) {
+        pw0 = pw0 * x
+        q0 += 1usize
+    }
+    ret pw0
+}
+
+// create.exponential.basis: exp(rate x), the derivative of order nderiv is rate^nderiv exp(rate x)
+fn eval_exponential(rate: f64, x: f64, nderiv: usize) -> f64 {
+    var r = 1.0f64
+    var k = 0usize
+    while k < nderiv {
+        r = r * rate
+        k += 1usize
+    }
+    ret r * math.exp[f64](rate * x)
+}
+
+// create.polygonal.basis(argvals): the hat functions, the order 2 B-splines on the argvals; fda's getbasismatrix passes no derivative order to polyg, so eval.basis answers the values whatever nderiv is
+fn eval_polygonal(a: *mem.Arena, argvals: []const f64, x: f64, out: []f64) -> err {
+    ret eval_bspline(a, 2usize, argvals, x, 0usize, out)
+}
+
+// the row of eval.basis at x for a basis other than the B-spline one: kind 1 Fourier (nbasis, period), 2 monomial (par the exponents), 3 exponential (par the rates), 4 polygonal (par the argvals); nd the derivative order
+fn gen_row(a: *mem.Arena, kind: usize, period: f64, par: []const f64, nbasis: usize, x: f64, nd: usize, v: []f64) -> err {
+    if kind == 1usize {
+        eval_fourier(nbasis, period, x, nd, v)
+        ret ok
+    }
+    if kind == 4usize { ret eval_polygonal(a, par, x, v) }
+    var j = 0usize
+    while j < nbasis {
+        if kind == 2usize {
+            v[j] = eval_monomial(par[j], x, nd)
+        } else {
+            v[j] = eval_exponential(par[j], x, nd)
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
 // out receives the nbasis basis values (or derivatives) at x
 fn eval_bspline(a: *mem.Arena, norder: usize, breaks: []const f64, x: f64, deriv: usize, out: []f64) -> err {
     let degree = norder - 1usize
@@ -66,6 +128,39 @@ fn gauss_legendre(m: usize, nodes: []f64, wts: []f64) {
 // the roughness penalty matrix of getbasispenalty(basis, Lfdobj = m-th derivative): the integrals of D^m phi_i D^m phi_j over the range, exact by Gauss-Legendre quadrature on every break interval; nbasis by nbasis, column-major in out
 fn penalty_matrix(a: *mem.Arena, norder: usize, breaks: []const f64, m: usize, out: []f64) -> err {
     let nb = breaks.len + norder - 2usize
+    if breaks.len == 2usize {
+        // fda: with no interior knots bsplinepen answers the penalty of the MONOMIAL basis x^0 .. x^(nbasis - 1) (monomialpen), not that of the B-splines
+        var i0 = 0usize
+        while i0 < nb {
+            var j0 = 0usize
+            while j0 < nb {
+                out[j0 * nb + i0] = 0.0f64
+                if i0 >= m && j0 >= m {
+                    var ifac = 1.0f64
+                    var jfac = 1.0f64
+                    var k0 = 0usize
+                    while k0 < m {
+                        ifac = ifac * (f64(i0) - f64(k0))
+                        jfac = jfac * (f64(j0) - f64(k0))
+                        k0 += 1usize
+                    }
+                    let ipow = i0 + j0 - 2usize * m + 1usize
+                    var phi = 1.0f64
+                    var plo = 1.0f64
+                    var q0 = 0usize
+                    while q0 < ipow {
+                        phi = phi * breaks[1usize]
+                        plo = plo * breaks[0usize]
+                        q0 += 1usize
+                    }
+                    out[j0 * nb + i0] = (phi - plo) * ifac * jfac / f64(ipow)
+                }
+                j0 += 1usize
+            }
+            i0 += 1usize
+        }
+        ret ok
+    }
     let ng = 10usize
     let (nodes, e1) = mem.alloc[f64](a, ng)
     let (wts, e2) = mem.alloc[f64](a, ng)
@@ -308,12 +403,91 @@ fn smooth_basis_stats(a: *mem.Arena, norder: usize, breaks: []const f64, argvals
 
 // fda numerical inprod(basis, basis) for a B-spline basis with simple knots: Romberg integration (NR qromb with fda tolerances, JMAX 15, JMIN 5, EPS 1e-4) of every product over the whole range at once, the convergence
 // test taken over the whole matrix; out is nbasis by nbasis column-major. It differs from the exact Gram matrix at the 1e-5 level, which is what pca.fd and the other inprod users see
-fn inprod_romberg(a: *mem.Arena, norder: usize, breaks: []const f64, out: []f64) -> err {
-    let nb = breaks.len + norder - 2usize
-    let nn = nb * nb
+// f[c] = sum_k v[k] coefs[c * nb + k]: the curves of a coefficient matrix at one point whose basis row is v
+fn pair_values(v: []const f64, nb: usize, coefs: []const f64, n: usize, f: []f64) {
+    var c = 0usize
+    while c < n {
+        var s = 0.0f64
+        var k = 0usize
+        while k < nb {
+            s += v[k] * coefs[c * nb + k]
+            k += 1usize
+        }
+        f[c] = s
+        c += 1usize
+    }
+}
+
+fn inprod_coefs(a: *mem.Arena, norder: usize, breaks: []const f64, c1: []const f64, n1: usize, c2: []const f64, n2: usize, out: []f64) -> err {
+    ret inprod_coefs_k(a, 0usize, 0.0f64, breaks, norder, breaks, c1, n1, c2, n2, out)
+}
+
+// a basis for the integrals: kind 0 B-spline (norder, breaks), 1 Fourier, 2 monomial, 3 exponential, 4 polygonal (kinds 1 to 4: breaks are the two ends of the range, nbasis = norder, par as in gen_row), 5 the constant basis
+type Bspec = struct { kind: usize, period: f64, par: []const f64, norder: usize, breaks: []const f64 }
+
+fn spec_nbasis(b: *const Bspec) -> usize {
+    if b.kind == 5usize { ret 1usize }
+    ret b.breaks.len + b.norder - 2usize
+}
+
+// the basis row at x
+fn basis_row(a: *mem.Arena, b: *const Bspec, x: f64, v: []f64) -> err {
+    if b.kind == 5usize {
+        v[0usize] = 1.0f64
+        ret ok
+    }
+    if b.kind >= 1usize { ret gen_row(a, b.kind, b.period, b.par, spec_nbasis(b), x, 0usize, v) }
+    ret eval_bspline(a, b.norder, b.breaks, x, 0usize, v)
+}
+
+// inprod_coefs for one basis of any kind: both coefficient matrices in the basis (kind 1 Fourier is over [breaks[0], breaks[last]] with the given period)
+fn inprod_coefs_k(a: *mem.Arena, kind: usize, period: f64, par: []const f64, norder: usize, breaks: []const f64, c1: []const f64, n1: usize, c2: []const f64, n2: usize, out: []f64) -> err {
+    let b = Bspec{ kind: kind, period: period, par: par, norder: norder, breaks: breaks }
+    ret inprod_general(a, &b, c1, n1, &b, c2, n2, &b, c1[0usize..0usize], out)
+}
+
+// the curve values of both coefficient matrices at x, the second times the weight function when wc is not empty
+fn point_values(a: *mem.Arena, b1: *const Bspec, c1: []const f64, n1: usize, b2: *const Bspec, c2: []const f64, n2: usize, w: *const Bspec, wc: []const f64, x: f64, v: []f64, v2: []f64, vw: []f64, f1: []f64, f2: []f64) -> err {
+    var e = basis_row(a, b1, x, v)
+    if e != ok { ret e }
+    e = basis_row(a, b2, x, v2)
+    if e != ok { ret e }
+    pair_values(v, spec_nbasis(b1), c1, n1, f1)
+    pair_values(v2, spec_nbasis(b2), c2, n2, f2)
+    if wc.len > 0usize {
+        e = basis_row(a, w, x, vw)
+        if e != ok { ret e }
+        var wv = 0.0f64
+        var k = 0usize
+        while k < wc.len {
+            wv += vw[k] * wc[k]
+            k += 1usize
+        }
+        k = 0usize
+        while k < n2 {
+            f2[k] = wv * f2[k]
+            k += 1usize
+        }
+    }
+    ret ok
+}
+
+// inprod(fd(c1, basis1), fd(c2, basis2), 0, 0, rng, wtfd) by fda's Romberg integration over the range of basis1; the weight function is wc in the basis w when wc is not empty
+fn inprod_general(a: *mem.Arena, b1: *const Bspec, c1: []const f64, n1: usize, b2: *const Bspec, c2: []const f64, n2: usize, ws: *const Bspec, wc: []const f64, out: []f64) -> err {
+    let nb = spec_nbasis(b1)
+    let nb2 = spec_nbasis(b2)
+    let nbw = spec_nbasis(ws)
+    let breaks = b1.breaks
+    let nn = n1 * n2
+    let (f1, e8) = mem.alloc[f64](a, n1)
+    let (f2, e9) = mem.alloc[f64](a, n2)
+    if e8 != ok || e9 != ok { ret mem.Full }
     let jmaxp = 16usize
     let (sm, e1) = mem.alloc[f64](a, jmaxp * nn)
-    let (v, e2) = mem.alloc[f64](a, nb + norder)
+    let (v, e2) = mem.alloc[f64](a, nb + b1.norder + 2usize)
+    let (v2, e2b) = mem.alloc[f64](a, nb2 + b2.norder + 2usize)
+    let (vw, e2c) = mem.alloc[f64](a, nbw + ws.norder + 2usize)
+    if e2b != ok || e2c != ok { ret mem.Full }
     let (cs, e3) = mem.alloc[f64](a, 5usize * nn)
     let (ds, e4) = mem.alloc[f64](a, 5usize * nn)
     let (y, e5) = mem.alloc[f64](a, nn)
@@ -338,13 +512,13 @@ fn inprod_romberg(a: *mem.Arena, norder: usize, breaks: []const f64, out: []f64)
     while side < 2usize {
         var xe = lo
         if side == 1usize { xe = hi }
-        let e = eval_bspline(a, norder, breaks, xe, 0usize, v)
+        let e = point_values(a, b1, c1, n1, b2, c2, n2, ws, wc, xe, v, v2, vw, f1, f2)
         if e != ok { ret e }
         var i = 0usize
-        while i < nb {
+        while i < n1 {
             var j = 0usize
-            while j < nb {
-                sm[j * nb + i] += width * v[i] * v[j] / 2.0f64
+            while j < n2 {
+                sm[j * n1 + i] += width * f1[i] * f2[j] / 2.0f64
                 j += 1usize
             }
             i += 1usize
@@ -368,13 +542,13 @@ fn inprod_romberg(a: *mem.Arena, norder: usize, breaks: []const f64, out: []f64)
         while f64(q) < npts {
             var xp = 0.5f64 * (lo + hi)
             if iter > 2usize { xp = lo + del / 2.0f64 + f64(q) * del }
-            let e = eval_bspline(a, norder, breaks, xp, 0usize, v)
+            let e = point_values(a, b1, c1, n1, b2, c2, n2, ws, wc, xp, v, v2, vw, f1, f2)
             if e != ok { ret e }
             var i = 0usize
-            while i < nb {
+            while i < n1 {
                 var j = 0usize
-                while j < nb {
-                    sm[(iter - 1usize) * nn + j * nb + i] += width * v[i] * v[j] / tnm
+                while j < n2 {
+                    sm[(iter - 1usize) * nn + j * n1 + i] += width * f1[i] * f2[j] / tnm
                     j += 1usize
                 }
                 i += 1usize
@@ -465,6 +639,25 @@ fn inprod_romberg(a: *mem.Arena, norder: usize, breaks: []const f64, out: []f64)
         }
     }
     ret ok
+}
+
+
+// inprod(basis, basis): the identity coefficient matrices
+fn inprod_romberg(a: *mem.Arena, norder: usize, breaks: []const f64, out: []f64) -> err {
+    let nb = breaks.len + norder - 2usize
+    let (id, e) = mem.alloc[f64](a, nb * nb)
+    if e != ok { ret e }
+    var q = 0usize
+    while q < nb * nb {
+        id[q] = 0.0f64
+        q += 1usize
+    }
+    q = 0usize
+    while q < nb {
+        id[q * nb + q] = 1.0f64
+        q += 1usize
+    }
+    ret inprod_coefs(a, norder, breaks, id, nb, id, nb, out)
 }
 
 // pca.fd with no smoothing, the harmonics in the basis of the data: the eigenvalues in values (nbasis entries, descending, zero past min(nbasis, nrep)) and the proportions of variance in varprop. gram is the exact basis Gram matrix

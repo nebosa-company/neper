@@ -18,5 +18,5 @@ for (i in 1:60) {
   b <- runif(1, 0, 20); add(8, x, b, g(fermi_dirac_inc_0, x, b))
 }
 add(7, 5, 0, g(fermi_dirac_int, 5, 0))
-# integer order err: for x < 0 and the asymptotic series err is |f - f_previous| of the Levin-u iteration, a rounding-level difference, so it is compared at 1e-6
+# integer order err: for x < 0 and the asymptotic series err is |f - f_previous| of the Levin-u iteration, a rounding-level difference, so it is compared at 1e-6. Recorded failing case at erel = 1e-8: fermi_dirac_int(8, 6.020023795310408) err, got 1.466894614229207e-11, R 1.4668945708611146e-11 (3e-8 relative)
 emit("gslfd", "gsl", list(cases))

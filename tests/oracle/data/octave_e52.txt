@@ -1,0 +1,7 @@
+# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>
+# name: a
+# type: matrix
+# ndims: 2
+ 2 2
+ 1 2
+ 3 4

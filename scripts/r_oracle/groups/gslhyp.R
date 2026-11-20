@@ -7,8 +7,11 @@ suppressMessages(library(gsl))
 cases <- list()
 set.seed(20263120)
 g <- function(f, ...) tryCatch(f(..., give = TRUE, strict = FALSE), error = function(e) NULL)
+loose <- list()
+# ill-conditioned: R's own err exceeds 1e-7*|val|; the port's cancellation differs from R's libm rounding there (about 1e-5 relative), so these go to the loose set at the end
 add <- function(code, p, r, vrel = 1e-9, erel = 1e-8) {
-  if (is.null(r) || r$status != 0 || !is.finite(r$val) || r$val == 0 || !is.finite(r$err) || r$err > 1e-7 * abs(r$val)) return()
+  if (is.null(r) || r$status != 0 || !is.finite(r$val) || r$val == 0 || !is.finite(r$err)) return()
+  if (r$err > 1e-7 * abs(r$val)) { loose[[length(loose) + 1]] <<- list(code, p, r); return() }
   cases[[length(cases) + 1]] <<- case("h", c(code, 0, p), r$val, rel = vrel, abs = 1e-300)
   cases[[length(cases) + 1]] <<- case("h", c(code, 1, p), r$err, rel = erel, abs = 1e-300)
 }
@@ -57,4 +60,20 @@ for (i in 1:500) { a <- ab(); b <- ab(); cv <- cc2(); x <- x2(); add(6, c(a, b, 
 for (i in 1:250) { a <- ab(); b <- ab(); cv <- cc2(); x <- x2(); add(8, c(a, b, cv, x), g(hyperg_2F1_renorm, a, b, cv, x)) }
 for (i in 1:300) { a <- ab(); b <- runif(1, 0, 8); cv <- cc2(); x <- x2(); add(7, c(a, b, cv, x), g(hyperg_2F1_conj, a, b, cv, x)) }
 for (i in 1:200) { a <- ab(); b <- runif(1, 0, 8); cv <- cc2(); x <- x2(); add(9, c(a, b, cv, x), g(hyperg_2F1_conj_renorm, a, b, cv, x)) }
+# c - a - b an integer (reflect degenerate branch), both signs and zero
+xd <- function() c(runif(1, 0.5, 0.99), runif(1, 0.9, 0.999), runif(1, 0.1, 0.5))[sample(1:3, 1)]
+for (i in 1:400) {
+  a <- c(runif(1, 0.1, 4), runif(1, 4, 9), -runif(1, 0.1, 4) - 0.05)[sample(1:3, 1)]
+  b <- c(runif(1, 0.1, 4), runif(1, 4, 9), -runif(1, 0.1, 4) - 0.05)[sample(1:3, 1)]
+  cv <- a + b + sample(-3:4, 1); x <- xd()
+  add(6, c(a, b, cv, x), g(hyperg_2F1, a, b, cv, x))
+  add(8, c(a, b, cv, x), g(hyperg_2F1_renorm, a, b, cv, x))
+}
+# loose set: value within max(1e-4, 100*err/|val|) relative; error estimate within a factor of two (rel 1)
+for (k in seq_along(loose)) {
+  if (k > 400) break
+  l <- loose[[k]]; r <- l[[3]]
+  cases[[length(cases) + 1]] <- case("h", c(l[[1]], 0, l[[2]]), r$val, rel = min(1, max(1e-4, 100 * r$err / abs(r$val))), abs = 1e-300)
+  cases[[length(cases) + 1]] <- case("h", c(l[[1]], 1, l[[2]]), r$err, rel = 1, abs = 1e-300)
+}
 emit("gslhyp", "gsl", list(cases))

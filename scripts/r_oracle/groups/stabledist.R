@@ -72,6 +72,13 @@ for (rep in 1:20) {
     if (is.finite(d) && d > 0) cases[[length(cases) + 1]] <- case("d", c(al, be, ga, de, x), d, rel = 1e-9, abs = 1e-18)
   }
 }
+# alpha near 1 with beta near 1 far in the lower tail: the integral underflows and R answers dPareto (checked per case against stabledist:::dPareto), so c_stable_tail decides
+for (al in c(0.999, 1.0005, 1.001, 1.003, 1.01, 1.03, 1.1)) for (be in c(0.9, 0.99, 0.999)) for (x in c(-1e10, -1e12, -1e14)) {
+  ga <- 1.3; de <- 0.4; xx <- de + ga * x
+  d <- suppressWarnings(dstable(xx, al, be, ga, de))
+  pr <- stabledist:::dPareto(x, al, be) / ga
+  if (is.finite(d) && d > 0 && abs(d - pr) <= 1e-13 * pr) cases[[length(cases) + 1]] <- case("d", c(al, be, ga, de, xx), d, rel = 1e-9, abs = 1e-30)
+}
 # pm = 1 and pm = 2: args (alpha, beta, gamma, delta, x, pm) under "dpm" and "ppm"
 for (rep in 1:25) {
   al <- c(runif(1, 0.4, 0.98), runif(1, 1.02, 1.95))[sample(1:2, 1)]

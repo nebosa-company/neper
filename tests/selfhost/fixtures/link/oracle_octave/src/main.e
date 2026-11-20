@@ -17,12 +17,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e != ok { os.exit(5) }
     var bb = b
     let _ = str.push(&bb, "tests/oracle/data/octave_")
+    let erred = str.eq(c.name, "ebad") || str.eq(c.name, "env") || str.eq(c.name, "ecnt")
+    if erred { let _ = str.push_byte(&bb, 101u8) }
     if idx >= 10usize { let _ = str.push_byte(&bb, u8(48usize + idx / 10usize)) }
     let _ = str.push_byte(&bb, u8(48usize + idx % 10usize))
     let _ = str.push(&bb, ".txt")
     let path = str.done(&bb)
     let (text, re) = fs.read_file(a, path, 1048576usize)
     if re != ok { os.exit(6) }
+    if erred {
+        let (s, se) = oct.strict(a, text)
+        if str.eq(c.name, "ebad") {
+            if se == oct.Malformed { ret 1.0f64 }
+            if se != ok { os.exit(8) }
+            ret 0.0f64
+        }
+        if se != ok { os.exit(9) }
+        if str.eq(c.name, "env") { ret f64(s.nvars) }
+        ret f64(s.counts[col])
+    }
     let (m, pe) = oct.parse(a, text)
     if pe != ok { os.exit(7) }
     if str.eq(c.name, "nvars") { ret f64(m.nvars) }

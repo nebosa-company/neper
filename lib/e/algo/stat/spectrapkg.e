@@ -319,6 +319,12 @@ fn eigs_general(a: *mem.Arena, x: []const f64, n: usize, k: usize, which: usize,
     ret eigs_gen_core[MatOp](a, &op, mat_mul, xr, n, k, which, sigma, re, im, vre, vim)
 }
 
+// eigs(A, k, which) on a complex matrix (xre + i xim, column-major): RSpectra coerces it to double with a warning, dropping the imaginary part, so the answer is eigs_general of xre
+fn eigs_complex(a: *mem.Arena, xre: []const f64, xim: []const f64, n: usize, k: usize, which: usize, sigma: f64, re: []f64, im: []f64, vre: []f64, vim: []f64) -> err {
+    let _ = xim
+    ret eigs_general(a, xre, n, k, which, sigma, re, im, vre, vim)
+}
+
 // the pair of Gram operators of svds: y = A' A x (the n side) or y = A A' x (the m side) from the operators of A and A'
 type Gram[Ctx: type] = struct { c: *Ctx, f: fn(*Ctx, []const f64, []f64), ft: fn(*Ctx, []const f64, []f64), t: []f64 }
 
@@ -593,6 +599,14 @@ fn densify(a: *mem.Arena, m: sp.Csc) -> ([]f64, err) {
         c += 1usize
     }
     ret (d, ok)
+}
+
+// irlba::svdr on a sparse matrix (compressed-column): the same passes on the dense copy, as svdr
+fn svdr_sparse(a: *mem.Arena, g: *rr.Rng, m: sp.Csc, k: usize, extra: usize, tol: f64, it: usize, d: []f64) -> (usize, err) {
+    let (dn, e0) = densify(a, m)
+    if e0 != ok { ret (0usize, e0) }
+    let (iters, e1) = svdr(a, g, dn, m.nrow, m.ncol, k, extra, tol, it, d)
+    ret (iters, e1)
 }
 
 // RSpectra::svds on a sparse matrix (compressed-column, as Matrix::dgCMatrix stores it): d the k largest singular values, u (nrow by k) and v (ncol by k) the vectors, row-major

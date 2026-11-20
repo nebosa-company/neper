@@ -1,0 +1,5 @@
+# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>
+# name: a
+# type: range
+# base, limit, increment
+0 1 0.1

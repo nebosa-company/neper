@@ -1,0 +1,1 @@
+infile age:age_fmt e@mail id:id_fmt comment:comment_fmt score 1st tag#1 x-y long_variable_name_number_one price$:price$_fmt my var:my var_fmt income height:height_fmt a.b:a.b_fmt  using  tests/oracle/data/wf_3_stata.csv , automatic

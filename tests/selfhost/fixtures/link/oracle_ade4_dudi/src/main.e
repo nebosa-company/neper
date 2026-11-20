@@ -3,6 +3,7 @@
 
 use e.algo.stat.ade4 as ad
 use e.io
+use e.math
 use e.mem
 use e.os
 use e.test.oracle as oracle
@@ -15,6 +16,96 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nf = usize(z[3usize])
     let what = usize(z[4usize])
     let idx = usize(z[5usize])
+    if kind == 14usize {
+        let nb = usize(z[6usize])
+        let blocks = z[7usize..7usize + nb]
+        let xt = z[7usize + nb..7usize + nb + n * p]
+        let (ob, oe) = mem.alloc[f64](a, n * p)
+        if oe != ok { os.exit(23) }
+        ad.prep_binary(xt, n, p, blocks, ob)
+        if ob[idx] != ob[idx] { ret 0.0f64 - 1.0f64 }
+        ret ob[idx]
+    }
+    if kind == 15usize {
+        let rmin = z[6usize..6usize + p]
+        let rmax = z[6usize + p..6usize + 2usize * p]
+        let xt = z[6usize + 2usize * p..6usize + 2usize * p + n * p]
+        let (oc, oe) = mem.alloc[f64](a, n * p)
+        let (om, me) = mem.alloc[f64](a, p)
+        if oe != ok || me != ok { os.exit(24) }
+        ad.prep_circular(xt, n, p, rmin, rmax, oc, om)
+        if what == 1usize { ret om[idx] }
+        ret oc[idx]
+    }
+    if kind == 12usize {
+        let rw = z[6usize..6usize + n]
+        let pts = z[6usize + n..6usize + n + n * p]
+        let (dm, g1) = mem.alloc[f64](a, n * n)
+        if g1 != ok { os.exit(20) }
+        var i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < n {
+                var s = 0.0f64
+                var q = 0usize
+                while q < p {
+                    let df = pts[i * p + q] - pts[j * p + q]
+                    s += df * df
+                    q += 1usize
+                }
+                dm[i * n + j] = math.sqrt[f64](s)
+                j += 1usize
+            }
+            i += 1usize
+        }
+        let (pc, pe) = ad.dudi_pco(a, dm, n, rw, nf)
+        if pe != ok { os.exit(21) }
+        if what == 0usize { ret pc.d.eig[idx] }
+        if what == 1usize { ret pc.d.c1[idx] }
+        if what == 2usize { ret pc.d.li[idx] }
+        if what == 3usize { ret pc.d.co[idx] }
+        if what == 4usize { ret pc.d.l1[idx] }
+        if what == 6usize { ret pc.tab[idx] }
+        ret f64(pc.d.rank)
+    }
+    if kind == 13usize {
+        let kinds = z[6usize..6usize + p]
+        let rw = z[6usize + p..6usize + p + n]
+        let xt = z[6usize + p + n..6usize + p + n + n * p]
+        let (hs, he) = ad.dudi_hillsmith(a, xt, kinds, n, p, rw, nf)
+        if he != ok { os.exit(22) }
+        if what == 0usize { ret hs.eig[idx] }
+        if what == 1usize { ret hs.c1[idx] }
+        if what == 2usize { ret hs.li[idx] }
+        if what == 3usize { ret hs.co[idx] }
+        if what == 4usize { ret hs.l1[idx] }
+        ret f64(hs.rank)
+    }
+    if kind == 11usize {
+        let nb = usize(z[6usize])
+        let blocks = z[7usize..7usize + nb]
+        let rw = z[7usize + nb..7usize + nb + n]
+        let xt = z[7usize + nb + n..7usize + nb + n + n * p]
+        if what >= 6usize {
+            let (pt, h1) = mem.alloc[f64](a, n * p)
+            let (pr, h2) = mem.alloc[f64](a, n)
+            let (pc, h3) = mem.alloc[f64](a, p)
+            if h1 != ok || h2 != ok || h3 != ok { os.exit(17) }
+            let he = ad.prep_fuzzy_var(a, xt, n, p, blocks, rw, pt, pr, pc)
+            if he != ok { os.exit(18) }
+            if what == 6usize { ret pt[idx] }
+            if what == 7usize { ret pr[idx] }
+            ret pc[idx]
+        }
+        let (fp, fpe) = ad.dudi_fpca(a, xt, n, p, blocks, rw, nf)
+        if fpe != ok { os.exit(19) }
+        if what == 0usize { ret fp.eig[idx] }
+        if what == 1usize { ret fp.c1[idx] }
+        if what == 2usize { ret fp.li[idx] }
+        if what == 3usize { ret fp.co[idx] }
+        if what == 4usize { ret fp.l1[idx] }
+        ret f64(fp.rank)
+    }
     if kind == 8usize {
         let nb = usize(z[6usize])
         let rw = z[7usize..7usize + n]
@@ -61,6 +152,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let xt = z[6usize + p..6usize + p + n * p]
         let (md, me) = ad.dudi_mix(a, xt, kinds, n, p, nf)
         if me != ok { os.exit(14) }
+        if what == 6usize {
+            let (cr, g2) = mem.alloc[f64](a, p * md.nf)
+            if g2 != ok { os.exit(15) }
+            let ge = ad.mix_cr(a, xt, kinds, n, p, nf, cr)
+            if ge != ok { os.exit(16) }
+            ret cr[idx]
+        }
         if what == 0usize { ret md.eig[idx] }
         if what == 1usize { ret md.c1[idx] }
         if what == 2usize { ret md.li[idx] }
@@ -105,6 +203,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if what == 3usize { ret ci.lx[idx] }
         if what == 4usize { ret ci.ly[idx] }
         if what == 5usize { ret f64(ci.d.rank) }
+        if what == 7usize { ret ci.d.li[idx] }
+        if what == 8usize { ret ci.d.co[idx] }
         ret ci.rv
     }
     let x = z[6usize..6usize + n * p]

@@ -1,0 +1,13 @@
+x
+numeric
+3
+Inf
+7
+N
+z
+logical
+4
+1
+0
+2
+N

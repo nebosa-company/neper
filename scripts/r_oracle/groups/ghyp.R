@@ -114,4 +114,9 @@ for (from in 1:5) for (to in 1:5) for (rep in 1:4) {
   r <- ghypChangePars(from, to, q)
   for (j in 1:2) add("chpars", c(from, to, delta, q[3], q[4], j - 1), r[2 + j])
 }
-emit("ghyp", "GeneralizedHyperbolic", list(cases))
+# ghypcdf.R and ghypnfit.R source this file with ghyp_part set to write the integrate-based cases and the Nelder-Mead fits as their own groups
+fit_fns <- c("nigFit", "hyperbFit")
+cdf_fns <- c("pghyp", "pnig", "phyperb", "qghyp", "pgig")
+part <- if (exists("ghyp_part")) ghyp_part else "ghyp"
+fns <- function(k) if (k$fn %in% fit_fns) "ghypnfit" else if (k$fn %in% cdf_fns) "ghypcdf" else "ghyp"
+emit(part, "GeneralizedHyperbolic", list(cases[vapply(cases, function(k) fns(k) == part, NA)]))

@@ -1,0 +1,71 @@
+// e.fmt.sdump against foreign::data.restore. tests/oracle/foreign_sdump.json and the dump files under tests/oracle/data come from
+// `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R foreign_sdump`; the layout is at the top of scripts/r_oracle/groups/foreign_sdump.R.
+
+use e.fmt.sdump as sd
+use e.fs
+use e.io
+use e.mem
+use e.os
+use e.str
+use e.test.oracle as oracle
+
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let idx = usize(x[0usize])
+    let col = usize(x[1usize])
+    let erred = str.eq(c.name, "eerr") || str.eq(c.name, "enobj") || str.eq(c.name, "elen") || str.eq(c.name, "esum") || str.eq(c.name, "ewsum") || str.eq(c.name, "enna")
+    let (b, e) = str.builder(a, 64usize)
+    if e != ok { os.exit(5) }
+    var bb = b
+    let _ = str.push(&bb, "tests/oracle/data/sdump_")
+    if erred { let _ = str.push_byte(&bb, 101u8) }
+    let _ = str.push_i64(&bb, i64(idx))
+    let _ = str.push(&bb, ".txt")
+    let (text, re) = fs.read_file(a, str.done(&bb), 1048576usize)
+    if re != ok { os.exit(6) }
+    let (m, pe) = sd.parse(a, text)
+    if str.eq(c.name, "eerr") {
+        if pe == sd.Malformed { ret 1.0f64 }
+        if pe != ok { os.exit(7) }
+        ret 0.0f64
+    }
+    if pe != ok { os.exit(8) }
+    if str.eq(c.name, "nobj") || str.eq(c.name, "enobj") { ret f64(m.n) }
+    // the error files list their objects in name order already
+    let v = m.items[col]
+    if str.eq(c.name, "len") || str.eq(c.name, "elen") { ret f64(v.len) }
+    if str.eq(c.name, "sum") || str.eq(c.name, "esum") { ret v.sum }
+    if str.eq(c.name, "wsum") || str.eq(c.name, "ewsum") { ret v.wsum }
+    if str.eq(c.name, "nna") || str.eq(c.name, "enna") { ret f64(v.nna) }
+    if str.eq(c.name, "nlev") { ret f64(v.nlev) }
+    if str.eq(c.name, "levs") { ret v.levs }
+    if str.eq(c.name, "ndim") { ret f64(v.ndim) }
+    if str.eq(c.name, "dimprod") { ret v.dimprod }
+    if str.eq(c.name, "nnames") { ret f64(v.nnames) }
+    if str.eq(c.name, "elh") { ret v.elh }
+    ret v.nhash
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (golden, load_error) = oracle.load(a, "tests/oracle/foreign_sdump.json")
+    if load_error != ok { os.exit(2) }
+    if golden.cases.len == 0usize { os.exit(3) }
+    var failures = 0usize
+    var at = 0usize
+    while at < golden.cases.len {
+        let start = mem.mark(a)
+        let c = &golden.cases[at]
+        let got = answer(a, c)
+        if !oracle.agrees(got, c) {
+            failures += 1usize
+            if failures <= 12usize {
+                let _ = io.print(oracle.describe(a, c, got))
+                let _ = io.print("\n")
+            }
+        }
+        mem.reset(a, start)
+        at += 1usize
+    }
+    if failures > 0usize { os.exit(1) }
+    ret ok
+}

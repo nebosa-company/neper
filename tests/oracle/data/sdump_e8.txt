@@ -1,0 +1,11 @@
+x
+numeric
+2
+1e3
+0x1F
+y
+integer
+3
+3.9
+-2.5
+1e2

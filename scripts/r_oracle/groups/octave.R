@@ -122,4 +122,82 @@ for (i in 1:15) {
     if (is.matrix(v)) add("dimr", c(i, j - 1), nrow(v) * 1000 + ncol(v))
   }
 }
+# malformed and truncated files (octave_e<i>.txt): "ebad" is 1 when read.octave stops with an error, else "env" is the number of variables and "ecnt" the
+# length of variable col; the files only differ in what read.octave's own readLines/scan/stopifnot calls do with them
+H <- "# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>"
+bad_files <- list(
+  c(H, "# name: a", "# type: matrix"),
+  c(H, "# name: a", "# type: matrix", "# rows: 2"),
+  c(H, "# name: a", "# type: matrix", "# rows: 2", "# columns: 2", " 1 2"),
+  c(H, "# name: a", "# type: matrix", "# rows: 2", "# columns: 3", " 1 2", " 3 4"),
+  c(H, "# name: a", "# type: matrix", "# rows: 1", "# columns: 2", " 1 2 3 4"),
+  c(H, "# name: a", "# type: matrix", "# rows: 1", "# columns: 2", " 1 x"),
+  c(H, "# name: a", "# type: scalar", "abc"),
+  c(H, "# name: a", "# type: scalar"),
+  c(H, "# name: a", "# type: scalar", "1 2"),
+  c(H, "# name: a", "# type:"),
+  c(H, "# name: a"),
+  c(H, "# name: a", "# type: range", "# base, limit, increment", "1 5"),
+  c(H, "# name: a", "# type: range", "# base, limit, increment", "1 5 1 2"),
+  c(H, "# name: a", "# type: range"),
+  c(H, "# name: a", "# type: complex scalar", "(1,2,3)"),
+  c(H, "# name: a", "# type: complex scalar", "(1)"),
+  c(H, "# name: a", "# type: complex scalar"),
+  c(H, "# name: a", "# type: complex matrix", "# rows: 2", "# columns: 2", " (1,2) (3,4)"),
+  c(H, "# name: a", "# type: complex matrix"),
+  c(H, "# name: a", "# type: string", "# elements: 2", "# length: 1", "x"),
+  c(H, "# name: a", "# type: string"),
+  c(H, "# name: a", "# type: string", "# elements: x", "# length: 1", "x"),
+  c(H, "# name: a", "# type: list", "# length: 2", "# name: _val", "# type: scalar", "1"),
+  c(H, "# name: a", "# type: list"),
+  c(H, "# name: a", "# type: cell"),
+  c(H, "# name: a", "# type: cell", "# rows: 1", "# columns: 2", "# name: <cell-element>", "# type: scalar", "1", ""),
+  c(H, "# name: a", "# type: struct"),
+  c(H, "# name: a", "# type: bool", "x"),
+  c(H, "# name: a", "# type: bool", "1 0"),
+  c(H, "# name: a", "# type: bool matrix"),
+  c(H, "# name: a", "# type: bool matrix", "# rows: 2", "# columns: 2", " 1 0"),
+  c(H, "# name: a", "# type: foo", "zzz", "# name: b", "# type: scalar", "3"),
+  c(H, "# name: a", "# type: foo", "zzz"),
+  c(H, "# name: a", "# type: matrix", "# ndims: 3", " 2 2 2", " 1", " 2"),
+  c(H, "# name: a", "# type: matrix", "# ndims: 3"),
+  c(H),
+  character(0),
+  c(H, "# name: a", "# type: scalar", "1", "junk", "# name: b", "# type: scalar", "2"),
+  c(H, "junk", "# name: a", "# type: scalar", "1"),
+  c(H, "# name: a", "# type: scalar", "# name: b", "# type: scalar", "2"),
+  c(H, "# name: a", "# type: range", "# base, limit, increment", "5 1 -1"),
+  c(H, "# name: a", "# type: range", "# base, limit, increment", "5 1 1"),
+  c(H, "# name: a", "# type: range", "# base, limit, increment", "1 5 0"),
+  c(H, "# name: a", "# type: range", "# base, limit, increment", "3 3 0"),
+  c(H, "# name: a", "# type: range", "# base, limit, increment", "0 1 0.1"),
+  c(H, "# name: a", "# type: complex scalar", "(1,2),"),
+  c(H, "# name: a", "# type: complex scalar", "(,2)"),
+  c(H, "# name: a", "# type: matrix", "# rows: x", "# columns: 2", " 1 2"),
+  c(H, "# name: a", "# type: matrix", "# rows: 1", "# columns: -2", " 1 2"),
+  c(H, "# name: a", "# type: matrix", "# rows: 1", "# columns: 2", " 1 NA", "# name: b", "# type: bool", "1"),
+  c(H, "# name: a", "# type: matrix", "# ndims: 3", " 2 x 2", " 1"),
+  c(H, "# name: a", "# type: matrix", "# ndims: 2", " 2 2", " 1 2", " 3 4"),
+  c(H, "# name: a", "# type: complex matrix", "# ndims: 2", " 2 1", " (1,2)", " (3,4)"),
+  c(H, "# name: a", "# type: complex matrix", "# ndims: 2", " 2 1", " (1,2)", " (3,4,5)"),
+  c(H, "# name: a", "# type: string", "# elements: 0"),
+  c(H, "# name: a", "# type: string", "# elements: 3", "# length: 1", "x", "# length: 1"),
+  c(H, "# name: a", "# type: list", "# length: x"),
+  c(H, "# name: a", "# type: list", "# length: 0", "# name: b", "# type: scalar", "4"),
+  c(H, "# name: a", "# type: cell", "# rows: 2", "# columns: 1", "# name: <cell-element>", "# type: scalar", "1"),
+  c(H, "# name: a", "# type: cell", "# rows: 0", "# columns: 0"),
+  c(H, "# name: a", "# type: struct", "# length: 1", "# name: f", "# type: matrix", "# rows: 1"),
+  c(H, "# name: a", "# type: bool matrix", "# rows: 1", "# columns: 2", " 1 y"),
+  c(H, "# name: a", "# type: scalar", "Inf", "# name: b", "# type: scalar", "NA", "# name: c", "# type: scalar", "-Inf")
+)
+for (i in seq_along(bad_files)) {
+  path <- file.path(root, sprintf("tests/oracle/data/octave_e%d.txt", i))
+  writeLines(bad_files[[i]], path)
+  r <- tryCatch(suppressWarnings(read.octave(path)), error = function(e) NULL)
+  add("ebad", c(i, 0), as.numeric(is.null(r)))
+  if (!is.null(r)) {
+    add("env", c(i, 0), length(r))
+    for (j in seq_along(r)) add("ecnt", c(i, j - 1), length(r[[j]]))
+  }
+}
 emit("octave", "foreign", list(cases))
