@@ -1,0 +1,13 @@
+l
+list
+2
+
+NULL
+0
+
+integer
+4
+4
+5
+N
+7

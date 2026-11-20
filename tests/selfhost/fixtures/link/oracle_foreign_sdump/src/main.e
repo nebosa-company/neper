@@ -1,5 +1,6 @@
 // e.fmt.sdump against foreign::data.restore. tests/oracle/foreign_sdump.json and the dump files under tests/oracle/data come from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R foreign_sdump`; the layout is at the top of scripts/r_oracle/groups/foreign_sdump.R.
+// A name with a leading x is a summary of an object in a hand-written dump (sdump_e<i>.txt).
 
 use e.fmt.sdump as sd
 use e.fs
@@ -13,7 +14,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let idx = usize(x[0usize])
     let col = usize(x[1usize])
-    let erred = str.eq(c.name, "eerr") || str.eq(c.name, "enobj") || str.eq(c.name, "elen") || str.eq(c.name, "esum") || str.eq(c.name, "ewsum") || str.eq(c.name, "enna")
+    var nm = c.name
+    var erred = str.eq(nm, "eerr") || str.eq(nm, "enobj")
+    if nm.len > 1usize && nm[0usize] == 120u8 {
+        erred = true
+        nm = nm[1usize..nm.len]
+    }
     let (b, e) = str.builder(a, 64usize)
     if e != ok { os.exit(5) }
     var bb = b
@@ -24,25 +30,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (text, re) = fs.read_file(a, str.done(&bb), 1048576usize)
     if re != ok { os.exit(6) }
     let (m, pe) = sd.parse(a, text)
-    if str.eq(c.name, "eerr") {
+    if str.eq(nm, "eerr") {
         if pe == sd.Malformed { ret 1.0f64 }
         if pe != ok { os.exit(7) }
         ret 0.0f64
     }
     if pe != ok { os.exit(8) }
-    if str.eq(c.name, "nobj") || str.eq(c.name, "enobj") { ret f64(m.n) }
+    if str.eq(nm, "nobj") || str.eq(nm, "enobj") { ret f64(m.n) }
     // the error files list their objects in name order already
     let v = m.items[col]
-    if str.eq(c.name, "len") || str.eq(c.name, "elen") { ret f64(v.len) }
-    if str.eq(c.name, "sum") || str.eq(c.name, "esum") { ret v.sum }
-    if str.eq(c.name, "wsum") || str.eq(c.name, "ewsum") { ret v.wsum }
-    if str.eq(c.name, "nna") || str.eq(c.name, "enna") { ret f64(v.nna) }
-    if str.eq(c.name, "nlev") { ret f64(v.nlev) }
-    if str.eq(c.name, "levs") { ret v.levs }
-    if str.eq(c.name, "ndim") { ret f64(v.ndim) }
-    if str.eq(c.name, "dimprod") { ret v.dimprod }
-    if str.eq(c.name, "nnames") { ret f64(v.nnames) }
-    if str.eq(c.name, "elh") { ret v.elh }
+    if str.eq(nm, "len") { ret f64(v.len) }
+    if str.eq(nm, "sum") { ret v.sum }
+    if str.eq(nm, "wsum") { ret v.wsum }
+    if str.eq(nm, "nna") { ret f64(v.nna) }
+    if str.eq(nm, "ty") { ret f64(v.ty) }
+    if str.eq(nm, "isum") { ret v.isum }
+    if str.eq(nm, "nlev") { ret f64(v.nlev) }
+    if str.eq(nm, "levs") { ret v.levs }
+    if str.eq(nm, "ndim") { ret f64(v.ndim) }
+    if str.eq(nm, "dimprod") { ret v.dimprod }
+    if str.eq(nm, "nnames") { ret f64(v.nnames) }
+    if str.eq(nm, "elh") { ret v.elh }
     ret v.nhash
 }
 

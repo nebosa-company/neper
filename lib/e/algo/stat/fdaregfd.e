@@ -1,7 +1,8 @@
 // R fda, register.fd (crit 2, non-periodic, one variable) for B-spline curves, with its pieces monhess, regyfn, regfngrad, reghess, linesearch, stepchk and stepit.
 //
-// Not here: periodic registration (the shift), multivariate curves, crit 1, a W basis with a different order than the one given.
+// Periodic registration (the shift, Fourier curves) is in register_fd_full. Not here: multivariate curves, crit 1, a W basis with a different order than the one given.
 
+use e.algo.stat.fdabase as fb
 use e.algo.stat.fdalm as lm
 use e.algo.stat.fdapkg as fa
 use e.algo.stat.fdareg as fr
@@ -9,7 +10,83 @@ use e.math
 use e.mem
 
 // the fixed part of one registration: the curve basis (yn, yb), the W basis (wn, wb), the fine grid, the penalty on the W coefficients past the first and the Gram matrix of the curve basis
-type RegCtx = struct { yn: usize, yb: []const f64, ynb: usize, wn: usize, wb: []const f64, nw: usize, nfine: usize, lo: f64, hi: f64, xfine: []f64, kmat: []f64, haspen: bool, gram: []f64, crit: usize }
+type RegCtx = struct { yn: usize, yb: []const f64, ynb: usize, wn: usize, wb: []const f64, nw: usize, nfine: usize, lo: f64, hi: f64, xfine: []f64, kmat: []f64, haspen: bool, gram: []f64, crit: usize, kind: usize, period: f64, periodic: bool }
+
+// the curve at xs: kind 0 a B-spline basis (yn, yb), kind 1 a Fourier basis of ynb functions over the period
+fn eval_cx(a: *mem.Arena, cx: *const RegCtx, coefs: []const f64, xs: []const f64, deriv: usize, out: []f64) {
+    if cx.kind == 0usize {
+        eval_curve(a, cx.yn, cx.yb, coefs, xs, deriv, out)
+        ret
+    }
+    var i = 0usize
+    while i < xs.len {
+        let st = mem.mark(a)
+        out[i] = fb.eval_fd_fourier(a, cx.ynb, cx.period, coefs, xs[i], deriv)
+        mem.reset(a, st)
+        i += 1usize
+    }
+}
+
+// shifty: y at x + shift for data periodic over the span of x (fda's linear interpolation over two periods); fda's reduction of a large shift compares it with the upper end of x, not the width, and so do we
+fn shifty(a: *mem.Arena, xs: []const f64, y: []const f64, shift0: f64, out: []f64) -> err {
+    let n = xs.len
+    let (x2, e1) = mem.alloc[f64](a, 2usize * n)
+    let (y2, e2) = mem.alloc[f64](a, 2usize * n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    let xlo = xs[0usize]
+    let xhi = xs[n - 1usize]
+    let wid = xhi - xlo
+    var shift = shift0
+    var i = 0usize
+    var cnt = 0usize
+    if shift == 0.0f64 {
+        i = 0usize
+        while i < n {
+            out[i] = y[i]
+            i += 1usize
+        }
+        ret ok
+    }
+    if shift > 0.0f64 {
+        while shift > xhi { shift = shift - wid }
+        i = 0usize
+        while i < n {
+            x2[cnt] = xs[i]
+            y2[cnt] = y[i]
+            cnt += 1usize
+            i += 1usize
+        }
+        i = 1usize
+        while i < n {
+            x2[cnt] = xs[i] + wid
+            y2[cnt] = y[i]
+            cnt += 1usize
+            i += 1usize
+        }
+    } else {
+        while shift < xlo - wid { shift = shift + wid }
+        i = 0usize
+        while i + 1usize < n {
+            x2[cnt] = xs[i] - wid
+            y2[cnt] = y[i]
+            cnt += 1usize
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            x2[cnt] = xs[i]
+            y2[cnt] = y[i]
+            cnt += 1usize
+            i += 1usize
+        }
+    }
+    i = 0usize
+    while i < n {
+        out[i] = fr.approx_lin(x2, y2, cnt, xs[i] + shift)
+        i += 1usize
+    }
+    ret ok
+}
 
 fn eval_curve(a: *mem.Arena, norder: usize, breaks: []const f64, coefs: []const f64, xs: []const f64, deriv: usize, out: []f64) {
     var i = 0usize
@@ -266,13 +343,27 @@ fn reg_yfn(a: *mem.Arena, cx: *const RegCtx, cvec: []const f64, hfine: []const f
         if cvec[i] != 0.0f64 { allzero = false }
         i += 1usize
     }
-    if allzero {
+    var shift = 0.0f64
+    if cx.periodic { shift = cvec[0usize] }
+    if allzero && shift == 0.0f64 {
         i = 0usize
         while i < nb {
             out[i] = ycoefs[i]
             i += 1usize
         }
         ret ok
+    }
+    let (ysh, e0) = mem.alloc[f64](a, nf)
+    if e0 != ok { ret mem.Full }
+    if shift != 0.0f64 {
+        let e = shifty(a, cx.xfine, yfine, shift, ysh)
+        if e != ok { ret e }
+    } else {
+        i = 0usize
+        while i < nf {
+            ysh[i] = yfine[i]
+            i += 1usize
+        }
     }
     let (hinv, e1) = mem.alloc[f64](a, nf)
     let (bm, e2) = mem.alloc[f64](a, nb * nb)
@@ -298,10 +389,14 @@ fn reg_yfn(a: *mem.Arena, cx: *const RegCtx, cvec: []const f64, hfine: []const f
     }
     var t = 0usize
     while t < nf {
-        let st = mem.mark(a)
-        let e = fa.eval_bspline(a, cx.yn, cx.yb, hinv[t], 0usize, v)
-        mem.reset(a, st)
-        if e != ok { ret e }
+        if cx.kind == 0usize {
+            let st = mem.mark(a)
+            let e = fa.eval_bspline(a, cx.yn, cx.yb, hinv[t], 0usize, v)
+            mem.reset(a, st)
+            if e != ok { ret e }
+        } else {
+            fa.eval_fourier(nb, cx.period, hinv[t], 0usize, v)
+        }
         var r = 0usize
         while r < nb {
             var c = 0usize
@@ -309,7 +404,7 @@ fn reg_yfn(a: *mem.Arena, cx: *const RegCtx, cvec: []const f64, hfine: []const f
                 bm[c * nb + r] += v[r] * v[c]
                 c += 1usize
             }
-            rhs[r] += v[r] * yfine[t]
+            rhs[r] += v[r] * ysh[t]
             r += 1usize
         }
         t += 1usize
@@ -349,8 +444,8 @@ fn reg_fg(a: *mem.Arena, cx: *const RegCtx, y0fine: []const f64, dhfine: []const
     let (yr, e1) = mem.alloc[f64](a, nf)
     let (dyr, e2) = mem.alloc[f64](a, nf)
     if e1 != ok || e2 != ok { ret mem.Full }
-    eval_curve(a, cx.yn, cx.yb, ycoef, cx.xfine, 0usize, yr)
-    eval_curve(a, cx.yn, cx.yb, ycoef, cx.xfine, 1usize, dyr)
+    eval_cx(a, cx, ycoef, cx.xfine, 0usize, yr)
+    eval_cx(a, cx, ycoef, cx.xfine, 1usize, dyr)
     var aa = 0.0f64
     var bb = 0.0f64
     var cc = 0.0f64
@@ -375,10 +470,12 @@ fn reg_fg(a: *mem.Arena, cx: *const RegCtx, y0fine: []const f64, dhfine: []const
         var sb = 0.0f64
         var sc = 0.0f64
         var sr = 0.0f64
-        if j > 0usize {
+        if j > 0usize || cx.periodic {
             i = 0usize
             while i < nf {
-                let dw = dyr[i] * dhfine[j * nf + i]
+                var dhv = 1.0f64
+                if j > 0usize { dhv = dhfine[j * nf + i] }
+                let dw = dyr[i] * dhv
                 sb += dw * y0fine[i]
                 sc += dw * yr[i]
                 sr += dw * (y0fine[i] - yr[i])
@@ -406,7 +503,7 @@ fn reg_fg(a: *mem.Arena, cx: *const RegCtx, y0fine: []const f64, dhfine: []const
             p += 1usize
         }
     }
-    grad[0usize] = 0.0f64
+    if !cx.periodic { grad[0usize] = 0.0f64 }
     var nr = 0.0f64
     j = 0usize
     while j < nw {
@@ -430,12 +527,13 @@ fn reg_hs(a: *mem.Arena, cx: *const RegCtx, y0fine: []const f64, dhfine: []const
     let (dccv, e5) = mem.alloc[f64](a, nw)
     let (hv, e6) = mem.alloc[f64](a, np)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
-    eval_curve(a, cx.yn, cx.yb, ycoef, cx.xfine, 0usize, yr)
-    eval_curve(a, cx.yn, cx.yb, ycoef, cx.xfine, 1usize, dyr)
-    eval_curve(a, cx.yn, cx.yb, ycoef, cx.xfine, 2usize, d2yr)
+    eval_cx(a, cx, ycoef, cx.xfine, 0usize, yr)
+    eval_cx(a, cx, ycoef, cx.xfine, 1usize, dyr)
+    eval_cx(a, cx, ycoef, cx.xfine, 2usize, d2yr)
     var i = 0usize
     while i < nf {
         d2h[i] = 1.0f64
+        if cx.periodic { d2h[i] = 0.0f64 }
         i += 1usize
     }
     var jj = 1usize
@@ -444,6 +542,7 @@ fn reg_hs(a: *mem.Arena, cx: *const RegCtx, y0fine: []const f64, dhfine: []const
         i = 0usize
         while i < nf {
             d2h[col * nf + i] = 0.0f64
+            if cx.periodic { d2h[col * nf + i] = dhfine[jj * nf + i] }
             i += 1usize
         }
         jj += 1usize
@@ -466,10 +565,12 @@ fn reg_hs(a: *mem.Arena, cx: *const RegCtx, y0fine: []const f64, dhfine: []const
     while j < nw {
         var sb = 0.0f64
         var sc = 0.0f64
-        if j > 0usize {
+        if j > 0usize || cx.periodic {
             i = 0usize
             while i < nf {
-                let dw = dyr[i] * dhfine[j * nf + i]
+                var dhv = 1.0f64
+                if j > 0usize { dhv = dhfine[j * nf + i] }
+                let dw = dyr[i] * dhv
                 sb += dw * y0fine[i]
                 sc += dw * yr[i]
                 i += 1usize
@@ -497,6 +598,10 @@ fn reg_hs(a: *mem.Arena, cx: *const RegCtx, y0fine: []const f64, dhfine: []const
             while i < nf {
                 var dhj = 0.0f64
                 var dhk = 0.0f64
+                if cx.periodic {
+                    dhj = 1.0f64
+                    dhk = 1.0f64
+                }
                 if j > 0usize { dhj = dhfine[j * nf + i] }
                 if k > 0usize { dhk = dhfine[k * nf + i] }
                 s1 += (dyr[i] * dhj) * (dyr[i] * dhk)
@@ -539,13 +644,15 @@ fn reg_hs(a: *mem.Arena, cx: *const RegCtx, y0fine: []const f64, dhfine: []const
             p += 1usize
         }
     }
-    j = 0usize
-    while j < nw {
-        hess[j] = 0.0f64
-        hess[j * nw] = 0.0f64
-        j += 1usize
+    if !cx.periodic {
+        j = 0usize
+        while j < nw {
+            hess[j] = 0.0f64
+            hess[j * nw] = 0.0f64
+            j += 1usize
+        }
+        hess[0usize] = 1.0f64
     }
-    hess[0usize] = 1.0f64
     if ex < 0.0f64 { ret mem.Full }
     ret ok
 }
@@ -594,7 +701,7 @@ fn min_nan(x: f64, y: f64) -> f64 {
 }
 
 // stepchk with the limits -50 and 50: the step is shortened when it would leave them. fda indexes the length nw vectors with a logical index of length nw - 1, which R recycles; so do we. lim = (upper, lower) flags, ind[0] the status
-fn step_chk(oldstep: f64, cvec: []const f64, deltac: []const f64, lim: []usize, ind: []usize, nw: usize) -> f64 {
+fn step_chk(oldstep: f64, cvec: []const f64, deltac: []const f64, lim: []usize, ind: []usize, nw: usize, periodic: bool) -> f64 {
     var newstep = oldstep
     var stepmin = oldstep * deltac[0usize]
     var stepmax = stepmin
@@ -615,7 +722,9 @@ fn step_chk(oldstep: f64, cvec: []const f64, deltac: []const f64, lim: []usize, 
         var have = false
         i = 0usize
         while i < nw {
-            let sel = (oldstep * deltac[1usize + i % (nw - 1usize)]) == tgt
+            var di = 1usize + i % (nw - 1usize)
+            if periodic { di = i }
+            let sel = (oldstep * deltac[di]) == tgt
             if sel {
                 let si = oldstep * deltac[i]
                 var lim_v = 0.0f64 - 50.0f64
@@ -784,8 +893,8 @@ fn register_curve(a: *mem.Arena, cx: *const RegCtx, ycoefs: []const f64, y0coefs
     let (ips, e20) = mem.alloc[usize](a, 1usize)
     let (indv, e21) = mem.alloc[usize](a, 1usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok || e20 != ok || e21 != ok { ret mem.Full }
-    eval_curve(a, cx.yn, cx.yb, ycoefs, cx.xfine, 0usize, yfine)
-    eval_curve(a, cx.yn, cx.yb, y0coefs, cx.xfine, 0usize, y0fine)
+    eval_cx(a, cx, ycoefs, cx.xfine, 0usize, yfine)
+    eval_cx(a, cx, y0coefs, cx.xfine, 0usize, y0fine)
     var e = reg_h(a, cx, cvec, true, ffine, dffine, hfine, dhfine, d2h, fm)
     if e != ok { ret e }
     e = reg_yfn(a, cx, cvec, hfine, yfine, ycoefs, yreg)
@@ -859,7 +968,7 @@ fn register_curve(a: *mem.Arena, cx: *const RegCtx, ycoefs: []const f64, y0coefs
             var stepiter = 1usize
             var inner = true
             while stepiter <= 5usize && inner {
-                lmat[12usize] = step_chk(lmat[12usize], cvec, deltac, lim, indv, nw)
+                lmat[12usize] = step_chk(lmat[12usize], cvec, deltac, lim, indv, nw, cx.periodic)
                 if indv[0usize] == 1usize {
                     inner = false
                 } else if lmat[12usize] <= 1.0e-7f64 {
@@ -874,7 +983,7 @@ fn register_curve(a: *mem.Arena, cx: *const RegCtx, ycoefs: []const f64, y0coefs
                     ctmp[0usize] = 0.0f64
                     e = reg_h(a, cx, ctmp, false, ffine, dffine, hfine, dhfine, d2h, fm)
                     if e != ok { ret e }
-                    e = reg_yfn(a, cx, ctmp, hfine, yfine, ycoefs, yreg)
+                    e = reg_yfn(a, cx, cnew, hfine, yfine, ycoefs, yreg)
                     if e != ok { ret e }
                     e = reg_fg(a, cx, y0fine, dhfine, yreg, cnew, rcur, gcur)
                     if e != ok { ret e }
@@ -950,7 +1059,13 @@ fn register_fd(a: *mem.Arena, yn: usize, yb: []const f64, wn: usize, wb: []const
 
 // register.fd with crit 1 (the sum of squared differences from the target) or 2 (the smallest eigenvalue of the cross-product matrix, the default)
 fn register_fd_crit(a: *mem.Arena, yn: usize, yb: []const f64, wn: usize, wb: []const f64, m: usize, lambda: f64, crit: usize, ncurve: usize, ycoefs: []const f64, y0coefs: []const f64, wc0: []const f64, regc: []f64, wc: []f64, warpc: []f64) -> err {
-    let ynb = yb.len + yn - 2usize
+    let (sh, e0) = mem.alloc[f64](a, ncurve)
+    if e0 != ok { ret mem.Full }
+    ret register_fd_full(a, 0usize, yn, yb, yb.len + yn - 2usize, 0.0f64, false, wn, wb, m, lambda, crit, ncurve, ycoefs, y0coefs, wc0, regc, wc, warpc, sh)
+}
+
+// register.fd over a B-spline curve basis (kind 0: yn, yb) or a Fourier one (kind 1: ynb functions, period); periodic = TRUE fits the shift of a Fourier basis, returned in shift (one per curve) and in the first coefficient of the optimisation. wc keeps wc0's first coefficient, as fda's Wfd does
+fn register_fd_full(a: *mem.Arena, kind: usize, yn: usize, yb: []const f64, ynb: usize, period: f64, periodic: bool, wn: usize, wb: []const f64, m: usize, lambda: f64, crit: usize, ncurve: usize, ycoefs: []const f64, y0coefs: []const f64, wc0: []const f64, regc: []f64, wc: []f64, warpc: []f64, shift: []f64) -> err {
     let nw = wb.len + wn - 2usize
     var nfine = 10usize * ynb + 1usize
     if nfine < 201usize { nfine = 201usize }
@@ -959,14 +1074,19 @@ fn register_fd_crit(a: *mem.Arena, yn: usize, yb: []const f64, wn: usize, wb: []
     let (pm, e3) = mem.alloc[f64](a, nw * nw)
     let (gram, e4) = mem.alloc[f64](a, ynb * ynb)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
-    let lo = yb[0usize]
-    let hi = yb[yb.len - 1usize]
+    let lo = wb[0usize]
+    let hi = wb[wb.len - 1usize]
     var i = 0usize
     while i < nfine {
         xf[i] = fr.seq_at(lo, hi, nfine, i)
         i += 1usize
     }
-    var e = fa.penalty_matrix(a, yn, yb, 0usize, gram)
+    var e = ok
+    if kind == 0usize {
+        e = fa.penalty_matrix(a, yn, yb, 0usize, gram)
+    } else {
+        e = fb.inprod_fourier(a, ynb, period, gram)
+    }
     if e != ok { ret e }
     var haspen = false
     if lambda > 0.0f64 {
@@ -983,7 +1103,7 @@ fn register_fd_crit(a: *mem.Arena, yn: usize, yb: []const f64, wn: usize, wb: []
             r += 1usize
         }
     }
-    let cx = RegCtx { yn: yn, yb: yb, ynb: ynb, wn: wn, wb: wb, nw: nw, nfine: nfine, lo: lo, hi: hi, xfine: xf, kmat: kmat, haspen: haspen, gram: gram, crit: crit }
+    let cx = RegCtx { yn: yn, yb: yb, ynb: ynb, wn: wn, wb: wb, nw: nw, nfine: nfine, lo: lo, hi: hi, xfine: xf, kmat: kmat, haspen: haspen, gram: gram, crit: crit, kind: kind, period: period, periodic: periodic }
     let (cv, e5) = mem.alloc[f64](a, nw)
     let (yr, e6) = mem.alloc[f64](a, ynb)
     if e5 != ok || e6 != ok { ret mem.Full }
@@ -1003,6 +1123,11 @@ fn register_fd_crit(a: *mem.Arena, yn: usize, yb: []const f64, wn: usize, wb: []
             wc[ic * nw + i] = cv[i]
             i += 1usize
         }
+        shift[ic] = 0.0f64
+        if periodic {
+            shift[ic] = cv[0usize]
+            wc[ic * nw] = wc0[ic * nw]
+        }
         i = 0usize
         while i < ynb {
             regc[ic * ynb + i] = yr[i]
@@ -1020,7 +1145,7 @@ fn register_fd_crit(a: *mem.Arena, yn: usize, yb: []const f64, wn: usize, wb: []
         if e != ok { ret e }
         i = 0usize
         while i < nfine {
-            wm[ic * nfine + i] = lo + (hi - lo) * hf[i] / hf[nfine - 1usize]
+            wm[ic * nfine + i] = lo + (hi - lo) * hf[i] / hf[nfine - 1usize] + shift[ic]
             i += 1usize
         }
         ic += 1usize

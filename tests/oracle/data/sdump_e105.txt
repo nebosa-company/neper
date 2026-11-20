@@ -1,0 +1,7 @@
+t
+structure
+1
+class
+character
+1
+foo

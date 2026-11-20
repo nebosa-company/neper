@@ -12,8 +12,12 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let idx = usize(x[0usize])
-    let unsup = str.eq(c.name, "eunsup")
-    let erred = str.eq(c.name, "eerr") || unsup
+    var nm = c.name
+    var erred = str.eq(nm, "eerr")
+    if nm.len > 1usize && nm[0usize] == 120u8 {
+        erred = true
+        nm = nm[1usize..nm.len]
+    }
     let (b, e) = str.builder(a, 64usize)
     if e != ok { os.exit(5) }
     var bb = b
@@ -24,26 +28,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (text, re) = fs.read_file(a, str.done(&bb), 1048576usize)
     if re != ok { os.exit(6) }
     let (v, pe) = sb.parse(a, text)
-    if unsup {
-        if pe == sb.Unsupported { ret 1.0f64 }
-        if pe == sb.Malformed { ret 0.0f64 }
-        os.exit(9)
-    }
-    if erred {
+    if str.eq(nm, "eerr") {
         if pe == sb.Malformed { ret 1.0f64 }
         if pe != ok { os.exit(7) }
         ret 0.0f64
     }
     if pe != ok { os.exit(8) }
-    if str.eq(c.name, "len") { ret f64(v.len) }
-    if str.eq(c.name, "sum") { ret v.sum }
-    if str.eq(c.name, "wsum") { ret v.wsum }
-    if str.eq(c.name, "nna") { ret f64(v.nna) }
-    if str.eq(c.name, "nlev") { ret f64(v.nlev) }
-    if str.eq(c.name, "levs") { ret v.levs }
-    if str.eq(c.name, "ndim") { ret f64(v.ndim) }
-    if str.eq(c.name, "dimprod") { ret v.dimprod }
-    if str.eq(c.name, "nnames") { ret f64(v.nnames) }
+    if str.eq(nm, "len") { ret f64(v.len) }
+    if str.eq(nm, "sum") { ret v.sum }
+    if str.eq(nm, "wsum") { ret v.wsum }
+    if str.eq(nm, "nna") { ret f64(v.nna) }
+    if str.eq(nm, "ty") { ret f64(v.ty) }
+    if str.eq(nm, "isum") { ret v.isum }
+    if str.eq(nm, "nlev") { ret f64(v.nlev) }
+    if str.eq(nm, "levs") { ret v.levs }
+    if str.eq(nm, "ndim") { ret f64(v.ndim) }
+    if str.eq(nm, "dimprod") { ret v.dimprod }
+    if str.eq(nm, "nnames") { ret f64(v.nnames) }
     ret v.elh
 }
 

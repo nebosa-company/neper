@@ -3,8 +3,9 @@
 // the element codes, lengths and absolute file offsets), 21 structure (a list whose .Data, .Dim and .Label members make the object). The byte order is little-endian
 // unless the first code is out of range (0 to 65535), when it is big-endian, and an error when it is out of range both ways.
 //
-// parse() gives the same summary as e.fmt.sdump (length, sum, position-weighted sum, NAs, levels, dim, names). Complex values, S language modes (codes 257 to 321),
-// an element code of 0 or less (a name) and a code R does not know are refused with Unsupported (R returns a message for the last); duplicate member names too.
+// parse() gives the same summary as e.fmt.sdump (length, sum, position-weighted sum, NAs, levels, dim, names, type). Code 7 is complex (two doubles each), codes
+// 257 to 321 the S language modes (built as sdump builds them), an element code of 0 or less a name, and a code R does not know the message string R answers
+// with. A .Tsp member is an attribute here, as in read.S. Duplicate member names are refused with Unsupported.
 
 use e.fmt.sdump as sd
 use e.mem
@@ -85,15 +86,17 @@ fn chars(r: *R, at: usize, len: usize, out: []str) -> usize {
     ret at + 4usize + usize(size)
 }
 
-// an atomic object of code 1 to 4 at `at`
+// an atomic object of code 1 to 4 (logical, integer, single, double) or 7 (complex) at `at`
 fn atomic(r: *R, at: usize, code: i64, len: usize) -> sd.Item {
     var it: sd.Item = zero
     it.len = len
     it.prod = 1.0f64
+    if code == 7i64 { it.ty = 1u8 }
     var i = 0usize
     while i < len && r.bad == 0u8 {
         var na = false
         var v = 0.0f64
+        var iv = 0.0f64
         if code == 1i64 || code == 2i64 {
             let x = u32_at(r, at + 4usize * i)
             if x == 0i64 - 2147483648i64 {
@@ -109,15 +112,20 @@ fn atomic(r: *R, at: usize, code: i64, len: usize) -> sd.Item {
             if ub < 0i64 { ub = ub + 4294967296i64 }
             v = f64(mem.bitcast[f32](u32(ub)))
             if v != v { na = true }
-        } else {
+        } else if code == 4i64 {
             v = mem.bitcast[f64](u64_at(r, at + 8usize * i))
             if v != v { na = true }
+        } else {
+            v = mem.bitcast[f64](u64_at(r, at + 16usize * i))
+            iv = mem.bitcast[f64](u64_at(r, at + 16usize * i + 8usize))
+            if v != v || iv != iv { na = true }
         }
         if na {
             it.nna += 1usize
         } else {
             it.sum += v
             it.wsum += v * f64(i + 1usize)
+            it.isum += iv
             it.prod = it.prod * v
         }
         i += 1usize
@@ -125,27 +133,71 @@ fn atomic(r: *R, at: usize, code: i64, len: usize) -> sd.Item {
     ret it
 }
 
-fn read_obj(r: *R, a: *mem.Arena, code: i64, len: usize, at: usize) -> sd.Item {
-    if code >= 1i64 && code <= 4i64 { ret atomic(r, at, code, len) }
-    if code == 5i64 {
-        var it: sd.Item = zero
-        it.kind = 1u8
-        it.len = len
-        let (ss, se) = mem.alloc[str](a, len + 1usize)
-        if se != ok { ret fail(r, 2u8) }
-        let _ = chars(r, at, len, ss[0usize..len])
-        if r.bad != 0u8 { ret fail(r, 1u8) }
-        var i = 0usize
-        while i < len {
-            it.sum += code_sum(ss[i])
-            it.wsum += code_sum(ss[i]) * f64(i + 1usize)
-            i += 1usize
-        }
+// the character object at `at`: its summary and its first string
+fn char_obj(r: *R, a: *mem.Arena, len: usize, at: usize) -> (sd.Item, str) {
+    var it: sd.Item = zero
+    it.kind = 1u8
+    it.len = len
+    let (ss, se) = mem.alloc[str](a, len + 1usize)
+    if se != ok {
+        r.bad = 2u8
+        ret (it, "")
+    }
+    let _ = chars(r, at, len, ss[0usize..len])
+    if r.bad != 0u8 {
+        r.bad = 1u8
+        ret (it, "")
+    }
+    var i = 0usize
+    while i < len {
+        it.sum += code_sum(ss[i])
+        it.wsum += code_sum(ss[i]) * f64(i + 1usize)
+        i += 1usize
+    }
+    var first = ""
+    if len > 0usize { first = ss[0usize] }
+    ret (it, first)
+}
+
+// what ReadSObj answers for a code it does not know: the message as a one-string character vector
+fn unknown_mode(r: *R, a: *mem.Arena, code: i64) -> sd.Item {
+    var it: sd.Item = zero
+    let (b, e) = str.builder(a, 64usize)
+    if e != ok {
+        r.bad = 2u8
         ret it
     }
-    if code != 6i64 && code != 21i64 {
-        if code == 7i64 || (code >= 257i64 && code <= 321i64) { ret fail(r, 2u8) }
-        ret fail(r, 2u8)
+    var bb = b
+    let _ = str.push(&bb, "Unrecognized S mode ")
+    let _ = str.push_i64(&bb, code)
+    let _ = str.push(&bb, " not supported")
+    let msg = str.done(&bb)
+    it.kind = 1u8
+    it.len = 1usize
+    it.sum = code_sum(msg)
+    it.wsum = it.sum
+    ret it
+}
+
+fn read_obj(r: *R, a: *mem.Arena, code: i64, len: usize, at: usize) -> sd.Item {
+    if (code >= 1i64 && code <= 4i64) || code == 7i64 { ret atomic(r, at, code, len) }
+    if code == 5i64 {
+        let (it, _) = char_obj(r, a, len, at)
+        ret it
+    }
+    var lang = false
+    var smode = ""
+    if code >= 257i64 && code <= 321i64 {
+        lang = true
+        smode = sd.smode_name(usize(code - 257i64))
+    }
+    if code != 6i64 && code != 21i64 && !lang { ret unknown_mode(r, a, code) }
+    if lang && (str.eq(smode, "name") || str.eq(smode, "missing")) {
+        let (it, first) = char_obj(r, a, len, at)
+        if r.bad != 0u8 { ret it }
+        if str.eq(smode, "missing") { ret sd.mk("", 4u8, 2usize) }
+        if len == 0usize || first.len == 0usize { ret it }
+        ret sd.mk("", 2u8, 1usize)
     }
     let (names, ne) = mem.alloc[str](a, len + 1usize)
     if ne != ok { ret fail(r, 2u8) }
@@ -162,65 +214,34 @@ fn read_obj(r: *R, a: *mem.Arena, code: i64, len: usize, at: usize) -> sd.Item {
         let el = u32_at(r, lens_at + 4usize * i)
         let eo = u32_at(r, offs_at + 4usize * i)
         if r.bad != 0u8 { break }
-        if ec <= 0i64 { ret fail(r, 2u8) }
-        if el < 0i64 || eo < 0i64 { ret fail(r, 1u8) }
-        kids[i] = read_obj(r, a, ec, usize(el), usize(eo))
-        kids[i].name = names[i]
+        if ec <= 0i64 {
+            // as.name(names[i]); an empty name stops R
+            if names[i].len == 0usize { ret fail(r, 1u8) }
+            kids[i] = sd.mk(names[i], 2u8, 1usize)
+        } else {
+            if el < 0i64 || eo < 0i64 { ret fail(r, 1u8) }
+            kids[i] = read_obj(r, a, ec, usize(el), usize(eo))
+            kids[i].name = names[i]
+        }
         i += 1usize
     }
     if r.bad != 0u8 { ret fail(r, 1u8) }
-    var named = false
-    i = 0usize
-    while i < len {
-        if names[i].len > 0usize {
-            named = true
-            var j = 0usize
-            while j < i {
-                if str.eq(names[j], names[i]) { ret fail(r, 2u8) }
-                j += 1usize
-            }
-        }
-        i += 1usize
+    let (lv, ls) = sd.list_value(a, kids[0usize..len])
+    if ls != 0u8 { ret fail(r, ls) }
+    if code == 6i64 { ret sd.list_item("", lv) }
+    var res: sd.Item = zero
+    var st = 0u8
+    if code == 21i64 {
+        let (x, s2) = sd.structure_value(a, "", lv, false)
+        res = x
+        st = s2
+    } else {
+        let (x, s2) = sd.apply_code("", smode, lv)
+        res = x
+        st = s2
     }
-    var it: sd.Item = zero
-    if code == 6i64 {
-        it.kind = 2u8
-        it.len = len
-        i = 0usize
-        while i < len {
-            it.sum += kids[i].sum
-            it.wsum += kids[i].wsum
-            it.nna += kids[i].nna
-            if named { it.elh += code_sum(names[i]) * f64(i + 1usize) }
-            i += 1usize
-        }
-        if named { it.nnames = len }
-        ret it
-    }
-    var di = len
-    var dim_i = len
-    var lab_i = len
-    i = 0usize
-    while i < len {
-        if str.eq(names[i], ".Data") { di = i }
-        if str.eq(names[i], ".Dim") { dim_i = i }
-        if str.eq(names[i], ".Label") { lab_i = i }
-        if str.eq(names[i], ".Tsp") { ret fail(r, 2u8) }
-        i += 1usize
-    }
-    if di == len { ret fail(r, 1u8) }
-    it = kids[di]
-    if lab_i < len {
-        it.nlev = kids[lab_i].len
-        it.levs = kids[lab_i].sum
-    }
-    if dim_i < len {
-        let dm = kids[dim_i]
-        if dm.nna > 0usize || dm.prod != f64(kids[di].len) { ret fail(r, 1u8) }
-        it.ndim = dm.len
-        it.dimprod = dm.prod
-    }
-    ret it
+    if st != 0u8 { ret fail(r, st) }
+    ret res
 }
 
 fn parse(a: *mem.Arena, t: str) -> (sd.Item, err) {

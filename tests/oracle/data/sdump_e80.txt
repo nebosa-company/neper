@@ -1,0 +1,16 @@
+t
+structure
+2
+.Data
+integer
+4
+4
+5
+6
+7
+.Tsp
+numeric
+3
+1990
+1990.75
+4

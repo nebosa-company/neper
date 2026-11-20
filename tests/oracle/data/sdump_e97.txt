@@ -1,0 +1,15 @@
+t
+structure
+2
+.Data
+numeric
+3
+1
+2
+3
+.Tsp
+numeric
+3
+1
+1001
+1.000009

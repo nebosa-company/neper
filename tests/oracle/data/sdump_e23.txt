@@ -1,0 +1,7 @@
+x
+NULL
+0
+y
+numeric
+1
+1

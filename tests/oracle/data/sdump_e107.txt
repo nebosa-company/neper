@@ -1,0 +1,7 @@
+t
+structure
+1
+.Label
+character
+1
+a

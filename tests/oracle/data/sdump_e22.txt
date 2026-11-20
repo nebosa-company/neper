@@ -1,0 +1,7 @@
+n
+NULL
+1
+a
+numeric
+1
+5
