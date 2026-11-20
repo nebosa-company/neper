@@ -4621,4 +4621,5 @@ D7721	1325	T118-T120 opened for the harness findings with no row; T079, T085 and
 D7722	792	Handover files folded into the work queue
 D7723	1154	Handover leftovers placed
 D7724	546	Block-ellipsis keeps the clamped-line prefix; ellipsis-alone references are an older encoding
-D7725	508	L413 flexmix closed
+D7725	509	L413 flexmix closed
+D7726	312	L511 QCA closed; read.ssd dropped

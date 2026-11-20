@@ -51809,3 +51809,7 @@ User verdict of 2026-11-05 (css-overflow section 6, block-ellipsis): follow the 
 ## D7725 — L413 flexmix closed
 
 All acceptance entries (FLXMRglm four families, FLXMRglmfix, concomitant models, EM and CEM, BIC and ICL, posterior and clusters) have passing oracle cases plus SEM, weights, offsets and EIC. Concomitant and stepFlexmix tolerances derive from R's sensitivity to a 2-ulp perturbation of the covariate (nnet BFGS is not reproduced to rounding). refit, boot, LR_test, rflexmix and summary standard errors are outside the acceptance and not ported. Windows only; Linux pending.
+
+## D7726 — L511 QCA closed; read.ssd dropped
+
+QCA closed: truthTable, minimize (complex, parsimonious, intermediate), superSubset, pof and necessity tests all have exact or 1e-10 oracle cases (Windows; Linux pending). In foreign (L332) read.ssd is dropped from the scope: it needs SAS, so no oracle can exist.
