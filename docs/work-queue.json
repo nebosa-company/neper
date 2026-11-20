@@ -276,7 +276,7 @@
       "score": 0.86,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (2026-11-20, merged 108fcd2c5): hcubature, pcubature, cuhre, vegas, suave and divonne equal cubature (integral, error, evaluations, chi-square probability, return code, vector integrands, infinite limits) on fixed integrand ids (oracle_cubaturepkg; Windows only). Remaining: see the verifier gap list: arbitrary user integrands, pcubature box splitting beyond what the cases hit, Suave/Divonne sampler exactness, Linux. Verifier gaps: (1) pcubature box splitting is not implemented: pcubature_nd is documented 'without box splitting' and the oracle generator skips every R pcubature run that needs more than 4000/20000  | (2) pcubature box splitting was NOT ported: it does not exist. cubature-1.0.4 pcubature.c is purely p-adaptive (grows the Clenshaw-Curtis degree in one dimension at a time and never su | (3) Loose tolerance: cuhre chi-square probability and divonne evaluation count/error estimate in unstable cases (20 neval and 34 error cases of 570 dv cases) remain loosened; the optim | (4) Linux run of oracle_cubaturepkg not done (only x64-windows). | (5) Divonne non-default features not ported (outside the Acceptance list, skipped): cubature-rule keys 7, 9, 11, 13 (return -3), Sobol and Mersenne-Twister samples (negative keys), xGi | (6) docs/work-queue.json not edited (repo rules). Suggested L453 update: delete 'Open: the box splitting of pcubature ...', note pcubature has no splitting in the C source, hcubature/p"
+      "evidence": "Partial (2026-11-21, merged c356aac52; Windows only): hcubature, pcubature, cuhre, vegas, suave and divonne equal R cubature on 4514 oracle cases covering integral, error, evaluations, chi-square probability, return code, vector integrands and infinite limits, but arbitrary user integrands, the Linux run, sampler-exact Suave/Divonne and the loosened unstable-case tolerances are not covered. Verifier gaps: (1) Loose tolerances without a per-case R-side reason: about 75 'ch' cases carry rel 1e-8 plus an abs allowance as large as 0.4 (e.g. 0.3979, 0.0997), generated from the obse | (2) Divonne is loosened in ~330 'dv' cases: 141 at rel 1e-8 with abs 0.02, 48 at rel 1e-5, and about 30 evaluation-count cases with abs allowances up to 260857 and 374702 (th | (3) Integrands are fixed ids baked into cubaturepkg.e (integrand(id, ...)), so arbitrary user integrands are not supported; the title's 'arbitrary integrand coverage' is unme | (4) Suave and Divonne sampler exactness is only checked on the fixed integrand ids with fixed seeds; there is no case with a user-selected or distinct integrand, and the Divo | (5) oracle_cubaturepkg was run only on x64-windows; no Linux run is recorded (the queue evidence says Windows only). | (6) Weak-mutation note: a ~1e-16 relative change to a GK15 node (xgk[3]) and truncating pi in cc_node both still pass, so near-ulp constants are not pinned; larger mutations "
     },
     {
       "id": "L454",
@@ -537,10 +537,10 @@
       "group": "CRAN parity",
       "order": 711,
       "title": "gam: backfitting generalized additive models",
-      "score": 0.85,
+      "score": 0.88,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (2026-11-20, merged 108fcd2c5): gam s() and lo() backfitting (gaussian, binomial, poisson), mixed s+lo, predict at newdata, step.Gam paths, anova Chisq/F and summary equal gam in the oracle groups gam, gam_lo, gam_mix, gam_pred and gam_step. Remaining: predict se.fit only at the training points; step.Gam only over 1/linear/s/lo regimens; weights and offset variants beyond the generated cases; some df-matched s() tolerances loosened; Linux pending. Verifier gaps: (1) lo(x1, x2) of two or more variables is not ported: loessfit.e is 1-D only, and it needs the loessf.f kd-tree and blending. Outside the Acceptance list, skipped. | (2) random() smoother, offsets and NA handling are not ported. Outside the Acceptance list, skipped. | (3) Some df-matched s() cases keep a per-case tolerance above 1e-9 (up to 1.5e-6 in gam_pred) because R's Brent search is unstable under 1e-11 weight changes. R cannot be matched more  | (4) Degree 2 lo() is oracle-checked only for a single lo term in Gaussian fits, because R crashes on other combinations. | (5) A rank-deficient local fit in a lo() basis is not checked against R. | (6) Linux and the full suite were not run. | (7) L376 is not closed in docs/work-queue.json, docs/decisions.md or docs/progress.html: the task rules forbid touching them."
+      "evidence": "Partial (2026-11-21, merged c356aac52; Windows only): gam s() and lo() backfitting (gaussian, binomial, poisson), mixed s+lo, offset(), predict at newdata, se.fit at the training points, step.Gam over 1/linear/s/lo, and anova and summary equal R in the gam, gam_lo, gam_mix, gam_pred, gam_step and gam_off oracle groups; multi-variable lo(x1, x2), random(), NA handling, se.fit at newdata, wider step.Gam regimens and the Linux run are not covered. Verifier gaps: (1) df-matched s() tolerances above 1e-9, up to 1.5e-6 in gam_pred, are unchanged, because R's Brent search moves by more than that under 1e-11 weight changes | (2) step.Gam regimens beyond 1/linear/s/lo are not added | (3) Outside the Acceptance list and skipped: lo() of two or more variables (needs the loessf.f kd-tree), random(), NA handling, degree-2 lo() beyond a single Gaussian term, r | (4) Linux and the full suite were not run"
     },
     {
       "id": "L378",
@@ -563,17 +563,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6616). e.algo.stat.ordinalpkg.clm (logit, probit and cloglog links, flexible thresholds, no constant column) equals ordinal clm on Windows: log-likelihood, thresholds and coefficients to 1e-6 by Newton with step halving on the exact Hessian (oracle_ordinal, 69 values; Linux pending). D7508-D7509: the loglog link and equidistant thresholds equal ordinal (cauchit reaches a different local maximum than R). D7510-D7513, D7528-D7529: symmetric thresholds, case weights, predictions, anova, scale and nominal effects equal ordinal. Open: cauchit and the flexible links, clmm, profile. Was: Open (CRAN rank 447). Mid. e.algo.stat.regression has ordinal_logistic. Acceptance, equal to ordinal: clm with logit, probit, cloglog, loglog, cauchit and the flexible links, nominal and scale effects, thresholds symmetric and equidistant; clmm with random intercepts by Laplace and adaptive quadrature; predict, anova, profile."
-    },
-    {
-      "id": "L395",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 714,
-      "title": "RcppAnnoy: approximate nearest neighbours",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 463). Mid. e.ml.knn is exact. Acceptance, equal to RcppAnnoy: index building with its seeded random-projection splits, Euclidean, angular, Manhattan and Hamming metrics, getNNsByVector and getNNsByItem with search_k, and the index file format."
     },
     {
       "id": "L415",
@@ -686,17 +675,6 @@
       "evidence": "Partial (D6643). e.algo.stat.osqppkg.solve (convex QP with two-sided constraints by the OSQP ADMM iteration, dense, run to primal and dual residuals below 1e-11) equals osqp solve_osqp on Windows: solution and objective at 1e-6 (oracle_osqp, 48 values; Linux pending). Open: sparse input, adaptive rho, polishing, infeasibility and unboundedness certificates, warm starts, update of problem data, clarabel and the conic solvers (SOCP, SDP, exponential cone). Was: Open (CRAN ranks 815, 880; CVXR 807 is the modelling layer over them). Mid. e.math.opt.convex has convex solvers. Acceptance, equal to osqp and clarabel within the solver tolerance: osqp ADMM with rho updates and warm starts, status codes and iteration counts; clarabel for zero, nonnegative, second-order, exponential and power cones."
     },
     {
-      "id": "L493",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 744,
-      "title": "topicmodels: LDA and CTM",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 897). Mid. Acceptance, equal to topicmodels under set.seed: LDA with the VEM and Gibbs methods, CTM, posterior distributions, perplexity, logLik, terms and topics, with the document-term inputs of L380."
-    },
-    {
       "id": "L507",
       "category": "library",
       "group": "CRAN parity",
@@ -706,17 +684,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6405). The alpha spending functions equal gsDesign on Windows (oracle_gsdesign; Linux pending). Open: boundary computation by recursive integration, gsProbability, sample size, futility bounds, four-point spending parameterisations. Was: Open (CRAN rank 939). Mid. Acceptance, equal to gsDesign: gsDesign for the Lan-DeMets O'Brien-Fleming and Pocock, Hwang-Shih-DeCani, power and exponential spending functions, gsProbability, gsCP, nBinomial, nSurv, nNormal, sfLDOF and the boundaries and sample sizes."
-    },
-    {
-      "id": "L509",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 747,
-      "title": "Cubist: rule-based regression models",
-      "score": 0,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 924). Mid. Acceptance, equal to Cubist under set.seed: cubist with committees and neighbors, the generated rules and their linear models, predict, summary, varImp, and the C5.0-style splitting on mixed predictors."
     },
     {
       "id": "L510",
@@ -911,10 +878,10 @@
       "group": "CRAN parity",
       "order": 775,
       "title": "MCMCpack: Bayesian MCMC for common models",
-      "score": 0.05,
+      "score": 0.7,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6648). e.algo.stat.mcmcpackpkg equals the MCMCpack density functions dwish, diwish, dinvgamma and ddirichlet on Windows (oracle_mcmcpack, 120 values; Linux pending). Open: the samplers (MCMCregress, MCMClogit, MCMCpoisson, MCMCprobit, MCMCfactanal, MCMCirt1d, MCMChregress and the rest) under R random streams, rwish and riwish, posterior summaries, Bayes factors and marginal likelihoods. Was: Open (CRAN rank 636). Mid to large. Needs the R RNG streams. Acceptance, equal to MCMCpack value for value under set.seed: MCMCregress, MCMClogit, MCMCprobit, MCMCpoisson, MCMCoprobit, MCMCirt1d and MCMCirtKd, MCMCfactanal, MCMCmetrop1R, MCMCpanel, rwish, riwish, rdirichlet and the posterior summary helpers."
+      "evidence": "Partial (2026-11-21, merged c356aac52; Windows only): Seeded oracle groups match R for MCMCregress, MCMClogit, MCMCpoisson, MCMCprobit, MCMCoprobit, MCMCfactanal, MCMCirt1d, MCMCirtKd, MCMCmetrop1R, rwish, riwish, rdirichlet, BayesFactor/PostProbMod and the density functions (not re-run here), while MCMCpanel and MCMChregress have no code or oracle and the AC method, user starts and Laplace marginal likelihood are not covered. Verifier gaps: (1) MCMCpanel is in the Acceptance list but has no Neper implementation in lib/e/algo/stat/mcmcpack*.e and no oracle case in scripts/r_oracle/groups/mcmcpack*.R or tests/orac | (2) MCMCpanel: not an MCMCpack 1.7.1 export, so there is nothing in R to match. The Acceptance text needs correcting. | (3) MCMChregress is not implemented; it needs its own C++ Gibbs sampler and draw order, and is outside the Acceptance list. | (4) MCMCoprobit with mcmc.method 'AC' (Scythe BFGS, hesscdif, multivariate t proposal) is not ported. | (5) MCMCirt1d with R's default start values (per-item glm probit fits and the eigen-based theta.start) is not ported; the cases use scalar alpha.start and beta.start. | (6) MCMCirtKd and MCMCordfactanal with default starts are only at 1e-5 relative, because R's glm and polr stop early. The MCMCoprobit polr start is at 1e-6 to 1e-7. An exact "
     },
     {
       "id": "L455",
@@ -1076,10 +1043,10 @@
       "group": "CRAN parity",
       "order": 791,
       "title": "nlme: gls, correlation structures and variance functions",
-      "score": 0.08,
+      "score": 0.78,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partly done (D6064): e.algo.stat.gls has gls at a fixed AR1, compound-symmetry or exponential correlation, REML and ML, equal to nlme on 492 values on Windows (oracle_gls); Linux pending. Open: estimating correlation parameters, groups, variance functions, lme, lmList, other classes, anova, intervals, self-start models. Original: Open (CRAN rank 195). Large. e.algo.stat.mixed has random-intercept and slope fits, MMRM and GEE. Acceptance, equal to nlme: gls and lme with corAR1, corARMA, corCAR1, corCompSymm, corSymm, corGaus, corExp, corSpher, corLin, corRatio and the variance functions varIdent, varPower, varExp, varFixed, varComb, varConstPower; REML and ML objective, AIC, anova between models, intervals; lmList; nlme and nls self-start models (SSlogis, SSasymp, SSmicmen, SSfpl, SSgompertz)."
+      "evidence": "Partial (2026-11-21, merged c356aac52; Windows only): Equal to R nlme per oracle_gls and oracle_nlmelist: gls and lme with ten correlation structures and the variance functions (incl. varFixed/varComb), REML/ML, AIC, anova, intervals, lmList, and nls SS* self-starts; not covered: corARMA beyond (1,1), nlme() non-linear mixed models, nested random effects. Verifier gaps: (1) tests/oracle/nlmelist.json is 2,774,621 bytes, over the 2 MB cap; shrink it, for example by dropping the longest-redundant fit blocks or splitting lme and nls into two or | (2) tests/oracle/gls.json uses rel 1e-6 / abs 1e-8 on all 627 cases and scripts/r_oracle/groups/gls.R gives no R-side reason (nlmelist.R documents polishing to the optimum fo | (3) The tolerance in nlmelist.json is documented but still looser than 1e-8: lme at 5e-7, corSymm at 1e-5 and nls at 1e-6. The stated reason is that R's own optimizer stops a | (4) nlme (nonlinear mixed-effects models, incl. self-start models inside nlme): not implemented, no oracle case. Acceptance entry still missing. | (5) lme is single grouping level only: no nested or crossed random effects, no pdDiag/pdIdent/pdCompSymm. Only full-covariance random effects with q<=2 get var-cov intervals. | (6) lme corSymm: only coef, logLik, AIC, BIC and se are compared, at 1e-5 / 1e-6, because the model is not identified."
     },
     {
       "id": "L320",
@@ -1362,10 +1329,10 @@
       "group": "CRAN parity",
       "order": 829,
       "title": "grf: generalized random forests",
-      "score": 0,
+      "score": 0.8,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 944). Large (about 30k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to grf under set.seed: regression, quantile, causal, instrumental, survival and local linear forests with honest splitting, out-of-bag predictions, variance estimates, variable importance and the average treatment effect."
+      "evidence": "Partial (2026-11-21, merged c356aac52; Windows only): Equals R (grf 2.6.1, per the committed oracle cases; fixtures not run here): regression, causal, instrumental, quantile, local-linear and survival forests, with honest splitting, OOB predictions, variance estimates, variable importance and the all-sample AIPW ATE estimate and std.err; not covered: ATE for overlap, treated and control samples, TMLE and clusters, the multi_arm, probability and boosted forests, and any elementwise (non-checksum) comparison. Verifier gaps: (1) ll.split.cutoff above 0 (overall-beta branch) is implemented but not oracle-matched: an R case diverged at tree 0 node 14, cause unknown, not confirmed as tie noise; only | (2) One local-linear-split case (weight penalty, split lambda 0.5, p=4) diverged and was dropped, cause unknown. | (3) fast.logrank=TRUE for survival forests is not implemented (outside the Acceptance list, skipped). | (4) average_treatment_effect with target.sample treated/control/overlap or method TMLE, clusters, missing X, tune.parameters, causal survival, multi-arm, multi-regression and | (5) The generator writes inputs with 17 significant digits, which is why the oracle is large; I did not touch the shared scripts/r_oracle/generate.R."
     },
     {
       "id": "C287",

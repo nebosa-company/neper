@@ -23,7 +23,7 @@ L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
 L448	library	0.25	676	mcmc: Metropolis and tempering samplers	D7337: morph and morph.metrop (subexponential and exponential maps, centre) equal to mcmc under set.seed.
 L450	library	0.2	722	mediation: causal mediation analysis	Partial (D7376): e.algo.stat.mediationpkg.mediate_lm (quasi-Bayesian mediate for linear mediator and outcome models without interaction: ACME, ADE, total effect and proportion mediated with percentile
 L452	library	0.35	775	TSA: time-series analysis toolkit	Partial (D6190, D6406 McLeod.Li.test).
-L453	library	0.86	1442	cubature: adaptive multidimensional integration	Partial (2026-11-20, merged 108fcd2c5): hcubature, pcubature, cuhre, vegas, suave and divonne equal cubature (integral, error, evaluations, chi-square probability, return code, vector integrands, infi
+L453	library	0.86	1410	cubature: adaptive multidimensional integration	Partial (2026-11-21, merged c356aac52;
 L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).
 L468	library	0.66	3256	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
 L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
@@ -47,10 +47,9 @@ L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial 
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
 L367	library	0.67	3915	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
-L376	library	0.85	1300	gam: backfitting generalized additive models	Partial (2026-11-20, merged 108fcd2c5): gam s() and lo() backfitting (gaussian, binomial, poisson), mixed s+lo, predict at newdata, step.Gam paths, anova Chisq/F and summary equal gam in the oracle gr
+L376	library	0.88	902	gam: backfitting generalized additive models	Partial (2026-11-21, merged c356aac52;
 L378	library	0.2	651	uwot and Rtsne: embeddings equal to R	Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases;
 L393	library	0.3	926	ordinal: cumulative link models	Partial (D6616).
-L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
 L415	library	0.3	1063	marginaleffects: predictions, slopes and comparisons	Partial (D6942, D6943): e.algo.stat.margeff.glm_avg, avg_slopes, avg_predictions and the avg_comparisons of a 0 / 1 variable for gaussian, logistic and Poisson (identity, logit, log link) glms from th
 L416	library	0.15	609	polspline: polynomial spline models	D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 va
 L434	library	0.1	735	qgraph: network estimation	Partial (D6646).
@@ -61,9 +60,7 @@ L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L486	library	0.25	473	mixtools: mixture models by EM	Partial (D6194).
 L488	library	0.2	475	drc: dose-response models	Partial (D6411).
 L489	library	0.15	799	osqp and clarabel: quadratic and conic solvers	Partial (D6643).
-L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
 L507	library	0.2	514	gsDesign: group sequential designs	Partial (D6405).
-L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
 L510	library	0.35	545	gmm: generalized method of moments	Partial (D6479 linear two-step gmm with iid, MDS and D6480 HAC weighting with five kernels at fixed bandwidth, covariance and J agree with gmm on Windows;
 L512	library	0.15	1248	poLCA: latent class analysis	D7345: latent class regression with covariates (log-likelihood, response probabilities, coefficient magnitudes) equal to poLCA.
 L513	library	0.15	704	Epi: epidemiology tools	Partial (D6412, D7253, D7254, D7255 the conditional MLE odds ratio and its exact interval, D7256 clogistic on matched sets).
@@ -81,7 +78,7 @@ L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
 L417	library	0.9	2973	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
 L435	library	0.15	840	sna: social network analysis	Partial (D6636).
 L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
-L439	library	0.05	714	MCMCpack: Bayesian MCMC for common models	Partial (D6648).
+L439	library	0.7	1316	MCMCpack: Bayesian MCMC for common models	Partial (2026-11-21, merged c356aac52;
 L455	library	0.1	742	geometry: Qhull in n dimensions	Partial (D6645).
 L463	library	0.25	2452	actuar: actuarial science	Partial (D6143).
 L467	library	0.1	846	hetGP: heteroskedastic Gaussian processes	Partial (D6647).
@@ -96,7 +93,7 @@ L312	library	0.4	2208	psych: reliability, factor analysis and correlation tools	
 L313	library	0.25	2647	emmeans: estimated marginal means and contrasts	D7364: Tukey-adjusted odds ratios and Poisson rate ratios equal to emmeans.
 L341	library	0.15	785	multcomp: general linear hypotheses	Partial (D6631).
 L318	library	0.05	735	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partly done (D6063): e.algo.stat.fcast has BoxCox, InvBoxCox and BoxCox.lambda by loglik, equal to forecast on 171 cases on Windows (oracle_fcast);
-L319	library	0.08	803	nlme: gls, correlation structures and variance functions	Partly done (D6064): e.algo.stat.gls has gls at a fixed AR1, compound-symmetry or exponential correlation, REML and ML, equal to nlme on 492 values on Windows (oracle_gls);
+L319	library	0.78	1346	nlme: gls, correlation structures and variance functions	Partial (2026-11-21, merged c356aac52;
 L320	library	0.05	917	sf: simple-features geometry, predicates and spherical geometry	Partly done (D6065): the planar convex hull, polygon area, point in polygon and Delaunay triangle count in e.algo.geom equal sf on 150 cases on Windows (oracle_sf);
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
 L349	library	0.15	743	vegan: community ecology	Partial (D6627).
@@ -122,7 +119,7 @@ L382	library	0.18	958	VGAM: vector generalized linear and additive models	Starte
 L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).
 L384	library	0	415	spatstat: point pattern analysis	Open (CRAN ranks 304, 314, 316, 323).
 L516	library	0	273	tgp: Bayesian treed Gaussian processes	Open (CRAN rank 909).
-L517	library	0	354	grf: generalized random forests	Open (CRAN rank 944).
+L517	library	0.8	1250	grf: generalized random forests	Partial (2026-11-21, merged c356aac52;
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU

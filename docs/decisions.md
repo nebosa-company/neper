@@ -51825,3 +51825,7 @@ Every acceptance entry has a passing oracle case; irlba aug and complex Arnoldi 
 ## D7729 — L344 randomForest, L458 earth, L394 ipred and L309 nloptr closed
 
 First-implementation workflow round: each item's acceptance entries all have passing oracle cases on Windows (Linux pending). ipred needed a change in the shared rpart port (node risk summed in R's sorted-predictor order, as in partition.c) which oracle_rpart* and oracle_rpartfull still pass. L497 gamlss, L453 cubature and L376 gam stay open with scores .82, .86 and .85 and their gap lists in the queue evidence.
+
+## D7730 — L509 Cubist, L493 topicmodels and L395 RcppAnnoy closed
+
+All acceptance entries have passing oracle cases on Windows (Linux pending). CTM agrees to 1e-6 relative rather than 1e-9: the conjugate-gradient stopping test and EM convergence amplify first-iteration rounding; the reason is stated in the oracle group. L453 .86, L376 .88, L517 .80, L439 .70 and L319 .78 stay open with their gaps in the queue evidence.
