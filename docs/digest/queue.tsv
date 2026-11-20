@@ -14,24 +14,24 @@ T111	tooling	0	1029	Claude Code integration: a project skill and hooks that enfo
 T115	tooling	0	801	lang-stats reads compressed Codex sessions and counts forked history once	Opened 2026-11-19 from the harness log analysis (D7720).
 T112	tooling	0	900	Agent-route adoption is scored on the measured numbers, not on what the docs mention	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
 T062	tooling	0	875	Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools	Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit;
-L332	library	0.72	3758	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
+L332	library	0.82	2012	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418, D6420, D7113, D7114, D7115).
 L358	library	0.2	536	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
 L380	library	0.35	1159	tm and tidytext: text mining	Partial (D6618).
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
-L407	library	0.93	4582	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
-L409	library	0.62	3970	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
+L407	library	0.93	2854	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
+L409	library	0.72	3465	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids, D7231 rescale, D7261 standardize of an lm equal arm on Windows;
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
 L448	library	0.25	676	mcmc: Metropolis and tempering samplers	D7337: morph and morph.metrop (subexponential and exponential maps, centre) equal to mcmc under set.seed.
 L450	library	0.2	722	mediation: causal mediation analysis	Partial (D7376): e.algo.stat.mediationpkg.mediate_lm (quasi-Bayesian mediate for linear mediator and outcome models without interaction: ACME, ADE, total effect and proportion mediated with percentile
 L452	library	0.35	775	TSA: time-series analysis toolkit	Partial (D6190, D6406 McLeod.Li.test).
 L453	library	0.1	1118	cubature: adaptive multidimensional integration	Partial (D6475 box integrals of four fixed integrands agree with hcubature and pcubature to 1e-8 on Windows through a tensor Gauss-Legendre rule, not the package's adaptive algorithms;
 L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).
-L468	library	0.62	4583	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
+L468	library	0.66	3256	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
 L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L505	library	0.35	1173	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
-L306	library	0.88	4615	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
+L306	library	0.88	2868	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
 L307	library	0.25	658	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);
 L309	library	0.1	702	nloptr: gradient-based and constrained optimizers	Partly done (D6054): e.algo.stat.dfree.auglag (augmented Lagrangian over the box minimiser, no gradients) equals nloptr on HS071 and two more constrained problems on Windows (oracle_auglag);
 L314	library	0.15	1107	lubridate and timeDate: date-time parsing, periods, business calendars	Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the month-end rules, quarter, semester, decimal_date, epiweek, isoweek, floor_date and ceiling_date for dates, equal to lubridat
@@ -40,7 +40,7 @@ L275	library	0.08	825	Unicode collation, transliteration and encoding detection 
 L274	library	0.1	688	General linear mixed models (lme4)	Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and ML, equal to lme4 on deviance, sigma, sigma_b, fixed effects and conditional modes at optimiser tolerance;
 L342	library	0.42	1013	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lme
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
-L334	library	0.75	4719	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
+L334	library	0.75	3037	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
 L394	library	0.05	448	ipred: bagging and error estimation	Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred;
 L338	library	0.2	756	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
 L339	library	0.24	1899	bayestestR, performance and parameters: model summary indices	D7705: performance check_outliers by the iqr method (the row flags) equal to performance.
@@ -49,7 +49,7 @@ L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and lik
 L361	library	0.2	1406	segmented and strucchange: breakpoints and structural change	Partial (D6613).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
-L367	library	0.67	5343	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
+L367	library	0.67	3915	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
 L376	library	0.03	613	gam: backfitting generalized additive models	Started (D7686: smooth.spline with a target df, the smoother s() of gam rests on: the trace of the smoother and R's Brent search for spar equal to smooth.spline(x, y, df) to about 1e-4 in the fit and 
 L378	library	0.2	651	uwot and Rtsne: embeddings equal to R	Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases;
@@ -85,7 +85,7 @@ L368	library	0.2	684	fixest: high-dimensional fixed-effects estimation	Partial (
 L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (D6620).
 L372	library	0.15	729	spdep: spatial autocorrelation and spatial regression	Partial (D6624).
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
-L417	library	0.86	4795	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
+L417	library	0.86	3728	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
 L435	library	0.15	840	sna: social network analysis	Partial (D6636).
 L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
 L439	library	0.05	714	MCMCpack: Bayesian MCMC for common models	Partial (D6648).
