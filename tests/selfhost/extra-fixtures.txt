@@ -730,3 +730,17 @@ oracle_qca_pof
 oracle_qca_e2e
 oracle_fda10
 oracle_foreign_write_sas
+oracle_randomforest
+oracle_earth
+oracle_gamlss_fit
+oracle_gamlss_smooth
+oracle_gamlss_diag
+oracle_gamlss_step
+oracle_gamlss_lms
+oracle_gam
+oracle_gam_step
+oracle_gam_lo
+oracle_gam_mix
+oracle_gam_pred
+oracle_ipredbag
+oracle_nloptr
