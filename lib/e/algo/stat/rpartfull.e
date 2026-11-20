@@ -95,6 +95,7 @@ type Fit = struct {
     wpred: usize,
     ob: []usize,
     ob2: []usize,
+    rank: []usize,
     idx: []usize,
     tmpv: []usize,
     which: []i64,
@@ -404,8 +405,110 @@ fn rp_impurity(t: *Fit, p: f64) -> f64 {
 }
 
 // the k rows in t.ob sorted by predictor col (stable)
-fn rp_sort_ob(t: *Fit, col: usize, k: usize) {
-    let xs = t.x[col * t.n..col * t.n + t.n]
+// rpart's mysort (mysort.c): a median-of-3 quicksort with insertion sort below 11 elements, carrying cv along. Equal predictors end in its order,
+// which every node keeps (the sort is done once at the root), so that order is the tie-break of the per-node sort below.
+fn rp_mysort(start0: i64, stop0: i64, x: []f64, cv: []i64) {
+    var start = start0
+    var stop = stop0
+    while start < stop {
+        if stop - start < 11i64 {
+            var i = start + 1i64
+            while i <= stop {
+                let temp = x[usize(i)]
+                let tempd = cv[usize(i)]
+                var j = i - 1i64
+                while j >= start && x[usize(j)] > temp {
+                    x[usize(j + 1i64)] = x[usize(j)]
+                    cv[usize(j + 1i64)] = cv[usize(j)]
+                    j -= 1i64
+                }
+                x[usize(j + 1i64)] = temp
+                cv[usize(j + 1i64)] = tempd
+                i += 1i64
+            }
+            ret
+        }
+        var i = start
+        var j = stop
+        let k = (start + stop) / 2i64
+        var median = x[usize(k)]
+        if x[usize(i)] >= x[usize(k)] {
+            if x[usize(j)] > x[usize(k)] {
+                if x[usize(i)] > x[usize(j)] { median = x[usize(j)] } else { median = x[usize(i)] }
+            }
+        } else {
+            if x[usize(j)] < x[usize(k)] {
+                if x[usize(i)] > x[usize(j)] { median = x[usize(i)] } else { median = x[usize(j)] }
+            }
+        }
+        while i < j {
+            while x[usize(i)] < median { i += 1i64 }
+            while x[usize(j)] > median { j -= 1i64 }
+            if i < j {
+                if x[usize(i)] > x[usize(j)] {
+                    let temp = x[usize(i)]
+                    x[usize(i)] = x[usize(j)]
+                    x[usize(j)] = temp
+                    let tempd = cv[usize(i)]
+                    cv[usize(i)] = cv[usize(j)]
+                    cv[usize(j)] = tempd
+                }
+                i += 1i64
+                j -= 1i64
+            }
+        }
+        while x[usize(i)] >= median && i > start { i -= 1i64 }
+        while x[usize(j)] <= median && j < stop { j += 1i64 }
+        if (i - start) < (stop - j) {
+            if (i - start) > 0i64 { rp_mysort(start, i, x, cv) }
+            start = j
+        } else {
+            if (stop - j) > 0i64 { rp_mysort(j, stop, x, cv) }
+            stop = i
+        }
+    }
+}
+
+// the position of every row in rpart's root sort of each continuous predictor (a missing value sorts as 0, as rpart.c does)
+fn rp_ranks(a: *mem.Arena, t: *Fit) -> err {
+    let n = t.n
+    let (rk, e1) = mem.alloc[usize](a, n * t.p + 1usize)
+    let (xt, e2) = mem.alloc[f64](a, n + 1usize)
+    let (cv, e3) = mem.alloc[i64](a, n + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var v = 0usize
+    while v < t.p {
+        var k = 0usize
+        while k < n {
+            let xv = t.x[v * n + k]
+            if rp_finite(xv) {
+                cv[k] = i64(k)
+                xt[k] = xv
+            } else {
+                cv[k] = 0i64 - i64(k) - 1i64
+                xt[k] = 0.0f64
+            }
+            rk[v * n + k] = k
+            k += 1usize
+        }
+        if t.ncat[v] == 0usize && n > 1usize {
+            rp_mysort(0i64, i64(n) - 1i64, xt, cv)
+            k = 0usize
+            while k < n {
+                var row = cv[k]
+                if row < 0i64 { row = 0i64 - row - 1i64 }
+                rk[v * n + usize(row)] = k
+                k += 1usize
+            }
+        }
+        v += 1usize
+    }
+    t.rank = rk
+    ret ok
+}
+
+// a categorical predictor is never sorted: rpart keeps its rows in their original order inside every node, which sets the order its sums are added
+fn rp_sort_idx(t: *Fit, k: usize) {
     var width = 1usize
     while width < k {
         var lo = 0usize
@@ -418,7 +521,52 @@ fn rp_sort_ob(t: *Fit, col: usize, k: usize) {
             var j = mid
             var o = lo
             while i < mid && j < hi {
-                if xs[t.ob[j]] < xs[t.ob[i]] {
+                if t.ob[j] < t.ob[i] {
+                    t.ob2[o] = t.ob[j]
+                    j += 1usize
+                } else {
+                    t.ob2[o] = t.ob[i]
+                    i += 1usize
+                }
+                o += 1usize
+            }
+            while i < mid {
+                t.ob2[o] = t.ob[i]
+                i += 1usize
+                o += 1usize
+            }
+            while j < hi {
+                t.ob2[o] = t.ob[j]
+                j += 1usize
+                o += 1usize
+            }
+            lo = hi
+        }
+        var c = 0usize
+        while c < k {
+            t.ob[c] = t.ob2[c]
+            c += 1usize
+        }
+        width = width * 2usize
+    }
+}
+
+fn rp_sort_ob(t: *Fit, col: usize, k: usize) {
+    let xs = t.x[col * t.n..col * t.n + t.n]
+    let rk = t.rank[col * t.n..col * t.n + t.n]
+    var width = 1usize
+    while width < k {
+        var lo = 0usize
+        while lo < k {
+            var mid = lo + width
+            if mid > k { mid = k }
+            var hi = lo + 2usize * width
+            if hi > k { hi = k }
+            var i = lo
+            var j = mid
+            var o = lo
+            while i < mid && j < hi {
+                if xs[t.ob[j]] < xs[t.ob[i]] || (xs[t.ob[j]] == xs[t.ob[i]] && rk[t.ob[j]] < rk[t.ob[i]]) {
                     t.ob2[o] = t.ob[j]
                     j += 1usize
                 } else {
@@ -931,6 +1079,7 @@ fn rp_bsplit(t: *Fit, node: usize, lo: usize, hi: usize) -> usize {
             i += 1usize
         }
         if nc == 0usize && k > 0usize { rp_sort_ob(t, v, k) }
+        if nc > 0usize && k > 1usize { rp_sort_idx(t, k) }
         if k == 0usize || (nc == 0usize && xs[t.ob[0usize]] == xs[t.ob[k - 1usize]]) {
             v += 1usize
             continue
@@ -1024,6 +1173,7 @@ fn rp_choose_surg(t: *Fit, col: usize, lo: usize, hi: usize, nc: usize, tleft: f
     var success = false
     var split = 0.0f64
     var dir = 0i64 - 1i64
+    if nc > 0usize && k > 1usize { rp_sort_idx(t, k) }
     if nc == 0usize {
         if k > 1usize { rp_sort_ob(t, col, k) }
         var lastx = 0.0f64
@@ -1372,11 +1522,58 @@ fn rp_make_leaf(t: *Fit, node: usize) {
 }
 
 // partition.c: grows the node and returns (the number of splits kept below it, the risk of the kept subtree)
+// partition.c evaluates a node over rp.sorts[0], the first predictor's order (missing rows in their sorted place)
+fn rp_order_first(t: *Fit, lo: usize, hi: usize) {
+    let rk = t.rank[0usize..t.n]
+    let k = hi - lo
+    var width = 1usize
+    while width < k {
+        var s = 0usize
+        while s < k {
+            var mid = s + width
+            if mid > k { mid = k }
+            var e = s + 2usize * width
+            if e > k { e = k }
+            var i = s
+            var j = mid
+            var o = s
+            while i < mid && j < e {
+                if rk[t.idx[lo + j]] < rk[t.idx[lo + i]] {
+                    t.tmpv[o] = t.idx[lo + j]
+                    j += 1usize
+                } else {
+                    t.tmpv[o] = t.idx[lo + i]
+                    i += 1usize
+                }
+                o += 1usize
+            }
+            while i < mid {
+                t.tmpv[o] = t.idx[lo + i]
+                i += 1usize
+                o += 1usize
+            }
+            while j < e {
+                t.tmpv[o] = t.idx[lo + j]
+                j += 1usize
+                o += 1usize
+            }
+            s = e
+        }
+        var c = 0usize
+        while c < k {
+            t.idx[lo + c] = t.tmpv[c]
+            c += 1usize
+        }
+        width = width * 2usize
+    }
+}
+
 fn rp_partition(t: *Fit, node: usize, nodenum: i64, lo: usize, hi: usize) -> (usize, f64) {
     let n = hi - lo
     var tempcp = 0.0f64
     t.pl.nid[node] = nodenum
     if nodenum > 1i64 {
+        rp_order_first(t, lo, hi)
         var twt = 0.0f64
         var i = lo
         while i < hi {
@@ -1867,6 +2064,8 @@ fn rp_fit(a: *mem.Arena, x: []const f64, n: usize, p: usize, ncat: []const usize
         v += 1usize
     }
     t.maxcat = maxcat
+    let er = rp_ranks(a, &t)
+    if er != ok { ret (t, er) }
     t.minsplit = usize(ctl.minsplit)
     t.minbucket = usize(ctl.minbucket)
     t.cp = ctl.cp

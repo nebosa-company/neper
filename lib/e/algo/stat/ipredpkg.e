@@ -9,12 +9,17 @@ fn cens_surv(time: []const f64, cens: []const f64, t: f64) -> f64 {
     let n = time.len
     var s = 1.0f64
     var j = 0usize
-    while j < n {
-        if time[j] <= t && cens[j] == 0.0f64 {
-            // number at risk at time[j]: those with time >= time[j]
-            s = s * (1.0f64 - 1.0f64 / f64(n - j))
+    while j < n && time[j] <= t {
+        // one factor per distinct time: the censorings d of those at risk, where prodlim's reverse fit has tied events leave the risk set first
+        var d = 0usize
+        var k1 = 0usize
+        var e = j
+        while e < n && time[e] == time[j] {
+            if cens[e] == 0.0f64 { d += 1usize } else { k1 += 1usize }
+            e += 1usize
         }
-        j += 1usize
+        if d > 0usize { s = s * (1.0f64 - f64(d) / f64(n - j - k1)) }
+        j = e
     }
     ret s
 }
