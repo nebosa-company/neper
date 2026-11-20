@@ -744,3 +744,17 @@ oracle_gam_mix
 oracle_gam_pred
 oracle_ipredbag
 oracle_nloptr
+oracle_gam_off
+oracle_cubist
+oracle_topicmodels_lda
+oracle_topicmodels_gibbs
+oracle_topicmodels_ctm
+oracle_grf
+oracle_annoy
+oracle_mcmcpacksamp
+oracle_mcmcpackirt
+oracle_mcmcpackord
+oracle_mcmcpackordfa
+oracle_mcmcpackmh
+oracle_mcmcpackhelp
+oracle_nlmelist
