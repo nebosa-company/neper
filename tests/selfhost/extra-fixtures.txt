@@ -728,3 +728,5 @@ oracle_qca_min
 oracle_qca_ss
 oracle_qca_pof
 oracle_qca_e2e
+oracle_fda10
+oracle_foreign_write_sas
