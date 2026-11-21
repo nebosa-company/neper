@@ -169,28 +169,6 @@
       "evidence": "Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit; not previously a queue row. Acceptance: A Neper binary speaks MCP JSON-RPC over stdio (reusing lib/x/mcp/protocol.e framing) and serves get_symbol_definition, get_build_diagnostics, get_symbol_references and get_ast_subtree from the existing index/check/parse JSONL, with a per-request arena that stays flat across 1000 calls. A conformance test drives it from a scripted client and compares payloads to the CLI output. Size M. Checked open: lib/x/mcp/protocol.e exists but is Appdor table-oriented; no compiler-query MCP binary under tools/ or src/; T032 is the Appdor services/mcp-server only; grep work-done mcp: only L049 builders. The 2026-11-12 compiler review adds to the acceptance: a second query in one session answers in under 50 ms on `src/main.e`. Notes: docs/compiler-hardening-plan.md."
     },
     {
-      "id": "L358",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 602,
-      "title": "dbscan remainder: HDBSCAN, LOF and neighbourhood graphs",
-      "score": 0.2,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows; oracle_dbscanpkg; Linux pending). D7526: extractDBSCAN equals dbscan. D7702: sNNclust equals dbscan. D7703: jpclust equals dbscan. D7704: extractXi equals dbscan. Open: hdbscan. Was: Open (CRAN rank 368). Small to mid. e.ml.cluster.density has dbscan and optics. Acceptance, equal to dbscan: hdbscan with its condensed tree, membership probabilities and outlier scores, lof, sNN and sNNclust, kNN and frNN, kNNdist, extractXi and extractDBSCAN, jpclust."
-    },
-    {
-      "id": "L390",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 608,
-      "title": "R.matlab: MATLAB MAT files",
-      "score": 0.25,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6419). Level 5 uncompressed numeric and character arrays (e.fmt.mat5) equal readMat on writeMat files on Windows (oracle_matlab; Linux pending). Open: compressed v7, structs, cells, sparse, complex, level 4, writeMat. Was: Open (CRAN rank 444). Small to mid. Acceptance, equal to R.matlab on real files: readMat for level 4 and level 5 files including compressed (v7) variables, structs, cells, sparse matrices, logical and char arrays; writeMat round trip. v7.3 files are HDF5 and wait for L352."
-    },
-    {
       "id": "L407",
       "category": "library",
       "group": "CRAN parity",
@@ -211,39 +189,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (2026-11-21, merged 9e1b3e122; Windows fixtures pass, score from agent reports not re-audited): Merged worktree-wf_3d9b6b36-bf7-18 (clean, no conflicts). Fixed the bayesglm inverse.gaussian seed 21804 gap: the 3-ulp IRLS drift started at iteration 9 because pow15 (eta^1.5, 1/mu^2 link) was correctly rounded while R on Windows rounds the x87 extended result a second time. pow15 now uses armx87.r64 (same model as exp_r/log_r). Seed 21804 now matches R to the last bit (coef, dispersion, draws), and its draws are in the oracle at rel 1e-9 / abs 1e-11 (exclusion removed in armglm.R, armglmsim.json regenerated). Also found that glm/bayesglm sim draws are already checked coefficient by coeffici Remaining: (1) sim() for merMod from Neper's own lmer fit (simmer, 99 cases) and se.fixef/se.ranef (semer, 34 cases) are only checked at rel 2e-3 with abs 1e-4 to 1e-6 in tests/oracle/armmer.json; only the R-theta v | (2) sim for glmer (80 simglmer cases) is fed R's theta, beta, u and working weights because Neper has no glmer fit, so only the draw path is verified; either add a glmer fit or state in the Acceptance tha | (3) armglmsim covers glm/bayesglm sim coefficient by coefficient only on fits where V.beta matches R's bit for bit (scripts/r_oracle/groups/armglm.R line 62 filters out the roughly one third where LAPACK  | (4) dicmer is checked at rel/abs 1e-5 (17 cases) with no R-side reason recorded; tighten to 1e-8 or document why in scripts/r_oracle/groups/armmer.R. | (5) Linux has not been run and the notes say oracle_armpolr fails against the Windows-generated oracle; run all eight fixtures on Linux and make oracle_armpolr pass or regenerate it platform-independently | (6) sim for merMod: simmer/semer (sim, se.fixef, se.ranef from Neper's own lmer fit) still at rel 2e-3 / abs 1e-4 to 1e-6 because lmer's bobyqa stops about 1e-4 from the optimum; needs a port of NLopt BOB | (7) sim for glmer (simglmer) is driven by R's theta, beta, u and working weights; Neper has no glmer fit (PIRLS plus optimiser), so only the draw path is checked (1e-9), not a Neper-made fit. Not started. | (8) Linux not run: oracle_armpolr (and the other arm fixtures) were verified on Windows only; the Windows-generated oracle uses x87 double-rounded exp/log/pow, which glibc does not reproduce, so a Linux r"
-    },
-    {
-      "id": "L427",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 625,
-      "title": "afex: repeated-measures and mixed ANOVA",
-      "score": 0.3,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6614). e.algo.stat.afexpkg.rm_anova (one within factor, optional between factor of equal groups, Type III) equals afex aov_ez on Windows: F and p of A, B and A:B, Greenhouse-Geisser and Huynh-Feldt epsilons and corrected p, generalized eta squared, Mauchly W and p (oracle_afex, 240 values; Linux pending). Open: several within or between factors, unequal groups, covariates, Type II, emmeans follow-ups. Was: Open (CRAN rank 607). Small to mid. Acceptance, equal to afex: aov_car and aov_ez with Type III sums of squares, within, between and mixed designs, Mauchly sphericity test, Greenhouse-Geisser and Huynh-Feldt corrections, generalized eta squared, follow-up marginal means through the emmeans item. mixed() waits for L274."
-    },
-    {
-      "id": "L448",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 629,
-      "title": "mcmc: Metropolis and tempering samplers",
-      "score": 0.25,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "D7337: morph and morph.metrop (subexponential and exponential maps, centre) equal to mcmc under set.seed. Partial (D6610, D7285 initseq and olbm for a scalar chain). e.algo.stat.mcmcpkg.metrop (batch means, per-batch acceptance, final state; three fixed log densities) equals mcmc 0.9-8 under set.seed on Windows (oracle_mcmc, 90 values; Linux pending). Open: user densities, outfun, morph, temper. Was: Open (CRAN rank 789). Small to mid. e.math.mcmc has metropolis_hastings. Acceptance, equal to mcmc value for value under set.seed: metrop with its batching and scaling, morph and morph.metrop, temper with parallel and serial tempering, initseq and olbm variance estimates."
-    },
-    {
-      "id": "L450",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 631,
-      "title": "mediation: causal mediation analysis",
-      "score": 0.2,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D7376): e.algo.stat.mediationpkg.mediate_lm (quasi-Bayesian mediate for linear mediator and outcome models without interaction: ACME, ADE, total effect and proportion mediated with percentile limits and simulation p values) equals mediation under set.seed on 384 values on Windows (oracle_mediation; Linux pending). Open: treatment-mediator interaction, binary and other families, factors, bootstrap, mixed models, medsens. Open (CRAN rank 755). Small to mid. Needs lm and glm fits. Acceptance, equal to mediation under set.seed: mediate with quasi-Bayesian and bootstrap intervals, ACME, ADE and total effects for continuous and binary mediators and outcomes, treatment-mediator interaction, medsens sensitivity."
     },
     {
       "id": "L452",
@@ -277,17 +222,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6619). e.algo.stat.vimpkg.knn_impute (one numeric variable, complete distance columns, Gower range-scaled distance, median or mean of k donors, ties by row order) equals VIM 7.3.1 kNN on Windows (oracle_vim, 40 values; Linux pending). Open: missing values in the distance columns (VIM imputes them first and reuses them; the plain skip, zero and one rules do not reproduce it), factors, ordered and mixed variables, weights, donor conditions, hotdeck, irmi, aggr. Was: Open (CRAN rank 765). Small to mid. Acceptance, equal to VIM under set.seed: kNN with Gower distance and aggregation choices, hotdeck, irmi, regressionImp, aggr summaries, matrixplot data."
-    },
-    {
-      "id": "L479",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 641,
-      "title": "hdrcde: highest density regions",
-      "score": 0.25,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows; oracle_rdensity; Linux pending). Open: hdrbw, Box-Cox, hdr.den, cde, hdr.cde and the mode estimates. Was: Open (CRAN rank 837). Small to mid. Acceptance, equal to hdrcde: hdr and hdr.den for densities and samples, cde with the normal-reference and cross-validated bandwidths, hdr.cde, modal regions and the mode estimates."
     },
     {
       "id": "L481",
@@ -515,10 +449,10 @@
       "group": "CRAN parity",
       "order": 719,
       "title": "marginaleffects: predictions, slopes and comparisons",
-      "score": 0.3,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6942, D6943): e.algo.stat.margeff.glm_avg, avg_slopes, avg_predictions and the avg_comparisons of a 0 / 1 variable for gaussian, logistic and Poisson (identity, logit, log link) glms from the coefficients and covariance (delta-method standard errors, analytic Jacobian), equals marginaleffects to 1e-5 on Windows (oracle_margeff; Linux pending). D7521-D7524: probit, cloglog, inverse and sqrt links, predictions at new rows, coefficient hypotheses, unit-change and ratio, lnratio and lift comparisons (D7525) equal marginaleffects. Open: other families and links, comparisons for factors and other contrasts, conditional effects, hypotheses, the fits themselves from earlier items. Was: Open (CRAN ranks 541, 533, 577). Mid. Builds on the model fits of earlier items. Acceptance, equal to R for lm, glm and the families already fitted: predictions, avg_predictions, slopes and avg_slopes, comparisons and avg_comparisons with the delta-method standard errors, hypotheses with equality constraints, plus the effects and ggeffects predicted-margin tables."
+      "evidence": "Partial (2026-11-21, merged b1d65869c; Windows fixtures pass, score from the agent report): Branch was behind master: reset to master, then merged worktree-wf_ec4afcb0-368-22 (clean, no conflicts); oracle_margeff still passes. New in lib/e/algo/stat/margeff.e: mm_design (five model matrices: ~x+w, ~f+x, ~f*x, ~x+I(x^2)+f, ~x*w+f) with treatment, sum and Helmert coding; glm_pair (average of any counterfactual pair of model matrices with a row mask for by=, difference/ratio/lnratio/lift/prediction, delta-method se, gradient out); hyp_weights (~pairwise, ~revpairwise, ~sequential, ~reference, with marginaleffects 1.0.0 row order and signs); hyp_est (hypotheses over estimates); lin_joint Remaining: (1) Not run on Linux (Windows only). | (2) Not covered: negative binomial, ordinal, multinomial, mixed and survival families (outside the Acceptance 'lm, glm and the families already fitted'); Gamma inverse is covered by the older or | (3) Not covered: poly() factor coding (contr.poly); designs are the five fixed model shapes in mm_design, not a general formula parser. | (4) Conditional effects as plot_predictions/plot_slopes curves over datagrid() grids are only covered through glm_pred (mpred) and glm_margin (mtab) rows and by= groups, not as a dedicated grid "
     },
     {
       "id": "L416",

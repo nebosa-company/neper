@@ -51849,3 +51849,7 @@ L317 passed its acceptance verifier and all seven oracle_igraph* fixtures on Win
 ## D7735 — L342 lmerTest, L380 tm, L505 sm, L510 gmm and L494 bayesm closed
 
 Each passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. L304 haven (0.9), L452 TSA and L393 ordinal advanced and stay open with their gaps in the queue evidence.
+
+## D7736 — L427 afex, L358 dbscan, L390 R.matlab, L448 mcmc, L450 mediation, L479 hdrcde closed
+
+Each passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. L415 marginaleffects advanced and stays open; L318 forecast was re-verified with no new code.

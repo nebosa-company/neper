@@ -4631,4 +4631,5 @@ D7731	523	L497 gamlss and L492 coxme closed; ga() smoother dropped
 D7732	411	L516 tgp, L519 caret remainder, L397 hunspell closed
 D7733	315	L468 fpc closed
 D7734	389	L317 igraph closed; L318, L287 and L283 advanced
-D7735	295	L342 lmerTest, L380 tm, L505 sm, L510 gmm and L494 bayesm closed
+D7735	296	L342 lmerTest, L380 tm, L505 sm, L510 gmm and L494 bayesm closed
+D7736	303	L427 afex, L358 dbscan, L390 R.matlab, L448 mcmc, L450 mediation, L479 hdrcde closed

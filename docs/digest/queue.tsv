@@ -14,17 +14,11 @@ T111	tooling	0	1029	Claude Code integration: a project skill and hooks that enfo
 T115	tooling	0	801	lang-stats reads compressed Codex sessions and counts forked history once	Opened 2026-11-19 from the harness log analysis (D7720).
 T112	tooling	0	900	Agent-route adoption is scored on the measured numbers, not on what the docs mention	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
 T062	tooling	0	875	Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools	Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit;
-L358	library	0.2	536	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
-L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
 L407	library	0.95	2057	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial (2026-11-21, merged 9e1b3e122;
 L409	library	0.8	2314	arm: applied regression helpers	Partial (2026-11-21, merged 9e1b3e122;
-L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
-L448	library	0.25	676	mcmc: Metropolis and tempering samplers	D7337: morph and morph.metrop (subexponential and exponential maps, centre) equal to mcmc under set.seed.
-L450	library	0.2	722	mediation: causal mediation analysis	Partial (D7376): e.algo.stat.mediationpkg.mediate_lm (quasi-Bayesian mediate for linear mediator and outcome models without interaction: ACME, ADE, total effect and proportion mediated with percentile
 L452	library	0.6	1292	TSA: time-series analysis toolkit	re-auditing every Acceptance entry (armasubsets, McLeod.Li, detectAO/IO, arimax, periodogram, cpgram, eacf, BIC table, tsdiag) against the queue evidence, and the rest of the earli
 L453	library	0.93	1657	cubature: adaptive multidimensional integration	Partial (2026-11-21, merged 9e1b3e122;
 L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).
-L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L306	library	0.95	1307	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partial (2026-11-21, merged 9e1b3e122;
@@ -45,7 +39,7 @@ L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Part
 L376	library	0.9	1857	gam: backfitting generalized additive models	Partial (2026-11-21, merged 9e1b3e122;
 L378	library	0.2	651	uwot and Rtsne: embeddings equal to R	Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases;
 L393	library	0.7	1462	ordinal: cumulative link models	Partial (2026-11-21, merged 0de9a3a3a;
-L415	library	0.3	1063	marginaleffects: predictions, slopes and comparisons	Partial (D6942, D6943): e.algo.stat.margeff.glm_avg, avg_slopes, avg_predictions and the avg_comparisons of a 0 / 1 variable for gaussian, logistic and Poisson (identity, logit, log link) glms from th
+L415	library	0.6	1272	marginaleffects: predictions, slopes and comparisons	Partial (2026-11-21, merged b1d65869c;
 L416	library	0.15	609	polspline: polynomial spline models	D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 va
 L434	library	0.1	735	qgraph: network estimation	Partial (D6646).
 L436	library	0.1	756	MatchIt: matching for causal inference	Partial (D6638).
