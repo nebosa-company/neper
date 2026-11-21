@@ -51833,3 +51833,7 @@ All acceptance entries have passing oracle cases on Windows (Linux pending). CTM
 ## D7731 — L497 gamlss and L492 coxme closed; ga() smoother dropped
 
 L497: every acceptance entry except ga() has passing oracle cases on Windows and Linux. The ga() smoother (gamlss.add, mgcv-backed) is dropped: mgcv's REML/GCV Newton search stops at about 1e-6, so a 1e-9 oracle cannot hold. L492 coxme (first implementation, 706 cases) is closed. L439 .75, L319 .82, L517 .85, L438 .70, L375 .50 and L516 .50 stay open with their gaps in the queue evidence; the scores come from the implementer and verifier reports.
+
+## D7732 — L516 tgp, L519 caret remainder, L397 hunspell closed
+
+Each passed an acceptance verifier with a mutation check and all its fixtures on Windows in the integration worktree. L516 had no Acceptance list, so btgp, btlm, bcart, btgpllm and treed design were taken as the target. Linux runs are batched for later. L438, L375, L439, L319 and L517 stay partial with their gap lists in the queue evidence.

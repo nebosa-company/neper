@@ -74,11 +74,10 @@ L366	library	0.15	734	kernlab: kernel methods	Partial (D6634).
 L368	library	0.2	684	fixest: high-dimensional fixed-effects estimation	Partial (D6623).
 L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (D6620).
 L372	library	0.15	729	spdep: spatial autocorrelation and spatial regression	Partial (D6624).
-L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
 L417	library	0.9	2973	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
 L435	library	0.15	840	sna: social network analysis	Partial (D6636).
-L438	library	0.7	703	gss: smoothing spline ANOVA	Partial (2026-11-21, merged bfbfe837f;
-L439	library	0.75	1085	MCMCpack: Bayesian MCMC for common models	Partial (2026-11-21, merged bfbfe837f;
+L438	library	0.8	1340	gss: smoothing spline ANOVA	Partial (2026-11-21, merged 6ddc62d0b;
+L439	library	0.75	1804	MCMCpack: Bayesian MCMC for common models	Partial (2026-11-21, merged 6ddc62d0b;
 L455	library	0.1	742	geometry: Qhull in n dimensions	Partial (D6645).
 L463	library	0.25	2452	actuar: actuarial science	Partial (D6143).
 L467	library	0.1	846	hetGP: heteroskedastic Gaussian processes	Partial (D6647).
@@ -92,7 +91,7 @@ L312	library	0.4	2208	psych: reliability, factor analysis and correlation tools	
 L313	library	0.25	2647	emmeans: estimated marginal means and contrasts	D7364: Tukey-adjusted odds ratios and Poisson rate ratios equal to emmeans.
 L341	library	0.15	785	multcomp: general linear hypotheses	Partial (D6631).
 L318	library	0.05	735	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partly done (D6063): e.algo.stat.fcast has BoxCox, InvBoxCox and BoxCox.lambda by loglik, equal to forecast on 171 cases on Windows (oracle_fcast);
-L319	library	0.82	1162	nlme: gls, correlation structures and variance functions	Partial (2026-11-21, merged bfbfe837f;
+L319	library	0.88	1720	nlme: gls, correlation structures and variance functions	Partial (2026-11-21, merged 6ddc62d0b;
 L320	library	0.05	917	sf: simple-features geometry, predicates and spherical geometry	Partly done (D6065): the planar convex hull, polygon area, point in polygon and Delaunay triangle count in e.algo.geom equal sf on 150 cases on Windows (oracle_sf);
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
 L349	library	0.15	743	vegan: community ecology	Partial (D6627).
@@ -102,7 +101,7 @@ L352	library	0.15	714	ncdf4: NetCDF and HDF5 files	Partial (D7701): e.fmt.netcdf
 L371	library	0.15	866	coin: conditional and permutation tests	Partial (D6625).
 L373	library	0.15	662	bnlearn: Bayesian network learning	Partial (D6630).
 L374	library	0.2	759	rms: regression modelling strategies	Partial (D6629).
-L375	library	0.5	1459	partykit: conditional inference trees and MOB	Partial (2026-11-21, merged bfbfe837f;
+L375	library	0.6	1992	partykit: conditional inference trees and MOB	Partial (2026-11-21, merged 6ddc62d0b;
 L377	library	0.15	912	xgboost: gradient-boosted trees	Partial (D6632).
 L398	library	0.2	1400	rugarch: the GARCH family	Started (D7645 to D7698: sGARCH(1,1), gjrGARCH(1,1), eGARCH(1,1) (all with standard errors), iGARCH(1,1) and sGARCH of orders up to (2, 2) and sGARCH(1,1) with AR(1), AR(2), MA(1) and ARMA(1,1) means 
 L441	library	0.35	1116	msm and mstate: multi-state models	Partial (D7352).
@@ -116,8 +115,7 @@ L381	library	0.6	2332	ade4: multivariate analysis of ecological data	Partial (D7
 L382	library	0.18	958	VGAM: vector generalized linear and additive models	Started (D7625 to D7644: cumulative logit, probit and cloglog links with parallel slopes, the multinomial logit, the adjacent categories model (acat, parallel), the continuation-ratio models (sratio a
 L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).
 L384	library	0	415	spatstat: point pattern analysis	Open (CRAN ranks 304, 314, 316, 323).
-L516	library	0.5	1559	tgp: Bayesian treed Gaussian processes	Partial (2026-11-21, merged bfbfe837f;
-L517	library	0.85	919	grf: generalized random forests	Partial (2026-11-21, merged bfbfe837f;
+L517	library	0.88	1402	grf: generalized random forests	Partial (2026-11-21, merged 6ddc62d0b;
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU
@@ -415,7 +413,6 @@ L287	library	0	513	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml,
 L283	library	0	538	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
 L276	library	0	418	Sass/SCSS compiler (sass, libsass)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
 L518	library	0.2	552	tweedie: powers above 2 and the series beyond statmod	Partial (D7368): dtweedie_series for power above 2 (the Wright-type series with its reliability check) equal to tweedie on 59 values on Windows (oracle_gaussq;
-L519	library	0	399	caret remainder: numeric-response folds, ica and varImp for other models	D7477: createFolds for a numeric response equals caret.
 L521	library	0	560	N-d arrays: broadcasting, slicing, einsum and elementwise families over e.algo.linalg.tensor	Opened 2026-11-19 from the STEM gap sweep (D7717).
 L522	library	0	827	Computer algebra depth in e.math.sym: simplify, expand, factor, limits, series, systems and ODEs	Opened 2026-11-19 from the STEM gap sweep (D7717).
 L523	library	0	535	Boundary-value problems in e.math.ode: collocation and shooting	Opened 2026-11-19 from the STEM gap sweep (D7717).
