@@ -867,10 +867,10 @@
       "group": "CRAN parity",
       "order": 774,
       "title": "gss: smoothing spline ANOVA",
-      "score": 0,
+      "score": 0.7,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 634). Mid to large. Acceptance, equal to gss: ssanova and ssanova0 with cubic, tensor and thin-plate marginals and GCV, GML and Mallows smoothing parameters, gssanova for exponential families, ssden density and sshzd hazard estimation, predict with standard errors."
+      "evidence": "Partial (2026-11-21, merged bfbfe837f; scores set from the implementer and verifier reports, not re-audited): gss: ssanova, gssanova (ML, GML and cross-validated KL), approximate bases, ssden, sshzd and gssanova families equal gss at loosened tolerances (GML rel 1e-3, multi-theta up to 5e-2); Windows only. Remaining: (1) tests/oracle/gssapx.json is 2,818,573 bytes (over the 2 MB limit): trim its case count or split it, for example fewer seeds for the GML and multi-theta models, until it is under 2 MB. | (2) GML cases in oracle_gssapx are compared at rel 1e-3, and multi-theta cases at rel 3e-3 to 5e-2 with theta abs 0.3 (ssden, sshzd and gssapxglm multi-theta use rel 5e-2, abs 0.02 to 0.1). The "
     },
     {
       "id": "L439",
@@ -878,10 +878,10 @@
       "group": "CRAN parity",
       "order": 775,
       "title": "MCMCpack: Bayesian MCMC for common models",
-      "score": 0.7,
+      "score": 0.75,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (2026-11-21, merged c356aac52; Windows only): Seeded oracle groups match R for MCMCregress, MCMClogit, MCMCpoisson, MCMCprobit, MCMCoprobit, MCMCfactanal, MCMCirt1d, MCMCirtKd, MCMCmetrop1R, rwish, riwish, rdirichlet, BayesFactor/PostProbMod and the density functions (not re-run here), while MCMCpanel and MCMChregress have no code or oracle and the AC method, user starts and Laplace marginal likelihood are not covered. Verifier gaps: (1) MCMCpanel is in the Acceptance list but has no Neper implementation in lib/e/algo/stat/mcmcpack*.e and no oracle case in scripts/r_oracle/groups/mcmcpack*.R or tests/orac | (2) MCMCpanel: not an MCMCpack 1.7.1 export, so there is nothing in R to match. The Acceptance text needs correcting. | (3) MCMChregress is not implemented; it needs its own C++ Gibbs sampler and draw order, and is outside the Acceptance list. | (4) MCMCoprobit with mcmc.method 'AC' (Scythe BFGS, hesscdif, multivariate t proposal) is not ported. | (5) MCMCirt1d with R's default start values (per-item glm probit fits and the eigen-based theta.start) is not ported; the cases use scalar alpha.start and beta.start. | (6) MCMCirtKd and MCMCordfactanal with default starts are only at 1e-5 relative, because R's glm and polr stop early. The MCMCoprobit polr start is at 1e-6 to 1e-7. An exact "
+      "evidence": "Partial (2026-11-21, merged bfbfe837f; scores set from the implementer and verifier reports, not re-audited): MCMCpack: Laplace marginal likelihood with user priors, MCMCregress, MCMClogit, MCMCpoisson, MCMCprobit, MCMCoprobit, MCMCfactanal, MCMCirt1d, MCMCirtKd, MCMCmetrop1R, MCMChregress and the helper samplers equal R in the oracle groups; Windows only. Remaining: (1) MCMCoprobit AC long chains are checked at 1e-4 (4-draw) and 1e-6 (tiny tune), not 1e-9, because R's output depends on its libm. Only the Cowles cases reach 1e-9. I did not attempt this; it n | (2) MCMCirtKd, MCMCordfactanal and MCMCoprobit default starts stay at 1e-5 to 1e-7 relative because R's glm and polr stop at their own optimiser tolerance. I did not attempt this. | (3) MCMCirt1d default starts (per-item glm probit fits and eigen-based theta.start) are not ported. The previous round declared this out of scope, and I left it that way. | (4) Skipped as outside the Acceptance list: L'Ecuyer streams, HMMpanelFE/RE, testpanel*Break and other exotic models. | (5) Windows only; the Linux run is pending."
     },
     {
       "id": "L455",
@@ -972,17 +972,6 @@
       "evidence": "Partial (D6642). e.algo.stat.riskregpkg.score (IPCW Brier score and AUC of a predicted risk at one horizon, Kaplan-Meier censoring weights, untied times) equals riskRegression Score() on Windows (oracle_riskregression, 48 values; Linux pending). Open: censoring models conditional on covariates, ties, several horizons, competing risks (CIF), standard errors and confidence intervals, model comparison, calibration, net benefit, predictRisk for fitted models. Was: Open (CRAN rank 850). Mid. Needs L311 and L419. Acceptance, equal to riskRegression under set.seed: Score for Brier and AUC over time with censoring weights, predictRisk, FGR, CSC, ate, with cross-validation."
     },
     {
-      "id": "L492",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 785,
-      "title": "coxme: mixed-effects Cox models",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 900). Mid. Needs L311. Acceptance, equal to coxme: coxme with random intercepts, nested and crossed effects, correlated slopes, the penalized partial likelihood fits and the variance components, ranef, fixef and VarCorr."
-    },
-    {
       "id": "L440",
       "category": "library",
       "group": "CRAN parity",
@@ -1043,10 +1032,10 @@
       "group": "CRAN parity",
       "order": 791,
       "title": "nlme: gls, correlation structures and variance functions",
-      "score": 0.78,
+      "score": 0.82,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (2026-11-21, merged c356aac52; Windows only): Equal to R nlme per oracle_gls and oracle_nlmelist: gls and lme with ten correlation structures and the variance functions (incl. varFixed/varComb), REML/ML, AIC, anova, intervals, lmList, and nls SS* self-starts; not covered: corARMA beyond (1,1), nlme() non-linear mixed models, nested random effects. Verifier gaps: (1) tests/oracle/nlmelist.json is 2,774,621 bytes, over the 2 MB cap; shrink it, for example by dropping the longest-redundant fit blocks or splitting lme and nls into two or | (2) tests/oracle/gls.json uses rel 1e-6 / abs 1e-8 on all 627 cases and scripts/r_oracle/groups/gls.R gives no R-side reason (nlmelist.R documents polishing to the optimum fo | (3) The tolerance in nlmelist.json is documented but still looser than 1e-8: lme at 5e-7, corSymm at 1e-5 and nls at 1e-6. The stated reason is that R's own optimizer stops a | (4) nlme (nonlinear mixed-effects models, incl. self-start models inside nlme): not implemented, no oracle case. Acceptance entry still missing. | (5) lme is single grouping level only: no nested or crossed random effects, no pdDiag/pdIdent/pdCompSymm. Only full-covariance random effects with q<=2 get var-cov intervals. | (6) lme corSymm: only coef, logLik, AIC, BIC and se are compared, at 1e-5 / 1e-6, because the model is not identified."
+      "evidence": "Partial (2026-11-21, merged bfbfe837f; scores set from the implementer and verifier reports, not re-audited): nlme: gls and lme with the correlation and variance structures, lmList, SS self-starts and nlme() for the five self-starts (ML and REML: nlme always estimates beta, b and D by ML in the PNLS step, REML only changes sigma, logLik, BIC and se) equal nlme in the oracle groups; Windows only. Remaining: (1) nlme(): covariates on parameters, user-written model functions, nested or crossed nlme random effects, pdDiag or other pdMat classes, and correlation or variance structures inside nlme are n | (2) Tolerances still looser than 1e-8 and not tightened: gls.json 1e-6, glsarma 1e-6 (1e-4 for one fit), gls fitted-value cases 1e-5, lmepd 2e-4 / 5e-4, nlmelist lme 5e-7, corSymm 1e-5, nls 1e-6 | (3) Not touched: pd classes carry no apVar intervals; lme corSymm compares only coef, logLik, AIC, BIC and se; nested lme has no var-cov intervals, random slopes or crossed effects. pdBlocked, p | (4) Linux was not run. The nlmenest fixture and the other oracle fixtures were not re-run after this round. The earlier nlmenl exit-1 flake was not investigated."
     },
     {
       "id": "L320",
@@ -1153,10 +1142,10 @@
       "group": "CRAN parity",
       "order": 812,
       "title": "partykit: conditional inference trees and MOB",
-      "score": 0,
+      "score": 0.5,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 386). Large. Needs L371. Acceptance, equal to partykit: ctree and ctree_control, mob with lmtree and glmtree, cforest under set.seed, node and split structures, predict, party and constparty conversions."
+      "evidence": "Partial (2026-11-21, merged bfbfe837f; scores set from the implementer and verifier reports, not re-audited): partykit: ctree, ctree options, mob, forests (oracle_partykit*); Windows only, first implementation. Remaining: (1) teststat/splitstat 'maximum' where the test has more than one degree of freedom (factor predictors, multi-class responses): needs mvtnorm's Genz-Bretz pmvnorm with its randomised quasi-Monte | (2) ctree_control testtype MonteCarlo (nresample permutation draws) and splittest = TRUE: not implemented, so no oracle case. | (3) ctree MIA, maxsurrogate/numsurrogate, multiway, majority, mtry/maxvar in plain ctree, Surv, multivariate and ordered responses: not implemented, skipped as exotic and outside the Acceptance  | (4) ctree/mob zero case weights in mob: not supported. partykit's mob_grow_fluctests indexes the unfiltered weights with filtered positions, so zero weights are unmatched. Zero weights are cover | (5) mob (lmtree) also not covered: catsplit multiway, ordinal partitioning tests, breakties, mtry, rank-deficient regressors. | (6) glmtree with weights, offset, cluster or vcov other than opg, and gaussian, Gamma or quasi families: not done. Weights, offset, cluster and vcov are implemented and checked only for the gaus | (7) as.party conversion from foreign tree classes (rpart etc.), nodeprune, and print/plot structures: not ported. Conversions checked are as.constparty of a plain ctree party and of a mob tree."
     },
     {
       "id": "L377",
@@ -1223,17 +1212,6 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Started (D7653 to D7655: the unidimensional 2PL, Rasch (free latent variance) and graded response models on mirt's 61-point quadrature, slopes, intercepts and log-likelihood equal to mirt on Windows; oracle_mirt, 112 values; Linux pending). Open: 3PL and 4PL, partial credit, generalized partial credit and nominal items, several factors, a free latent variance, missing data, standard errors, scores (EAP, MAP), item and person fit, DIF, multiple groups. Was: Open (CRAN rank 841). Large. Acceptance, equal to mirt: mirt for Rasch, 1PL to 4PL, graded response, generalized partial credit, nominal and multidimensional models by EM, itemfit, personfit, fscores, multipleGroup, DIF, anova and the fit statistics M2 and C2."
-    },
-    {
-      "id": "L497",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 820,
-      "title": "gamlss: GAMLSS model fitting",
-      "score": 0.82,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Partial (2026-11-20, merged 108fcd2c5): RS, CG and mixed fits with pb/cs/lo smoothers, centiles, lms (BCCG), stepGAIC, residual diagnostics and worm-plot data equal gamlss (oracle_gamlss_fit, _smooth, _diag, _lms, _step; Windows only). Remaining: (1) ga() smoother (gamlss.add, mgcv gam) not implemented, mgcv's REML/GCV Newton search is unlikely to match to 1e-9: implement it or narrow the acceptance to pb, cs and lo; (2) cs df/GCV scenarios at 1e-8 (sbart spar tolerance), pb df=4 at 1e-4 (R's uniroot tolerance), lms BCCG fit values at 1e-4 (R's nu-smoother lambda stop at the noise floor); (3) lms only BCCG without calibration; fits limited to NO, GA, PO, WEI, BCCG with identity and log links; (4) Linux not run."
     },
     {
       "id": "L515",
@@ -1318,10 +1296,10 @@
       "group": "CRAN parity",
       "order": 828,
       "title": "tgp: Bayesian treed Gaussian processes",
-      "score": 0,
+      "score": 0.5,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 909). Large (about 25k lines upstream); ask the user whether it is still relevant before starting. Acceptance, equal to tgp under set.seed: bgp, btgp, bcart, blm, bgpllm and btgpllm by reversible-jump MCMC, the posterior predictions and the design routines."
+      "evidence": "Partial (2026-11-21, merged bfbfe837f; scores set from the implementer and verifier reports, not re-audited): tgp: GP, blm, design (oracle_tgp, _tgpblm, _tgpdesign, _tgpgp); Windows only, first implementation. Remaining: (1) No tree is implemented: btgp, btlm, bcart and btgpllm (the reversible-jump grow/prune/change/swap/rotate moves) are absent from lib/e/algo/stat/tgp*.e, and tgp.e's header says the treed MCMC | (2) tests/oracle has no case for btgp, btlm, bcart or btgpllm. tgpgp.json covers only bgp (the 'bgpllm' option shows in the commit message but no separate fn tag), tgpblm.json only blm, tgpdesig | (3) tgp_design.e says its treed form needs the trees of the fit, which do not exist, so the design routines are only partly covered. Cover the treed design (tgp.design with a treed fit) once the | (4) Possible vacuous oracle: mutating lin_prob in tgp_gp.e (adding 0.001 to gm.gam1, line 288) and re-running oracle_tgpgp still printed 'passed'. Either the bgpllm cases do not exercise lin_pro | (5) All four fixtures printed 'passed' in about 0.5 s each, which looks like a cached result. I did not confirm a fresh rebuild, so re-run with a forced rebuild, for example after deleting the . | (6) Tree models not ported, so btgp, btgpllm, btlm and bcart have no oracle case: Tree grow/prune/change/swap/rotate with Gp::Split/Combine/Match, propose_split/val_order_probs, part_child, well | (7) tgp.design/dopt.gp are only covered for a fit with one partition (no tree); the treed form needs the trees of a btgp/btlm fit (tgp.get.trees/partition)."
     },
     {
       "id": "L517",
@@ -1329,10 +1307,10 @@
       "group": "CRAN parity",
       "order": 829,
       "title": "grf: generalized random forests",
-      "score": 0.8,
+      "score": 0.85,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (2026-11-21, merged c356aac52; Windows only): Equals R (grf 2.6.1, per the committed oracle cases; fixtures not run here): regression, causal, instrumental, quantile, local-linear and survival forests, with honest splitting, OOB predictions, variance estimates, variable importance and the all-sample AIPW ATE estimate and std.err; not covered: ATE for overlap, treated and control samples, TMLE and clusters, the multi_arm, probability and boosted forests, and any elementwise (non-checksum) comparison. Verifier gaps: (1) ll.split.cutoff above 0 (overall-beta branch) is implemented but not oracle-matched: an R case diverged at tree 0 node 14, cause unknown, not confirmed as tie noise; only | (2) One local-linear-split case (weight penalty, split lambda 0.5, p=4) diverged and was dropped, cause unknown. | (3) fast.logrank=TRUE for survival forests is not implemented (outside the Acceptance list, skipped). | (4) average_treatment_effect with target.sample treated/control/overlap or method TMLE, clusters, missing X, tune.parameters, causal survival, multi-arm, multi-regression and | (5) The generator writes inputs with 17 significant digits, which is why the oracle is large; I did not touch the shared scripts/r_oracle/generate.R."
+      "evidence": "Partial (2026-11-21, merged bfbfe837f; scores set from the implementer and verifier reports, not re-audited): grf: regression, causal, instrumental, quantile, local-linear, survival and multi-arm forests with elementwise comparison, honest splitting, variance, importance, ATE; Windows only. Remaining: (1) Weight-penalty local linear split (ll.split.weight.penalty=TRUE) with split lambda 0.3 or more: out-of-bag predictions differ in about 10 of 110 and 63 of 120 rows. Cases tried: n=110, p=4,  | (2) Two n=40, 6-tree overall-beta cases (cutoff 40 and cutoff 8, no honesty) diverged and were dropped. The 4-tree versions match. | (3) multi_arm_causal_forest with stabilize.splits=FALSE at small min.node.size is not matched (ulp tie-break from Eigen summation order in the relabelling). | (4) Linux was not run; the fixture passed on Windows only. | (5) The queue score and docs were not updated, per the task rules."
     },
     {
       "id": "C287",

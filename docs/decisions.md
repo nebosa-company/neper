@@ -51829,3 +51829,7 @@ First-implementation workflow round: each item's acceptance entries all have pas
 ## D7730 — L509 Cubist, L493 topicmodels and L395 RcppAnnoy closed
 
 All acceptance entries have passing oracle cases on Windows (Linux pending). CTM agrees to 1e-6 relative rather than 1e-9: the conjugate-gradient stopping test and EM convergence amplify first-iteration rounding; the reason is stated in the oracle group. L453 .86, L376 .88, L517 .80, L439 .70 and L319 .78 stay open with their gaps in the queue evidence.
+
+## D7731 — L497 gamlss and L492 coxme closed; ga() smoother dropped
+
+L497: every acceptance entry except ga() has passing oracle cases on Windows and Linux. The ga() smoother (gamlss.add, mgcv-backed) is dropped: mgcv's REML/GCV Newton search stops at about 1e-6, so a 1e-9 oracle cannot hold. L492 coxme (first implementation, 706 cases) is closed. L439 .75, L319 .82, L517 .85, L438 .70, L375 .50 and L516 .50 stay open with their gaps in the queue evidence; the scores come from the implementer and verifier reports.

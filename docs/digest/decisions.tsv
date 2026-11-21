@@ -4626,4 +4626,5 @@ D7726	313	L511 QCA closed; read.ssd dropped
 D7727	703	L496 fda and L332 foreign closed; density.fd dropped
 D7728	472	L334 RSpectra and irlba closed
 D7729	496	L344 randomForest, L458 earth, L394 ipred and L309 nloptr closed
-D7730	426	L509 Cubist, L493 topicmodels and L395 RcppAnnoy closed
+D7730	427	L509 Cubist, L493 topicmodels and L395 RcppAnnoy closed
+D7731	522	L497 gamlss and L492 coxme closed; ga() smoother dropped
