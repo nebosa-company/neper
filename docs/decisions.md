@@ -51845,3 +51845,7 @@ All 22 oracle_fpc* fixtures pass on Windows and the verifier found every accepta
 ## D7734 — L317 igraph closed; L318, L287 and L283 advanced
 
 L317 passed its acceptance verifier and all seven oracle_igraph* fixtures on Windows (and under WSL by cross-emit). L318 gained tbats and bats; L287 gained an HTML4 recovery parser and libxml2 recovery cases. L283 and L287 had been deferred by the user and were started without asking; both stay open until the user decides.
+
+## D7735 — L342 lmerTest, L380 tm, L505 sm, L510 gmm and L494 bayesm closed
+
+Each passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. L304 haven (0.9), L452 TSA and L393 ordinal advanced and stay open with their gaps in the queue evidence.

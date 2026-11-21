@@ -180,17 +180,6 @@
       "evidence": "Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows; oracle_dbscanpkg; Linux pending). D7526: extractDBSCAN equals dbscan. D7702: sNNclust equals dbscan. D7703: jpclust equals dbscan. D7704: extractXi equals dbscan. Open: hdbscan. Was: Open (CRAN rank 368). Small to mid. e.ml.cluster.density has dbscan and optics. Acceptance, equal to dbscan: hdbscan with its condensed tree, membership probabilities and outlier scores, lof, sNN and sNNclust, kNN and frNN, kNNdist, extractXi and extractDBSCAN, jpclust."
     },
     {
-      "id": "L380",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 605,
-      "title": "tm and tidytext: text mining",
-      "score": 0.35,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6618). e.algo.stat.tmpkg on a document-term count matrix equals tm weightTfIdf (normalized or not), weightSMART (every tf, idf and normalization letter but u and b), removeSparseTerms and tidytext bind_tf_idf on Windows, plus document cosine similarity (oracle_tm, 144 values; Linux pending). D6860: findFreqTerms and findAssocs equal tm. D7514-D7516: the stopword lists of the thirteen Snowball languages and removePunctuation (ASCII, default options) equal tm. The removePunctuation preserve options (D7517) ASCII word and ngram tokenisation (D7518, D7519) and stemming (Porter and Porter2 equal SnowballC, D7520) equal R. Open: non-ASCII tokenisation, the sentence and regex tokenisers, stemming, stop words, corpora, (D6861 adds the u and b norms) topic models. Was: Open (CRAN ranks 400, 383). Small to mid. Verify e.text.rank, e.text.index and e.text.stem first. Acceptance, equal to R: tm DocumentTermMatrix and TermDocumentMatrix with weightTf, weightTfIdf, weightBin and weightSMART, removeSparseTerms, findFreqTerms, findAssocs, stopword lists, removePunctuation; tidytext unnest_tokens for words, ngrams, sentences and regex, bind_tf_idf."
-    },
-    {
       "id": "L390",
       "category": "library",
       "group": "CRAN parity",
@@ -262,10 +251,10 @@
       "group": "CRAN parity",
       "order": 633,
       "title": "TSA: time-series analysis toolkit",
-      "score": 0.35,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6190, D6406 McLeod.Li.test). periodogram equals TSA on Windows (oracle_tsa; Linux pending). D6870: eacf equals TSA. D7129, D7130: detectAO and detectIO on the fitted pieces equal to TSA (oracle_tsa_detectao, 72 values). D7131: the cumulative periodogram values (cpgram body) equal R (oracle_tsa_cpgram, 48 values). D7527: the tsdiag Ljung-Box p-values equal Box.test. D7713: stats::ar.ols for one series (the AR fit armasubsets builds on) equals R. Open: armasubsets (leaps regsubsets with its collinearity handling), arimax, BIC table. Was: Open (CRAN rank 735). Small to mid. Acceptance, equal to TSA: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax with intervention terms, periodogram, cumulative periodogram data, eacf, BIC table, tsdiag statistics."
+      "evidence": "Partial (2026-11-21, merged 0de9a3a3a; Windows fixtures pass, score from the agent report): The earlier L452 work is in this branch. A plain merge of worktree-wf_39512f68-14c-20 conflicted: that branch is 2063 commits behind master, and the merge pulled in deletions of master's files. I aborted it, reset to master and cherry-picked its four L452 commits (armasubsets/BIC table, arimax, detectAO/IO, oracle size). tests/selfhost/extra-fixtures.txt came across without conflict. I did not re-audit the Acceptance list or the older gap list this round. Arimax tolerances were tightened by measuring each case at 1e-9 against R. Cases 1, 3, 6 (ML and CSS-ML), 7 and 8 now equal R at 1e-9; befor Remaining: (1) arimax case 2 (CSS-ML with a transfer term) is still only checked at 5e-6. Its ML twin agrees at 1e-8, so the CSS stage's stopping point differs from R's. I did not find which part; case 7 ( | (2) arimax case 4 is checked at 1e-8 and case 5 (airmiles) at 5e-7 for coefficients and 5e-6 for standard errors, not 1e-9. R's own optim BFGS stopping (reltol 1e-8, finite-difference gradient a | (3) Not done: re-auditing every Acceptance entry (armasubsets, McLeod.Li, detectAO/IO, arimax, periodogram, cpgram, eacf, BIC table, tsdiag) against the queue evidence, and the rest of the earli"
     },
     {
       "id": "L453",
@@ -323,17 +312,6 @@
       "evidence": "Partial (D6160). randtoolbox halton, unscrambled sobol (eight dimensions, Bratley-Fox numbers) and torus equal R on Windows (oracle_randtoolbox; Linux pending). D6611: congruRand (any modulus, multiplier and increment, any dimension) equals randtoolbox on 17 runs. Open: scrambled sobol, WELL, SFMT, Knuth-TAOCP, qrng. Was: Open (CRAN ranks 926, 963). Small to mid. Verify e.algo.rand.quasi first. Acceptance, equal to R value for value: randtoolbox sobol (with scrambling), halton, torus, WELL, SFMT, congruRand and the Knuth-TAOCP generators; qrng sobol, halton, ghalton and korobov."
     },
     {
-      "id": "L505",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 662,
-      "title": "sm: nonparametric smoothing methods",
-      "score": 0.35,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows; oracle_sm; Linux pending). D6874: hcv (one variable, density and regression) equals sm. hsj (the Sheather-Jones bandwidth, unbinned) equals sm on 30 samples (oracle_sm_sj). D7439-D7442: h.select cv (density, regression), df and aicc, the regression se, 1-d binning, binned regression, density, cv selection, and binned df and aicc, equal sm (oracle_sm_hsel). D7458-D7459: sm.ancova equality and parallel test p-values equal sm; D7461: sm.regression no.effect and linear tests equal sm. D7462-D7464: h.select cv for two variables (scaled, common, separate) equals sm; sm.survival equals sm (D7460). D7465: h.select for two covariates (cv, df, aicc; scaled) equals sm. D7466: the common and separate 2-d structures for regression equal sm. The sm.density variability band equals sm (D7621). Open: 2-d and binned ancova, the other band curves, sm.options. Was: Open (CRAN rank 954). Small to mid. Acceptance, equal to sm: sm.density in one and two dimensions with the bandwidths hnorm, hcv and h.select, sm.regression with its bands, sm.ancova, sm.survival, sm.options."
-    },
-    {
       "id": "L306",
       "category": "library",
       "group": "CRAN parity",
@@ -387,17 +365,6 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and ML, equal to lme4 on deviance, sigma, sigma_b, fixed effects and conditional modes at optimiser tolerance; oracle_lmer; Linux pending). Open: crossed and nested random effects, random slopes, glmer, predict and simulate. Was: Open. Needs L264, L273. e.algo.stat.mixed has random intercept and slope fits and PQL only. Acceptance: lmer with crossed and nested random effects by REML and ML, glmer with Laplace and adaptive Gauss-Hermite for binomial and poisson, bobyqa and Nelder_Mead optimisers; fixef, ranef, VarCorr, logLik, predict and simulate match lme4 on sleepstudy, Penicillin and cbpp within 1e-6."
-    },
-    {
-      "id": "L342",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 681,
-      "title": "lmerTest: Satterthwaite and Kenward-Roger tests for mixed models",
-      "score": 0.42,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lmerTest to 1e-4 on Windows (oracle_lmer; Linux pending). D6918: the t statistics and two-sided p values of the coefficient table equal lmerTest. D6919: contest1D (a contrast L'beta: estimate, standard error, Satterthwaite df, t, p) equals lmerTest. D6969: the joint F test of contest (several contrast rows, Fai-Cornelius denominator df) equals lmerTest. D6946: ranova (the likelihood-ratio test of the random intercept) equals lmerTest for REML fits. Open: anova tables for factors (the same joint test per term) with contrasts, Kenward-Roger, ranova, step, difflsmeans, models beyond one random intercept. Was: Open (CRAN rank 262). Small to mid. Needs L274. Acceptance, equal to lmerTest: summary and anova with Satterthwaite and Kenward-Roger degrees of freedom and p-values, ranova, step, difflsmeans, contest."
     },
     {
       "id": "L284",
@@ -537,10 +504,10 @@
       "group": "CRAN parity",
       "order": 713,
       "title": "ordinal: cumulative link models",
-      "score": 0.3,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6616). e.algo.stat.ordinalpkg.clm (logit, probit and cloglog links, flexible thresholds, no constant column) equals ordinal clm on Windows: log-likelihood, thresholds and coefficients to 1e-6 by Newton with step halving on the exact Hessian (oracle_ordinal, 69 values; Linux pending). D7508-D7509: the loglog link and equidistant thresholds equal ordinal (cauchit reaches a different local maximum than R). D7510-D7513, D7528-D7529: symmetric thresholds, case weights, predictions, anova, scale and nominal effects equal ordinal. Open: cauchit and the flexible links, clmm, profile. Was: Open (CRAN rank 447). Mid. e.algo.stat.regression has ordinal_logistic. Acceptance, equal to ordinal: clm with logit, probit, cloglog, loglog, cauchit and the flexible links, nominal and scale effects, thresholds symmetric and equidistant; clmm with random intercepts by Laplace and adaptive quadrature; predict, anova, profile."
+      "evidence": "Partial (2026-11-21, merged 0de9a3a3a; Windows fixtures pass, score from the agent report): Reset to master (739703fb9) and fast-forward merged worktree-wf_39512f68-14c-18 (6 ordinal commits; no conflicts, extra-fixtures already lists the 4 fixtures). Then: (1) tests/oracle/ordinal.json cut from 7.7 MB to 1.8 MB by rounding covariates and weights to multiples of 1/32 (short exact decimals), n ranges x0.6, and one pr case per fit instead of one per class; ordinal4.json 674 KB, ordinal3 1.3 MB, ordinal2 510 KB. (2) predict (pr) and anova (anst/anp) now run links 0-4 (logit, probit, cloglog, loglog, cauchit), 25 reps each, tolerance rel 1e-9 abs 1e-10. (3) Found a real bug: clm_predict_ Remaining: (1) Loosened tolerances kept (documented, R optimiser path forces them): clmm fitted parameters 5e-5 relative, ranef 1e-3 (abs 1e-6), clmm anova 1e-6; clm flexible-link (Aranda-Ordaz, log-gamma) | (2) No clmm predict case: ordinal exports no predict.clmm, so there is no R value to compare | (3) scale (sc*), nominal (nm*), symmetric (sy*), equidistant (eq*) and weighted (w*) cases still run links 0-2 only (not extended to loglog/cauchit; the predict/anova request was met) | (4) Linux runs of oracle_ordinal, oracle_ordinal2, oracle_ordinal3 and oracle_ordinal4 pending (Windows only here) | (5) Out of Acceptance scope, not started: clmm with weights, several random effects, random slopes, nominal/scale effects, flexible links, nAGQ other than 1, 5, 10"
     },
     {
       "id": "L415",
@@ -664,17 +631,6 @@
       "evidence": "Partial (D6405). The alpha spending functions equal gsDesign on Windows (oracle_gsdesign; Linux pending). Open: boundary computation by recursive integration, gsProbability, sample size, futility bounds, four-point spending parameterisations. Was: Open (CRAN rank 939). Mid. Acceptance, equal to gsDesign: gsDesign for the Lan-DeMets O'Brien-Fleming and Pocock, Hwang-Shih-DeCani, power and exponential spending functions, gsProbability, gsCP, nBinomial, nSurv, nNormal, sfLDOF and the boundaries and sample sizes."
     },
     {
-      "id": "L510",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 748,
-      "title": "gmm: generalized method of moments",
-      "score": 0.35,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6479 linear two-step gmm with iid, MDS and D6480 HAC weighting with five kernels at fixed bandwidth, covariance and J agree with gmm on Windows; oracle_gmmpkg; Linux pending). Open: Andrews and Newey-West bandwidths, prewhitening, iterated and CUE, nonlinear moments, hypothesis tests. Was: Open (CRAN rank 906). Mid. Acceptance, equal to gmm: gmm with the two-step, iterated and CUE estimators, kernel HAC weighting (Bartlett, Parzen, Quadratic Spectral, Andrews and Newey-West bandwidths), the J test and the linear hypothesis tests."
-    },
-    {
       "id": "L512",
       "category": "library",
       "group": "CRAN parity",
@@ -713,10 +669,10 @@
       "group": "CRAN parity",
       "order": 754,
       "title": "haven: SAS, SPSS and Stata file formats",
-      "score": 0.2,
+      "score": 0.9,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6049). e.fmt.dta reads Stata 117, 118 and 119 (labels, doubles and strings with missing codes, value labels) equal to haven 2.5.5 on files from haven::write_dta, Windows (Linux pending). Open: SAS7BDAT, XPORT, SPSS sav and zsav, Stata 102-116, strLs, tagged missing, narrow integer types, writers. Was: Open (CRAN rank 123). Mid to large. New e.fmt modules; no reader exists. Acceptance, each equal to haven on a corpus of real files: read of SAS7BDAT (all compression, both endians, 32 and 64 bit), XPORT v5 and v8, SPSS sav and zsav (compressed, long strings, weights), Stata dta 102 to 119 (strLs, value labels, tagged and extended missing); variable and value labels, formats and user-missing values preserved; write of dta, sav and xpt round trips through haven read."
+      "evidence": "Partial (2026-11-21, merged 0de9a3a3a; Windows fixtures pass, score from the agent report): Fast-forward merged the 10 L304 commits from worktree-wf_39512f68-14c-24 (branch sat directly on master; no conflicts). Delivered earlier and still in the tree: readers equal to haven for SAS7BDAT, XPORT v5/v8, sav/zsav, Stata 104-119, and byte-equal dta/sav/xpt writers (oracle_haven_*, haven_write). New in this round: SPSS weight check. haven exposes no weight, so tests/data/haven/s1w.sav (s1.sav with header weight index 1) is asserted in haven_write: read gives weight variable 0 (plain s1 gives -1), write restores identical bytes. haven_write passes on x64-windows. L304 score set to 0.9 with Remaining: (1) Linux runs of oracle_haven_sas, oracle_haven_dta2, oracle_haven_sav, oracle_haven_xpt and haven_write are pending, so L304 stays open at 0.9 | (2) Stata 102 and 103 cannot be covered because haven refuses below 104; Stata 104-112 are checked only on files built from the format description by scripts/make_haven_dta2.R | (3) SAS compressed (RDC) and big-endian files are ReadStat-written or rewritten from ReadStat output, not SAS-written; there is no vendor-written SPSS sample | (4) sav.write is little-endian only; long-string value labels and long-string missing values are ported but no corpus file exercises them | (5) sas7bcat: only the two real SAS catalogs are checked; the ReadStat catalog-writer output could not be parsed by haven, and the catalog block-pointer sort quirk is not reproduced"
     },
     {
       "id": "L315",
@@ -882,17 +838,6 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Partial (D6647). e.algo.stat.hetgppkg.homgp (homoskedastic Gaussian-process regression, Gaussian kernel with per-dimension theta, known nugget g and the sqrt(eps) jitter hetGP adds, profiled constant mean and variance) equals hetGP mleHomGP with known hyperparameters on Windows: beta0, nu_hat, log-likelihood and the predictive mean, latent variance and nugget variance (oracle_hetgp, 120 values; Linux pending). Open: hyperparameter optimisation, Matern kernels, heteroskedastic models (mleHetGP), replicated designs, derivatives, sequential design criteria. Was: Open (CRAN rank 784). Mid to large. Pairs with the Gaussian process of kernlab in L366. Acceptance, equal to hetGP within the optimizer tolerance: mleHomGP, mleHetGP, predict with variance decomposition, update with new points, noise models, and the expected-improvement criteria."
-    },
-    {
-      "id": "L494",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 780,
-      "title": "bayesm: Bayesian econometrics",
-      "score": 0.35,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Partial (D6817: e.algo.stat.bayesmpkg has lndMvn, lndMvst, lndIWishart, lndIChisq, llmnl, condMom, rdirichlet, rtrun, rwishart and breg equal to bayesm under set.seed on 1484 values; oracle_bayesm; Linux pending). D6818: rmultireg and runireg equal bayesm. D6819: runiregGibbs equals bayesm. D6953: rmixture (labels from n uniforms, then the normals) equals bayesm under set.seed. D6954: rmvst equals bayesm under set.seed. D6897: mnlHess and numEff equal bayesm. D6898: mixDen and the mixture moments of momMix equal bayesm. D6900: createX (intercept, demographics and attributes, DIFF = FALSE, any base) equals bayesm. Open: rnmixGibbs, rmnpGibbs, rmvpGibbs, rivGibbs, rhierLinearModel, rhierMnlRwMixture, rscaleUsage. Was: Open (CRAN rank 829). Mid to large. Needs the R RNG streams. Acceptance, equal to bayesm value for value under set.seed: rhierMnlRwMixture, rmnpGibbs, rmvpGibbs, runireg, runiregGibbs, rivGibbs, rnmixGibbs, rhierLinearModel, rscaleUsage and the helper samplers."
     },
     {
       "id": "L514",
