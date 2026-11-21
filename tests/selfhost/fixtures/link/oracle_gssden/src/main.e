@@ -19,7 +19,8 @@ fn solve(a: *mem.Arena, z: []const f64, r: *Res) -> err {
     let n = usize(z[1usize])
     let nb = usize(z[2usize])
     let seed = i64(z[3usize])
-    let skip = z[4usize] > 0.5f64
+    let skip = z[4usize] > 0.5f64 && z[4usize] < 1.5f64
+    let fixed = z[4usize] > 1.5f64
     let ng = usize(z[5usize])
     let m = usize(z[6usize])
     var dim = 2usize
@@ -85,7 +86,9 @@ fn solve(a: *mem.Arena, z: []const f64, r: *Res) -> err {
         }
     }
     var f: den.DenFit = zero
-    try den.ssden(a, model, x, n, idb, nb, lo, hi, qx, qw, nqd, 1.4f64, 0.0000001f64, 30usize, skip, &f)
+    var fx = z[0usize..0usize]
+    if fixed { fx = z[7usize + n * dim + m * dim..z.len] }
+    try den.ssden(a, model, x, n, idb, nb, lo, hi, qx, qw, nqd, 1.4f64, 0.0000001f64, 30usize, skip, fx, &f)
     let (dens, pe) = den.zeros(a, m)
     if pe != ok { ret pe }
     try den.den_eval(a, model, &f, x, n, idb, lo, hi, xo, m, dens)

@@ -23,7 +23,8 @@ fn solve(a: *mem.Arena, z: []const f64, r: *Res) -> err {
     let nb = usize(z[4usize])
     let m = usize(z[5usize])
     let seed = i64(z[6usize])
-    let skip = z[7usize] > 0.5f64
+    let skip = z[7usize] > 0.5f64 && z[7usize] < 1.5f64
+    let fixed = z[7usize] > 1.5f64
     var dim = 2usize
     if model == 1usize { dim = 1usize }
     let x = z[8usize..8usize + n * dim]
@@ -52,7 +53,9 @@ fn solve(a: *mem.Arena, z: []const f64, r: *Res) -> err {
     var d1: gss.Design = zero
     try gss.design(a, model, x, n, xo, m, xb, nb, &d1)
     var g: g1.Gs1 = zero
-    try cv.gssanova(a, fam, d.s, d.q, id, d.nq, y, n, d.n0, nb, alpha, skip, &g)
+    var fx = z[0usize..0usize]
+    if fixed { fx = z[8usize + n * dim + n + m * dim..z.len] }
+    try cv.gssanova(a, fam, d.s, d.q, id, d.nq, y, n, d.n0, nb, alpha, skip, fx, &g)
     let (pred, pe) = mem.alloc[f64](a, m + 1usize)
     let (sev, se2) = mem.alloc[f64](a, m + 1usize)
     if pe != ok { ret pe }

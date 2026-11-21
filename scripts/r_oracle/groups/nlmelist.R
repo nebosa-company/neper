@@ -5,7 +5,8 @@
 # lmlist args: c(q_out, n, p, ng, gs[ng], y[n], X[n*p]); output per group: coef, sigma, se, lower, upper; then pooledSD.
 # ssval args: c(kind, q_out, x, par...); output: value, gradient. nls args: c(kind, q_out, n, x[n], y[n]);
 #   output: coef, sigma, deviance, logLik, AIC, BIC, se. kinds: 1 SSlogis, 2 SSasymp, 3 SSmicmen, 4 SSfpl, 5 SSgompertz.
-# lme cases carry rel 5e-7 / abs 1e-8 (corSymm cases 1e-5 / 1e-6, compared on the identified outputs only). R's own lme stops ~1e-6 from the optimum (reruns with other
+# lme cases carry rel 5e-7 / abs 1e-8 (corSymm cases 1e-5 / 1e-6, compared on the identified outputs only). R's own lme stops ~1e-6 from the optimum (measured: Orthodont,
+#   pdSymm + corAR1, only the start value of the AR1 parameter changed 0.05 / 0.2 / 0.4 -> estimates spread by 6e-6 relative; reruns with other
 #   starts or tolerances differ that much), so the reference is lme's fit polished to the optimum of the same likelihood (see polished). lme output continues after ranef
 #   (all groups) with the fixed-effect t limits (lower p, upper p) and the intervals.lme var-cov limits (natural scale: lower then upper; sds, re corr, cor, var, sigma);
 #   the var-cov Hessian is Richardson-extrapolated (nlme's fdHess has ~1e-3 rounding noise), checked to 25% of lme's own apVar. Family 5: lme anova L.Ratio of two specs.

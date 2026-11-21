@@ -1,7 +1,7 @@
 // R MCMCpack::MCMCirt1d: the one-dimensional item response (ideal point) model by Gibbs sampling, on the Scythe Mersenne-Twister stream
 // (data augmentation Z, item parameters eta = (alpha, beta), subject abilities theta with equality and sign constraints).
 //
-// Not here: the start values R derives from the data (the caller hands them over), and the other IRT samplers.
+// Not here: the other IRT samplers. R's default start values derived from the data are in e.algo.stat.mcmcpackirtstart (the caller hands them over).
 
 use e.algo.stat.mcmcpackdraw as md
 use e.algo.stat.mcmcpacksamp as ms

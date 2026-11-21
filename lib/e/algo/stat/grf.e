@@ -13,10 +13,12 @@
 // Boosted forests are boosted() and probability forests kind 5. Kinds 6 and 7 are multi_arm_causal_forest and multi_regression_forest (Data.ym outcomes, Data.tm
 // centred treatment columns; predict_multi): multi_arm_causal_forest (nuisance forests: kind 7 for Y.hat, kind 5 for W.hat) with stabilize.splits is checked against R
 // for one and several outcomes and with variance estimates for one outcome. Without stabilize.splits the rule has no minimum node size on the treatment, tiny nodes tie
-// exactly between isolating one sample from either side, and R breaks the tie by an ulp of Eigen's summation order in the relabelling, which this port does not reproduce.
+// exactly between isolating one sample from either side, and R breaks the tie by an ulp of Eigen's summation order; relabel_multi and split_multi repeat that order
+// (sum_ord, pplu_inverse, eig_redux), and the oracle cases include min.node.size 2, 3 and 5 without stabilize.splits.
 //
-// Not here: missing values in X, tune.parameters, fast.logrank, causal survival, merge_forests. TMLE with clusters is an error in R. The overall-beta branch of the
-// local linear split (ll.split.cutoff above 0) equals R in three oracle cases; a weight-penalty split (ridge on each column) with lambda 0.3 or more diverges in a few trees (cause open).
+// Not here: missing values in X, tune.parameters, fast.logrank, causal survival, merge_forests. TMLE with clusters is an error in R. The local linear split
+// (ll.split.cutoff above or at 0, with or without weight penalty) equals R in the oracle cases, because its ridge solve repeats Eigen's arithmetic: the
+// products' summation order by size, an LDLT pivoting on the unreduced diagonal, and its panelled triangular solves (solve_sym, eig_redux, relabel_ll).
 
 use e.math
 use e.math.special as special
@@ -368,7 +370,7 @@ type Scratch = struct {
     keys: []f64, ids: []usize, tk: []f64, ti: []usize, uniq: []f64, counter: []usize, sums: []f64, wsums: []f64,
     vars: []usize, flags: []bool, pool: []usize,
     resp: []f64, nsm: []usize, sz: []f64, szz: []f64, cut: []f64, cls: []f64, cc: []f64, llx: []f64, llm: []f64, llb: []f64, llz: []f64, rel: []usize, sv: []f64,
-    rm: []f64, bs: []f64, bw: []f64, bq: []f64, bm: []usize, nv: []f64, nvi: []usize
+    rm: []f64, bs: []f64, bw: []f64, bq: []f64, bm: []usize, nv: []f64, nvi: []usize, mw: []f64
 }
 
 // leaf value slots of the optimized strategies
@@ -701,10 +703,23 @@ fn split_value_prob(d: *const Data, sc: *Scratch, node: []const usize, v: usize,
         i += 1usize
     }
 }
+// the sum of p[0..n) as Eigen's product kernels order it: packet pairs when `packet`, otherwise one by one
+fn sum_ord(p: []const f64, n: usize, packet: bool) -> f64 {
+    if packet { ret eig_redux(p, n) }
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        s += p[i]
+        i += 1usize
+    }
+    ret s
+}
 
-// the determinant and inverse of the k by k row-major matrix m by Gauss-Jordan elimination with partial pivoting (Eigen's PartialPivLU)
-fn lu_inverse(m: []const f64, k: usize, inv: []f64, work: []f64) -> f64 {
-    var det = 1.0f64
+// Eigen's PartialPivLU of the k by k row-major matrix m and its inverse (the solve against the identity, whose triangular solves multiply by the reciprocal of
+// each pivot): inv receives the inverse, work the factors; the result is the determinant (the diagonal's product). The panels of four of Eigen's matrix solves
+// are not modelled, so k is at most four.
+fn pplu_inverse(m: []const f64, k: usize, inv: []f64, work: []f64) -> f64 {
+    var tr: [8]usize = zero
     var i = 0usize
     while i < k * k {
         work[i] = m[i]
@@ -719,64 +734,92 @@ fn lu_inverse(m: []const f64, k: usize, inv: []f64, work: []f64) -> f64 {
     var c = 0usize
     while c < k {
         var piv = c
+        var mx = math.abs[f64](work[c * k + c])
         var r = c + 1usize
         while r < k {
-            if math.abs[f64](work[r * k + c]) > math.abs[f64](work[piv * k + c]) { piv = r }
+            if math.abs[f64](work[r * k + c]) > mx {
+                mx = math.abs[f64](work[r * k + c])
+                piv = r
+            }
             r += 1usize
         }
-        if piv != c {
-            det = 0.0f64 - det
-            var j = 0usize
-            while j < k {
-                let t1 = work[c * k + j]
-                work[c * k + j] = work[piv * k + j]
-                work[piv * k + j] = t1
-                let t2 = inv[c * k + j]
-                inv[c * k + j] = inv[piv * k + j]
-                inv[piv * k + j] = t2
-                j += 1usize
+        tr[c] = piv
+        if mx != 0.0f64 {
+            if piv != c {
+                var j = 0usize
+                while j < k {
+                    let t = work[c * k + j]
+                    work[c * k + j] = work[piv * k + j]
+                    work[piv * k + j] = t
+                    j += 1usize
+                }
+            }
+            r = c + 1usize
+            while r < k {
+                work[r * k + c] /= work[c * k + c]
+                r += 1usize
             }
         }
-        let pv = work[c * k + c]
-        det *= pv
-        if pv == 0.0f64 { ret 0.0f64 }
         r = c + 1usize
         while r < k {
-            let fct = work[r * k + c] / pv
-            var j = 0usize
+            var j = c + 1usize
             while j < k {
-                work[r * k + j] -= fct * work[c * k + j]
-                inv[r * k + j] -= fct * inv[c * k + j]
+                work[r * k + j] -= work[r * k + c] * work[c * k + j]
                 j += 1usize
             }
             r += 1usize
         }
         c += 1usize
     }
-    c = k
-    while c > 0usize {
-        c -= 1usize
-        let pv = work[c * k + c]
-        var j = 0usize
-        while j < k {
-            inv[c * k + j] = inv[c * k + j] / pv
-            j += 1usize
-        }
-        var r = 0usize
-        while r < c {
-            let fct = work[r * k + c]
-            j = 0usize
+    c = 0usize
+    while c < k {
+        let p = tr[c]
+        if p != c {
+            var j = 0usize
             while j < k {
-                inv[r * k + j] -= fct * inv[c * k + j]
+                let t = inv[c * k + j]
+                inv[c * k + j] = inv[p * k + j]
+                inv[p * k + j] = t
                 j += 1usize
             }
-            r += 1usize
         }
+        c += 1usize
+    }
+    var j = 0usize
+    while j < k {
+        i = 0usize
+        while i < k {
+            var r = i + 1usize
+            while r < k {
+                inv[r * k + j] -= inv[i * k + j] * work[r * k + i]
+                r += 1usize
+            }
+            i += 1usize
+        }
+        i = k
+        while i > 0usize {
+            i -= 1usize
+            inv[i * k + j] = inv[i * k + j] * (1.0f64 / work[i * k + i])
+            var r = 0usize
+            while r < i {
+                inv[r * k + j] -= inv[i * k + j] * work[r * k + i]
+                r += 1usize
+            }
+        }
+        j += 1usize
+    }
+    var det = 1.0f64
+    i = 0usize
+    while i < k {
+        det *= work[i * k + i]
+        i += 1usize
     }
     ret det
 }
 
-// MultiCausalRelabelingStrategy::relabel: responses sc.rm[s * rl + o * K + t] = rho_weight(s, t) * residual(s, o); true means the node cannot be split
+// MultiCausalRelabelingStrategy::relabel: responses sc.rm[s * rl + o * K + t] = rho_weight(s, t) * residual(s, o); true means the node cannot be split.
+// Each Eigen product is summed the way Eigen's kernel for its size and shape does (see sum_ord): a small one, and any product with a one-by-one result,
+// is a packet dot; the rest add in order, except a row times a matrix, which adds the even and odd samples apart.
 fn relabel_multi(d: *const Data, sc: *Scratch, node: []const usize) -> bool {
     let kk = d.ntr
     let no = d.nout
@@ -814,79 +857,113 @@ fn relabel_multi(d: *const Data, sc: *Scratch, node: []const usize) -> bool {
         j += 1usize
     }
     if math.abs[f64](sw) <= 1.0e-16f64 { ret true }
-    var ww: [64]f64 = zero
+    let wc = sc.mw[0usize..m * kk]
+    let yc = sc.mw[m * kk..m * (kk + no)]
+    let t2 = sc.mw[m * (kk + no)..m * (2usize * kk + no)]
+    let tmp = sc.mw[m * (2usize * kk + no)..m * (2usize * kk + no + 1usize)]
     i = 0usize
     while i < m {
         let s = node[i]
-        let w = weight_of(d, s)
-        var a1 = 0usize
-        while a1 < kk {
-            var b1 = 0usize
-            while b1 < kk {
-                ww[a1 * kk + b1] += (d.tm[s * kk + a1] - wbar[a1]) * w * (d.tm[s * kk + b1] - wbar[b1])
-                b1 += 1usize
-            }
-            a1 += 1usize
+        j = 0usize
+        while j < kk {
+            wc[i * kk + j] = d.tm[s * kk + j] - wbar[j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < no {
+            yc[i * no + j] = d.ym[s * no + j] - ybar[j]
+            j += 1usize
         }
         i += 1usize
+    }
+    var ww: [64]f64 = zero
+    let wpacket = m + 2usize * kk < 20usize || kk == 1usize
+    var a1 = 0usize
+    while a1 < kk {
+        var b1 = 0usize
+        while b1 < kk {
+            i = 0usize
+            while i < m {
+                tmp[i] = (wc[i * kk + a1] * weight_of(d, node[i])) * wc[i * kk + b1]
+                i += 1usize
+            }
+            ww[a1 * kk + b1] = sum_ord(tmp, m, wpacket)
+            b1 += 1usize
+        }
+        a1 += 1usize
     }
     var inv: [64]f64 = zero
     var work: [64]f64 = zero
-    let det = lu_inverse(ww[0usize..64usize], kk, inv[0usize..64usize], work[0usize..64usize])
+    let det = pplu_inverse(ww[0usize..64usize], kk, inv[0usize..64usize], work[0usize..64usize])
     if math.abs[f64](det) < 1.0e-10f64 { ret true }
-    var wy: [32]f64 = zero
-    i = 0usize
-    while i < m {
-        let s = node[i]
-        let w = weight_of(d, s)
-        var a1 = 0usize
-        while a1 < kk {
-            var o1 = 0usize
-            while o1 < no {
-                wy[a1 * no + o1] += (d.tm[s * kk + a1] - wbar[a1]) * w * (d.ym[s * no + o1] - ybar[o1])
-                o1 += 1usize
+    // beta = ((inverse * W') * diag(w)) * Y
+    let bpacket = 2usize * kk + m < 20usize
+    var pr: [8]f64 = zero
+    a1 = 0usize
+    while a1 < kk {
+        j = 0usize
+        while j < m {
+            var l = 0usize
+            while l < kk {
+                pr[l] = inv[a1 * kk + l] * wc[j * kk + l]
+                l += 1usize
             }
-            a1 += 1usize
+            t2[a1 * m + j] = sum_ord(pr[0usize..8usize], kk, bpacket) * weight_of(d, node[j])
+            j += 1usize
         }
-        i += 1usize
+        a1 += 1usize
     }
     var beta: [32]f64 = zero
-    var a2 = 0usize
-    while a2 < kk {
+    let eo = kk == 1usize && no > 1usize && m + kk + no >= 20usize
+    a1 = 0usize
+    while a1 < kk {
         var o2 = 0usize
         while o2 < no {
             var acc = 0.0f64
-            var b2 = 0usize
-            while b2 < kk {
-                acc += inv[a2 * kk + b2] * wy[b2 * no + o2]
-                b2 += 1usize
+            if eo {
+                var ev = 0.0f64
+                var od = 0.0f64
+                i = 0usize
+                while i + 1usize < m {
+                    ev += t2[a1 * m + i] * yc[i * no + o2]
+                    od += t2[a1 * m + i + 1usize] * yc[(i + 1usize) * no + o2]
+                    i += 2usize
+                }
+                acc = ev + od
+                if m % 2usize == 1usize { acc += t2[a1 * m + m - 1usize] * yc[(m - 1usize) * no + o2] }
+            } else {
+                i = 0usize
+                while i < m {
+                    acc += t2[a1 * m + i] * yc[i * no + o2]
+                    i += 1usize
+                }
             }
-            beta[a2 * no + o2] = acc
+            beta[a1 * no + o2] = acc
             o2 += 1usize
         }
-        a2 += 1usize
+        a1 += 1usize
     }
+    let rpacket = kk + m + kk < 20usize
+    let fpacket = kk + m + no < 20usize
     i = 0usize
     while i < m {
         let s = node[i]
         var o3 = 0usize
         while o3 < no {
-            var fit = 0.0f64
-            var b3 = 0usize
-            while b3 < kk {
-                fit += (d.tm[s * kk + b3] - wbar[b3]) * beta[b3 * no + o3]
-                b3 += 1usize
+            var l = 0usize
+            while l < kk {
+                pr[l] = wc[i * kk + l] * beta[l * no + o3]
+                l += 1usize
             }
-            let resid = (d.ym[s * no + o3] - ybar[o3]) - fit
+            let resid = yc[i * no + o3] - sum_ord(pr[0usize..8usize], kk, fpacket)
             var t3 = 0usize
             while t3 < kk {
-                var rw = 0.0f64
-                var b4 = 0usize
-                while b4 < kk {
-                    rw += (d.tm[s * kk + b4] - wbar[b4]) * inv[t3 * kk + b4]
-                    b4 += 1usize
+                l = 0usize
+                while l < kk {
+                    pr[l] = wc[i * kk + l] * inv[t3 * kk + l]
+                    l += 1usize
                 }
-                sc.rm[s * rl + o3 * kk + t3] = rw * resid
+                sc.rm[s * rl + o3 * kk + t3] = sum_ord(pr[0usize..8usize], kk, rpacket) * resid
                 t3 += 1usize
             }
             o3 += 1usize
@@ -1045,16 +1122,19 @@ fn split_multi(d: *const Data, sc: *Scratch, node: []const usize, v: usize, stab
             continue
         }
         let wr2 = wnode - wl
-        var s1 = 0.0f64
-        var s2 = 0.0f64
+        // ArrayXd::square().sum() is Eigen's packet redux
+        var sq1: [64]f64 = zero
+        var sq2: [64]f64 = zero
         var r2 = 0usize
         while r2 < rl {
             let l = sc.nv[o_ls + r2]
             let rr = sc.nv[r2] - l
-            s1 += l * l
-            s2 += rr * rr
+            sq1[r2] = l * l
+            sq2[r2] = rr * rr
             r2 += 1usize
         }
+        let s1 = eig_redux(sq1[0usize..64usize], rl)
+        let s2 = eig_redux(sq2[0usize..64usize], rl)
         var dec = s1 / wl + s2 / wr2
         dec -= imb * (1.0f64 / f64(n_left) + 1.0f64 / f64(n_right))
         if dec > best.dec {
@@ -1071,6 +1151,40 @@ fn split_multi(d: *const Data, sc: *Scratch, node: []const usize, v: usize, stab
 fn colval(d: *const Data, s: usize, j: usize) -> f64 {
     if j == d.p { ret d.y[s] }
     ret d.x[s * d.p + j]
+}
+
+// Eigen's redux sum of the n values p (SSE2, two doubles a packet): two packet accumulators, pairwise lanes, the odd one last
+fn eig_redux(p: []const f64, n: usize) -> f64 {
+    let asz = (n / 2usize) * 2usize
+    if asz == 0usize { ret p[0usize] }
+    var a0 = p[0usize]
+    var a1 = p[1usize]
+    if asz > 2usize {
+        var b0 = p[2usize]
+        var b1 = p[3usize]
+        let asz2 = (n / 4usize) * 4usize
+        var i = 4usize
+        while i < asz2 {
+            a0 += p[i]
+            a1 += p[i + 1usize]
+            b0 += p[i + 2usize]
+            b1 += p[i + 3usize]
+            i += 4usize
+        }
+        a0 += b0
+        a1 += b1
+        if asz > asz2 {
+            a0 += p[asz2]
+            a1 += p[asz2 + 1usize]
+        }
+    }
+    var s = a0 + a1
+    var j = asz
+    while j < n {
+        s += p[j]
+        j += 1usize
+    }
+    ret s
 }
 
 // LLRegressionRelabelingStrategy::relabel: the residual of a ridge regression on ll_vars within the node (or of the overall fit for a small node)
@@ -1101,24 +1215,50 @@ fn relabel_ll(d: *const Data, sc: *Scratch, node: []const usize, o: *const Opts)
         }
         ret
     }
+    // Eigen's products: a small one (n + 2k below 20 for X'X, n + k + 1 below 20 for X'y) is a coefficient-wise dot that sums in packets of two; a larger X'X
+    // sums in order, and the X'y gemv sums even and odd samples apart. sc.resp[0..n) holds the products here (the residuals are written after).
+    let tmp = sc.resp
     var r = 0usize
     while r < k {
         var c = 0usize
         while c < k {
             var acc = 0.0f64
-            i = 0usize
-            while i < n {
-                acc += sc.llx[i * k + r] * sc.llx[i * k + c]
-                i += 1usize
+            if n + 2usize * k < 20usize {
+                i = 0usize
+                while i < n {
+                    tmp[i] = sc.llx[i * k + r] * sc.llx[i * k + c]
+                    i += 1usize
+                }
+                acc = eig_redux(tmp, n)
+            } else {
+                i = 0usize
+                while i < n {
+                    acc += sc.llx[i * k + r] * sc.llx[i * k + c]
+                    i += 1usize
+                }
             }
             sc.llm[r * k + c] = acc
             c += 1usize
         }
         var bacc = 0.0f64
-        i = 0usize
-        while i < n {
-            bacc += sc.llx[i * k + r] * d.y[node[i]]
-            i += 1usize
+        if n + k + 1usize < 20usize {
+            i = 0usize
+            while i < n {
+                tmp[i] = sc.llx[i * k + r] * d.y[node[i]]
+                i += 1usize
+            }
+            bacc = eig_redux(tmp, n)
+        } else {
+            var ev = 0.0f64
+            var od = 0.0f64
+            i = 0usize
+            while i + 1usize < n {
+                ev += sc.llx[i * k + r] * d.y[node[i]]
+                od += sc.llx[(i + 1usize) * k + r] * d.y[node[i + 1usize]]
+                i += 2usize
+            }
+            bacc = ev + od
+            if n % 2usize == 1usize { bacc += sc.llx[(n - 1usize) * k + r] * d.y[node[n - 1usize]] }
         }
         sc.llb[r] = bacc
         r += 1usize
@@ -1487,6 +1627,8 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
     let (bmv, m5) = gz_usize(a, nbound * mkk)
     let (nvv, m6) = gz_f64(a, 2usize * mrl + 6usize * mkk + 2usize)
     let (nviv, m7) = gz_usize(a, 2usize * mkk)
+    let (mwv, m8) = gz_f64(a, nbound * (2usize * mkk + d.nout + 1usize))
+    if m8 != ok { ret (t, m8) }
     if m1 != ok { ret (t, m1) }
     if m2 != ok { ret (t, m2) }
     if m3 != ok { ret (t, m3) }
@@ -1575,6 +1717,7 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
     sc.bw = bwv
     sc.bq = bqv
     sc.bm = bmv
+    sc.mw = mwv
     sc.nv = nvv
     sc.nvi = nviv
     i = 0usize
@@ -2599,7 +2742,7 @@ fn predict_multi(a: *mem.Arena, f: *const Forest, kind: usize, kk: usize, no: us
             }
             a1 += 1usize
         }
-        let _d1 = lu_inverse(m1, kk, m2, wk)
+        let _d1 = pplu_inverse(m1, kk, m2, wk)
         var o1 = 0usize
         while o1 < no {
             var a2 = 0usize
@@ -2639,7 +2782,7 @@ fn predict_multi(a: *mem.Arena, f: *const Forest, kind: usize, kk: usize, no: us
                 }
                 a1 += 1usize
             }
-            let _d2 = lu_inverse(m3, kk, m4, wk)
+            let _d2 = pplu_inverse(m3, kk, m4, wk)
             // v2 = WWi W
             a1 = 0usize
             while a1 < kk {
@@ -3498,79 +3641,170 @@ fn predict_quantile(a: *mem.Arena, f: *const Forest, d: *const Data, xnew: []con
     ret ok
 }
 
-// solves the symmetric positive definite k by k system m z = b (m row-major, destroyed; b destroyed) by elimination on the largest remaining diagonal,
-// the pivoting of Eigen's LDLT; k at most 64
+// solves the symmetric positive definite k by k system m z = b (m row-major, only the lower triangle read, destroyed; b destroyed) as Eigen's LDLT does:
+// left-looking, pivoting on the diagonal as it stood before the reduction, each update subtracting a sequentially accumulated sum; k at most 64
 fn solve_sym(m: []f64, b: []f64, z: []f64, k: usize) {
-    var perm: [64]usize = zero
-    var i = 0usize
-    while i < k {
-        perm[i] = i
-        i += 1usize
-    }
+    var tr: [64]usize = zero
+    var temp: [64]f64 = zero
     var kk = 0usize
     while kk < k {
-        var r = kk
+        var idx = kk
         var mx = math.abs[f64](m[kk * k + kk])
         var q = kk + 1usize
         while q < k {
             if math.abs[f64](m[q * k + q]) > mx {
                 mx = math.abs[f64](m[q * k + q])
-                r = q
+                idx = q
             }
             q += 1usize
         }
-        if r != kk {
+        tr[kk] = idx
+        if kk != idx {
             var c = 0usize
-            while c < k {
-                let t = m[r * k + c]
-                m[r * k + c] = m[kk * k + c]
-                m[kk * k + c] = t
+            while c < kk {
+                let t = m[kk * k + c]
+                m[kk * k + c] = m[idx * k + c]
+                m[idx * k + c] = t
                 c += 1usize
             }
+            var r = idx + 1usize
+            while r < k {
+                let t = m[r * k + kk]
+                m[r * k + kk] = m[r * k + idx]
+                m[r * k + idx] = t
+                r += 1usize
+            }
+            let td = m[kk * k + kk]
+            m[kk * k + kk] = m[idx * k + idx]
+            m[idx * k + idx] = td
+            var i = kk + 1usize
+            while i < idx {
+                let t = m[i * k + kk]
+                m[i * k + kk] = m[idx * k + i]
+                m[idx * k + i] = t
+                i += 1usize
+            }
+        }
+        if kk > 0usize {
+            var c = 0usize
+            while c < kk {
+                temp[c] = m[c * k + c] * m[kk * k + c]
+                c += 1usize
+            }
+            var dot = 0.0f64
             c = 0usize
-            while c < k {
-                let t = m[c * k + r]
-                m[c * k + r] = m[c * k + kk]
-                m[c * k + kk] = t
+            while c < kk {
+                dot += m[kk * k + c] * temp[c]
                 c += 1usize
             }
-            let tb = b[r]
-            b[r] = b[kk]
-            b[kk] = tb
-            let tp = perm[r]
-            perm[r] = perm[kk]
-            perm[kk] = tp
+            m[kk * k + kk] -= dot
+            var r = kk + 1usize
+            while r < k {
+                var acc = 0.0f64
+                c = 0usize
+                while c < kk {
+                    acc += m[r * k + c] * temp[c]
+                    c += 1usize
+                }
+                m[r * k + kk] -= acc
+                r += 1usize
+            }
         }
         let piv = m[kk * k + kk]
-        i = kk + 1usize
-        while i < k {
-            let fct = m[i * k + kk] / piv
-            var j = kk
-            while j < k {
-                m[i * k + j] -= fct * m[kk * k + j]
-                j += 1usize
+        if piv != 0.0f64 {
+            var r = kk + 1usize
+            while r < k {
+                m[r * k + kk] /= piv
+                r += 1usize
             }
-            b[i] -= fct * b[kk]
-            i += 1usize
         }
         kk += 1usize
     }
-    var w: [64]f64 = zero
-    i = k
-    while i > 0usize {
-        i -= 1usize
-        var s = b[i]
-        var j = i + 1usize
-        while j < k {
-            s -= m[i * k + j] * w[j]
-            j += 1usize
-        }
-        w[i] = s / m[i * k + i]
+    var i = 0usize
+    while i < k {
+        z[i] = b[i]
+        i += 1usize
     }
     i = 0usize
     while i < k {
-        z[perm[i]] = w[i]
+        let t = z[i]
+        z[i] = z[tr[i]]
+        z[tr[i]] = t
         i += 1usize
+    }
+    // Eigen's triangular solve works in panels of four: inside a panel column by column, below it one update by the panel's accumulated sum
+    var k1 = 0usize
+    while k1 < k {
+        var w = k - k1
+        if w > 4usize { w = 4usize }
+        let end = k1 + w
+        i = k1
+        while i < end {
+            var r = i + 1usize
+            while r < end {
+                z[r] -= z[i] * m[r * k + i]
+                r += 1usize
+            }
+            i += 1usize
+        }
+        var r = end
+        while r < k {
+            var acc = 0.0f64
+            var j = k1
+            while j < end {
+                acc += m[r * k + j] * z[j]
+                j += 1usize
+            }
+            z[r] -= acc
+            r += 1usize
+        }
+        k1 += 4usize
+    }
+    i = 0usize
+    while i < k {
+        if math.abs[f64](m[i * k + i]) > 2.2250738585072014e-308f64 {
+            z[i] /= m[i * k + i]
+        } else {
+            z[i] = 0.0f64
+        }
+        i += 1usize
+    }
+    k1 = 0usize
+    while k1 < k {
+        var w = k - k1
+        if w > 4usize { w = 4usize }
+        let top = k - k1 - w
+        var kq = 0usize
+        while kq < w {
+            let ii = k - k1 - kq - 1usize
+            var acc = 0.0f64
+            var q = 0usize
+            while q < kq {
+                acc += m[(ii + 1usize + q) * k + ii] * z[ii + 1usize + q]
+                q += 1usize
+            }
+            z[ii] -= acc
+            kq += 1usize
+        }
+        var r = 0usize
+        while r < top {
+            var acc = 0.0f64
+            var j = top
+            while j < top + w {
+                acc += m[j * k + r] * z[j]
+                j += 1usize
+            }
+            z[r] -= acc
+            r += 1usize
+        }
+        k1 += 4usize
+    }
+    i = k
+    while i > 0usize {
+        i -= 1usize
+        let t = z[i]
+        z[i] = z[tr[i]]
+        z[tr[i]] = t
     }
 }
 

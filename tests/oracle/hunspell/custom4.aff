@@ -1,0 +1,18 @@
+SET UTF-8
+TRY abcdefghijklmnopqrstuvwxyz
+NEEDAFFIX N
+PFX A Y 1
+PFX A 0 re/S .
+PFX B Y 1
+PFX B 0 un .
+SFX S Y 1
+SFX S 0 s .
+SFX D Y 1
+SFX D 0 ed/S .
+SFX G Y 1
+SFX G 0 ing/DS .
+SFX E N 1
+SFX E 0 ness/S .
+SFX H Y 2
+SFX H e ish/E e
+SFX H 0 ish/E [^e]

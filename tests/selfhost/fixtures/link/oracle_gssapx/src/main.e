@@ -151,8 +151,8 @@ fn same(p: []const f64, q: []const f64) -> bool {
     ret true
 }
 
-fn main(a: *mem.Arena, args: []str) -> err {
-    let (golden, load_error) = oracle.load(a, "tests/oracle/gssapx.json")
+fn check_file(a: *mem.Arena, path: str) -> usize {
+    let (golden, load_error) = oracle.load(a, path)
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     let base = mem.mark(a)
@@ -182,6 +182,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         at += 1usize
     }
-    if failures > 0usize { os.exit(1) }
+    ret failures
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let f1 = check_file(a, "tests/oracle/gssapx.json")
+    let f2 = check_file(a, "tests/oracle/gssskip.json")
+    if f1 + f2 > 0usize { os.exit(1) }
     ret ok
 }

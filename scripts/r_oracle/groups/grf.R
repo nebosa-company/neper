@@ -219,6 +219,17 @@ emit_ll(100, 3, enable.ll.split = TRUE, ll.split.weight.penalty = TRUE, ll.split
 emit_ll(100, 3, enable.ll.split = TRUE, cutoff = 5, ll.split.lambda = 0.1, num.trees = 40)
 emit_ll(40, 3, enable.ll.split = TRUE, cutoff = 40, num.trees = 4, honesty = FALSE)
 emit_ll(40, 3, enable.ll.split = TRUE, cutoff = 8, num.trees = 4, honesty = FALSE)
+emit_ll(110, 3, enable.ll.split = TRUE, ll.split.weight.penalty = TRUE, ll.split.lambda = 0.5, cutoff = 0, num.trees = 60)
+emit_ll(120, 4, enable.ll.split = TRUE, ll.split.weight.penalty = TRUE, ll.split.lambda = 1, cutoff = 10, num.trees = 60)
+emit_ll(120, 4, enable.ll.split = TRUE, ll.split.weight.penalty = FALSE, ll.split.lambda = 1, cutoff = 10, num.trees = 60)
+emit_ll(120, 4, enable.ll.split = TRUE, ll.split.weight.penalty = TRUE, ll.split.lambda = 1, cutoff = 0, num.trees = 60)
+emit_ll(120, 4, enable.ll.split = TRUE, ll.split.weight.penalty = FALSE, ll.split.lambda = 1, cutoff = 0, num.trees = 60)
+emit_ll(110, 4, enable.ll.split = TRUE, ll.split.weight.penalty = TRUE, ll.split.lambda = 0.3, cutoff = 0, num.trees = 50)
+emit_ll(120, 4, enable.ll.split = TRUE, ll.split.weight.penalty = TRUE, ll.split.lambda = 2, cutoff = 10, num.trees = 50)
+emit_ll(110, 3, enable.ll.split = TRUE, ll.split.weight.penalty = TRUE, ll.split.lambda = 5, cutoff = 0, num.trees = 50)
+emit_ll(120, 4, enable.ll.split = TRUE, ll.split.weight.penalty = TRUE, ll.split.lambda = 0.8, cutoff = 6, num.trees = 50)
+emit_ll(40, 3, enable.ll.split = TRUE, cutoff = 40, num.trees = 6, honesty = FALSE)
+emit_ll(40, 3, enable.ll.split = TRUE, cutoff = 8, num.trees = 6, honesty = FALSE)
 
 #   fn "grf_surv": survival forests. args = (sel, n, p, num.trees, mtry, min.node.size, sample.fraction, honesty, honesty.fraction, honesty.prune.leaves, alpha, seed, nnew, hasw,
 #                     prediction.type (0 Kaplan-Meier, 1 Nelson-Aalen), 0 x 9, Y[n], D[n], (w[n]), X, Xnew); sel 0 oob survival curves, 1 test curves (row-major checksums),
@@ -377,5 +388,9 @@ emit_multi(80, 4, honesty.fraction = 0.7, honesty.prune.leaves = FALSE, nl = 3, 
 emit_multi(150, 3, stabilize.splits = FALSE, min.node.size = 20, num.trees = 40)
 emit_multi(200, 4, stabilize.splits = FALSE, min.node.size = 30, nl = 2, num.trees = 40, honesty = FALSE)
 emit_multi(120, 3, stabilize.splits = FALSE, min.node.size = 15, nl = 3, nout = 2, num.trees = 40)
+emit_multi(100, 3, stabilize.splits = FALSE, min.node.size = 5, num.trees = 40)
+emit_multi(120, 4, stabilize.splits = FALSE, min.node.size = 3, nl = 3, nout = 2, num.trees = 40)
+emit_multi(80, 3, stabilize.splits = FALSE, min.node.size = 5, nl = 2, num.trees = 40, honesty = FALSE)
+emit_multi(90, 3, stabilize.splits = FALSE, min.node.size = 2, nl = 4, num.trees = 40)
 
 emit("grf", "grf", list(cases))

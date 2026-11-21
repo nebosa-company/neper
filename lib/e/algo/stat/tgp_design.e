@@ -2,7 +2,7 @@
 // randomkit generator seeded from R's sample(0:999, 3), and tgp.design on a fit without a tree (one partition,
 // so it is dopt.gp over all the candidates with howmany new inputs). The criterion is the log determinant of the
 // isotropic exponential correlation (range 0.001 m^2, nugget 0.01) of the fixed inputs and the chosen ones.
-// The treed form needs the trees of the fit, which are not here.
+// The treed form (tgp.design on a fit with a tree) is design_treed in tgp_tree.e, which needs the best tree of the fit.
 
 use e.algo.rand.r as rr
 use e.algo.stat.tgp as tgp

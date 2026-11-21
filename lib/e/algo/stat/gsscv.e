@@ -878,7 +878,7 @@ fn cv_m_wk(c: *Mng, theta: []const f64) -> f64 { ret c.scale * cv_m(c, theta) + 
 
 fn log10f(x: f64) -> f64 { ret math.log10[f64](x) }
 
-fn mspngreg(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, n: usize, n0: usize, nxi: usize, alpha: f64, skip: bool, out: *g1.Gs1) -> err {
+fn mspngreg(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, n: usize, n0: usize, nxi: usize, alpha: f64, skip: bool, fix: []const f64, out: *g1.Gs1) -> err {
     let sz = n * nxi
     let nn = n0 + nxi
     let (theta, e1) = gss.zeros(a, nq)
@@ -965,7 +965,7 @@ fn mspngreg(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []co
     }
     var z2: g1.Gs1 = zero
     try sspngreg(a, fam, s, rwk, q1, y, n, n0, nxi, alpha, &z2)
-    let nlambda = z2.fit.nlambda
+    var nlambda = z2.fit.nlambda
     i = 0usize
     while i < nq {
         theta[i] = theta[i] + z2.fit.theta[0usize]
@@ -977,6 +977,15 @@ fn mspngreg(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []co
         out.eta = z2.eta
         out.w = z2.w
         ret ok
+    }
+    // fix = R's converged [nlambda, theta..]: the fit at those values, no search (the nlm search stops on rounding-dependent points)
+    if fix.len > 0usize {
+        nlambda = fix[0usize]
+        i = 0usize
+        while i < nq {
+            theta[i] = fix[1usize + i]
+            i += 1usize
+        }
     }
     // the theta search
     let (rw2, e5) = gss.zeros(a, sz)
@@ -1034,7 +1043,7 @@ fn mspngreg(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []co
         cx.shift = 10.0f64
     }
     var counter = 0usize
-    var searching = true
+    var searching = fix.len == 0usize
     while searching {
         let r = nlm.nlm[Mng](a, &cx, cv_m_wk, theta, 100usize, 7i64, 1.0f64)
         if r.code <= 3i64 { searching = false } else {
@@ -1116,7 +1125,7 @@ fn mspngreg(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []co
 }
 
 // one kernel (nq == 1) through sspngreg with q = r[id, ], else mspngreg; rs holds the nq kernels one after the other
-fn gssanova(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, n: usize, n0: usize, nxi: usize, alpha: f64, skip: bool, out: *g1.Gs1) -> err {
+fn gssanova(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, n: usize, n0: usize, nxi: usize, alpha: f64, skip: bool, fix: []const f64, out: *g1.Gs1) -> err {
     if nq == 1usize {
         let (q, e) = gss.zeros(a, nxi * nxi)
         if e != ok { ret e }
@@ -1132,6 +1141,6 @@ fn gssanova(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []co
         try sspngreg(a, fam, s, rs, q, y, n, n0, nxi, alpha, out)
         ret ok
     }
-    try mspngreg(a, fam, s, rs, id, nq, y, n, n0, nxi, alpha, skip, out)
+    try mspngreg(a, fam, s, rs, id, nq, y, n, n0, nxi, alpha, skip, fix, out)
     ret ok
 }

@@ -7,6 +7,9 @@
 # Tolerance rel 1e-6 / abs 1e-8: gls() runs nlminb at its default msTol 1e-5 on a forward-difference gradient, so its estimates sit ~1e-7 to 1e-6 from the
 # optimum of the likelihood; the likelihood is flat there (logLik, AIC, BIC agree far tighter). Neper minimises to the exact optimum, so the reference
 # cannot be reproduced closer than R's own stopping point without rebuilding every structure's objective on the R side (done for lme in nlmelist.R, not for gls).
+# Measured on R 4.6.1 / nlme 3.1.169 (ChickWeight, 12 chicks, ML, same data and model, only the start value of the correlation/variance parameter changed 0.05 / 0.2 / 0.4):
+# gls estimates spread by 1e-7 (AR1), 3.8e-6 (AR1 + varPower), 2.7e-6 (CompSymm) and 3.9e-5 (ARMA(1,1)) relative, logLik by <= 3e-7 absolute, so no reference
+# taken from one gls run is the optimum to better than that, whatever the tolerance on the Neper side.
 suppressMessages(library(nlme))
 cases <- list()
 set.seed(20261120)

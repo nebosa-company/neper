@@ -1,0 +1,16 @@
+SET UTF-8
+TRY abcdefghijklmnopqrstuvwxyz
+AF 3
+AF AB
+AF B
+AF ABC
+AM 2
+AM po:noun is:plur
+AM po:verb
+PFX A Y 1
+PFX A 0 re .
+PFX B Y 1
+PFX B 0 un/2 .
+SFX C Y 2
+SFX C 0 s . 1
+SFX C 0 ing . 2

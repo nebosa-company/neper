@@ -1,7 +1,8 @@
 // R partykit lmtree: model-based recursive partitioning of a linear model y ~ x | z. A node is split on the partitioning variable whose parameter-instability test has the smallest p value (supLM for a numeric variable with the tabulated beta approximation, the chi-square of the grouped score sums for an unordered factor, both on the scores r x decorrelated by the inverse outer product), Bonferroni adjusted, and at the cut point or level split that minimises the summed residual sum of squares of the two refitted models.
 //
-// Not here: weights, offsets and clusters, ordered partitioning factors, ordinal tests, vcov other than opg, post-pruning, mtry, breakties, glmtree and other model families.
+// Not here: catsplit multiway, ordinal = max or L2 for ordered partitioning factors, Gamma and other glm families, zero weights with vcov = info, vcov info or sandwich for a glm.
 
+use e.algo.rand.r as rnd
 use e.algo.stat.partykitpkg as pk
 use e.algo.stat.strucpkg_tables as tb
 use e.math
@@ -11,12 +12,18 @@ use e.str
 
 type MOut = struct { vr: []i64, brk: []f64, kid1: []i64, kid2: []i64, nobs: []f64, pval: []f64, objfun: []f64, coef: []f64, lmap: []i64, stat: []f64, adjp: []f64, k: usize, pz: usize, maxlev: usize, count: usize, minsize: usize }
 
-type MCtl = struct { alpha: f64, bonf: bool, maxdepth: usize, trim: f64, center: bool }
+type MCtl = struct { alpha: f64, bonf: bool, maxdepth: usize, trim: f64, center: bool, mtry: usize, bties: bool, rg: *rnd.Rng }
 
 // wt the case weights (empty = all 1), off the offset (empty = none), cl the cluster codes (empty = none), vc the instability weighting: 0 opg, 1 info, 2 sandwich (the last two for the linear model)
 type MCtx = struct { xr: []const f64, kx: usize, y: []const f64, n: usize, z: []const f64, pz: usize, nl: []const usize, fam: usize, wt: []const f64, off: []const f64, cl: []const usize, vc: usize }
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
+
+// a partitioning factor coded 1000000 + L is an ordered factor of L levels: its z column holds the level indices 1 .. L, it is tested as a factor (ordinal = chisq) and split like a numeric variable at a level, never between levels
+fn nlv(x: usize) -> usize {
+    if x >= 1000000usize { ret x - 1000000usize }
+    ret x
+}
 
 // the sum of the case weights over the rows sub (their count without weights)
 fn sumw(c: *const MCtx, sub: []const usize) -> f64 {
@@ -204,7 +211,9 @@ fn devres(fam: usize, y: f64, mu: f64) -> f64 {
 fn glmfit(a: *mem.Arena, c: *const MCtx, sub: []const usize, coef: []f64, wres: []f64) -> (f64, err) {
     let m = sub.len
     let k = c.kx + 1usize
-    let fam = c.fam
+    var fam = c.fam
+    if fam == 4usize { fam = 1usize }
+    if fam == 5usize { fam = 2usize }
     let (eta, e1) = mem.alloc[f64](a, m)
     let (mu, e2) = mem.alloc[f64](a, m)
     let (zz, e3) = mem.alloc[f64](a, m)
@@ -217,7 +226,8 @@ fn glmfit(a: *mem.Arena, c: *const MCtx, sub: []const usize, coef: []f64, wres: 
     while i < m {
         yy[i] = c.y[sub[i]]
         if fam == 1usize {
-            let ms = (yy[i] + 0.5f64) / 2.0f64
+            let wi0 = rw(c, sub[i])
+            let ms = (wi0 * yy[i] + 0.5f64) / (wi0 + 1.0f64)
             eta[i] = math.log[f64](ms / (1.0f64 - ms))
         } else {
             eta[i] = math.log[f64](yy[i] + 0.1f64)
@@ -228,7 +238,7 @@ fn glmfit(a: *mem.Arena, c: *const MCtx, sub: []const usize, coef: []f64, wres: 
     var devold = 0.0f64
     i = 0usize
     while i < m {
-        devold += devres(fam, yy[i], mu[i])
+        devold += rw(c, sub[i]) * devres(fam, yy[i], mu[i])
         i += 1usize
     }
     var iter = 0usize
@@ -237,8 +247,10 @@ fn glmfit(a: *mem.Arena, c: *const MCtx, sub: []const usize, coef: []f64, wres: 
         i = 0usize
         while i < m {
             let me = mueta(fam, eta[i])
-            zz[i] = eta[i] + (yy[i] - mu[i]) / me
-            ww[i] = math.sqrt[f64](me * me / varfun(fam, mu[i]))
+            var of0 = 0.0f64
+            if c.off.len > 0usize { of0 = c.off[sub[i]] }
+            zz[i] = (eta[i] - of0) + (yy[i] - mu[i]) / me
+            ww[i] = math.sqrt[f64](rw(c, sub[i]) * me * me / varfun(fam, mu[i]))
             w2[i] = ww[i] * ww[i]
             i += 1usize
         }
@@ -254,9 +266,10 @@ fn glmfit(a: *mem.Arena, c: *const MCtx, sub: []const usize, coef: []f64, wres: 
                 s += c.xr[j * c.n + sub[i]] * coef[j + 1usize]
                 j += 1usize
             }
+            if c.off.len > 0usize { s += c.off[sub[i]] }
             eta[i] = s
             mu[i] = linkinv(fam, s)
-            dev += devres(fam, yy[i], mu[i])
+            dev += rw(c, sub[i]) * devres(fam, yy[i], mu[i])
             i += 1usize
         }
         var dd = dev - devold
@@ -267,22 +280,30 @@ fn glmfit(a: *mem.Arena, c: *const MCtx, sub: []const usize, coef: []f64, wres: 
         iter += 1usize
     }
     var ll = 0.0f64
+    var dv = 0.0f64
     i = 0usize
     while i < m {
+        let wi = rw(c, sub[i])
         wres[i] = (yy[i] - mu[i]) / mueta(fam, eta[i]) * w2[i]
+        dv += wi * devres(fam, yy[i], mu[i])
         if fam == 1usize {
-            if yy[i] > 0.5f64 { ll += math.log[f64](mu[i]) } else { ll += math.log[f64](1.0f64 - mu[i]) }
+            // dbinom(round(w y), round(w), mu, log = TRUE)
+            let nn = math.round[f64](wi)
+            let xx = math.round[f64](wi * yy[i])
+            ll += nm.lgammafn(nn + 1.0f64) - nm.lgammafn(xx + 1.0f64) - nm.lgammafn(nn - xx + 1.0f64) + xx * math.log[f64](mu[i]) + (nn - xx) * math.log[f64](1.0f64 - mu[i])
         } else {
-            ll += 0.0f64 - mu[i] + yy[i] * math.log[f64](mu[i]) - nm.lgammafn(yy[i] + 1.0f64)
+            ll += wi * (0.0f64 - mu[i] + yy[i] * math.log[f64](mu[i]) - nm.lgammafn(yy[i] + 1.0f64))
         }
         i += 1usize
     }
+    // the quasi families score the deviance, the others the negative log-likelihood
+    if c.fam == 4usize || c.fam == 5usize { ret (dv, ok) }
     ret (0.0f64 - ll, ok)
 }
 
 // the node model: objfun (rss for fam 0, the negative log-likelihood otherwise) with coef and the score residuals res
 fn fit_sub(a: *mem.Arena, c: *const MCtx, sub: []const usize, coef: []f64, res: []f64) -> (f64, err) {
-    if c.fam != 0usize {
+    if c.fam != 0usize && c.fam != 3usize {
         let (g, eg) = glmfit(a, c, sub, coef, res)
         ret (g, eg)
     }
@@ -306,7 +327,25 @@ fn fit_sub(a: *mem.Arena, c: *const MCtx, sub: []const usize, coef: []f64, res: 
         nw = sq
     }
     let (r, e2) = ols(a, c, sub, coef, res, nw, yv)
-    ret (r, e2)
+    if e2 != ok { ret (r, e2) }
+    if c.fam == 3usize {
+        // glm(family = gaussian): -logLik is aic / 2 less its parameters, nobs / 2 * (log(2 pi dev / nobs) + 1) - sum(log w)
+        let nobs = f64(sub.len)
+        var slw = 0.0f64
+        i = 0usize
+        while i < sub.len {
+            slw += math.log[f64](rw(c, sub[i]))
+            i += 1usize
+        }
+        ret (nobs / 2.0f64 * (math.log[f64](r / nobs * 2.0f64 * 3.141592653589793f64) + 1.0f64) - slw / 2.0f64, ok)
+    }
+    ret (r, ok)
+}
+
+// the score weight of row r: the working residuals of a glm already carry the case weight, a linear model's do not
+fn rws(c: *const MCtx, r: usize) -> f64 {
+    if c.fam == 0usize || c.fam == 3usize { ret rw(c, r) }
+    ret 1.0f64
 }
 
 // inverse of the symmetric positive definite k by k matrix s by Cholesky; false when it is not positive definite
@@ -484,6 +523,36 @@ fn grow(a: *mem.Arena, c: *const MCtx, ctl: *const MCtl, o: *MOut, sub: []usize,
     let minsize = o.minsize
     if mf < f64(2usize * minsize) { ret (id, ok) }
     if depth >= ctl.maxdepth { ret (id, ok) }
+    // mtry: the partitioning variables tested at this node are sort(sample(1:m, mtry)), drawn before anything else of the test
+    let (usev, eu) = mem.alloc[bool](a, c.pz)
+    if eu != ok { ret (id, mem.Full) }
+    var uj = 0usize
+    while uj < c.pz {
+        usev[uj] = true
+        uj += 1usize
+    }
+    if ctl.mtry > 0usize && c.pz > ctl.mtry {
+        uj = 0usize
+        while uj < c.pz {
+            usev[uj] = false
+            uj += 1usize
+        }
+        let (pick, ep) = rnd.sample_int(a, ctl.rg, i64(c.pz), i64(ctl.mtry), false)
+        if ep != ok { ret (id, ep) }
+        uj = 0usize
+        while uj < ctl.mtry {
+            usev[usize(pick[uj]) - 1usize] = true
+            uj += 1usize
+        }
+    }
+    // partykit's mob_grow_fluctests drops the zero-weight rows from the scores but divides them by the unfiltered weights (recycled): a zero weight reached makes the outer product non-finite and chol fails, and with clusters tapply meets scores and clusters of different length; the node stays a leaf. vcov = info never forms that product (a zero weight there is not supported)
+    var nzero = 0usize
+    var zi = 0usize
+    while zi < m {
+        if rw(c, sub[zi]) == 0.0f64 { nzero += 1usize }
+        zi += 1usize
+    }
+    if nzero > 0usize && c.vc != 1usize && (c.cl.len > 0usize || k * (m - nzero) >= m) { ret (id, ok) }
     // parameter instability tests
     let (pr, e4) = mem.alloc[f64](a, c.n * k)
     let (meat, e5) = mem.alloc[f64](a, k * k)
@@ -495,7 +564,7 @@ fn grow(a: *mem.Arena, c: *const MCtx, ctl: *const MCtl, o: *MOut, sub: []usize,
         while q < k {
             var xv = 1.0f64
             if q > 0usize { xv = c.xr[(q - 1usize) * c.n + sub[i]] }
-            pr[q * c.n + sub[i]] = res[i] * xv * rw(c, sub[i]) / math.sqrt[f64](mf)
+            pr[q * c.n + sub[i]] = res[i] * xv * rws(c, sub[i]) / math.sqrt[f64](mf)
             q += 1usize
         }
         i += 1usize
@@ -650,7 +719,12 @@ fn grow(a: *mem.Arena, c: *const MCtx, ctl: *const MCtl, o: *MOut, sub: []usize,
     while j < c.pz {
         okv[j] = false
         o.stat[nd * c.pz + j] = 0.0f64
-        let lv = c.nl[j]
+        var lv = c.nl[j]
+        var gofs = 0usize
+        if lv >= 1000000usize {
+            lv -= 1000000usize
+            gofs = 1usize
+        }
         i = 0usize
         while i < m {
             srt[i] = sub[i]
@@ -663,8 +737,47 @@ fn grow(a: *mem.Arena, c: *const MCtx, ctl: *const MCtl, o: *MOut, sub: []usize,
             if c.z[j * c.n + srt[i]] != c.z[j * c.n + srt[0usize]] { distinct = true }
             i += 1usize
         }
-        if distinct {
+        if distinct && usev[j] {
             if lv == 0usize {
+                if ctl.bties {
+                    // breakties: the order is that of z plus uniform noise within a tenth of the smallest gap
+                    var mm = 1.0f64
+                    var gotg = false
+                    i = 1usize
+                    while i < m {
+                        let dz = c.z[j * c.n + srt[i]] - c.z[j * c.n + srt[i - 1usize]]
+                        if dz > 0.0f64 && (!gotg || dz / 10.0f64 < mm) {
+                            mm = dz / 10.0f64
+                            gotg = true
+                        }
+                        i += 1usize
+                    }
+                    let (ky, ek) = mem.alloc[f64](a, m)
+                    let (oi2, eo2) = mem.alloc[usize](a, m)
+                    if ek != ok || eo2 != ok { ret (id, mem.Full) }
+                    i = 0usize
+                    while i < m {
+                        ky[i] = c.z[j * c.n + sub[i]] + rnd.runif(ctl.rg, 0.0f64 - mm, mm)
+                        oi2[i] = i
+                        i += 1usize
+                    }
+                    i = 1usize
+                    while i < m {
+                        let v2 = oi2[i]
+                        var jj2 = i
+                        while jj2 > 0usize && ky[oi2[jj2 - 1usize]] > ky[v2] {
+                            oi2[jj2] = oi2[jj2 - 1usize]
+                            jj2 -= 1usize
+                        }
+                        oi2[jj2] = v2
+                        i += 1usize
+                    }
+                    i = 0usize
+                    while i < m {
+                        srt[i] = sub[oi2[i]]
+                        i += 1usize
+                    }
+                }
                 q = 0usize
                 while q < k {
                     cs[q] = 0.0f64
@@ -712,7 +825,7 @@ fn grow(a: *mem.Arena, c: *const MCtx, ctl: *const MCtl, o: *MOut, sub: []usize,
                 }
                 i = 0usize
                 while i < m {
-                    let g = usize(c.z[j * c.n + sub[i]])
+                    let g = usize(c.z[j * c.n + sub[i]]) - gofs
                     gc[g] += rw(c, sub[i])
                     q = 0usize
                     while q < k {
@@ -768,7 +881,12 @@ fn grow(a: *mem.Arena, c: *const MCtx, ctl: *const MCtl, o: *MOut, sub: []usize,
     o.pval[nd] = o.adjp[nd * c.pz + best]
     if o.pval[nd] > ctl.alpha { ret (id, ok) }
     // split search on the chosen variable
-    let lv = c.nl[best]
+    var lv = c.nl[best]
+    var ordb = false
+    if lv >= 1000000usize {
+        ordb = true
+        lv = 0usize
+    }
     var brk = 0.0f64
     var found = false
     let (dir, e14) = mem.alloc[i64](a, o.maxlev + 1usize)
@@ -825,7 +943,7 @@ fn grow(a: *mem.Arena, c: *const MCtx, ctl: *const MCtl, o: *MOut, sub: []usize,
             if dev < bestdev {
                 bestdev = dev
                 brk = uz[u]
-                if ctl.center && u + 1usize < nu { brk = (uz[u] + uz[u + 1usize]) / 2.0f64 }
+                if ctl.center && !ordb && u + 1usize < nu { brk = (uz[u] + uz[u + 1usize]) / 2.0f64 }
                 found = true
             }
             u += 1usize
@@ -970,12 +1088,20 @@ fn grow(a: *mem.Arena, c: *const MCtx, ctl: *const MCtl, o: *MOut, sub: []usize,
 // lmtree(y ~ x | z): xr holds the regressors (n by kx, without the intercept), z the partitioning variables (n by pz), nl[j] = 0 numeric or the level count of a factor (codes 0 .. nl - 1);
 // minsize 0 takes partykit's default ceiling(10 * number of coefficients)
 fn lmtree(a: *mem.Arena, xr: []const f64, kx: usize, y: []const f64, n: usize, z: []const f64, pz: usize, nl: []const usize, fam: usize, alpha: f64, bonf: bool, minsize: usize, maxdepth: usize, trim: f64, center: bool, prune: usize, wt: []const f64, off: []const f64, cl: []const usize, vc: usize) -> (MOut, err) {
+    let (o, e) = lmtree_x(a, xr, kx, y, n, z, pz, nl, fam, alpha, bonf, minsize, maxdepth, trim, center, prune, wt, off, cl, vc, 0usize, false, 1i64)
+    ret (o, e)
+}
+
+// lmtree with mtry partitioning variables drawn per node (0 = all), breakties and R's set.seed(seed) in force
+fn lmtree_x(a: *mem.Arena, xr: []const f64, kx: usize, y: []const f64, n: usize, z: []const f64, pz: usize, nl: []const usize, fam: usize, alpha: f64, bonf: bool, minsize: usize, maxdepth: usize, trim: f64, center: bool, prune: usize, wt: []const f64, off: []const f64, cl: []const usize, vc: usize, mtry: usize, bties: bool, seed: i64) -> (MOut, err) {
+    var rg: rnd.Rng = zero
+    rnd.seed(&rg, seed)
     var o: MOut = zero
     let k = kx + 1usize
     var ml = 1usize
     var j = 0usize
     while j < pz {
-        if nl[j] > ml { ml = nl[j] }
+        if nlv(nl[j]) > ml { ml = nlv(nl[j]) }
         j += 1usize
     }
     let cap = 2usize * n + 2usize
@@ -1015,7 +1141,7 @@ fn lmtree(a: *mem.Arena, xr: []const f64, kx: usize, y: []const f64, n: usize, z
     o.count = 0usize
     o.minsize = minsize
     let c = MCtx { xr: xr, kx: kx, y: y, n: n, z: z, pz: pz, nl: nl, fam: fam, wt: wt, off: off, cl: cl, vc: vc }
-    let ctl = MCtl { alpha: alpha, bonf: bonf, maxdepth: maxdepth, trim: trim, center: center }
+    let ctl = MCtl { alpha: alpha, bonf: bonf, maxdepth: maxdepth, trim: trim, center: center, mtry: mtry, bties: bties, rg: &rg }
     let (sub, e12) = mem.alloc[usize](a, n)
     if e12 != ok { ret (o, e12) }
     i = 0usize
@@ -1174,7 +1300,7 @@ fn predict_node(o: *const MOut, nl: []const usize, z: []const f64, nr: usize, i:
         let j = usize(o.vr[k] - 1i64)
         let zv = z[j * nr + i]
         var left = false
-        if nl[j] == 0usize {
+        if nl[j] == 0usize || nl[j] >= 1000000usize {
             left = zv <= o.brk[k]
         } else {
             left = o.lmap[k * o.maxlev + usize(zv)] == 0i64

@@ -2,6 +2,10 @@
 # fam 1 binomial, 2 poisson, 3 Gamma, 4 inverse.gaussian; model 1 y ~ x1, 2 y ~ x1 + x2, 3 y ~ x1 * x2; method 1 "u", 2 "v" (the family default); id.basis is sample(n, nb) after set.seed(seed);
 # idx 0 nlambda, 1 score, 2 varht, 3 .. 3 + nq - 1 theta, then d, eta[1:3], w[1:3], the m predictions and standard errors (link scale), nb and the id.basis checksums.
 suppressMessages(library(gss))
+# skip 2 (several theta, searching): the nlm search stops on a rounding-dependent point, so R's converged nlambda and theta of every mspreg1 call of the iteration
+# (the start pass of the Gamma and inverse Gaussian families included, in call order) follow XO as (nlambda, theta[nq]) blocks and the fit is taken at them with no search
+assign(".glmrec", list(), globalenv())
+trace("mspreg1", exit = quote(assign(".glmrec", c(get(".glmrec", globalenv()), list(returnValue())), globalenv())), where = asNamespace("gss"), print = FALSE)
 cases <- list()
 add <- function(args, want, tol, ab) cases[[length(cases) + 1]] <<- case("ag", args, want, rel = tol, abs = ab)
 nqof <- c(1, 2, 5); n0of <- c(2, 3, 4)
@@ -21,6 +25,7 @@ run <- function(fam, model, n, seed, skip) {
   fm <- c("binomial", "poisson", "Gamma", "inverse.gaussian")[fam]
   method <- if (fam <= 2) 1 else 2
   nb <- max(30, ceiling(10 * n^(2/9))); if (nb >= n) nb <- n
+  assign(".glmrec", list(), globalenv())
   fit <- tryCatch(suppressWarnings(gssanova1(fo, family = fm, data = df, seed = seed, skip.iter = skip > 0)), error = function(e) NULL)
   if (is.null(fit)) return(invisible(FALSE))
   m <- 5
@@ -29,7 +34,8 @@ run <- function(fam, model, n, seed, skip) {
   pr <- predict(fit, xo, se.fit = TRUE)
   if (any(!is.finite(pr$se.fit))) return(invisible(FALSE))
   nq <- nqof[model]; n0 <- n0of[model]; idb <- fit$id.basis
-  args <- c(fam, model, method, n, nb, m, seed, skip, as.vector(X), y, as.vector(as.matrix(xo)))
+  fixmode <- nq > 1 && skip == 0
+  args <- c(fam, model, method, n, nb, m, seed, if (fixmode) 2 else skip, as.vector(X), y, as.vector(as.matrix(xo)), if (fixmode) unlist(lapply(get(".glmrec", globalenv()), function(z) c(z$nlambda, z$theta))))
   vals <- c(fit$nlambda, fit$score, fit$varht, fit$theta, fit$d, fit$eta[1:3], fit$w[1:3], pr$fit, pr$se.fit, nb, sum(idb), sum(idb * seq_along(idb)), idb[1], idb[nb])
   nv <- length(vals)
   tol <- rep(1e-6, nv); ab <- rep(1e-9, nv)
@@ -37,8 +43,7 @@ run <- function(fam, model, n, seed, skip) {
   # the iteration count is exact; the id.basis checksums are exact
 
   tol[(nv - 4):nv] <- 0; ab[(nv - 4):nv] <- 0
-  # the nlm search over several theta ends where the score is flat to rounding noise
-  if (nq > 1 && skip == 0) { tol[] <- 5e-2; ab[] <- 0.02; ab[4:(3 + nq)] <- 0.1; ab[1] <- 1e-3; tol[(nv - 4):nv] <- 0; ab[(nv - 4):nv] <- 0 }
+  if (fixmode) { ab[1] <- 1e-9; ab[4:(3 + nq)] <- 1e-9 }   # the passed nlambda and theta come back as they went in
   for (k in seq_along(vals)) add(c(args, k - 1), vals[k], tol[k], ab[k])
   invisible(TRUE)
 }

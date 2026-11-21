@@ -58,7 +58,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         j += 1usize
     }
     let y = z[x0 + n * p..x0 + n * p + n]
-    let xo = pk.Xo { statcrit: statcrit, maxst: maxst, setlog: true, logmin: math.log[f64](mincrit), ord: ord, w: w }
+    let xo = pk.Xo { statcrit: statcrit, maxst: maxst, setlog: true, logmin: math.log[f64](mincrit), ord: ord, w: w, nres: 0usize, spl: false, mtry: 0usize, maxvar: 1000000usize }
     let (o, e3) = pk.ctree_x(a, x, n, p, nl, y, yl, minsplit, minbucket, minprob, mincrit, bonf, maxdepth, stump, inter, w, &xo)
     if e3 != ok { ret 0.0f64 / 0.0f64 }
     if sel == 1usize { ret f64(o.count) }

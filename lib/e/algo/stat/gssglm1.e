@@ -39,8 +39,15 @@ fn lin(f: *const gss.Ss1, s: []const f64, rs: []const f64, nq: usize, n: usize, 
     }
 }
 
+// fixes: R's converged [nlambda, theta..] of every mspreg1 call in order (empty: search); the block of the p-th call, empty past the end
+fn pick(fixes: []const f64, nq: usize, p: usize) -> []const f64 {
+    let w = 1usize + nq
+    if fixes.len < (p + 1usize) * w { ret fixes[0usize..0usize] }
+    ret fixes[p * w..(p + 1usize) * w]
+}
+
 // the quadrature-free fit of one pass: nq == 1 through sspreg1w with q = r[id, ], else mspreg1w
-fn pass(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, w: []const f64, n: usize, n0: usize, nxi: usize, method: usize, alpha: f64, varht: f64, skip: bool, out: *gss.Ss1) -> err {
+fn pass(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, w: []const f64, n: usize, n0: usize, nxi: usize, method: usize, alpha: f64, varht: f64, skip: bool, fix: []const f64, out: *gss.Ss1) -> err {
     if nq == 1usize {
         let (q, e) = gss.zeros(a, nxi * nxi)
         if e != ok { ret e }
@@ -56,12 +63,12 @@ fn pass(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, nq: u
         try gss.sspreg1w(a, s, rs, q, y, w, n, n0, nxi, method, alpha, varht, out)
         ret ok
     }
-    try gss.mspreg1w(a, s, rs, id, nq, y, w, n, n0, nxi, method, alpha, varht, skip, out)
+    try gss.mspreg1w(a, s, rs, id, nq, y, w, n, n0, nxi, method, alpha, varht, skip, fix, out)
     ret ok
 }
 
 // fam 1 binomial, 2 Poisson, 3 Gamma, 4 inverse Gaussian; method 1 u, 2 v
-fn gssanova1(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, n: usize, n0: usize, nxi: usize, method: usize, alpha: f64, varht: f64, skip: bool, out: *Gs1) -> err {
+fn gssanova1(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, n: usize, n0: usize, nxi: usize, method: usize, alpha: f64, varht: f64, skip: bool, fixes: []const f64, out: *Gs1) -> err {
     let (eta, e1) = gss.zeros(a, n)
     let (etan, e2) = gss.zeros(a, n)
     let (ywk, e3) = gss.zeros(a, n)
@@ -81,10 +88,12 @@ fn gssanova1(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []c
             i += 1usize
         }
         var z0: gss.Ss1 = zero
-        try pass(a, s, rs, id, nq, ywk, none, n, n0, nxi, 2usize, alpha, varht, skip, &z0)
+        try pass(a, s, rs, id, nq, ywk, none, n, n0, nxi, 2usize, alpha, varht, skip, pick(fixes, nq, 0usize), &z0)
         lin(&z0, s, rs, nq, n, n0, nxi, eta)
     }
     var iter = 0usize
+    var npass = 0usize
+    if fam >= 3usize { npass = 1usize }
     var z: gss.Ss1 = zero
     var looping = true
     while looping {
@@ -96,7 +105,8 @@ fn gssanova1(a: *mem.Arena, fam: usize, s: []const f64, rs: []const f64, id: []c
             i += 1usize
         }
         let lb = mem.mark(a)
-        try pass(a, s, rs, id, nq, ywk, w, n, n0, nxi, method, alpha, varht, skip, &z)
+        try pass(a, s, rs, id, nq, ywk, w, n, n0, nxi, method, alpha, varht, skip, pick(fixes, nq, npass), &z)
+        npass += 1usize
         lin(&z, s, rs, nq, n, n0, nxi, etan)
         var num = 0.0f64
         var dn = 0.0f64

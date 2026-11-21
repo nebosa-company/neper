@@ -846,7 +846,7 @@ fn sub_q(a: *mem.Arena, r: []const f64, id: []const usize, n: usize, nxi: usize)
 }
 
 // mspdsty: rk holds the nq kernels (each n by nxi), qrk the quadrature ones (each nqd by nxi), id the 0-based basis rows of the observations
-fn mspdsty(a: *mem.Arena, sdat: []const f64, rk: []const f64, id: []const usize, qs: []const f64, qrk: []const f64, qdwt: []const f64, n: usize, nxi: usize, nnull: usize, nqd: usize, nq: usize, prec: f64, maxiter: usize, alpha: f64, skip: bool, out: *DenFit) -> err {
+fn mspdsty(a: *mem.Arena, sdat: []const f64, rk: []const f64, id: []const usize, qs: []const f64, qrk: []const f64, qdwt: []const f64, n: usize, nxi: usize, nnull: usize, nqd: usize, nq: usize, prec: f64, maxiter: usize, alpha: f64, skip: bool, fix: []const f64, out: *DenFit) -> err {
     let sz = n * nxi
     let qsz = nqd * nxi
     let nxis = nxi + nnull
@@ -940,12 +940,21 @@ fn mspdsty(a: *mem.Arena, sdat: []const f64, rk: []const f64, id: []const usize,
     q1 = q2
     var z2: Sp = zero
     try sspdsty(a, sdat, rwk, q1, qs, qwk, qdwt, n, nxi, nnull, nqd, prec, maxiter, alpha, &z2)
-    let lambda = z2.lambda
+    var lambda = z2.lambda
     i = 0usize
     while i < nq {
         logth0[i] = logth0[i] + lambda
         theta[i] = theta[i] + z2.theta
         i += 1usize
+    }
+    // fix = R's converged [lambda, theta..]: the fit at those values, no search (the search stops on rounding-dependent points)
+    if fix.len > 0usize {
+        lambda = fix[0usize]
+        i = 0usize
+        while i < nq {
+            theta[i] = fix[1usize + i]
+            i += 1usize
+        }
     }
     out.nxi = nxi
     out.nnull = nnull
@@ -1022,7 +1031,7 @@ fn mspdsty(a: *mem.Arena, sdat: []const f64, rk: []const f64, id: []const usize,
         cx.shift = 10.0f64
     }
     var counter = 0usize
-    var searching = true
+    var searching = fix.len == 0usize
     while searching {
         let r = nlm.nlm[CvD](a, &cx, cvd_wk, theta, 100usize, 7i64, 1.0f64)
         if cx.bad { ret DenDiverge }
@@ -1069,7 +1078,7 @@ fn mspdsty(a: *mem.Arena, sdat: []const f64, rk: []const f64, id: []const usize,
 }
 
 // ssden: x (n by dim) the data, idb the 0-based basis rows, [lo, hi] the range of each variable, (qx (nqd by dim), qdwt) the quadrature
-fn ssden(a: *mem.Arena, model: usize, x: []const f64, n: usize, idb: []const usize, nb: usize, lo: []const f64, hi: []const f64, qx: []const f64, qdwt: []const f64, nqd: usize, alpha: f64, prec: f64, maxiter: usize, skip: bool, out: *DenFit) -> err {
+fn ssden(a: *mem.Arena, model: usize, x: []const f64, n: usize, idb: []const usize, nb: usize, lo: []const f64, hi: []const f64, qx: []const f64, qdwt: []const f64, nqd: usize, alpha: f64, prec: f64, maxiter: usize, skip: bool, fix: []const f64, out: *DenFit) -> err {
     var dim = 2usize
     if model == 1usize { dim = 1usize }
     let nnull = den_nnull(model)
@@ -1129,7 +1138,7 @@ fn ssden(a: *mem.Arena, model: usize, x: []const f64, n: usize, idb: []const usi
         out.nq = 1usize
         ret ok
     }
-    try mspdsty(a, sdat, rk, idb, qs, qrk, qdwt, n, nb, nnull, nqd, nq, prec, maxiter, alpha, skip, out)
+    try mspdsty(a, sdat, rk, idb, qs, qrk, qdwt, n, nb, nnull, nqd, nq, prec, maxiter, alpha, skip, fix, out)
     ret ok
 }
 

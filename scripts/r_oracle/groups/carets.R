@@ -27,7 +27,7 @@ for (rep in 1:12) {
 for (rep in 1:12) {
   n <- sample(60:150, 1); k <- sample(2:4, 1); Xm <- matrix(round(rnorm(n * k), 3), n, k); y <- rbinom(n, 1, plogis(0.2 + Xm %*% c(0.8, -0.5, 0.3, 0.2)[1:k]))
   d <- data.frame(y = y, Xm); m <- glm(y ~ ., binomial, d); vi <- varImp(m)$Overall
-  for (j in seq_along(vi)) add("vig", c(n, k + 1, j - 1, cbind(1, Xm), y), vi[j], 1e-6)
+  for (j in seq_along(vi)) add("vig", c(n, k + 1, j - 1, cbind(1, Xm), y), vi[j], 1e-9)
 }
 # the prevalence argument "cmv": (which 0 ppv 1 npv 2 prevalence 3 f1 4 detection rate, TP, FP, FN, TN, prevalence)
 for (rep in 1:30) {
@@ -113,13 +113,13 @@ set.seed(20262401)
 for (rep in 1:15) {
   n <- sample(60:150, 1); k <- sample(2:4, 1); Xm <- matrix(round(rnorm(n * k), 3), n, k); y <- rpois(n, exp(0.3 + Xm %*% c(0.4, -0.3, 0.2, 0.1)[1:k]))
   d <- data.frame(y = y, Xm); m <- glm(y ~ ., poisson, d); vi <- varImp(m)$Overall
-  for (j in seq_along(vi)) add("vip", c(n, k + 1, j - 1, cbind(1, Xm), y), vi[j], 1e-6)
+  for (j in seq_along(vi)) add("vip", c(n, k + 1, j - 1, cbind(1, Xm), y), vi[j], 1e-9)
 }
 # varImp(glm Gamma(log)): "vigm" (n, p, index, X[n p] intercept first, y)
 set.seed(20262402)
 for (rep in 1:15) {
   n <- sample(60:150, 1); k <- sample(2:4, 1); Xm <- matrix(round(rnorm(n * k), 3), n, k); mu <- exp(1 + Xm %*% c(0.4, -0.3, 0.2, 0.1)[1:k]); y <- rgamma(n, shape = 4, rate = 4 / mu)
   d <- data.frame(y = y, Xm); m <- tryCatch(glm(y ~ ., Gamma(link = "log"), d), error = function(e) NULL); if (is.null(m)) next; vi <- varImp(m)$Overall
-  for (j in seq_along(vi)) add("vigm", c(n, k + 1, j - 1, cbind(1, Xm), y), vi[j], 1e-6)
+  for (j in seq_along(vi)) add("vigm", c(n, k + 1, j - 1, cbind(1, Xm), y), vi[j], 1e-9)
 }
 emit("carets", "caret", list(cases))

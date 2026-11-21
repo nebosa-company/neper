@@ -5,10 +5,10 @@
 // current relative covariance D (Gauss-Newton with step halving on the stacked system), then an ML fit of D on the linearisation at that fit, which is the
 // lme profile objective of e.algo.stat.gls over the pseudo-response w = y - f + A beta + B b with A, B the derivatives of the model by the fixed and the
 // random effects. R stops its iteration at its own pnlsTol (1e-3 by default), so its estimates sit ~1e-4 from the fixed point where the two steps
-// reproduce each other; this module iterates to that fixed point (relative change below 3e-9; the D optimum is located to ~1e-9). Starting values are
+// reproduce each other; this module iterates to that fixed point (relative change below 1e-10; the D optimum is located to ~1e-9). Starting values are
 // the pooled nls fit of the same self-start model, random effects start at zero.
-// Not here: method "REML" (nlme's REML estimates differ from this linearisation's), covariates on the parameters, user-written model functions,
-// nested random effects, correlation and variance structures.
+// A numeric covariate may enter any parameter's fixed part (nlme_fit_cov). User-written model functions, nested random effects and pdMat classes are
+// e.algo.stat.nlmeml. nlme_fit_cv adds correlation = corAR1(form = ~ 1 | g) and weights = varPower(form = ~ x) (ML only; REML with them is refused). Not here: crossed effects.
 
 use e.algo.stat.gls as g
 use e.algo.stat.nlmelist as nl
@@ -17,7 +17,28 @@ use e.algo.stat.psych as ps
 use e.math
 use e.mem
 
-type Lin = struct { kind: i64, n: usize, np: usize, ng: usize, nr: usize, gs: []const f64, x: []const f64, y: []const f64, rs: []usize }
+// np: model parameters, nf: fixed coefficients (np plus one per covariate term); fp[c] is the parameter coefficient c belongs to, fz[c] > 0 makes it
+// multiply the covariate zc instead of 1
+type Lin = struct { kind: i64, n: usize, np: usize, nf: usize, ng: usize, nr: usize, gs: []const f64, x: []const f64, y: []const f64, rs: []usize, fp: []usize, fz: []f64, zc: []const f64, wm: []const f64, rv: []f64 }
+
+fn mult(c: *Lin, cc: usize, t: usize) -> f64 {
+    if c.fz[cc] > 0.0f64 { ret c.zc[t] }
+    ret 1.0f64
+}
+
+// the model parameters of observation t: phi[j] = sum of beta[c] * mult over the coefficients of parameter j
+fn fill_phi(c: *Lin, beta: []const f64, t: usize, phi: []f64) {
+    var j = 0usize
+    while j < c.np {
+        phi[j] = 0.0f64
+        j += 1usize
+    }
+    var cc = 0usize
+    while cc < c.nf {
+        phi[c.fp[cc]] += beta[cc] * mult(c, cc, t)
+        cc += 1usize
+    }
+}
 
 fn nlme_len(np: usize, nr: usize, ng: usize) -> usize {
     ret np + 4usize + nr + nr * (nr - 1usize) / 2usize + np + ng * nr
@@ -33,11 +54,7 @@ fn linearize(c: *Lin, beta: []const f64, bb: []const f64, am: []f64, bz: []f64, 
         let m = usize(c.gs[gi])
         var k = 0usize
         while k < m {
-            var j = 0usize
-            while j < c.np {
-                phi[j] = beta[j]
-                j += 1usize
-            }
+            fill_phi(c, beta, t, phi[0usize..4usize])
             var r = 0usize
             while r < c.nr {
                 phi[c.rs[r]] += bb[gi * c.nr + r]
@@ -45,10 +62,11 @@ fn linearize(c: *Lin, beta: []const f64, bb: []const f64, am: []f64, bz: []f64, 
             }
             let f = nl.ss_eval(c.kind, c.x[t], phi[0usize..4usize], gr[0usize..4usize])
             var wv = c.y[t] - f
-            j = 0usize
-            while j < c.np {
-                am[j * c.n + t] = gr[j]
-                wv += gr[j] * beta[j]
+            var j = 0usize
+            while j < c.nf {
+                let gj = gr[c.fp[j]] * mult(c, j, t)
+                am[j * c.n + t] = gj
+                wv += gj * beta[j]
                 j += 1usize
             }
             r = 0usize
@@ -65,7 +83,7 @@ fn linearize(c: *Lin, beta: []const f64, bb: []const f64, am: []f64, bz: []f64, 
     }
 }
 
-// penalized residual sum of squares: sum (y - f)^2 + sum_g b_g' pm b_g
+// penalized weighted residual sum of squares: (y - f)' W (y - f) + sum_g b_g' pm b_g, W the inverse error covariance of c.wm (identity when empty)
 fn pobj(c: *Lin, pm: []const f64, beta: []const f64, bb: []const f64) -> f64 {
     var gr: [4]f64 = zero
     var phi: [4]f64 = zero
@@ -74,23 +92,32 @@ fn pobj(c: *Lin, pm: []const f64, beta: []const f64, bb: []const f64) -> f64 {
     var gi = 0usize
     while gi < c.ng {
         let m = usize(c.gs[gi])
+        let t0 = t
         var k = 0usize
         while k < m {
-            var j = 0usize
-            while j < c.np {
-                phi[j] = beta[j]
-                j += 1usize
-            }
+            fill_phi(c, beta, t, phi[0usize..4usize])
             var r = 0usize
             while r < c.nr {
                 phi[c.rs[r]] += bb[gi * c.nr + r]
                 r += 1usize
             }
             let f = nl.ss_eval(c.kind, c.x[t], phi[0usize..4usize], gr[0usize..4usize])
-            let e = c.y[t] - f
-            s += e * e
+            c.rv[t] = c.y[t] - f
             t += 1usize
             k += 1usize
+        }
+        var k1 = 0usize
+        while k1 < m {
+            if c.wm.len == 0usize {
+                s += c.rv[t0 + k1] * c.rv[t0 + k1]
+            } else {
+                var k2 = 0usize
+                while k2 < m {
+                    s += c.rv[t0 + k1] * c.wm[(t0 + k1) * c.n + t0 + k2] * c.rv[t0 + k2]
+                    k2 += 1usize
+                }
+            }
+            k1 += 1usize
         }
         var r = 0usize
         while r < c.nr {
@@ -108,7 +135,7 @@ fn pobj(c: *Lin, pm: []const f64, beta: []const f64, bb: []const f64) -> f64 {
 
 // Gauss-Newton on (beta, b) for the penalized problem at the relative precision pm = D^-1, from the current beta and bb
 fn pnls(a: *mem.Arena, c: *Lin, pm: []const f64, beta: []f64, bb: []f64) -> err {
-    let np = c.np
+    let np = c.nf
     let nr = c.nr
     let m = np + c.ng * nr
     let st = mem.mark(a)
@@ -121,8 +148,8 @@ fn pnls(a: *mem.Arena, c: *Lin, pm: []const f64, beta: []f64, bb: []f64) -> err 
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret e1 }
     var gr: [4]f64 = zero
     var phi: [4]f64 = zero
-    var jv: [8]f64 = zero
-    var jc: [8]usize = zero
+    let (jm, e7) = mem.alloc[f64](a, c.n * (np + nr))
+    if e7 != ok { ret e7 }
     var s0 = pobj(c, pm, beta, bb)
     var it = 0usize
     while it < 200usize {
@@ -142,42 +169,59 @@ fn pnls(a: *mem.Arena, c: *Lin, pm: []const f64, beta: []f64, bb: []f64) -> err 
             let ms = usize(c.gs[gi])
             var k = 0usize
             while k < ms {
-                var j = 0usize
-                while j < np {
-                    phi[j] = beta[j]
-                    j += 1usize
-                }
+                fill_phi(c, beta, t, phi[0usize..4usize])
                 var r = 0usize
                 while r < nr {
                     phi[c.rs[r]] += bb[gi * nr + r]
                     r += 1usize
                 }
                 let f = nl.ss_eval(c.kind, c.x[t], phi[0usize..4usize], gr[0usize..4usize])
-                let res = c.y[t] - f
-                j = 0usize
+                c.rv[t] = c.y[t] - f
+                var j = 0usize
                 while j < np {
-                    jv[j] = gr[j]
-                    jc[j] = j
+                    jm[t * (np + nr) + j] = gr[c.fp[j]] * mult(c, j, t)
                     j += 1usize
                 }
                 r = 0usize
                 while r < nr {
-                    jv[np + r] = gr[c.rs[r]]
-                    jc[np + r] = np + gi * nr + r
+                    jm[t * (np + nr) + np + r] = gr[c.rs[r]]
                     r += 1usize
-                }
-                var a1 = 0usize
-                while a1 < np + nr {
-                    rhs[jc[a1]] += jv[a1] * res
-                    var b1 = 0usize
-                    while b1 < np + nr {
-                        hm[jc[a1] * m + jc[b1]] += jv[a1] * jv[b1]
-                        b1 += 1usize
-                    }
-                    a1 += 1usize
                 }
                 t += 1usize
                 k += 1usize
+            }
+            // J' W J and J' W res over the group's rows
+            let t0 = t - ms
+            var k1 = 0usize
+            while k1 < ms {
+                var k2 = 0usize
+                while k2 < ms {
+                    var w = 0.0f64
+                    if c.wm.len == 0usize {
+                        if k1 == k2 { w = 1.0f64 }
+                    } else {
+                        w = c.wm[(t0 + k1) * c.n + t0 + k2]
+                    }
+                    if w != 0.0f64 {
+                        var a1 = 0usize
+                        while a1 < np + nr {
+                            var ca = a1
+                            if a1 >= np { ca = np + gi * nr + (a1 - np) }
+                            let ja = jm[(t0 + k1) * (np + nr) + a1] * w
+                            rhs[ca] += ja * c.rv[t0 + k2]
+                            var b1 = 0usize
+                            while b1 < np + nr {
+                                var cb = b1
+                                if b1 >= np { cb = np + gi * nr + (b1 - np) }
+                                hm[ca * m + cb] += ja * jm[(t0 + k2) * (np + nr) + b1]
+                                b1 += 1usize
+                            }
+                            a1 += 1usize
+                        }
+                    }
+                    k2 += 1usize
+                }
+                k1 += 1usize
             }
             var r1 = 0usize
             while r1 < nr {
@@ -263,7 +307,35 @@ fn pnls(a: *mem.Arena, c: *Lin, pm: []const f64, beta: []f64, bb: []f64) -> err 
 // out: fixed effects (np), sigma, logLik, AIC, BIC, random-effect sds (nr), their correlations (lower triangle by columns), standard errors of the
 // fixed effects (np), random effects (group-major)
 fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64, y: []const f64, rset: []const f64, reml: bool, out: []f64) -> err {
-    let np = nl.ss_np(kind)
+    ret nlme_fit_cov(a, kind, n, gs, x, y, rset, reml, x[0usize..0usize], x[0usize..0usize], out)
+}
+
+// fixed = p ~ 1 + zc for every parameter p with cm[p] != 0 (cm has one entry per parameter, or none); coefficients are ordered by parameter, the
+// intercept first. out has nlme_len(np + number of covariate terms, nr, ng) entries.
+fn nlme_fit_cov(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64, y: []const f64, rset: []const f64, reml: bool, zc: []const f64, cm: []const f64, out: []f64) -> err {
+    ret nlme_fit_cv(a, kind, n, gs, x, y, rset, reml, zc, cm, 0i64, 0i64, out)
+}
+
+// number of extra outputs of nlme_fit_cv: the natural correlation parameter (ck 1 corAR1) and the variance parameter (vkind 2 varPower on x)
+fn cv_len(ck: i64, vkind: i64) -> usize {
+    var c = 0usize
+    if ck != 0i64 { c += 1usize }
+    if vkind != 0i64 { c += 1usize }
+    ret c
+}
+
+// nlme(correlation = corAR1(form = ~ 1 | g) if ck == 1, weights = varPower(form = ~ x) if vkind == 2): the within-group errors have the unit-sigma
+// covariance Lambda C Lambda (C the AR1 correlation by position inside the group, Lambda = diag(|x|^delta)). PNLS weights the residuals by its inverse and the
+// ML step adds it to the random-effects part of V; out gets the natural correlation and variance parameters after the random effects.
+fn nlme_fit_cv(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64, y: []const f64, rset: []const f64, reml: bool, zc: []const f64, cm: []const f64, ck: i64, vkind: i64, out: []f64) -> err {
+    let npm = nl.ss_np(kind)
+    var nf = npm
+    var q0 = 0usize
+    while q0 < cm.len {
+        if cm[q0] != 0.0f64 { nf += 1usize }
+        q0 += 1usize
+    }
+    let np = nf
     let ng = gs.len
     let nr = rset.len
     let nrp = nr * (nr + 1usize) / 2usize
@@ -273,8 +345,19 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
     let (am, e3) = mem.alloc[f64](a, n * np)
     let (bz, e4) = mem.alloc[f64](a, n * nr)
     let (w, e5) = mem.alloc[f64](a, n)
-    let (pv, e6) = mem.alloc[f64](a, nrp + 1usize)
-    let (pold, e7) = mem.alloc[f64](a, nrp + 1usize)
+    let ncv = cv_len(ck, vkind)
+    if reml && ncv > 0usize { ret g.Singular }
+    let npv = nrp + ncv
+    var nvt = 0usize
+    if vkind != 0i64 { nvt = 1usize }
+    let (pv, e6) = mem.alloc[f64](a, npv + 1usize)
+    let (pold, e7) = mem.alloc[f64](a, npv + 1usize)
+    let (cvk, e17) = mem.alloc[f64](a, 2usize)
+    let (rmat, e18) = mem.alloc[f64](a, n * n + 1usize)
+    let (wmat, e19) = mem.alloc[f64](a, n * n + 1usize)
+    let (sdv, e20) = mem.alloc[f64](a, n + 1usize)
+    let (rvv, e21) = mem.alloc[f64](a, n + 1usize)
+    if e17 != ok || e18 != ok || e19 != ok || e20 != ok || e21 != ok { ret e17 }
     let (nfit, e8) = mem.alloc[f64](a, nl.nls_len(kind))
     let (cf, e9) = mem.alloc[f64](a, np)
     let (xi, e10) = mem.alloc[f64](a, np * np)
@@ -282,6 +365,9 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
     let (dm, e12) = mem.alloc[f64](a, nr * nr + 1usize)
     let (pm, e13) = mem.alloc[f64](a, nr * nr + 1usize)
     let (bold, e14) = mem.alloc[f64](a, np + ng * nr)
+    let (fp, e15) = mem.alloc[usize](a, np)
+    let (fz, e16) = mem.alloc[f64](a, np)
+    if e15 != ok || e16 != ok { ret e15 }
     if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret e0 }
     if e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok { ret e8 }
     var i = 0usize
@@ -289,10 +375,19 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
         rs[i] = usize(rset[i]) - 1usize
         i += 1usize
     }
+    cvk[0usize] = 2.0f64
+    cvk[1usize] = 0.0f64
     i = 0usize
-    while i < n {
-        tz[i] = 0.0f64
-        i += 1usize
+    var gq = 0usize
+    while gq < ng {
+        let mg = usize(gs[gq])
+        var kq = 0usize
+        while kq < mg {
+            tz[i] = f64(kq)
+            i += 1usize
+            kq += 1usize
+        }
+        gq += 1usize
     }
     i = 0usize
     while i < ng * nr {
@@ -300,18 +395,33 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
         i += 1usize
     }
     i = 0usize
-    while i < nrp {
+    while i < npv {
         pv[i] = 0.0f64
         i += 1usize
     }
     let ne = nl.nls_fit(a, kind, n, x, y, nfit)
     if ne != ok { ret ne }
     i = 0usize
-    while i < np {
-        beta[i] = nfit[i]
+    while i < npm {
+        if !(nfit[i] - nfit[i] == 0.0f64) { ret g.Singular }
         i += 1usize
     }
-    var c = Lin { kind: kind, n: n, np: np, ng: ng, nr: nr, gs: gs, x: x, y: y, rs: rs }
+    var cc = 0usize
+    i = 0usize
+    while i < npm {
+        fp[cc] = i
+        fz[cc] = 0.0f64
+        beta[cc] = nfit[i]
+        cc += 1usize
+        if i < cm.len && cm[i] != 0.0f64 {
+            fp[cc] = i
+            fz[cc] = 1.0f64
+            beta[cc] = 0.0f64
+            cc += 1usize
+        }
+        i += 1usize
+    }
+    var c = Lin { kind: kind, n: n, np: npm, nf: np, ng: ng, nr: nr, gs: gs, x: x, y: y, rs: rs, fp: fp, fz: fz, zc: zc, wm: wmat[0usize..0usize], rv: rvv }
     let nobs = f64(n)
     let cst = nobs * (math.log[f64](nobs) - (1.0f64 + math.log[f64](2.0f64 * 3.141592653589793f64))) / 2.0f64
     var ctl: [6]f64 = zero
@@ -327,19 +437,19 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
     while it < 100usize && !conv {
         let st = mem.mark(a)
         linearize(&c, beta, bb, am, bz, w)
-        let sp = g.Spec { n: n, p: np, x: am, y: w, t: tz, gs: gs, ng: ng, ck: 0i64, nv: 0usize, vk: tz[0usize..0usize], vn: tz[0usize..0usize], vc: tz[0usize..0usize], reml: false, q: nr, z: bz, pd: 0i64 }
+        let sp = g.Spec { n: n, p: np, x: am, y: w, t: tz, gs: gs, ng: ng, ck: ck, nv: nvt, vk: cvk[0usize..nvt], vn: cvk[1usize..1usize + nvt], vc: x[0usize..nvt * n], reml: false, q: nr, z: bz, pd: 0i64 }
         var cx = g.Ctx { a: a, s: sp, cst: cst }
         i = 0usize
-        while i < nrp {
+        while i < npv {
             pold[i] = pv[i]
             i += 1usize
         }
-        let r = nlb.nlminb[g.Ctx](a, &cx, g.obj, nl.lme_grad, true, pv[0usize..nrp], ctl[0usize..6usize])
+        let r = nlb.nlminb[g.Ctx](a, &cx, g.obj, nl.lme_grad, true, pv[0usize..npv], ctl[0usize..6usize])
         if r.iterations == 0usize && r.fevals == 0usize {
             mem.reset(a, st)
             ret g.Singular
         }
-        if it > 0usize { nl.lme_polish(a, &cx, pv[0usize..nrp]) }
+        if it > 0usize { nl.lme_polish(a, &cx, pv[0usize..npv]) }
         g.re_cov(nr, pv[0usize..nrp], dd[0usize..64usize], 0i64)
         i = 0usize
         while i < nr * nr {
@@ -360,6 +470,28 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
             bold[np + i] = bb[i]
             i += 1usize
         }
+        if ncv > 0usize {
+            let nc = g.ncor(&sp)
+            g.fill_corr(&sp, pv[nrp..nrp + nc], rmat)
+            g.fill_sd(&sp, pv[nrp + nc..npv], sdv)
+            i = 0usize
+            while i < n {
+                var j = 0usize
+                while j < n {
+                    rmat[i * n + j] = rmat[i * n + j] * sdv[i] * sdv[j]
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            let ldw = g.block_inv(a, &sp, rmat[0usize..n * n], wmat[0usize..n * n])
+            if ldw != ldw {
+                if !ps.invert(a, rmat[0usize..n * n], n, wmat[0usize..n * n]) {
+                    mem.reset(a, st)
+                    ret g.Singular
+                }
+            }
+            c.wm = wmat[0usize..n * n]
+        }
         let pe = pnls(a, &c, pm, beta, bb)
         if pe != ok {
             mem.reset(a, st)
@@ -367,7 +499,7 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
         }
         var ch = 0.0f64
         i = 0usize
-        while i < np + ng * nr + nrp {
+        while i < np + ng * nr + npv {
             var nv = 0.0f64
             var ov = 0.0f64
             if i < np {
@@ -390,14 +522,14 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
             if dv / sc > ch { ch = dv / sc }
             i += 1usize
         }
-        if ch < 3.0e-9f64 { conv = true }
+        if ch < 1.0e-10f64 { conv = true }
         mem.reset(a, st)
         it += 1usize
     }
     if !conv { ret g.Singular }
     linearize(&c, beta, bb, am, bz, w)
-    let sp = g.Spec { n: n, p: np, x: am, y: w, t: tz, gs: gs, ng: ng, ck: 0i64, nv: 0usize, vk: tz[0usize..0usize], vn: tz[0usize..0usize], vc: tz[0usize..0usize], reml: reml, q: nr, z: bz, pd: 0i64 }
-    let f = g.core(a, &sp, pv[0usize..nrp], cf, xi)
+    let sp = g.Spec { n: n, p: np, x: am, y: w, t: tz, gs: gs, ng: ng, ck: ck, nv: nvt, vk: cvk[0usize..nvt], vn: cvk[1usize..1usize + nvt], vc: x[0usize..nvt * n], reml: reml, q: nr, z: bz, pd: 0i64 }
+    let f = g.core(a, &sp, pv[0usize..npv], cf, xi)
     if !f.good { ret g.Singular }
     g.re_cov(nr, pv[0usize..nrp], dd[0usize..64usize], 0i64)
     i = 0usize
@@ -407,7 +539,7 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
     }
     out[np] = f.sigma
     out[np + 1usize] = f.loglik
-    let npar = f64(np + nrp + 1usize)
+    let npar = f64(np + npv + 1usize)
     // nlme's PNLS step estimates beta, b and D by ML whatever the method; REML only changes sigma, logLik and the standard errors afterwards
     var nrem = 0.0f64
     if reml { nrem = f64(np) }
@@ -440,6 +572,11 @@ fn nlme_fit(a: *mem.Arena, kind: i64, n: usize, gs: []const f64, x: []const f64,
     while i < ng * nr {
         out[o + i] = bb[i]
         i += 1usize
+    }
+    o += ng * nr
+    if ncv > 0usize {
+        let wrote = g.natural(&sp, pv[nrp..npv], out[o..o + ncv])
+        if wrote != ncv { ret g.Singular }
     }
     ret ok
 }

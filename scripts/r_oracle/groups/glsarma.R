@@ -2,6 +2,7 @@
 # Case args: c(q, spec); spec = c(reml, n, p, ck, nv, ng, gs[ng], t[n], y[n], X[n*p] column-major, then per variance term c(kind, nstr, v[n])).
 # ck = 1000 + 10 p + q for corARMA(p, q). Output vector as in groups/gls.R: coef (p), sigma, logLik, AIC, BIC, natural correlation
 # parameters (phi then theta), natural variance parameters, se (p), lower (p), upper (p).
+# R-side limit (measured, see groups/gls.R): rerunning gls with another start value of the same corARMA moves its estimates by up to 4e-5 relative (3.9e-5 for ARMA(1,1)).
 # Tolerance 1e-6 relative (1e-8 absolute): gls stops nlminb at its default tolerance and the same path is followed here. The corARMA(3, 0) fit with varPower has a flat likelihood along the coefficients, so both stop up to 3e-5 apart: 1e-4 relative or 1e-5 absolute for that fit.
 suppressMessages(library(nlme))
 cases <- list()
@@ -38,6 +39,8 @@ for (cf in list(c(2, 0, 0), c(0, 2, 1), c(2, 1, 0), c(1, 2, 1), c(3, 0, 1), c(2,
   for (q in seq_along(ov)) cases[[length(cases) + 1]] <- case("glsarma", c(q - 1, args0), ov[q], rel = if (ck == 1030 && vp) 1e-4 else 1e-6, abs = if (ck == 1030 && vp) 1e-5 else 1e-8)
 }
 # variance functions of the fitted values, varPower/varExp/varConstPower(form = ~ fitted(.)): kind 12, 13, 14 (variance kind + 10).
+# Tolerance 1e-5 relative / 1e-7 absolute for these: the weights depend on the fitted values, so gls iterates its coefficients inside the nlminb objective and stops at
+# its own msTol 1e-5 / 1e-6-level coefficient change; R's value is not the optimum to better than that, and no R-side rebuild of the objective exists for them.
 # nlme refits until the relative change of the coefficients and parameters is <= 1e-6, so those cases carry tolerance 1e-5 (1e-7 absolute).
 mk2 <- function(ng, m, p) {
   D <- mk(ng, m, p)

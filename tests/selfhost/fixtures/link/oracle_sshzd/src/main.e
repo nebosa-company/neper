@@ -18,7 +18,8 @@ fn solve(a: *mem.Arena, z: []const f64, r: *Res) -> err {
     let n = usize(z[1usize])
     let nb = usize(z[2usize])
     let seed = i64(z[3usize])
-    let skip = z[4usize] > 0.5f64
+    let skip = z[4usize] > 0.5f64 && z[4usize] < 1.5f64
+    let fixed = z[4usize] > 1.5f64
     let m = usize(z[5usize])
     var dim = 2usize
     if model == 1usize { dim = 1usize }
@@ -73,7 +74,9 @@ fn solve(a: *mem.Arena, z: []const f64, r: *Res) -> err {
         i += 1usize
     }
     var f: hz.HzFit = zero
-    try hz.sshzd(a, model, n, tm, st, xc, idp, nb, 1.4f64, 0.0000001f64, 30usize, skip, &f)
+    var fx = z[0usize..0usize]
+    if fixed { fx = z[o + m * dim..z.len] }
+    try hz.sshzd(a, model, n, tm, st, xc, idp, nb, 1.4f64, 0.0000001f64, 30usize, skip, fx, &f)
     let (rate, pe) = den.zeros(a, m)
     if pe != ok { ret pe }
     try hz.hzd_rate(a, &f, xn, m, rate)

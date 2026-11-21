@@ -7,7 +7,8 @@
 # of D on the linearisation at that fit reproduce each other. R stops that iteration at its own pnlsTol (1e-3 by default; below 1e-7 its PNLS step halves out), so
 # nlme's estimates sit ~1e-4 from that fixed point. The reference here is the fixed point itself, iterated with an exact PNLS (Gauss-Newton with the analytic
 # self-start gradients) and a Newton-polished ML/REML optimum of D (the objective rebuilt on the linearisation), then checked against nlme(pnlsTol = 1e-7)
-# (estimates, sigma, logLik, sds to 1e-6 relative, se to 1e-5) before a case is kept. The D optimum is located to ~1e-9 on both sides: rel 1e-7 / abs 1e-8.
+# (estimates, sigma, logLik, sds to 1e-6 relative, se to 1e-5) before a case is kept. The D optimum is located to ~1e-9 on both sides (the iteration contracts fast and then sits at the roundoff floor, see nlme_fixpoint.R): rel 1e-8 / abs 1e-8.
+# The cases with output index + 1000 compare nlme's own returned estimates (not the fixed point) at 2e-5 relative.
 suppressMessages(library(nlme))
 suppressMessages(library(numDeriv))
 cases <- list()
@@ -46,6 +47,9 @@ for (cf in cfgs) {
   if (max(abs(ref - mine) / pmax(abs(ref), 1e-3)) > 1e-5 || max(abs(sqrt(diag(vcov(f))) - se) / se) > 1e-4) { message("fixpoint differs from nlme ", kind, ": ", paste(signif(ref - mine, 3), collapse = " "), " se ", max(abs(sqrt(diag(vcov(f))) - se) / se)); next }
   ov <- c(r$beta, r$sigma, ll, -2 * ll + 2 * npar, -2 * ll + npar * log(nobs), sd, cr, se, as.vector(t(r$B[unique(as.integer(d$g)), , drop = FALSE])))
   args0 <- c(reml, nrow(d), cf[[4]], rep(cf[[5]], cf[[4]]), d$x, d$y, q, rs)
-  for (j in seq_along(ov)) cases[[length(cases) + 1]] <- case("nlme", c(kind, j - 1, args0), ov[j], rel = 1e-7, abs = 1e-8)
+  for (j in seq_along(ov)) cases[[length(cases) + 1]] <- case("nlme", c(kind, j - 1, args0), ov[j], rel = 1e-8, abs = 1e-8)
+  # nlme's own returned fixed effects, sigma, logLik and random-effect sds (pnlsTol = 1e-7 stopping point): the output index + 1000 selects them; they sit within ~3e-6 of the fixed point
+  nref <- c(seq_len(np + 2) - 1, np + 4 + seq_len(q) - 1)
+  for (j in seq_along(nref)) cases[[length(cases) + 1]] <- case("nlme", c(kind, 1000 + nref[j], args0), ref[j], rel = 2e-5, abs = 1e-6)
 }
 emit("nlmenl", "nlme", list(cases))

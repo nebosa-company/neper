@@ -1,7 +1,7 @@
 // R's tgp package, first slice: the randomkit Mersenne-Twister that tgp's C++ draws from (seeded by
 // three2lstate of three integers, not by R's RNG) and lhs(), the Latin hypercube sampler, both the
-// uniform and the beta-quantile form. Not here yet: the treed-GP MCMC (btgp, btlm, bcart, bgp, blm,
-// bgpllm, btgpllm), its predictions and the design routines.
+// uniform and the beta-quantile form. The chains are in tgp_blm.e (blm), tgp_gp.e (bgp, bgpllm) and tgp_tree.e
+// (btlm, bcart, btgp, btgpllm); the design routines are in tgp_design.e and tgp_tree.e (treed form).
 
 use e.algo.rand.r as rr
 use e.math.nmath_beta as nb

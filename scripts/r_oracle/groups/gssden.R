@@ -1,4 +1,5 @@
 # gss ssden (cubic marginals, sampled id.basis). One case per scalar: "sd" (model, n, nb, seed, skip, ng, m, X[n*dim], XO[m*dim], idx),
+# skip 2 (several theta): R's converged lambda and theta follow XO, and the fit is taken there with no search;
 # model 1 ~ x1, 2 ~ x1 + x2, 3 ~ x1 * x2; the quadrature is gauss.quad(200) in one dimension and the tensor grid gauss.quad(ng) per variable in two (passed as quad=);
 # id.basis is sample(n, nb) after set.seed(seed); idx 0 lambda, 1 .. nq theta, then c (nb), d, int, cv, the m densities, nb and the id.basis checksums.
 suppressMessages(library(gss))
@@ -27,13 +28,15 @@ run <- function(model, n, seed, skip, ng) {
   xo <- as.data.frame(sapply(1:dim, function(v) runif(m, min(X[, v]), max(X[, v])))); colnames(xo) <- colnames(X)
   pr <- dssden(fit, if (dim == 1) xo[[1]] else xo)
   nq <- nqof[model]; n0 <- n0of[model]; idb <- fit$id.basis
-  args <- c(model, n, nb, seed, skip, ng, m, as.vector(X), as.vector(as.matrix(xo)))
+  fixmode <- nq > 1 && skip == 0
+  args <- c(model, n, nb, seed, if (fixmode) 2 else skip, ng, m, as.vector(X), as.vector(as.matrix(xo)), if (fixmode) c(fit$lambda, fit$theta))
   vals <- c(fit$lambda, fit$theta, fit$c, fit$d, fit$int, fit$cv, pr, nb, sum(idb), sum(idb * seq_along(idb)), idb[1], idb[nb])
   nv <- length(vals)
   tol <- rep(1e-6, nv); ab <- rep(1e-9, nv)
   ab[1] <- 1e-3
-  # the nlm search over several theta ends where the cross-validation score is flat to its own Newton precision (prec 1e-7): theta to 0.1, the fit to 5e-2 relative
-  if (nq > 1 && skip == 0) { tol[] <- 5e-2; ab[] <- 0.02; ab[2:(1 + nq)] <- 0.1; ab[1] <- 1e-3 }
+  # skip 2: R's nlm search over several theta stops on a rounding-dependent point, so R's converged lambda and theta are passed in and the fit there is compared (the Newton iteration itself stops at prec 1e-7)
+  # the cv score (a trace plus a likelihood from the last Newton iterate) is 5e-6: that iterate is within R's prec 1e-7 of the optimum but not the same point
+  if (fixmode) { tol[] <- 1e-6; ab[] <- 1e-8; ab[1] <- 1e-9; kcv <- 1 + nq + length(fit$c) + length(fit$d) + 2; tol[kcv] <- 5e-6 }
   tol[(nv - 4):nv] <- 0; ab[(nv - 4):nv] <- 0
   for (k in seq_along(vals)) add(c(args, k - 1), vals[k], tol[k], ab[k])
   invisible(TRUE)

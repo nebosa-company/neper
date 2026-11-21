@@ -1,0 +1,17 @@
+SET UTF-8
+FLAG UTF-8
+TRY áéíóúőűabcdefghijklmnopqrstuvwxyz
+WORDCHARS -
+FORBIDDENWORD ß
+ICONV 2
+ICONV ch c
+ICONV ph f
+OCONV 1
+OCONV c ch
+PFX Á Y 1
+PFX Á 0 meg .
+SFX É Y 2
+SFX É 0 ért [^aeiouáé]
+SFX É 0 t [aeiouáé]
+SFX Ő N 1
+SFX Ő ő ek ő

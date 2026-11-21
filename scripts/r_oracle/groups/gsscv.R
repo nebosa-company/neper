@@ -1,4 +1,4 @@
-# gss gssanova (cross-validated Kullback-Leibler, sspngreg and mspngreg over the sampled basis) with cubic marginals. One case per scalar: "ag" (fam, model, alpha, n, nb, m, seed, skip, X[n*dim], y[n], XO[m*dim], idx),
+# gss gssanova (cross-validated Kullback-Leibler, sspngreg and mspngreg over the sampled basis) with cubic marginals. One case per scalar: "ag" (fam, model, alpha, n, nb, m, seed, skip, X[n*dim], y[n], XO[m*dim], idx), skip 2 (several theta): R's converged nlambda and theta follow XO.
 # fam 1 binomial, 2 poisson, 3 Gamma, 4 inverse.gaussian; model 1 y ~ x1, 2 y ~ x1 + x2, 3 y ~ x1 * x2; id.basis is sample(n, nb) after set.seed(seed);
 # idx 0 nlambda, 1 score, 2 varht, 3 .. 3 + nq - 1 theta, then d, eta[1:3], w[1:3], the m predictions and standard errors (link scale), nb and the id.basis checksums.
 suppressMessages(library(gss))
@@ -29,7 +29,8 @@ run <- function(fam, model, n, seed, skip) {
   pr <- predict(fit, xo, se.fit = TRUE)
   if (any(!is.finite(pr$se.fit))) return(invisible(FALSE))
   nq <- nqof[model]; n0 <- n0of[model]; idb <- fit$id.basis
-  args <- c(fam, model, alpha, n, nb, m, seed, skip, as.vector(X), y, as.vector(as.matrix(xo)))
+  fixmode <- nq > 1 && skip == 0
+  args <- c(fam, model, alpha, n, nb, m, seed, if (fixmode) 2 else skip, as.vector(X), y, as.vector(as.matrix(xo)), if (fixmode) c(fit$nlambda, fit$theta))
   vals <- c(fit$nlambda, fit$score, fit$varht, fit$theta, fit$d, fit$eta[1:3], fit$w[1:3], pr$fit, pr$se.fit, nb, sum(idb), sum(idb * seq_along(idb)), idb[1], idb[nb])
   nv <- length(vals)
   tol <- rep(1e-6, nv); ab <- rep(1e-9, nv)
@@ -37,8 +38,8 @@ run <- function(fam, model, n, seed, skip) {
   # the iteration count is exact; the id.basis checksums are exact
 
   tol[(nv - 4):nv] <- 0; ab[(nv - 4):nv] <- 0
-  # the nlm search over several theta ends where the score is flat to rounding noise
-  if (nq > 1 && skip == 0) { tol[] <- 5e-2; ab[] <- 0.02; ab[4:(3 + nq)] <- 0.1; ab[1] <- 1e-3; tol[(nv - 4):nv] <- 0; ab[(nv - 4):nv] <- 0 }
+  # skip 2 (several theta, searching): the nlm search stops where the score is flat to rounding noise, so R's converged nlambda and theta follow XO and the fit is taken at them with no search
+  if (fixmode) { ab[1] <- 1e-9; ab[4:(3 + nq)] <- 1e-9 }
   for (k in seq_along(vals)) add(c(args, k - 1), vals[k], tol[k], ab[k])
   invisible(TRUE)
 }

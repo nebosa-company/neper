@@ -1,25 +1,26 @@
 // R partykit ctree: conditional inference trees with the default quadratic test statistic, asymptotic chi-square p values, Bonferroni or univariate adjustment, and the maximally selected statistic for the split point. Numeric and unordered factor predictors; a numeric response, or a factor response through its indicator columns (the last two levels of a binary factor reduce to the second level's indicator, exactly as .y2infl does).
 //
-// Not here: the maximum statistic (needs pmvnorm), Monte Carlo p values and splittest = TRUE, ordered factors, missing values, case weights, surrogate splits, cforest, MOB, other responses (survival, multivariate, ordered).
+// Not here: ordered factors, missing values, case weights, surrogate splits, cforest, MOB, other responses (survival, multivariate, ordered).
 //
 // The algorithm is libcoin's: the linear statistic T = sum x h over the node, its permutation mean and covariance (Strasser-Weber), the quadratic form with the Moore-Penrose inverse (eigenvalues below sqrt(eps) of the largest are dropped, their count is the degrees of freedom), and for the split the same statistic on the left part at every admissible cut point, the first maximum winning.
 
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.rand.r as rr
+use e.algo.stat.mvt as mvt
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.mem
 
-type Ctx = struct { x: []const f64, n: usize, p: usize, nl: []const usize, h: []const f64, q: usize, yl: usize, y: []const f64, maxst: bool, wt: []const f64 }
+type Ctx = struct { x: []const f64, n: usize, p: usize, nl: []const usize, h: []const f64, q: usize, yl: usize, y: []const f64, maxst: bool, wt: []const f64, rg: *rr.Rng, lat: *const mvt.Lat, nres: usize, spl: bool }
 
-type Ctl = struct { minsplit: usize, minbucket: usize, minprob: f64, logmin: f64, bonf: bool, maxdepth: usize, stump: bool, splittry: usize, mtry: usize, inter: bool, statcrit: bool, ord: []const bool }
+type Ctl = struct { minsplit: usize, minbucket: usize, minprob: f64, logmin: f64, bonf: bool, maxdepth: usize, stump: bool, splittry: usize, mtry: usize, maxvar: usize, inter: bool, statcrit: bool, ord: []const bool }
 
-// extended options of ctree_core: the criterion is the statistic itself (testtype Teststatistic), the maximum statistic (teststat = splitstat = maximum, supported where the test has one degree of freedom, where pmvnorm is a plain pnorm), the log of mincriterion when given, and which numeric-coded predictors are ordered factors (intersplit leaves them alone)
-type Xo = struct { statcrit: bool, maxst: bool, setlog: bool, logmin: f64, ord: []const bool, w: []const f64 }
+// extended options of ctree_core: the criterion is the statistic itself (testtype Teststatistic), the maximum statistic (teststat = splitstat = maximum, with several degrees of freedom the p value is mvtnorm Genz-Bretz on the seeded stream of ctree_xs), the log of mincriterion when given, and which numeric-coded predictors are ordered factors (intersplit leaves them alone)
+type Xo = struct { statcrit: bool, maxst: bool, setlog: bool, logmin: f64, ord: []const bool, w: []const f64, nres: usize, spl: bool, mtry: usize, maxvar: usize }
 
 // one node per row, ids in pre-order (1-based, as partykit numbers them); vr is the split variable (1-based, 0 for a leaf)
-type Out = struct { vr: []i64, brk: []f64, kid1: []i64, kid2: []i64, nobs: []f64, pval: []f64, stat: []f64, fit: []f64, lmap: []i64, prob1: []f64, maxlev: usize, count: usize }
+type Out = struct { vr: []i64, brk: []f64, kid1: []i64, kid2: []i64, nobs: []f64, pval: []f64, stat: []f64, fit: []f64, lmap: []i64, prob1: []f64, maxlev: usize, count: usize, sv: []bool }
 
 type Split = struct { found: bool, brk: f64, dir: []i64 }
 
@@ -102,8 +103,582 @@ fn influence(c: *const Ctx, sub: []const usize, ei: []f64, ci: []f64) {
     }
 }
 
-// (log statistic, log(1 - p), valid): the test of predictor j on the subset
-fn test_var(a: *mem.Arena, c: *const Ctx, sub: []const usize, j: usize) -> (f64, f64, bool, err) {
+// the split statistic: the quadratic form, or for teststat = maximum the largest standardised element (libcoin's C_maxabsstand_Variance)
+fn split_stat(a: *mem.Arena, c: *const Ctx, cov: []const f64, d: []const f64, q: usize) -> (f64, usize, err) {
+    if !c.maxst {
+        let (s0, r0, e0) = quad(a, cov, d, q)
+        ret (s0, r0, e0)
+    }
+    var m = 0.0f64
+    var k = 0usize
+    while k < q {
+        var t = 0.0f64
+        let v = cov[k * q + k]
+        if v > tolv() { t = math.abs[f64](d[k] / math.sqrt[f64](v)) }
+        if t > m { m = t }
+        k += 1usize
+    }
+    ret (m, q, ok)
+}
+
+// libcoin's C_maxtype_pvalue for the two-sided maximum: log(1 - p) from mvtnorm's Genz-Bretz mvtdst over the elements with variance above tol
+fn maxtype_lp(a: *mem.Arena, c: *const Ctx, cov: []const f64, mxs: f64, dim: usize) -> (f64, err) {
+    let (idx, e1) = mem.alloc[usize](a, dim)
+    if e1 != ok { ret (0.0f64, e1) }
+    var nz = 0usize
+    var u = 0usize
+    while u < dim {
+        if cov[u * dim + u] > tolv() {
+            idx[nz] = u
+            nz += 1usize
+        }
+        u += 1usize
+    }
+    let (lo, e2) = mem.alloc[f64](a, nz)
+    let (up, e3) = mem.alloc[f64](a, nz)
+    let (dl, e4) = mem.alloc[f64](a, nz)
+    let (inf, e5) = mem.alloc[i64](a, nz)
+    let (cor, e6) = mem.alloc[f64](a, nz * nz / 2usize + 1usize)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (0.0f64, mem.Full) }
+    var k = 0usize
+    var i = 0usize
+    while i < nz {
+        lo[i] = 0.0f64 - mxs
+        up[i] = mxs
+        dl[i] = 0.0f64
+        inf[i] = 2i64
+        var j = 0usize
+        while j < i {
+            let ii = idx[i]
+            let jj = idx[j]
+            cor[k] = cov[ii * dim + jj] / (math.sqrt[f64](cov[ii * dim + ii]) * math.sqrt[f64](cov[jj * dim + jj]))
+            k += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (r, e7) = mvt.mvtdst(a, c.rg, c.lat, nz, 0i64, lo, up, inf, cor[0usize..nz * (nz - 1usize) / 2usize], dl, 25000i64, 0.001f64, 0.0f64)
+    if e7 != ok { ret (0.0f64, e7) }
+    var ans = r.value
+    if r.inform == 2i64 || r.inform == 3i64 { ans = 0.0f64 }
+    ret (math.log[f64](ans), ok)
+}
+
+// libcoin's C_MPinv_sym into mp (m by m): eigenvalues below sqrt(eps) of the largest are dropped
+fn mpinv(a: *mem.Arena, cov: []const f64, m: usize, mp: []f64) -> err {
+    var i = 0usize
+    while i < m * m {
+        mp[i] = 0.0f64
+        i += 1usize
+    }
+    if m == 1usize {
+        if cov[0] > tolv() { mp[0] = 1.0f64 / cov[0] }
+        ret ok
+    }
+    let (w, e1) = mem.alloc[f64](a, m)
+    let (z, e2) = mem.alloc[f64](a, m * m)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    let e = sy.dsyevr_all(a, cov, m, w, z)
+    if e != ok { ret e }
+    let dtol = w[m - 1usize] * tolv()
+    var k = 0usize
+    while k < m {
+        if !(w[k] < dtol) {
+            let vi = 1.0f64 / w[k]
+            var r = 0usize
+            while r < m {
+                var s = 0usize
+                while s < m {
+                    mp[r * m + s] += vi * z[k * m + r] * z[k * m + s]
+                    s += 1usize
+                }
+                r += 1usize
+            }
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// the statistic of the linear statistic deviation d: the quadratic form d' MP d, or the largest standardised element for the maximum statistic
+fn mcstat(c: *const Ctx, mp: []const f64, cov: []const f64, d: []const f64, m: usize) -> f64 {
+    var acc = 0.0f64
+    if c.maxst {
+        var k = 0usize
+        while k < m {
+            let v = cov[k * m + k]
+            if v > tolv() {
+                let t = math.abs[f64](d[k] / math.sqrt[f64](v))
+                if t > acc { acc = t }
+            }
+            k += 1usize
+        }
+        ret acc
+    }
+    ret qform(mp, d, m)
+}
+
+// libcoin's C_quadform on the deviation d
+fn qform(mp: []const f64, d: []const f64, m: usize) -> f64 {
+    var acc = 0.0f64
+    var qq = 0usize
+    while qq < m {
+        var tmp = 0.0f64
+        var p = 0usize
+        while p < m {
+            tmp += d[p] * mp[p * m + qq]
+            p += 1usize
+        }
+        acc += tmp * d[qq]
+        qq += 1usize
+    }
+    ret acc
+}
+
+// libcoin's C_Permute: a random permutation of expd into perm, tmp is scratch (R's n * unif_rand() truncated)
+fn draw_perm(rg: *rr.Rng, expd: []const usize, tmp: []usize, perm: []usize) {
+    var n = expd.len
+    var i = 0usize
+    while i < n {
+        tmp[i] = expd[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < expd.len {
+        let j = usize(f64(n) * rr.unif(rg))
+        perm[i] = tmp[j]
+        n -= 1usize
+        tmp[j] = tmp[n]
+        i += 1usize
+    }
+}
+
+// the subset with every row repeated by its integer case weight (libcoin's RC_setup_subset)
+fn expand_sub(a: *mem.Arena, c: *const Ctx, sub: []const usize) -> ([]usize, err) {
+    var tot = 0usize
+    var i = 0usize
+    while i < sub.len {
+        tot += usize(c.wt[sub[i]])
+        i += 1usize
+    }
+    let (ex, e1) = mem.alloc[usize](a, tot)
+    if e1 != ok { ret (ex, e1) }
+    var at = 0usize
+    i = 0usize
+    while i < sub.len {
+        var r = 0usize
+        let wi = usize(c.wt[sub[i]])
+        while r < wi {
+            ex[at] = sub[i]
+            at += 1usize
+            r += 1usize
+        }
+        i += 1usize
+    }
+    ret (ex, ok)
+}
+
+// libcoin draws the nresample permutations before it looks at the variance, so a predictor without variation still consumes the stream
+fn burn_perms(a: *mem.Arena, c: *const Ctx, sub: []const usize) -> err {
+    if c.nres == 0usize { ret ok }
+    let (expd, e1) = expand_sub(a, c, sub)
+    let (tmp, e2) = mem.alloc[usize](a, expd.len)
+    let (perm, e3) = mem.alloc[usize](a, expd.len)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var b = 0usize
+    while b < c.nres {
+        draw_perm(c.rg, expd, tmp, perm)
+        b += 1usize
+    }
+    ret ok
+}
+
+// testtype MonteCarlo of one predictor without splittest: (log(1 - p), statistic); the permutation p value counts the permuted statistics at least the observed one up to tol
+fn mc_plain(a: *mem.Arena, c: *const Ctx, sub: []const usize, j: usize, d: []const f64, cov: []const f64, dim: usize, np: usize, pidx: []const usize, pres: []const usize, cnt: []const f64, ei: []const f64) -> (f64, f64, err) {
+    let q = c.q
+    let lv = c.nl[j]
+    let (mp, e1) = mem.alloc[f64](a, dim * dim)
+    let (dp, e2) = mem.alloc[f64](a, dim)
+    if e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    let e3 = mpinv(a, cov, dim, mp)
+    if e3 != ok { ret (0.0f64, 0.0f64, e3) }
+    let st = mcstat(c, mp, cov, d, dim)
+    let (expd, e4) = expand_sub(a, c, sub)
+    let (tmp, e5) = mem.alloc[usize](a, expd.len)
+    let (perm, e6) = mem.alloc[usize](a, expd.len)
+    if e4 != ok || e5 != ok || e6 != ok { ret (0.0f64, 0.0f64, mem.Full) }
+    var ex = 0.0f64
+    var i = 0usize
+    while i < sub.len {
+        ex += c.x[j * c.n + sub[i]] * c.wt[sub[i]]
+        i += 1usize
+    }
+    var greater = 0usize
+    var b = 0usize
+    while b < c.nres {
+        draw_perm(c.rg, expd, tmp, perm)
+        var u = 0usize
+        while u < dim {
+            dp[u] = 0.0f64
+            u += 1usize
+        }
+        i = 0usize
+        while i < expd.len {
+            let ob = expd[i]
+            let yb = perm[i]
+            var k = 0usize
+            if lv == 0usize {
+                let xv = c.x[j * c.n + ob]
+                while k < q {
+                    dp[k] += xv * c.h[k * c.n + yb]
+                    k += 1usize
+                }
+            } else {
+                let l = pidx[usize(c.x[j * c.n + ob])]
+                while k < q {
+                    dp[k * np + l] += c.h[k * c.n + yb]
+                    k += 1usize
+                }
+            }
+            i += 1usize
+        }
+        var k2 = 0usize
+        while k2 < q {
+            if lv == 0usize {
+                dp[k2] -= ex * ei[k2]
+            } else {
+                var l2 = 0usize
+                while l2 < np {
+                    dp[k2 * np + l2] -= cnt[pres[l2]] * ei[k2]
+                    l2 += 1usize
+                }
+            }
+            k2 += 1usize
+        }
+        let pst = mcstat(c, mp, cov, dp, dim)
+        if pst > st || math.abs[f64](pst - st) < tolv() { greater += 1usize }
+        b += 1usize
+    }
+    ret (dist.log1p(0.0f64 - f64(greater) / f64(c.nres)), st, ok)
+}
+
+// the cut points of one predictor over its present groups (splittest = TRUE), visited as libcoin's C_ordered_Xfactor and C_unordered_Xfactor do: running left sums, one covariance and one Moore-Penrose inverse per cut, then the observed and every permuted statistic against it
+type SpC = struct { num: bool, g: usize, q: usize, m: f64, mb: f64, f1: f64, f2: f64, ei: []const f64, ci: []const f64, maxst: bool, nres: usize, ml: []f64, mex: []f64, mbl: []f64, mp: []f64, cv: []f64, dd: []f64, ls: []f64, best: f64, bmax: []f64 }
+
+// the statistic of the linear statistic ls with expectation ex at the current cut
+fn cut_stat(s: *SpC, ls: []const f64, ex: []const f64) -> f64 {
+    let q = s.q
+    if s.maxst {
+        var ans = 0.0f64 - 1.0f64 / 0.0f64
+        var k = 0usize
+        while k < q {
+            var t = 0.0f64
+            if s.cv[k] > tolv() { t = math.abs[f64]((ls[k] - ex[k]) / math.sqrt[f64](s.cv[k])) }
+            if t > ans { ans = t }
+            k += 1usize
+        }
+        ret ans
+    }
+    var k2 = 0usize
+    while k2 < q {
+        s.dd[k2] = ls[k2] - ex[k2]
+        k2 += 1usize
+    }
+    ret qform(s.mp, s.dd, q)
+}
+
+// one admissible cut with sl observations on the left: refresh the variance or covariance and its inverse, then update the observed maximum and the permuted ones
+fn cut_eval(a: *mem.Arena, s: *SpC, sl: f64) -> err {
+    let start = mem.mark(a)
+    let q = s.q
+    let f1 = s.f1
+    let f2 = s.f2
+    if q == 1usize {
+        var v = f1 * s.ci[0usize] * sl
+        v -= f2 * s.ci[0usize] * sl * sl
+        s.cv[0usize] = v
+    } else {
+        var k = 0usize
+        while k < q {
+            var r = 0usize
+            while r < q {
+                if s.maxst {
+                    if r == k { s.cv[k] = s.ci[k * q + k] * (f1 * sl - f2 * sl * sl) }
+                } else {
+                    s.cv[k * q + r] = s.ci[k * q + r] * (f1 * sl - f2 * (sl * sl))
+                }
+                r += 1usize
+            }
+            k += 1usize
+        }
+    }
+    if !s.maxst {
+        let e = mpinv(a, s.cv, q, s.mp)
+        if e != ok { ret e }
+    }
+    let t = cut_stat(s, s.ml, s.mex)
+    if t > s.best { s.best = t }
+    var b = 0usize
+    while b < s.nres {
+        let pst = cut_stat(s, s.mbl[b * q..b * q + q], s.mex)
+        if pst > s.bmax[b] { s.bmax[b] = pst }
+        b += 1usize
+    }
+    mem.reset(a, start)
+    ret ok
+}
+
+// every cut point against the group table gl (g by q linear statistics) with sizes cg and the permuted tables pt (nres of them)
+fn cut_run(a: *mem.Arena, s: *SpC, gl: []const f64, cg: []const f64, pt: []const f64) -> err {
+    let q = s.q
+    let ng = s.g
+    if s.num {
+        var sl = 0.0f64
+        var k = 0usize
+        while k < q {
+            s.ml[k] = 0.0f64
+            s.mex[k] = 0.0f64
+            k += 1usize
+        }
+        var u = 0usize
+        while u < s.nres * q {
+            s.mbl[u] = 0.0f64
+            u += 1usize
+        }
+        var g = 0usize
+        while g < ng {
+            sl += cg[g]
+            k = 0usize
+            while k < q {
+                s.ml[k] += gl[g * q + k]
+                s.mex[k] += cg[g] * s.ei[k]
+                var b = 0usize
+                while b < s.nres {
+                    s.mbl[b * q + k] += pt[b * ng * q + g * q + k]
+                    b += 1usize
+                }
+                k += 1usize
+            }
+            if sl >= s.mb && s.m - sl >= s.mb {
+                let e = cut_eval(a, s, sl)
+                if e != ok { ret e }
+            }
+            g += 1usize
+        }
+        ret ok
+    }
+    var mi = 1usize
+    var l = 1usize
+    while l < ng {
+        mi *= 2usize
+        l += 1usize
+    }
+    var jv = 1usize
+    while jv < mi {
+        var sl = 0.0f64
+        var k = 0usize
+        while k < q {
+            s.ml[k] = 0.0f64
+            s.mex[k] = 0.0f64
+            k += 1usize
+        }
+        var u = 0usize
+        while u < s.nres * q {
+            s.mbl[u] = 0.0f64
+            u += 1usize
+        }
+        var jj = jv
+        l = 1usize
+        while l < ng {
+            if jj % 2usize == 1usize {
+                sl += cg[l]
+                k = 0usize
+                while k < q {
+                    s.ml[k] += gl[l * q + k]
+                    s.mex[k] += cg[l] * s.ei[k]
+                    var b = 0usize
+                    while b < s.nres {
+                        s.mbl[b * q + k] += pt[b * ng * q + l * q + k]
+                        b += 1usize
+                    }
+                    k += 1usize
+                }
+            }
+            jj /= 2usize
+            l += 1usize
+        }
+        if sl >= s.mb && s.m - sl >= s.mb {
+            let e = cut_eval(a, s, sl)
+            if e != ok { ret e }
+        }
+        jv += 1usize
+    }
+    ret ok
+}
+
+// splittest = TRUE: the test of predictor j is the maximally selected statistic over its cut points; with nres > 0 the p value is the permutation one; (log statistic, log(1 - p), valid)
+fn test_split(a: *mem.Arena, c: *const Ctx, sub: []const usize, j: usize, mb: usize) -> (f64, f64, bool, err) {
+    let start = mem.mark(a)
+    let q = c.q
+    let m = sumw(c, sub)
+    let (ei, e1) = mem.alloc[f64](a, q)
+    let (ci, e2) = mem.alloc[f64](a, q * q)
+    let (gid, e3) = mem.alloc[usize](a, c.n)
+    if e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, 0.0f64, false, mem.Full) }
+    influence(c, sub, ei, ci)
+    let lv = c.nl[j]
+    var ng = 0usize
+    if lv == 0usize {
+        let (srt, e4) = mem.alloc[usize](a, sub.len)
+        if e4 != ok { ret (0.0f64, 0.0f64, false, e4) }
+        var i = 0usize
+        while i < sub.len {
+            srt[i] = sub[i]
+            i += 1usize
+        }
+        sort_by(srt, c.x, j, c.n)
+        i = 0usize
+        while i < srt.len {
+            if i > 0usize && c.x[j * c.n + srt[i]] != c.x[j * c.n + srt[i - 1usize]] { ng += 1usize }
+            gid[srt[i]] = ng
+            i += 1usize
+        }
+        ng += 1usize
+    } else {
+        let (pix, e4) = mem.alloc[usize](a, lv)
+        let (pc, e5) = mem.alloc[f64](a, lv)
+        if e4 != ok || e5 != ok { ret (0.0f64, 0.0f64, false, mem.Full) }
+        var l = 0usize
+        while l < lv {
+            pc[l] = 0.0f64
+            l += 1usize
+        }
+        var i = 0usize
+        while i < sub.len {
+            pc[usize(c.x[j * c.n + sub[i]])] += c.wt[sub[i]]
+            i += 1usize
+        }
+        l = 0usize
+        while l < lv {
+            if pc[l] > 0.0f64 {
+                pix[l] = ng
+                ng += 1usize
+            }
+            l += 1usize
+        }
+        i = 0usize
+        while i < sub.len {
+            gid[sub[i]] = pix[usize(c.x[j * c.n + sub[i]])]
+            i += 1usize
+        }
+    }
+    let (cg, e6) = mem.alloc[f64](a, ng)
+    let (gl, e7) = mem.alloc[f64](a, ng * q)
+    let (mp, e9) = mem.alloc[f64](a, q * q)
+    let (ml, e10) = mem.alloc[f64](a, q)
+    let (dd, e11) = mem.alloc[f64](a, q)
+    let (mex, e11b) = mem.alloc[f64](a, q)
+    let (cv, e11c) = mem.alloc[f64](a, q * q)
+    let (mbl, e11d) = mem.alloc[f64](a, c.nres * q + 1usize)
+    let (bmax, e11e) = mem.alloc[f64](a, c.nres + 1usize)
+    if e6 != ok || e7 != ok || e9 != ok || e10 != ok || e11 != ok || e11b != ok || e11c != ok || e11d != ok || e11e != ok { ret (0.0f64, 0.0f64, false, mem.Full) }
+    var g = 0usize
+    while g < ng {
+        cg[g] = 0.0f64
+        var k = 0usize
+        while k < q {
+            gl[g * q + k] = 0.0f64
+            k += 1usize
+        }
+        g += 1usize
+    }
+    var i = 0usize
+    while i < sub.len {
+        let gi = gid[sub[i]]
+        cg[gi] += c.wt[sub[i]]
+        var k = 0usize
+        while k < q {
+            gl[gi * q + k] += c.h[k * c.n + sub[i]] * c.wt[sub[i]]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let f1 = m / (m - 1.0f64)
+    let f2 = 1.0f64 / (m - 1.0f64)
+    var allsmall = true
+    g = 0usize
+    while g < ng {
+        var k = 0usize
+        while k < q {
+            if !(ci[k * q + k] * (f1 * cg[g] - f2 * cg[g] * cg[g]) < tolv()) { allsmall = false }
+            k += 1usize
+        }
+        g += 1usize
+    }
+    // the permutations are drawn before the variance is looked at
+    var pt: []f64 = zero
+    if c.nres > 0usize {
+        let (expd, e13) = expand_sub(a, c, sub)
+        let (tmp, e14) = mem.alloc[usize](a, expd.len)
+        let (perm, e15) = mem.alloc[usize](a, expd.len)
+        let (pt0, e16) = mem.alloc[f64](a, c.nres * ng * q)
+        if e13 != ok || e14 != ok || e15 != ok || e16 != ok { ret (0.0f64, 0.0f64, false, mem.Full) }
+        var b = 0usize
+        while b < c.nres {
+            draw_perm(c.rg, expd, tmp, perm)
+            var u = 0usize
+            while u < ng * q {
+                pt0[b * ng * q + u] = 0.0f64
+                u += 1usize
+            }
+            i = 0usize
+            while i < expd.len {
+                let gi = gid[expd[i]]
+                var k = 0usize
+                while k < q {
+                    pt0[b * ng * q + gi * q + k] += c.h[k * c.n + perm[i]]
+                    k += 1usize
+                }
+                i += 1usize
+            }
+            b += 1usize
+        }
+        pt = pt0
+    }
+    if allsmall {
+        mem.reset(a, start)
+        ret (0.0f64, 0.0f64, false, ok)
+    }
+    var sp = SpC { num: lv == 0usize, g: ng, q: q, m: m, mb: f64(mb), f1: f1, f2: f2, ei: ei, ci: ci, maxst: c.maxst, nres: c.nres, ml: ml, mex: mex, mbl: mbl, mp: mp, cv: cv, dd: dd, ls: ml, best: 0.0f64, bmax: bmax }
+    var bi = 0usize
+    while bi < c.nres {
+        bmax[bi] = 0.0f64
+        bi += 1usize
+    }
+    let ecr = cut_run(a, &sp, gl, cg, pt)
+    if ecr != ok { ret (0.0f64, 0.0f64, false, ecr) }
+    var lp = 0.0f64
+    if c.nres > 0usize {
+        var greater = 0usize
+        bi = 0usize
+        while bi < c.nres {
+            if bmax[bi] > sp.best { greater += 1usize }
+            bi += 1usize
+        }
+        lp = dist.log1p(0.0f64 - f64(greater) / f64(c.nres))
+    }
+    mem.reset(a, start)
+    var sm = sp.best
+    if sm < 2.220446049250313e-16f64 { sm = 2.220446049250313e-16f64 }
+    ret (math.log[f64](sm), lp, true, ok)
+}
+
+// (log statistic, log(1 - p), valid): the test of predictor j on the subset; mb is the node's minbucket (only splittest = TRUE reads it)
+fn test_var(a: *mem.Arena, c: *const Ctx, sub: []const usize, j: usize, mb: usize) -> (f64, f64, bool, err) {
+    if c.spl {
+        let (ls0, lp0, v0, e0) = test_split(a, c, sub, j, mb)
+        ret (ls0, lp0, v0, e0)
+    }
     let start = mem.mark(a)
     let q = c.q
     let m = sumw(c, sub)
@@ -226,14 +801,39 @@ fn test_var(a: *mem.Arena, c: *const Ctx, sub: []const usize, j: usize) -> (f64,
         u += 1usize
     }
     if allsmall {
+        let eb = burn_perms(a, c, sub)
+        if eb != ok { ret (0.0f64, 0.0f64, false, eb) }
         mem.reset(a, start)
         ret (0.0f64, 0.0f64, false, ok)
+    }
+    if c.nres > 0usize {
+        let (lpm, stm, em) = mc_plain(a, c, sub, j, d, cov, dim, np, pidx, pres, cnt, ei)
+        mem.reset(a, start)
+        if em != ok { ret (0.0f64, 0.0f64, false, em) }
+        var sm0 = stm
+        if sm0 < 2.220446049250313e-16f64 { sm0 = 2.220446049250313e-16f64 }
+        ret (math.log[f64](sm0), lpm, true, ok)
+    }
+    if c.maxst && dim != 1usize {
+        var mxs = 0.0f64
+        u = 0usize
+        while u < dim {
+            if cov[u * dim + u] > tolv() {
+                let t = math.abs[f64](d[u] / math.sqrt[f64](cov[u * dim + u]))
+                if t > mxs { mxs = t }
+            }
+            u += 1usize
+        }
+        let (lpm, em) = maxtype_lp(a, c, cov, mxs, dim)
+        mem.reset(a, start)
+        if em != ok { ret (0.0f64, 0.0f64, false, em) }
+        if mxs < 2.220446049250313e-16f64 { mxs = 2.220446049250313e-16f64 }
+        ret (math.log[f64](mxs), lpm, true, ok)
     }
     let (stat, rank, e8) = quad(a, cov, d, dim)
     mem.reset(a, start)
     if e8 != ok { ret (0.0f64, 0.0f64, false, e8) }
     if rank == 0usize { ret (0.0f64, 0.0f64, false, ok) }
-    if c.maxst && dim != 1usize { ret (0.0f64, 0.0f64, false, mem.Full) }
     let lp = nm.pchisq(stat, f64(rank), true, true)
     var sm = stat
     if c.maxst { sm = math.sqrt[f64](stat) }
@@ -321,7 +921,7 @@ fn find_split(a: *mem.Arena, c: *const Ctx, sub: []const usize, j: usize, mb: us
                     }
                     k += 1usize
                 }
-                let (st, rk, e7) = quad(a, cov, dd, q)
+                let (st, rk, e7) = split_stat(a, c, cov, dd, q)
                 if e7 != ok { ret (res, e7) }
                 if st > maxstat {
                     maxstat = st
@@ -410,7 +1010,7 @@ fn find_split(a: *mem.Arena, c: *const Ctx, sub: []const usize, j: usize, mb: us
                 }
                 k += 1usize
             }
-            let (st, rk, e7) = quad(a, cov, dd, q)
+            let (st, rk, e7) = split_stat(a, c, cov, dd, q)
             if e7 != ok { ret (res, e7) }
             if st > maxstat {
                 maxstat = st
@@ -576,24 +1176,39 @@ fn grow(a: *mem.Arena, c: *const Ctx, ctl: *const Ctl, o: *Out, rg: *rr.Rng, sub
     // mtry: the variables tried at this node are a random draw (R's .resample with prob, drawn before any test)
     let (usev, e12) = mem.alloc[bool](a, c.p)
     if e12 != ok { ret (id, mem.Full) }
+    // maxvar: once that many variables have split somewhere in the tree (depth-first, as R's shared splitvars), only those stay candidates
+    var nsv = 0usize
     var j = 0usize
     while j < c.p {
-        usev[j] = true
+        if o.sv[j] { nsv += 1usize }
         j += 1usize
     }
-    if ctl.mtry > 0usize && ctl.mtry < 1000000usize {
+    let (sl, e14) = mem.alloc[usize](a, c.p)
+    if e14 != ok { ret (id, mem.Full) }
+    var nsl = 0usize
+    j = 0usize
+    while j < c.p {
+        usev[j] = false
+        if nsv < ctl.maxvar || o.sv[j] {
+            usev[j] = true
+            sl[nsl] = j
+            nsl += 1usize
+        }
+        j += 1usize
+    }
+    if ctl.mtry > 0usize && ctl.mtry < 1000000usize && nsl > 0usize {
         var mt = ctl.mtry
-        if mt > c.p { mt = c.p }
+        if mt > nsl { mt = nsl }
         j = 0usize
         while j < c.p {
             usev[j] = false
             j += 1usize
         }
-        let (pick, e13) = sample_prob(a, rg, c.p, mt)
+        let (pick, e13) = sample_prob(a, rg, nsl, mt)
         if e13 != ok { ret (id, e13) }
         j = 0usize
         while j < mt {
-            usev[pick[j]] = true
+            usev[sl[pick[j]]] = true
             j += 1usize
         }
     }
@@ -604,7 +1219,7 @@ fn grow(a: *mem.Arena, c: *const Ctx, ctl: *const Ctl, o: *Out, rg: *rr.Rng, sub
         lp[j] = 0.0f64
         okv[j] = false
         if usev[j] {
-            let (s1, p1, v1, et) = test_var(a, c, sub, j)
+            let (s1, p1, v1, et) = test_var(a, c, sub, j, mb)
             if et != ok { ret (id, et) }
             ls[j] = s1
             lp[j] = p1
@@ -725,6 +1340,8 @@ fn grow(a: *mem.Arena, c: *const Ctx, ctl: *const Ctl, o: *Out, rg: *rr.Rng, sub
     }
     if chosen == c.p { ret (id, ok) }
     o.vr[k] = i64(chosen + 1usize)
+    o.sv[chosen] = true
+    o.stat[k] = math.exp[f64](ls[chosen])
     var bk = sp.brk
     var isord = false
     if ctl.ord.len > chosen { isord = ctl.ord[chosen] }
@@ -804,7 +1421,7 @@ fn ctree(a: *mem.Arena, x: []const f64, n: usize, p: usize, nl: []const usize, y
     var none: []const usize = zero
     var none2: []const bool = zero
     var none4: []const f64 = zero
-    let xo = Xo { statcrit: false, maxst: false, setlog: false, logmin: 0.0f64, ord: none2, w: none4 }
+    let xo = Xo { statcrit: false, maxst: false, setlog: false, logmin: 0.0f64, ord: none2, w: none4, nres: 0usize, spl: false, mtry: 0usize, maxvar: 1000000usize }
     let (o, e) = ctree_core(a, x, n, p, nl, y, yl, minsplit, minbucket, minprob, alpha, bonf, maxdepth, stump, inter, 0usize, &rg, none, &xo)
     ret (o, e)
 }
@@ -813,11 +1430,37 @@ fn ctree(a: *mem.Arena, x: []const f64, n: usize, p: usize, nl: []const usize, y
 // ctree with the extended controls: w the case weights per row (empty = 1; the weighted sums are accumulated per row as libcoin does, so exact ties between cut points fall as in R; a zero weight drops the row from growing
 // while it stays in x for the intersplit neighbour), xo the criterion options; mincrit is mincriterion (1 - alpha unless testtype is Teststatistic)
 fn ctree_x(a: *mem.Arena, x: []const f64, n: usize, p: usize, nl: []const usize, y: []const f64, yl: usize, minsplit: usize, minbucket: usize, minprob: f64, mincrit: f64, bonf: bool, maxdepth: usize, stump: bool, inter: bool, w: []const f64, xo: *const Xo) -> (Out, err) {
+    let (o, e) = ctree_xs(a, x, n, p, nl, y, yl, minsplit, minbucket, minprob, mincrit, bonf, maxdepth, stump, inter, w, xo, 1i64)
+    ret (o, e)
+}
+
+// ctree_x with R's set.seed(seed) in force: the maximum statistic's p values draw from the stream
+fn ctree_xs(a: *mem.Arena, x: []const f64, n: usize, p: usize, nl: []const usize, y: []const f64, yl: usize, minsplit: usize, minbucket: usize, minprob: f64, mincrit: f64, bonf: bool, maxdepth: usize, stump: bool, inter: bool, w: []const f64, xo: *const Xo, seed: i64) -> (Out, err) {
     var rg: rr.Rng = zero
+    rr.seed(&rg, seed)
     var none: []const usize = zero
-    let xo2 = Xo { statcrit: xo.statcrit, maxst: xo.maxst, setlog: xo.setlog, logmin: xo.logmin, ord: xo.ord, w: w }
+    let xo2 = Xo { statcrit: xo.statcrit, maxst: xo.maxst, setlog: xo.setlog, logmin: xo.logmin, ord: xo.ord, w: w, nres: xo.nres, spl: xo.spl, mtry: xo.mtry, maxvar: xo.maxvar }
     let (o, e) = ctree_core(a, x, n, p, nl, y, yl, minsplit, minbucket, minprob, 1.0f64 - mincrit, bonf, maxdepth, stump, inter, 0usize, &rg, none, &xo2)
     ret (o, e)
+}
+
+// ctree_xs that also returns the node of every training row as partykit stores it at fit time: fitted_node on all rows with the stream where the growing left it (rows that meet an unseen level draw their kid)
+fn ctree_xsf(a: *mem.Arena, x: []const f64, n: usize, p: usize, nl: []const usize, y: []const f64, yl: usize, minsplit: usize, minbucket: usize, minprob: f64, mincrit: f64, bonf: bool, maxdepth: usize, stump: bool, inter: bool, w: []const f64, xo: *const Xo, seed: i64, fit: []usize) -> (Out, err) {
+    var rg: rr.Rng = zero
+    rr.seed(&rg, seed)
+    var none: []const usize = zero
+    let xo2 = Xo { statcrit: xo.statcrit, maxst: xo.maxst, setlog: xo.setlog, logmin: xo.logmin, ord: xo.ord, w: w, nres: xo.nres, spl: xo.spl, mtry: xo.mtry, maxvar: xo.maxvar }
+    let (o, e) = ctree_core(a, x, n, p, nl, y, yl, minsplit, minbucket, minprob, 1.0f64 - mincrit, bonf, maxdepth, stump, inter, 0usize, &rg, none, &xo2)
+    if e != ok { ret (o, e) }
+    let (allrows, e2) = mem.alloc[usize](a, n)
+    if e2 != ok { ret (o, e2) }
+    var i = 0usize
+    while i < n {
+        allrows[i] = i
+        i += 1usize
+    }
+    let ef = fitted_rec(a, &o, nl, x, n, 1usize, allrows, fit, &rg)
+    ret (o, ef)
 }
 
 // ctree grown on the rows ini (all rows when empty) with mtry variables drawn from rg at every node (0 = all), as cforest grows each tree
@@ -884,6 +1527,14 @@ fn ctree_core(a: *mem.Arena, x: []const f64, n: usize, p: usize, nl: []const usi
     o.prob1 = p1
     o.maxlev = ml
     o.count = 0usize
+    let (svb, e15) = mem.alloc[bool](a, p)
+    if e15 != ok { ret (o, e15) }
+    i = 0usize
+    while i < p {
+        svb[i] = false
+        i += 1usize
+    }
+    o.sv = svb
     let (wts, e12) = mem.alloc[f64](a, n)
     if e12 != ok { ret (o, e12) }
     i = 0usize
@@ -892,10 +1543,14 @@ fn ctree_core(a: *mem.Arena, x: []const f64, n: usize, p: usize, nl: []const usi
         if xo.w.len > 0usize { wts[i] = xo.w[i] }
         i += 1usize
     }
-    let c = Ctx { x: x, n: n, p: p, nl: nl, h: h, q: q, yl: yl, y: y, maxst: xo.maxst, wt: wts }
+    var lat: mvt.Lat = zero
+    if xo.maxst { mvt.load_lattice(&lat) }
+    let c = Ctx { x: x, n: n, p: p, nl: nl, h: h, q: q, yl: yl, y: y, maxst: xo.maxst, wt: wts, rg: rg, lat: &lat, nres: xo.nres, spl: xo.spl }
+    var mt0 = mtry
+    if xo.mtry > 0usize { mt0 = xo.mtry }
     var lgm = math.log[f64](1.0f64 - alpha)
     if xo.setlog { lgm = xo.logmin }
-    let ctl = Ctl { minsplit: minsplit, minbucket: minbucket, minprob: minprob, logmin: lgm, bonf: bonf, maxdepth: maxdepth, stump: stump, splittry: 2usize, mtry: mtry, inter: inter, statcrit: xo.statcrit, ord: xo.ord }
+    let ctl = Ctl { minsplit: minsplit, minbucket: minbucket, minprob: minprob, logmin: lgm, bonf: bonf, maxdepth: maxdepth, stump: stump, splittry: 2usize, mtry: mt0, maxvar: xo.maxvar, inter: inter, statcrit: xo.statcrit, ord: xo.ord }
     var ns = 0usize
     i = 0usize
     while i < n {
@@ -1036,7 +1691,7 @@ fn cforest(a: *mem.Arena, x: []const f64, n: usize, p: usize, nl: []const usize,
     var rg: rr.Rng = zero
     var none3: []const bool = zero
     var none5: []const f64 = zero
-    let xo0 = Xo { statcrit: false, maxst: false, setlog: false, logmin: 0.0f64, ord: none3, w: none5 }
+    let xo0 = Xo { statcrit: false, maxst: false, setlog: false, logmin: 0.0f64, ord: none3, w: none5, nres: 0usize, spl: false, mtry: 0usize, maxvar: 1000000usize }
     rr.seed(&rg, seed)
     let size = usize(math.floor[f64](f64(n) * 0.632f64))
     let (rw, e1) = mem.alloc[usize](a, ntree * size)

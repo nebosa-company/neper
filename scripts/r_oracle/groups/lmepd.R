@@ -3,6 +3,8 @@
 # X[n*p] column-major, 100 pd + qz, Z[n*qz], then per variance term c(kind, nstr, v[n])); pd: 1 pdDiag, 2 pdIdent, 3 pdCompSymm.
 # Output vector: coef (p), sigma, logLik, AIC, BIC, random-effect sd (qz), random-effect correlations (lower triangle by columns), natural correlation
 # parameters, natural variance parameters, se (p), ranef (group-major, first three groups). No intervals (nlme's var-cov intervals are not compared for these classes).
+# Measured on R 4.6.1 / nlme 3.1.169 (Orthodont, ML, only the corAR1 start value changed 0.05 / 0.2 / 0.4): lme estimates spread by 6e-6 relative with pdSymm + corAR1 and
+# 1.1e-6 with pdDiag + corAR1 + varPower (logLik 6e-11), so R's own stopping point is the limit of any reference taken from one lme run.
 # R's lme (nlminb, msTol 1e-12) stops about 1e-6 from the optimum of the likelihood, so the estimates carry rel 2e-4 / abs 1e-5 and logLik, AIC, BIC 1e-9
 # (the likelihood is flat at its optimum, second order in that distance); the BLUPs move ~1e-5 with it: rel 5e-4 / abs 2e-4.
 suppressMessages(library(nlme))

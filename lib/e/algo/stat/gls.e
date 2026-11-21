@@ -358,6 +358,67 @@ fn start_pars(s: *const Spec, par: []f64) {
 }
 
 // profile fit at the parameter vector par: coef (p), xtxi (p by p) receive the estimates
+// inverse of r (into si, zero outside the blocks) and its log-determinant, block by block over the groups; NaN when the groups do not tile n or a
+// block is singular, and the caller then inverts the whole matrix (an n x n Gauss-Jordan costs n^4, the blocks ng * m^4)
+fn block_inv(a: *mem.Arena, s: *const Spec, r: []const f64, si: []f64) -> f64 {
+    let n = s.n
+    var tot = 0usize
+    var mx = 0usize
+    var k = 0usize
+    while k < s.ng {
+        let m = usize(s.gs[k])
+        tot += m
+        if m > mx { mx = m }
+        k += 1usize
+    }
+    if tot != n || s.ng < 2usize { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n * n {
+        si[i] = 0.0f64
+        i += 1usize
+    }
+    let st = mem.mark(a)
+    let (bm, e1) = mem.alloc[f64](a, mx * mx)
+    let (bi, e2) = mem.alloc[f64](a, mx * mx)
+    if e1 != ok || e2 != ok {
+        mem.reset(a, st)
+        ret 0.0f64 / 0.0f64
+    }
+    var ld = 0.0f64
+    var o = 0usize
+    k = 0usize
+    while k < s.ng {
+        let m = usize(s.gs[k])
+        i = 0usize
+        while i < m {
+            var j = 0usize
+            while j < m {
+                bm[i * m + j] = r[(o + i) * n + o + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        if !ps.invert(a, bm[0usize..m * m], m, bi[0usize..m * m]) {
+            mem.reset(a, st)
+            ret 0.0f64 / 0.0f64
+        }
+        ld += ps.logdet(a, bm[0usize..m * m], m)
+        i = 0usize
+        while i < m {
+            var j = 0usize
+            while j < m {
+                si[(o + i) * n + o + j] = bi[i * m + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        o += m
+        k += 1usize
+    }
+    mem.reset(a, st)
+    ret ld
+}
+
 fn core(a: *mem.Arena, s: *const Spec, par: []const f64, coef: []f64, xtxi: []f64) -> Fit {
     let n = s.n
     let p = s.p
@@ -385,7 +446,11 @@ fn core(a: *mem.Arena, s: *const Spec, par: []const f64, coef: []f64, xtxi: []f6
         i += 1usize
     }
     if s.q > 0usize { add_re(s, par[0usize..nr], r) }
-    if !ps.invert(a, r, n, si) { ret bad }
+    var ldet = block_inv(a, s, r, si)
+    if ldet != ldet {
+        if !ps.invert(a, r, n, si) { ret bad }
+        ldet = ps.logdet(a, r, n)
+    }
     var j = 0usize
     while j < p {
         i = 0usize
@@ -460,7 +525,6 @@ fn core(a: *mem.Arena, s: *const Spec, par: []const f64, coef: []f64, xtxi: []f6
     }
     let nf = f64(n)
     let pf = f64(p)
-    let ldet = ps.logdet(a, r, n)
     let two_pi = 2.0f64 * 3.141592653589793f64
     if s.reml {
         let s2 = rss / (nf - pf)

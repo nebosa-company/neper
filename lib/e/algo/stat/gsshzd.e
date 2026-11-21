@@ -607,7 +607,7 @@ fn hz_trace_id(r: []const f64, id: []const usize, nt: usize, nxi: usize) -> f64 
 }
 
 // msphzd for the nq kernels (blocks of nt by nxi in rk, of na by nxi in qrk)
-fn msphzd(a: *mem.Arena, s: []const f64, rk: []const f64, id: []const usize, nobs: usize, qs: []const f64, qrk: []const f64, qdwt: []const f64, nt: usize, nxi: usize, nnull: usize, na: usize, nq: usize, prec: f64, maxiter: usize, alpha: f64, skip: bool, out: *HzFit) -> err {
+fn msphzd(a: *mem.Arena, s: []const f64, rk: []const f64, id: []const usize, nobs: usize, qs: []const f64, qrk: []const f64, qdwt: []const f64, nt: usize, nxi: usize, nnull: usize, na: usize, nq: usize, prec: f64, maxiter: usize, alpha: f64, skip: bool, fix: []const f64, out: *HzFit) -> err {
     let sz = nt * nxi
     let qsz = na * nxi
     let nxis = nxi + nnull
@@ -747,6 +747,15 @@ fn msphzd(a: *mem.Arena, s: []const f64, rk: []const f64, id: []const usize, nob
             }
         }
     }
+    // fix = R's converged [lambda, theta.. (the estimate), theta.. (the last point nlm evaluated)]: the fit at those values, no search (the nlm search stops on rounding-dependent points)
+    if fix.len > 0usize && nq > 1usize && !skip {
+        est = fix[0usize]
+        i = 0usize
+        while i < nq {
+            theta[i] = fix[1usize + i]
+            i += 1usize
+        }
+    }
     cx.lambda = est
     out.nxi = nxi
     out.nnull = nnull
@@ -782,7 +791,8 @@ fn msphzd(a: *mem.Arena, s: []const f64, rk: []const f64, id: []const usize, nob
     let (rw5, eg) = hz_comb(a, rk, sz, nq, theta)
     if eg != ok { ret eg }
     cx.rwk = rw5
-    let tmp = gss.absf(cvm(&cx, theta))
+    let c0 = cvm(&cx, theta)
+    let tmp = gss.absf(c0)
     if cx.bad { ret den.DenDiverge }
     if tmp < 1.0f64 && tmp > 0.0001f64 { cx.scale = 10.0f64 / tmp }
     if tmp < 0.0001f64 {
@@ -790,8 +800,20 @@ fn msphzd(a: *mem.Arena, s: []const f64, rk: []const f64, id: []const usize, nob
         cx.shift = 10.0f64
     }
     var counter = 0usize
-    var searching = true
-    var fv = 0.0f64
+    var searching = fix.len == 0usize
+    var fv = cx.scale * c0 + cx.shift
+    if fix.len > 0usize {
+        // R keeps the c and d of the last evaluation of nlm, not of its estimate: fix carries that point after the estimate
+        let (tl, etl) = den.zeros(a, nq)
+        if etl != ok { ret etl }
+        i = 0usize
+        while i < nq {
+            tl[i] = fix[1usize + nq + i]
+            i += 1usize
+        }
+        let _ = cvm(&cx, tl)
+        if cx.bad { ret den.DenDiverge }
+    }
     while searching {
         let r = nlm.nlm[CvH](a, &cx, cvm_wk, theta, 100usize, 7i64, 1.0f64)
         fv = r.fv
@@ -839,7 +861,7 @@ fn hz_terms(a: *mem.Arena, model: usize, lo: []const f64, hi: []const f64, x: []
 
 // sshzd: tend (nobs) the follow-up times, status (nobs) 1 for a failure, xc (nobs) the covariate (models 2 and 3), idp the 0-based positions among the failures of the nxi
 // basis cases
-fn sshzd(a: *mem.Arena, model: usize, nobs: usize, tend: []const f64, status: []const f64, xc: []const f64, idp: []const usize, nxi: usize, alpha: f64, prec: f64, maxiter: usize, skip: bool, out: *HzFit) -> err {
+fn sshzd(a: *mem.Arena, model: usize, nobs: usize, tend: []const f64, status: []const f64, xc: []const f64, idp: []const usize, nxi: usize, alpha: f64, prec: f64, maxiter: usize, skip: bool, fix: []const f64, out: *HzFit) -> err {
     var dim = 2usize
     if model == 1usize { dim = 1usize }
     var nt = 0usize
@@ -970,7 +992,7 @@ fn sshzd(a: *mem.Arena, model: usize, nobs: usize, tend: []const f64, status: []
     out.xb = xb
     out.lo = lo
     out.hi = hi
-    try msphzd(a, s, rk, idp, nobs, qs, qrk, qdwt, nt, nxi, nnull, na, nq, prec, maxiter, alpha, skip, out)
+    try msphzd(a, s, rk, idp, nobs, qs, qrk, qdwt, nt, nxi, nnull, na, nq, prec, maxiter, alpha, skip, fix, out)
     ret ok
 }
 

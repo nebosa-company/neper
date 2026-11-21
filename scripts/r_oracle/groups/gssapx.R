@@ -2,6 +2,8 @@
 # model as in the gss group (1-3 cubic, 4-6 thin-plate marginals, 7 a two-dimensional thin-plate), method 1 "u" (varht 1), 2 "v", 3 "m" (GML); seed > 0: id.basis is sample(n, nb) after set.seed(seed) (idb is then ignored),
 # otherwise idb (1-based) is given; idx 0 nlambda, 1 score, 2 varht, 3 .. 3 + nq - 1 theta, then the d vector, then the m predictions and the m standard errors (predict se.fit).
 suppressMessages(library(gss))
+# Searches that are not here: the GML search (method m, nlm0 on a flat score stops on a rounding-dependent neighbour of R's point, 1e-3) and the nlm search over several
+# theta (flat directions, rounding noise in 10^x picks the path, 3e-3 to 5e-2) cannot be matched to the digit; the same fits are in gssfix at R's own converged nlambda and theta, at 1e-9.
 cases <- list()
 add <- function(args, want, tol, ab) cases[[length(cases) + 1]] <<- case("ap", args, want, rel = tol, abs = ab)
 nqof <- c(1, 2, 5, 1, 2, 5, 1); n0of <- c(2, 3, 4, 2, 3, 4, 3)
@@ -33,24 +35,15 @@ run <- function(model, method, alpha, n, nb, skip) {
   args <- c(model, method, alpha, n, nb, m, skip, as.vector(X), y, idb, as.vector(as.matrix(xo)))
   vals <- c(fit$nlambda, fit$score, fit$varht, fit$theta, fit$d, pr$fit, pr$se.fit, if (skip >= 2) c(nb, sum(idb), sum(idb * seq_along(idb)), idb[1], idb[nb]))
   nv <- length(vals)
-  # nlm0 and the fits at a given theta are deterministic to the 1e-7 bracket of the search (nlambda 1e-4 absolute, the rest 1e-7); the nlm search over several theta ends along flat
-  # directions where rounding noise (10^x from another libm) picks the path: there theta is compared to 0.05 and the rest to 3e-3 relative
+  # nlm0 for one smoothing parameter (methods u and v) is deterministic to the 1e-7 bracket of the search: nlambda 1e-4 absolute, the rest 1e-7
   tol <- rep(1e-7, nv); ab <- rep(1e-9, nv)
-  ab[1] <- 1e-4; ab[4:(3 + nq)] <- if (nq > 1 && skip == 0) 0.05 else 1e-9
-  if (nq > 1 && skip == 0) { tol[2:nv] <- 3e-3; fl <- which(fit$theta < -5); if (length(fl)) ab[3 + fl] <- 2 }   # a theta below -5 is a term switched off: its size is noise
-  # GML (method 3) is a flat score: nlm0 stops on a 1e-6 relative neighbour of R's point, and the nlm search over several theta wanders (theta 0.3, rest 5e-2 relative)
-  if (method == 3) { tol[] <- 1e-3; if (nq > 1 && skip == 0) { tol[2:nv] <- 5e-2; ab[4:(3 + nq)] <- 0.3; fl <- which(fit$theta < -5); if (length(fl)) ab[3 + fl] <- 2 } }
+  ab[1] <- 1e-4
   for (k in seq_along(vals)) add(c(args, k - 1), vals[k], tol[k], ab[k])
   invisible(TRUE)
 }
 ok1 <- function(model, method, alpha, lo, hi, skip = 0) { for (t in 1:20) { n <- sample(lo:hi, 1); if (!isFALSE(run(model, method, alpha, n, 30, skip))) break } }
 set.seed(20261123)
 for (model in c(1, 4)) for (mt in 1:2) for (al in c(1, 1.4)) ok1(model, mt, al, 40, 70)
-for (model in c(2, 5, 7)) for (mt in 1:2) ok1(model, mt, 1.4, 40, 65)
-for (model in c(3, 6)) for (mt in 1:2) ok1(model, mt, 1.4, 45, 70)
-for (model in c(2, 3, 5, 6)) for (mt in 1:2) ok1(model, mt, 1.4, 40, 60, 1)
+for (mt in 1:2) ok1(7, mt, 1.4, 40, 65)
 for (mt in 1:2) { set.seed(900 + mt); run(1, mt, 1.4, 150, 30, 4000 + mt) }
-for (model in 1:7) ok1(model, 3, 1.4, 40, 60)
-for (model in c(2, 5)) ok1(model, 3, 1.4, 40, 60, 1)
-set.seed(910); run(1, 3, 1.4, 150, 30, 4003)
 emit("gssapx", "gss", list(cases))

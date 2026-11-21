@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R grf`; the layout is at the top of scripts/r_oracle/groups/grf.R.
 
 use e.algo.rand.r as rng
+use e.algo.stat.fpc as fp
 use e.algo.stat.grf as grf
 use e.io
 use e.math
@@ -874,7 +875,37 @@ fn llforest(a: *mem.Arena, c: *const oracle.Case, out: []f64) -> err {
             bb[r] = bacc
             r += 1usize
         }
-        grf.solve_sym(mm, bb, beta, k)
+        // R: solve(t(D) %*% D + lambda J) %*% t(D) %*% Y, the inverse by dgetrf2/dgetrs, then two reference products summed in order
+        let (inv, ie) = mem.alloc[f64](a, k * k)
+        if ie != ok { ret ie }
+        let (m2, m2e) = mem.alloc[f64](a, k * n)
+        if m2e != ok { ret m2e }
+        let le = fp.lu_inverse(a, mm, k, inv)
+        if le != ok { ret le }
+        r = 0usize
+        while r < k {
+            var j = 0usize
+            while j < n {
+                var acc = 0.0f64
+                var l = 0usize
+                while l < k {
+                    var dl = 1.0f64
+                    if l > 0usize { dl = xd[j * p + l - 1usize] }
+                    acc += inv[r * k + l] * dl
+                    l += 1usize
+                }
+                m2[r * n + j] = acc
+                j += 1usize
+            }
+            var bt = 0.0f64
+            j = 0usize
+            while j < n {
+                bt += m2[r * n + j] * yv[j]
+                j += 1usize
+            }
+            beta[r] = bt
+            r += 1usize
+        }
         o.kind = 3usize
         o.ll_lambda = ll_split_lambda
         o.ll_wpen = ll_split_wpen

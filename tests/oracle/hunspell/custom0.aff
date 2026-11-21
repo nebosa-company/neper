@@ -1,0 +1,50 @@
+SET UTF-8
+FLAG long
+TRY aeioutrnslEAI
+KEY qwertyuiop|asdfghjkl|zxcvbnm
+WORDCHARS ’-
+IGNORE ·
+KEEPCASE Kc
+FORBIDDENWORD Fw
+NOSUGGEST Ns
+NEEDAFFIX Na
+WARN Wr
+SUGSWITHDOTS
+MAXNGRAMSUGS 3
+MAXDIFF 5
+ICONV 1
+ICONV ’ '
+OCONV 2
+OCONV ' ’
+OCONV ae æ
+MAP 3
+MAP aáà
+MAP eéè
+MAP (ss)ß
+REP 5
+REP ^teh the
+REP ie$ y
+REP f ph
+REP ^_a a_the
+REP ough uff
+BREAK 3
+BREAK -
+BREAK ^#
+BREAK #$
+PFX Re Y 1
+PFX Re 0 re .
+PFX Un Y 1
+PFX Un 0 un [^aeiou]
+SFX Ss Y 2
+SFX Ss y ies [^aeiou]y
+SFX Ss 0 s [^y]
+SFX Ng Y 2
+SFX Ng e ing e
+SFX Ng 0 ing [^e]
+SFX Ed N 2
+SFX Ed e ed e
+SFX Ed 0 ed [^e]
+SFX Ly Y 1
+SFX Ly 0 ly .
+SFX Mm Y 1
+SFX Mm 0 's .

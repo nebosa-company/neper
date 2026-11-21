@@ -77,7 +77,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             cache_len = fit_vec(a, c.args, cache)
             cache_key = c.args
         }
-        let q = usize(c.args[1usize])
+        var q = usize(c.args[1usize])
+        if q >= 1000usize { q -= 1000usize }
         if cache_len > q { got = cache[q] }
         mem.reset(a, st)
         if !oracle.agrees(got, c) {

@@ -3134,7 +3134,8 @@ fn cvm_wk(c: *Cvm, theta: []const f64) -> f64 { ret c.scale * cvm(c, theta) + c.
 // mspreg1: rs holds the nq kernels r_i (nobs by nxi) one after the other, id the 0-based rows of the basis; method 1 'u', 2 'v'
 fn mspreg1(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, nobs: usize, n0: usize, nxi: usize, method: usize, alpha: f64, varht: f64, skip: bool, out: *Ss1) -> err {
     var w: []const f64 = zero
-    try mspreg1w(a, s, rs, id, nq, y, w, nobs, n0, nxi, method, alpha, varht, skip, out)
+    var nofix: []const f64 = zero
+    try mspreg1w(a, s, rs, id, nq, y, w, nobs, n0, nxi, method, alpha, varht, skip, nofix, out)
     ret ok
 }
 
@@ -3171,7 +3172,7 @@ fn sspreg1w(a: *mem.Arena, s: []const f64, r: []const f64, q: []const f64, y: []
 }
 
 // mspreg1 with case weights w (empty: none)
-fn mspreg1w(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, w: []const f64, nobs: usize, n0: usize, nxi: usize, method: usize, alpha: f64, varht: f64, skip: bool, out: *Ss1) -> err {
+fn mspreg1w(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, w: []const f64, nobs: usize, n0: usize, nxi: usize, method: usize, alpha: f64, varht: f64, skip: bool, fix: []const f64, out: *Ss1) -> err {
     let sz = nobs * nxi
     let (theta, e1) = zeros(a, nq)
     let (rwk, e2) = zeros(a, sz)
@@ -3281,12 +3282,21 @@ fn mspreg1w(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, n
     }
     var z2: Ss1 = zero
     try sspreg1w(a, s, rwk, q1, y, w, nobs, n0, nxi, method, alpha, varht, &z2)
-    let nlambda = z2.nlambda
+    var nlambda = z2.nlambda
     i = 0usize
     while i < nq {
         logth0[i] = logth0[i] + nlambda
         theta[i] = theta[i] + z2.theta[0usize]
         i += 1usize
+    }
+    // fix = R's converged [nlambda, theta..] of this call: the fit at those values, no search (the nlm search stops on rounding-dependent points)
+    if fix.len > 0usize {
+        nlambda = fix[0usize]
+        i = 0usize
+        while i < nq {
+            theta[i] = fix[1usize + i]
+            i += 1usize
+        }
     }
     if skip {
         // skip.iter = TRUE: the fit at the starting theta
@@ -3365,7 +3375,7 @@ fn mspreg1w(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, n
         cx.shift = 10.0f64
     }
     var counter = 0usize
-    var searching = true
+    var searching = fix.len == 0usize
     while searching {
         let r = nlm.nlm[Cvm](a, &cx, cvm_wk, theta, 100usize, 7i64, 1.0f64)
         if r.code <= 3i64 { searching = false } else {
@@ -3459,4 +3469,89 @@ fn predict1(f: *const Ss1, s1: []const f64, q1: []const f64, nq: usize, n0: usiz
         out[i] = sm
         i += 1usize
     }
+}
+
+// spfix: the fit at a given theta (log10 weight of each of the nq kernels in rs, nobs by nxi one after the other) and nlambda, no search:
+// R's converged values passed in, so the score, varht, c, d and everything built on them are the same least-squares problem as R's
+fn spfix(a: *mem.Arena, s: []const f64, rs: []const f64, id: []const usize, nq: usize, y: []const f64, nobs: usize, n0: usize, nxi: usize, method: usize, alpha: f64, varht: f64, theta_in: []const f64, nlambda: f64, out: *Ss1) -> err {
+    let sz = nobs * nxi
+    let nn = n0 + nxi
+    let (theta, e0) = zeros(a, nq)
+    let (rk, e1) = zeros(a, sz)
+    let (qk, e2) = zeros(a, nxi * nxi)
+    let (qm, e3) = zeros(a, nxi * nxi)
+    let (sr, e4) = zeros(a, nobs * nn)
+    let (dcf, e5) = zeros(a, nn)
+    let (vv, e6) = zeros(a, nn * nn)
+    let (jpb, e7) = mem.alloc[usize](a, nn + 1usize)
+    if e0 != ok { ret e0 }
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    if e7 != ok { ret e7 }
+    var i = 0usize
+    var t = 0usize
+    while i < nq {
+        theta[i] = theta_in[i]
+        let wq = pow10(theta_in[i])
+        t = 0usize
+        while t < sz {
+            rk[t] += wq * rs[i * sz + t]
+            t += 1usize
+        }
+        i += 1usize
+    }
+    let nl = pow10(nlambda)
+    var j = 0usize
+    while j < nxi {
+        i = 0usize
+        while i < nxi {
+            qm[i + j * nxi] = rk[id[i] + j * nobs]
+            qk[i + j * nxi] = nl * qm[i + j * nxi]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    t = 0usize
+    while t < nobs * n0 {
+        sr[t] = s[t]
+        t += 1usize
+    }
+    t = 0usize
+    while t < sz {
+        sr[nobs * n0 + t] = rk[t]
+        t += 1usize
+    }
+    var ro: RegOut = zero
+    try reg_fit(a, sr, nobs, n0, qk, nxi, y, method, alpha, varht, dcf, vv, jpb, &ro)
+    let (cc, e8) = zeros(a, nxi)
+    let (dd, e9) = zeros(a, n0)
+    if e8 != ok { ret e8 }
+    if e9 != ok { ret e9 }
+    i = 0usize
+    while i < nxi {
+        cc[i] = dcf[n0 + i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n0 {
+        dd[i] = dcf[i]
+        i += 1usize
+    }
+    out.c = cc
+    out.d = dd
+    out.theta = theta
+    out.nlambda = nlambda
+    out.score = ro.score
+    out.varht = ro.varht
+    out.v = vv
+    out.jp = jpb
+    out.rkv = ro.rkv
+    out.sw = s
+    out.rw = rk
+    out.qm = qm
+    ret ok
 }

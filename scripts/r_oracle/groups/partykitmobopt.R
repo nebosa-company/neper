@@ -8,7 +8,7 @@ suppressMessages(library(partykit))
 cases <- list()
 add <- function(fn, args, want, rel = 1e-9, abs = 1e-12) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
 set.seed(20261261)
-run <- function(n, kx, pz, nl, alpha, bonf, minsize, maxdepth, trim, vc, usew, useoff, usecl, ncl = 4, noise = 1.5) {
+run <- function(n, kx, pz, nl, alpha, bonf, minsize, maxdepth, trim, vc, usew, useoff, usecl, ncl = 4, noise = 1.5, wzero = FALSE) {
   Z <- lapply(seq_len(pz), function(j) if (nl[j] == 0) round(rnorm(n) * 5, if (j == 1) 0 else 1) else sample(0:(nl[j] - 1), n, TRUE))
   X <- lapply(seq_len(kx), function(j) round(rnorm(n) * 3, 1))
   g1 <- if (nl[1] == 0) as.numeric(Z[[1]] > median(Z[[1]])) else as.numeric(Z[[1]] %% 2)
@@ -16,6 +16,7 @@ run <- function(n, kx, pz, nl, alpha, bonf, minsize, maxdepth, trim, vc, usew, u
   eta <- 1 + 3 * g1 + 2 * g2
   for (j in seq_len(kx)) eta <- eta + (1 + 2 * g1 * (j == 1)) * X[[j]]
   w <- if (usew) sample(1:3, n, TRUE) else rep(1, n)
+  if (wzero) w[sample.int(n, max(2, n %/% 6))] <- 0
   off <- if (useoff) round(rnorm(n), 2) else rep(0, n)
   cl <- if (usecl) sample(0:(ncl - 1), n, TRUE) else rep(0, n)
   y <- round(eta + off + rnorm(n) * noise, 2)
@@ -56,6 +57,9 @@ run <- function(n, kx, pz, nl, alpha, bonf, minsize, maxdepth, trim, vc, usew, u
   cp <- as.constparty(t)
   add("lo", c(14, a0), sum(seq_len(n) * cp$fitted[["(fitted)"]]) + sum(cp$fitted[["(response)"]]))
 }
+# every 6th run is generated (so the random stream is unchanged) but not emitted: keeps the oracle file under 2 MB
+run0 <- run; ri <- 0
+run <- function(...) { n0 <- length(cases); ri <<- ri + 1; run0(...); if (ri %% 6 == 0) cases <<- cases[seq_len(n0)] }
 rep_i <- 0
 for (usew in c(FALSE, TRUE)) for (useoff in c(FALSE, TRUE)) for (usecl in c(FALSE, TRUE)) for (vc in 0:2) {
   if (!usew && !useoff && !usecl && vc == 0) next
@@ -66,5 +70,11 @@ for (usew in c(FALSE, TRUE)) for (useoff in c(FALSE, TRUE)) for (usecl in c(FALS
     run(n, kx, pz, nl, alpha = c(0.05, 0.2, 0.05)[(rep_i %% 3) + 1], bonf = rep_i %% 3 != 1, minsize = c(0, 10)[(rep_i %% 2) + 1],
         maxdepth = c(1000, 3)[(rep_i %% 2) + 1], trim = c(0.1, 0.2)[(rep_i %% 2) + 1], vc = vc, usew = usew, useoff = useoff, usecl = usecl)
   }
+}
+# zero case weights: partykit's fluctuation test divides the retained scores by the unfiltered weights, so the node stays a leaf (vcov opg and sandwich)
+for (r in 1:12) {
+  n <- sample(45:65, 1); kx <- sample(1:2, 1); pz <- sample(2:3, 1)
+  nl <- sapply(seq_len(pz), function(j) sample(c(0, 0, 2, 3), 1))
+  run(n, kx, pz, nl, alpha = 0.2, bonf = TRUE, minsize = 10, maxdepth = 1000, trim = 0.1, vc = c(0, 2)[(r %% 2) + 1], usew = TRUE, useoff = r %% 3 == 0, usecl = r %% 4 == 0, wzero = TRUE)
 }
 emit("partykitmobopt", "partykit", list(cases))

@@ -11,6 +11,7 @@
 // from the fit through every predict that follows, exactly as an R session does.
 
 use e.algo.rand.r as rng
+use e.algo.stat.armld as rfld
 use e.math
 use e.mem
 
@@ -57,33 +58,8 @@ fn rf_i64s(a: *mem.Arena, n: usize) -> ([]i64, err) {
 
 fn ux(i: i64) -> usize { ret usize(i) }
 
-// R's mean(): the sum, then one refinement pass on the residuals
-fn rf_mean(v: []const f64) -> f64 {
-    let n = f64(v.len)
-    var hi = 0.0f64
-    var lo = 0.0f64
-    var i = 0usize
-    while i < v.len {
-        let s = hi + v[i]
-        let bb = s - hi
-        lo += (hi - (s - bb)) + (v[i] - bb)
-        hi = s
-        i += 1usize
-    }
-    let m0 = (hi + lo) / n
-    var th = 0.0f64
-    var tl = 0.0f64
-    i = 0usize
-    while i < v.len {
-        let d = v[i] - m0
-        let s = th + d
-        let bb = s - th
-        tl += (th - (s - bb)) + (d - bb)
-        th = s
-        i += 1usize
-    }
-    ret m0 + (th + tl) / n
-}
+// R's mean(): the long double sum and its refinement pass, as in armld
+fn rf_mean(v: []const f64) -> f64 { ret rfld.mean_ld(v) }
 
 // R's R_qsort_I (Singleton's quicksort carrying an index vector), positions 0-based and inclusive: the order of equal keys is the one R leaves
 fn rf_qsort_i(v: []f64, ix: []i64, lo: i64, hi: i64) {
