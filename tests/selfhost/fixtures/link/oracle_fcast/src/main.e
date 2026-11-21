@@ -13,6 +13,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "bc") { ret fc.box_cox(x[0usize], x[1usize]) }
     if str.eq(c.name, "ibc") { ret fc.inv_box_cox(fc.box_cox(x[0usize], x[1usize]), x[1usize]) }
+    if str.eq(c.name, "guer") {
+        let gn = usize(x[1usize])
+        let (work, we) = mem.alloc[f64](a, gn + 1usize)
+        if we != ok { ret 0.0f64 / 0.0f64 }
+        ret fc.guerrero(x[2usize..2usize + gn], usize(x[0usize]), x[2usize + gn], x[3usize + gn], work)
+    }
+    if str.eq(c.name, "cro") {
+        let cn = usize(x[2usize])
+        let (fits, fe) = mem.alloc[f64](a, cn)
+        let (work, we) = mem.alloc[f64](a, 2usize * cn)
+        if fe != ok || we != ok { ret 0.0f64 / 0.0f64 }
+        let level = fc.croston(x[3usize..3usize + cn], x[1usize], usize(x[0usize]), fits, work)
+        let pos = usize(x[3usize + cn])
+        if pos == cn { ret level }
+        ret fits[pos]
+    }
     let n = usize(x[0usize])
     let (logx, e) = mem.alloc[f64](a, n)
     if e != ok { ret 0.0f64 / 0.0f64 }

@@ -10,7 +10,7 @@
 // choice, all, any, minOccurs and maxOccurs, element and attribute groups, extension and restriction
 // of complex and simple content, anyAttribute), ID uniqueness and IDREF resolution.
 // Refused at load (`Unsupported`): import, include, redefine, substitutionGroup, abstract, key, keyref,
-// unique, notation, xsi:type, and a pattern using \i \I \c \C, class subtraction or \p{...}.
+// unique, xsi:type, and a pattern using \i \I \c \C, class subtraction or \p{...}.
 // Limits stated honestly: `\d \w \s` in a pattern are the ASCII ones (the regex engine's); ordered facets
 // on date and time types compare as UTC when a value has no zone; the g* types, duration and QName do
 // not take ordered facets; and an element's content is matched by the particle tree, not by a compiled
@@ -32,7 +32,7 @@ const NONE: u32 = 4294967295u32
 const UNBOUNDED: u32 = 4294967295u32
 const ANY_TYPE: u32 = 39u32
 const ANY_SIMPLE_TYPE: u32 = 40u32
-const BUILTINS: usize = 41usize
+const BUILTINS: usize = 43usize
 
 type Variety = enum u8 { Atomic, List, Union }
 type ParticleKind = enum u8 { Element, Sequence, Choice, All, Any }
@@ -56,11 +56,11 @@ type TypeDef = struct {
 }
 
 type Particle = struct { kind: ParticleKind, min: u32, max: u32, element: u32, children: []u32, rule: str, rule_tns: str }
-type ElementDecl = struct { name: str, ns: str, type_index: u32, nillable: bool, has_fixed: bool, fixed: str }
+type ElementDecl = struct { name: str, ns: str, type_index: u32, nillable: bool, has_fixed: bool, fixed: str, has_default: bool, default_text: str }
 
 type Schema = struct {
     types: []TypeDef, type_count: usize, particles: []Particle, particle_count: usize,
-    elements: []ElementDecl, element_count: usize, roots: []u32, root_count: usize, target_namespace: str,
+    elements: []ElementDecl, element_count: usize, roots: []u32, root_count: usize, target_namespace: str, libxml2: bool,
 }
 
 type ErrorCode = enum u8 {
@@ -223,6 +223,9 @@ fn builtin_names() -> [39]str {
 fn builtin_index(local: str) -> u32 {
     if same(local, "anyType") { ret ANY_TYPE }
     if same(local, "anySimpleType") { ret ANY_SIMPLE_TYPE }
+    if same(local, "NOTATION") { ret 10u32 }
+    if same(local, "NMTOKENS") { ret 41u32 }
+    if same(local, "IDREFS") { ret 42u32 }
     let names = builtin_names()
     var i = 0usize
     while i < 39usize {
@@ -256,6 +259,20 @@ fn init_builtins(s: *Schema) {
     var any_simple = simple_def("anySimpleType", xs_namespace())
     any_simple.builtin = true
     s.types[40usize] = any_simple
+    var nmtokens = simple_def("NMTOKENS", xs_namespace())
+    nmtokens.variety = Variety.List
+    nmtokens.item = 6u32
+    nmtokens.base = ANY_SIMPLE_TYPE
+    nmtokens.facets.has_min_length = true
+    nmtokens.facets.min_length = 1u64
+    s.types[41usize] = nmtokens
+    var idrefs = simple_def("IDREFS", xs_namespace())
+    idrefs.variety = Variety.List
+    idrefs.item = 8u32
+    idrefs.base = ANY_SIMPLE_TYPE
+    idrefs.facets.has_min_length = true
+    idrefs.facets.min_length = 1u64
+    s.types[42usize] = idrefs
     s.type_count = BUILTINS
 }
 
@@ -270,7 +287,7 @@ fn new_particle(c: *Compiler, kind: ParticleKind, min: u32, max: u32) -> (u32, e
 fn new_element(c: *Compiler, name: str, ns: str, type_index: u32) -> (u32, err) {
     if c.s.element_count >= c.s.elements.len { ret (NONE, TooComplex) }
     let at = c.s.element_count
-    c.s.elements[at] = ElementDecl { name: name, ns: ns, type_index: type_index, nillable: false, has_fixed: false, fixed: "" }
+    c.s.elements[at] = ElementDecl { name: name, ns: ns, type_index: type_index, nillable: false, has_fixed: false, fixed: "", has_default: false, default_text: "" }
     c.s.element_count += 1usize
     ret (u32(at), ok)
 }
@@ -281,7 +298,7 @@ fn xs(c: *const Compiler, id: xml.NodeId, local: str) -> bool { ret is_named(c.d
 fn unsupported_marker(c: *const Compiler, id: xml.NodeId) -> bool {
     let (uri, local, e) = expand(c.d, id)
     if e != ok || !same(uri, xs_namespace()) { ret false }
-    ret same(local, "import") || same(local, "include") || same(local, "redefine") || same(local, "key") || same(local, "keyref") || same(local, "unique") || same(local, "notation")
+    ret same(local, "import") || same(local, "include") || same(local, "redefine") || same(local, "key") || same(local, "keyref") || same(local, "unique")
 }
 
 fn register(c: *Compiler, kind: u8, name: str, id: xml.NodeId, index: u32) -> err {
@@ -449,7 +466,7 @@ fn compile_pattern(c: *Compiler, groups: []const str) -> (regex.Regex, err) {
     if head_error != ok { ret (zero, head_error) }
     let (whole, whole_error) = str.concat(c.a, head, ")$")
     if whole_error != ok { ret (zero, whole_error) }
-    let (compiled, compile_error) = regex.compile(c.a, whole, regex.Options { case_insensitive: false, multiline: false, dot_matches_newline: true })
+    let (compiled, compile_error) = regex.compile(c.a, whole, regex.Options { case_insensitive: false, multiline: false, dot_matches_newline: false })
     if compile_error != ok { ret (zero, Unsupported) }
     ret (compiled, ok)
 }
@@ -864,6 +881,11 @@ fn fill_element(c: *Compiler, id: xml.NodeId, decl: u32) -> err {
         c.s.elements[usize(decl)].has_fixed = true
         c.s.elements[usize(decl)].fixed = fixed_text
     }
+    let (default_text, has_default) = attr(c.d, id, "default")
+    if has_default {
+        c.s.elements[usize(decl)].has_default = true
+        c.s.elements[usize(decl)].default_text = default_text
+    }
     ret ok
 }
 
@@ -1140,6 +1162,19 @@ fn compile_complex(c: *Compiler, id: xml.NodeId, index: u32) -> err {
 }
 
 // Compile a schema document. The result lives in `a`.
+// `load` for the libxml2 that R's xml2 links: its lexical quirks (see xsd.valid_mode) and no IDREF lookup.
+fn load_libxml2(a: *mem.Arena, source: []const u8) -> (Schema, err) {
+    let (s0, e) = load(a, source)
+    var s = s0
+    s.libxml2 = true
+    // libxml2 does not hold NMTOKENS or IDREFS to at least one item.
+    if e == ok {
+        s.types[41usize].facets.has_min_length = false
+        s.types[42usize].facets.has_min_length = false
+    }
+    ret (s, e)
+}
+
 fn load(a: *mem.Arena, source: []const u8) -> (Schema, err) {
     let (d, parse_error) = xml.parse(a, source)
     if parse_error != ok { ret (zero, parse_error) }
@@ -1158,7 +1193,7 @@ fn load(a: *mem.Arena, source: []const u8) -> (Schema, err) {
     let (state, state_error) = mem.alloc[u8](a, types.len)
     if state_error != ok { ret (zero, state_error) }
     var c = Compiler {
-        a: a, d: &d, s: Schema { types: types, type_count: 0usize, particles: particles, particle_count: 0usize, elements: elements, element_count: 0usize, roots: roots, root_count: 0usize, target_namespace: "" },
+        a: a, d: &d, s: Schema { types: types, type_count: 0usize, particles: particles, particle_count: 0usize, elements: elements, element_count: 0usize, roots: roots, root_count: 0usize, target_namespace: "", libxml2: false },
         tns: attr_or(&d, d.root, "targetNamespace", ""), wildcard_rule: "##any", element_qualified: same(attr_or(&d, d.root, "elementFormDefault", ""), "qualified"),
         attribute_qualified: same(attr_or(&d, d.root, "attributeFormDefault", ""), "qualified"), named: named, named_count: 0usize, depth: 0u32, state: state,
     }
@@ -1465,10 +1500,16 @@ fn cmp_instants(d1: i64, t1: i64, d2: i64, t2: i64) -> i32 {
 
 // Dates and times: with the same zone status the instants compare directly; a zoneless value against a
 // zoned one is ordered only when every zone from -14:00 to +14:00 gives the same answer, else it is 2.
-fn compare_temporal(prim: xsd.Type, x: str, y: str) -> i32 {
+fn compare_temporal(prim: xsd.Type, x: str, y: str, libxml2: bool) -> i32 {
     let (dx, tx, zx) = instant(prim, x, 0i64)
     let (dy, ty, zy) = instant(prim, y, 0i64)
     if zx == zy { ret cmp_instants(dx, tx, dy, ty) }
+    // libxml2 orders a zoned value against a zoneless one as UTC instants and calls only equality undecided.
+    if libxml2 && prim != xsd.Type.Time {
+        let ordered = cmp_instants(dx, tx, dy, ty)
+        if ordered == 0i32 { ret 2i32 }
+        ret ordered
+    }
     if !zx {
         let (d_early, t_early, _) = instant(prim, x, 840i64)
         let (d_late, t_late, _) = instant(prim, x, -840i64)
@@ -1484,7 +1525,7 @@ fn compare_temporal(prim: xsd.Type, x: str, y: str) -> i32 {
 }
 
 // -1, 0, 1, or 2 when the values are not ordered (NaN).
-fn compare_values(prim: xsd.Type, x: str, y: str) -> i32 {
+fn compare_values(prim: xsd.Type, x: str, y: str, libxml2: bool) -> i32 {
     if prim == xsd.Type.Decimal || prim == xsd.Type.Integer || prim == xsd.Type.NonPositiveInteger || prim == xsd.Type.NegativeInteger || prim == xsd.Type.NonNegativeInteger || prim == xsd.Type.PositiveInteger || prim == xsd.Type.Long || prim == xsd.Type.Int || prim == xsd.Type.Short || prim == xsd.Type.Byte || prim == xsd.Type.UnsignedLong || prim == xsd.Type.UnsignedInt || prim == xsd.Type.UnsignedShort || prim == xsd.Type.UnsignedByte {
         ret cmp_decimal(x, y)
     }
@@ -1517,7 +1558,7 @@ fn compare_values(prim: xsd.Type, x: str, y: str) -> i32 {
         ret 1i32
     }
     if prim == xsd.Type.DateTime || prim == xsd.Type.Date || prim == xsd.Type.Time {
-        ret compare_temporal(prim, x, y)
+        ret compare_temporal(prim, x, y, libxml2)
     }
     if same(x, y) { ret 0i32 }
     ret 2i32
@@ -1571,7 +1612,7 @@ fn check_simple(a: *mem.Arena, s: *const Schema, t: u32, text: str) -> (bool, er
     let def = s.types[usize(t)]
     if def.builtin {
         if t >= 39u32 { ret (true, ok) }
-        ret (xsd.valid(builtin_type(t), text), ok)
+        ret (xsd.valid_mode(builtin_type(t), text, s.libxml2), ok)
     }
     let (norm, norm_error) = facet_normal(a, s, t, text)
     if norm_error != ok { ret (false, norm_error) }
@@ -1659,7 +1700,7 @@ fn facets_ok_atomic(a: *mem.Arena, s: *const Schema, t: u32, def: TypeDef, norm:
             let (member, member_error) = facet_normal(a, s, t, f.enumeration[k])
             if member_error != ok { ret (false, member_error) }
             var equal = same(norm, member)
-            if !equal && has_prim && compare_values(prim, norm, member) == 0i32 { equal = true }
+            if !equal && has_prim && compare_values(prim, norm, member, false) == 0i32 { equal = true }
             if equal { found = true }
             k += 1usize
         }
@@ -1668,19 +1709,23 @@ fn facets_ok_atomic(a: *mem.Arena, s: *const Schema, t: u32, def: TypeDef, norm:
     if has_prim && (f.has_min_inclusive || f.has_max_inclusive || f.has_min_exclusive || f.has_max_exclusive) {
         if !is_ordered(prim) { ret (false, Unsupported) }
         if f.has_min_inclusive {
-            let c = compare_values(prim, norm, str.trim(f.min_inclusive))
+            if !xsd.valid_mode(prim, str.trim(f.min_inclusive), s.libxml2) { ret (false, ok) }
+            let c = compare_values(prim, norm, str.trim(f.min_inclusive), s.libxml2)
             if c == 2i32 || c < 0i32 { ret (false, ok) }
         }
         if f.has_max_inclusive {
-            let c = compare_values(prim, norm, str.trim(f.max_inclusive))
+            if !xsd.valid_mode(prim, str.trim(f.max_inclusive), s.libxml2) { ret (false, ok) }
+            let c = compare_values(prim, norm, str.trim(f.max_inclusive), s.libxml2)
             if c == 2i32 || c > 0i32 { ret (false, ok) }
         }
         if f.has_min_exclusive {
-            let c = compare_values(prim, norm, str.trim(f.min_exclusive))
+            if !xsd.valid_mode(prim, str.trim(f.min_exclusive), s.libxml2) { ret (false, ok) }
+            let c = compare_values(prim, norm, str.trim(f.min_exclusive), s.libxml2)
             if c == 2i32 || c <= 0i32 { ret (false, ok) }
         }
         if f.has_max_exclusive {
-            let c = compare_values(prim, norm, str.trim(f.max_exclusive))
+            if !xsd.valid_mode(prim, str.trim(f.max_exclusive), s.libxml2) { ret (false, ok) }
+            let c = compare_values(prim, norm, str.trim(f.max_exclusive), s.libxml2)
             if c == 2i32 || c >= 0i32 { ret (false, ok) }
         }
     }
@@ -1699,7 +1744,7 @@ fn values_equal(a: *mem.Arena, s: *const Schema, t: u32, x: str, y: str) -> (boo
     let (ny, ey) = facet_normal(a, s, t, y)
     if ey != ok { ret (false, ey) }
     let prim_index = root_builtin(s, t)
-    if prim_index != NONE && prim_index < 39u32 { ret (compare_values(builtin_type(prim_index), nx, ny) == 0i32, ok) }
+    if prim_index != NONE && prim_index < 39u32 { ret (compare_values(builtin_type(prim_index), nx, ny, false) == 0i32, ok) }
     ret (same(nx, ny), ok)
 }
 
@@ -1724,7 +1769,7 @@ fn is_xmlns_attribute(name: str) -> bool { ret same(name, "xmlns") || str.starts
 // Record an ID or IDREF value of a type that derives from them.
 fn note_identity(w: *Walk, t: u32, text: str, id: xml.NodeId) -> bool {
     let prim = root_builtin(w.s, t)
-    if prim == NONE { ret true }
+    if prim == NONE || prim >= 39u32 { ret true }
     let norm = str.trim(text)
     if builtin_type(prim) == xsd.Type.ID {
         var i = 0usize
@@ -2147,6 +2192,28 @@ fn validate_element(w: *Walk, decl: u32, id: xml.NodeId) -> bool {
     ret validate_typed(w, e.type_index, id, e)
 }
 
+// A QName-typed value needs its prefix declared in scope at the element (libxml2 checks; the lexical form alone passes).
+fn qname_based(s: *const Schema, t_in: u32) -> bool {
+    var t = t_in
+    var steps = 0usize
+    while t != NONE && steps < 64usize {
+        let def = s.types[usize(t)]
+        if def.builtin { ret t < 39u32 && builtin_type(t) == xsd.Type.QName }
+        if def.complex || def.variety != Variety.Atomic { ret false }
+        t = def.base
+        steps += 1usize
+    }
+    ret false
+}
+
+fn qname_bound(w: *const Walk, t: u32, value: str, id: xml.NodeId) -> bool {
+    if !w.s.libxml2 || !qname_based(w.s, t) { ret true }
+    let (prefix, _) = split_name(str.trim(value))
+    if prefix.len == 0usize { ret true }
+    let (_, resolve_error) = resolve(w.d, id, prefix)
+    ret resolve_error == ok
+}
+
 fn validate_typed(w: *Walk, t: u32, id: xml.NodeId, e: ElementDecl) -> bool {
     if t == ANY_TYPE { ret true }
     let def = w.s.types[usize(t)]
@@ -2158,8 +2225,9 @@ fn validate_typed(w: *Walk, t: u32, id: xml.NodeId, e: ElementDecl) -> bool {
         if !text_ok { ret fail(w, ErrorCode.BadValue, id) }
         var value = text
         if text.len == 0usize && e.has_fixed { value = e.fixed }
+        if text.len == 0usize && !e.has_fixed && e.has_default { value = e.default_text }
         let (value_ok, value_error) = check_simple(w.a, w.s, t, value)
-        if value_error != ok || !value_ok { ret fail(w, ErrorCode.BadValue, id) }
+        if value_error != ok || !value_ok || !qname_bound(w, t, value, id) { ret fail(w, ErrorCode.BadValue, id) }
         if e.has_fixed {
             let (equal, equal_error) = values_equal(w.a, w.s, t, value, e.fixed)
             if equal_error != ok || !equal { ret fail(w, ErrorCode.FixedMismatch, id) }
@@ -2174,8 +2242,9 @@ fn validate_typed(w: *Walk, t: u32, id: xml.NodeId, e: ElementDecl) -> bool {
         if !text_ok { ret fail(w, ErrorCode.BadValue, id) }
         var value = text
         if text.len == 0usize && e.has_fixed { value = e.fixed }
+        if text.len == 0usize && !e.has_fixed && e.has_default { value = e.default_text }
         let (value_ok, value_error) = check_simple(w.a, w.s, def.simple_type, value)
-        if value_error != ok || !value_ok { ret fail(w, ErrorCode.BadValue, id) }
+        if value_error != ok || !value_ok || !qname_bound(w, def.simple_type, value, id) { ret fail(w, ErrorCode.BadValue, id) }
         if e.has_fixed {
             let (equal, equal_error) = values_equal(w.a, w.s, def.simple_type, value, e.fixed)
             if equal_error != ok || !equal { ret fail(w, ErrorCode.FixedMismatch, id) }
@@ -2306,7 +2375,8 @@ fn validate(a: *mem.Arena, s: *const Schema, d: *const xml.Document) -> (Result,
     }
     if decl == NONE { ret (Result { valid: false, code: ErrorCode.UnknownRoot, node: d.root }, ok) }
     let good = validate_element(&w, decl, d.root)
-    if good && w.code == ErrorCode.None {
+    // libxml2 (as R's xml2 links it) does not look an IDREF up, only that IDs do not repeat.
+    if good && w.code == ErrorCode.None && !s.libxml2 {
         var i = 0usize
         while i < w.ref_count && w.code == ErrorCode.None {
             var found = false

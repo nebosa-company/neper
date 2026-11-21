@@ -191,6 +191,19 @@ fn hex_value(c: u8) -> bool { ret is_digit(c) || (c >= 65u8 && c <= 70u8) || (c 
 // whatever the application can turn into a URI reference, and parsers differ on what they reject).
 fn is_any_uri(text: str) -> bool { ret all_xml_chars(text) }
 
+// libxml2 refuses a `%` that is not followed by two hex digits.
+fn percent_ok(s: str) -> bool {
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 37u8 {
+            if i + 2usize >= s.len || !hex_value(s[i + 1usize]) || !hex_value(s[i + 2usize]) { ret false }
+            i += 2usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
 // ---- numbers ----
 
 // Index just past an optional sign.
@@ -274,7 +287,19 @@ fn int_unbounded(s: str, negative_ok: bool, positive_ok: bool, zero_ok: bool) ->
     ret positive_ok
 }
 
-fn is_float(s: str) -> bool {
+fn digit_count(s: str) -> usize {
+    var n = 0usize
+    var i = 0usize
+    while i < s.len {
+        if is_digit(s[i]) { n += 1usize }
+        i += 1usize
+    }
+    ret n
+}
+
+fn is_float(s: str) -> bool { ret is_float_mode(s, false) }
+
+fn is_float_mode(s: str, lx: bool) -> bool {
     if same(s, "INF") || same(s, "-INF") || same(s, "NaN") { ret true }
     let b = s[after_sign(s)..]
     if b.len > 0usize && (b[0usize] == 43u8 || b[0usize] == 45u8) { ret false }
@@ -289,8 +314,9 @@ fn is_float(s: str) -> bool {
     }
     if !is_decimal(b[..e]) { ret false }
     if e == b.len { ret true }
+    // libxml2 takes `1e`, `1e+` and `1.e` as numbers: the exponent digits are optional.
     let exp = b[e + 1usize..]
-    ret all_digits(exp[after_sign(exp)..])
+    ret (lx && exp.len == after_sign(exp)) || all_digits(exp[after_sign(exp)..])
 }
 
 // ---- dates and times ----
@@ -469,7 +495,9 @@ fn is_g_month(s: str) -> bool {
 }
 
 // -?P(nY)?(nM)?(nD)?(T(nH)?(nM)?(n(.n)?S)?)?, with at least one component and a T that is followed by one.
-fn is_duration(s: str) -> bool {
+fn is_duration(s: str) -> bool { ret is_duration_mode(s, false) }
+
+fn is_duration_mode(s: str, lx: bool) -> bool {
     var i = 0usize
     if i < s.len && s[i] == 45u8 { i += 1usize }
     if i >= s.len || s[i] != 80u8 { ret false }
@@ -488,14 +516,20 @@ fn is_duration(s: str) -> bool {
         }
         let start = i
         while i < s.len && is_digit(s[i]) { i += 1usize }
-        if i == start || i >= s.len { ret false }
+        if i >= s.len { ret false }
+        let whole_digits = i - start
         var fraction = false
         if s[i] == 46u8 {
             fraction = true
             i += 1usize
             let digits_start = i
             while i < s.len && is_digit(s[i]) { i += 1usize }
-            if i == digits_start || i >= s.len { ret false }
+            if i >= s.len || (whole_digits == 0usize && i == digits_start) { ret false }
+            // libxml2 reads `PT1.S` and `PT.5S`: seconds may lack digits on one side of the point.
+            if (whole_digits == 0usize || i == digits_start) && !(lx && in_time && s[i] == 83u8) { ret false }
+            if !lx && (whole_digits == 0usize || i == digits_start) { ret false }
+        } else {
+            if whole_digits == 0usize { ret false }
         }
         let designator = s[i]
         i += 1usize
@@ -577,14 +611,20 @@ fn is_base64(s: str) -> bool {
 // ---- the dispatch ----
 
 // Whether `text` is a legal lexical form of `t` after the type's whitespace handling.
-fn valid(t: Type, text: str) -> bool {
+fn valid(t: Type, text: str) -> bool { ret valid_mode(t, text, false) }
+
+// `lx` follows the libxml2 that R's xml2 links where it departs from the recommendation: no sign on an unsigned type,
+// a decimal of at most 24 digits, optional exponent digits, `PT1.S`, date-like values that are not trimmed.
+fn valid_mode(t: Type, text: str, lx: bool) -> bool {
     if t == .String || t == .NormalizedString || t == .Token { ret all_xml_chars(text) }
     let s = trim(text)
+    // libxml2 holds a decimal in 24 digits, whole and fractional together.
+    if lx && (t == .Decimal || t == .Integer || t == .NonPositiveInteger || t == .NegativeInteger || t == .NonNegativeInteger || t == .PositiveInteger) && digit_count(s) > 24usize { ret false }
     if t == .Language { ret is_language(s) }
     if t == .Name { ret is_name(s) }
     if t == .NCName || t == .ID || t == .IDREF { ret is_ncname(s) }
     if t == .NMToken { ret is_nmtoken(s) }
-    if t == .AnyURI { ret is_any_uri(s) }
+    if t == .AnyURI { ret is_any_uri(s) && (!lx || percent_ok(s)) }
     if t == .QName { ret is_qname(s) }
     if t == .Boolean { ret same(s, "true") || same(s, "false") || same(s, "1") || same(s, "0") }
     if t == .Decimal { ret is_decimal(s) }
@@ -597,12 +637,22 @@ fn valid(t: Type, text: str) -> bool {
     if t == .Int { ret int_in(s, "2147483648", "2147483647", true) }
     if t == .Short { ret int_in(s, "32768", "32767", true) }
     if t == .Byte { ret int_in(s, "128", "127", true) }
+    // libxml2 writes no sign on an unsigned type, not even `+3` or `-0`.
+    if lx && (t == .UnsignedLong || t == .UnsignedInt || t == .UnsignedShort || t == .UnsignedByte) && after_sign(s) > 0usize { ret false }
     if t == .UnsignedLong { ret int_in(s, "", "18446744073709551615", true) }
     if t == .UnsignedInt { ret int_in(s, "", "4294967295", true) }
     if t == .UnsignedShort { ret int_in(s, "", "65535", true) }
     if t == .UnsignedByte { ret int_in(s, "", "255", true) }
-    if t == .Float || t == .Double { ret is_float(s) }
-    if t == .Duration { ret is_duration(s) }
+    if t == .Float || t == .Double { ret is_float_mode(s, lx) }
+    // libxml2 does not trim a date-like value: a trailing space is an error for all of them, and a
+    // leading one for the types with a date part.
+    if lx && (t == .Duration || t == .Time || t == .GMonthDay || t == .GDay || t == .GMonth) {
+        if text.len > 0usize && is_space(text[text.len - 1usize]) { ret false }
+    }
+    if lx && (t == .DateTime || t == .Date || t == .GYearMonth || t == .GYear) {
+        if text.len > 0usize && (is_space(text[0usize]) || is_space(text[text.len - 1usize])) { ret false }
+    }
+    if t == .Duration { ret is_duration_mode(s, lx) }
     if t == .DateTime { ret is_date_then(s, 0usize, true, true) }
     if t == .Date { ret is_date_then(s, 0usize, false, true) }
     if t == .Time { ret is_time_then_zone(s, 0usize) }

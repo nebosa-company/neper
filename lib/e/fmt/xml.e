@@ -30,7 +30,7 @@ const MAX_ATTRIBUTES_PER_ELEMENT: usize = 64usize
 const MAX_WRITER_DEPTH: usize = 256usize
 
 // Open element names are kept on a stack of at most `max_depth` entries.
-type State = struct { a: *mem.Arena, source: []const u8, at: usize, options: Options, stack: []str, depth: usize, pending_end: str, has_pending: bool, started: bool, finished: bool, xml_decl_allowed: bool, rooted: bool }
+type State = struct { a: *mem.Arena, source: []const u8, at: usize, options: Options, stack: []str, depth: usize, pending_end: str, has_pending: bool, started: bool, finished: bool, xml_decl_allowed: bool, rooted: bool, libxml2: bool, doctype_seen: bool }
 
 fn slurp(a: *mem.Arena, source: io.Reader) -> ([]u8, err) {
     let (contents, read_error) = slurp_with_limit(a, source, DEFAULT_MAX_BYTES)
@@ -298,16 +298,19 @@ fn xml_decl_field(source: []const u8, at: usize, close: usize, name: str, kind: 
     if value_end >= close { ret (at, false) }
     let value = source[eq + 1usize..value_end]
     if kind == 0u8 && !str.eq(value, "1.0") { ret (at, false) }
+    if kind == 3u8 && !str.eq(value, "1.0") && !str.eq(value, "1.1") { ret (at, false) }
     if kind == 1u8 && !is_encoding_name(value) { ret (at, false) }
     if kind == 2u8 && !str.eq(value, "yes") && !str.eq(value, "no") { ret (at, false) }
     ret (value_end + 1usize, true)
 }
 
 // XML 1.0 declaration order and values: version, optional encoding, optional standalone.
-fn valid_xml_declaration(source: []const u8, target_end: usize, close: usize) -> bool {
+fn valid_xml_declaration(source: []const u8, target_end: usize, close: usize, v11: bool) -> bool {
     var at = skip_space(source, target_end)
     if at == target_end { ret false }
-    let (after_version, version_ok) = xml_decl_field(source, at, close, "version", 0u8)
+    var version_kind = 0u8
+    if v11 { version_kind = 3u8 }
+    let (after_version, version_ok) = xml_decl_field(source, at, close, "version", version_kind)
     if !version_ok { ret false }
     at = skip_space(source, after_version)
     if at == close { ret true }
@@ -331,6 +334,37 @@ fn valid_xml_declaration(source: []const u8, target_end: usize, close: usize) ->
     let (last, standalone_ok) = xml_decl_field(source, at, close, "standalone", 2u8)
     if !standalone_ok { ret false }
     ret skip_space(source, last) == close
+}
+
+// The end of a DOCTYPE declaration that starts at `at` (after the keyword), or 0 when it declares
+// an entity or is malformed: entities are not expanded here.
+fn skip_doctype(source: []const u8, at_in: usize) -> usize {
+    var at = at_in
+    if at >= source.len || !is_space(source[at]) { ret 0usize }
+    var quote = 0u8
+    while at < source.len {
+        let c = source[at]
+        if quote != 0u8 {
+            if c == quote { quote = 0u8 }
+            at += 1usize
+            continue
+        }
+        if c == 34u8 || c == 39u8 {
+            quote = c
+            at += 1usize
+            continue
+        }
+        if c == 91u8 {
+            let (close, has_close) = str.find_from(source, "]", at)
+            if !has_close { ret 0usize }
+            if str.contains(source[at..close], "<!ENTITY") { ret 0usize }
+            at = close + 1usize
+            continue
+        }
+        if c == 62u8 { ret at + 1usize }
+        at += 1usize
+    }
+    ret 0usize
 }
 
 fn reader_next_err(r: *Reader) -> (Event, bool, err) {
@@ -388,6 +422,15 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             if normalize_error != ok { ret (zero, false, normalize_error) }
             ret (Event{ Text: normalized_body }, true, ok)
         }
+        if s.libxml2 && !s.doctype_seen && s.depth == 0usize && !s.started && str.starts_with(source[s.at..], "<!DOCTYPE") {
+            // libxml2 reads a DOCTYPE (external ID, internal subset without entities) and moves on.
+            let after = skip_doctype(source, s.at + 9usize)
+            if after == 0usize { ret (zero, false, Unsupported) }
+            s.xml_decl_allowed = false
+            s.doctype_seen = true
+            s.at = after
+            continue
+        }
         if str.starts_with(source[s.at..], "<!") { ret (zero, false, Unsupported) }
         if str.starts_with(source[s.at..], "<?") {
             let (close, has_close) = str.find_from(source, "?>", s.at + 2usize)
@@ -397,7 +440,7 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             let target_name = source[s.at + 2usize..target_end]
             if is_xml_target(target_name) {
                 if !str.eq(target_name, "xml") || !s.xml_decl_allowed || s.started || s.depth != 0usize { ret (zero, false, Invalid) }
-                if !valid_xml_declaration(source, target_end, close) { ret (zero, false, Invalid) }
+                if !valid_xml_declaration(source, target_end, close, s.libxml2) { ret (zero, false, Invalid) }
                 s.xml_decl_allowed = false
                 s.at = close + 2usize
                 continue
@@ -604,6 +647,8 @@ fn stream(a: *mem.Arena, source: []const u8, options: Options) -> (Reader, err) 
     s.started = false
     s.finished = false
     s.xml_decl_allowed = true
+    s.libxml2 = false
+    s.doctype_seen = false
     var r: Reader = zero
     r.state = mem.cast[*void](s)
     ret (r, ok)
@@ -632,6 +677,28 @@ fn add_node(nodes: []Node, used: *usize, kind: NodeKind, name: str, value: str, 
 // Nesting past 256 is `TooDeep`; a DOCTYPE stays `Unsupported` (no entity expansion,
 // no external references -- the XXE-safe reading is the only one there is).
 fn parse(a: *mem.Arena, source: []const u8) -> (Document, err) {
+    let (d, e) = parse_blanks(a, source, false)
+    ret (d, e)
+}
+
+// `parse` as libxml2 reads with its NOBLANKS option (xml2's default): a whitespace-only text node that
+// libxml2's heuristic takes for ignorable is left out -- one followed by markup, with no earlier text
+// sibling or text first child, and that is not the only child before the end tag.
+fn parse_noblanks(a: *mem.Arena, source: []const u8) -> (Document, err) {
+    let (d, e) = parse_blanks(a, source, true)
+    ret (d, e)
+}
+
+fn blank_text(data: str) -> bool {
+    var i = 0usize
+    while i < data.len {
+        if !is_space(data[i]) { ret false }
+        i += 1usize
+    }
+    ret data.len > 0usize
+}
+
+fn parse_blanks(a: *mem.Arena, source: []const u8, noblanks: bool) -> (Document, err) {
     // Every `<` opens at most one node and at most one text node precedes it.
     let bound = str.count(source, "<") * 2usize + 2usize
     let (nodes, nodes_error) = mem.alloc[Node](a, bound)
@@ -639,6 +706,7 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Document, err) {
     let (r0, r_error) = stream(a, source, Options { max_depth: 256u16, preserve_comments: true })
     if r_error != ok { ret (zero, r_error) }
     var r = r0
+    mem.cast[*State](r.state).libxml2 = noblanks
     var used = 0usize
     var current = add_node(nodes, &used, .Document, "", "", zero, NONE)
     var root = NONE
@@ -654,7 +722,22 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Document, err) {
         case .End as name:
             current = nodes[usize(current)].parent
         case .Text as data:
-            let _ = add_node(nodes, &used, .Text, "", data, zero, current)
+            var drop = false
+            if noblanks && current != 0u32 && blank_text(data) {
+                let st = mem.cast[*State](r.state)
+                var next_is_markup = st.at < source.len && source[st.at] == 60u8
+                var closing = next_is_markup && st.at + 1usize < source.len && source[st.at + 1usize] == 47u8
+                let last = nodes[usize(current)].last_child
+                if next_is_markup {
+                    if last == NONE {
+                        drop = !closing
+                    } else {
+                        let first = nodes[usize(current)].first_child
+                        drop = nodes[usize(last)].kind != .Text && nodes[usize(first)].kind != .Text
+                    }
+                }
+            }
+            if !drop { let _ = add_node(nodes, &used, .Text, "", data, zero, current) }
         case .Comment as body:
             let _ = add_node(nodes, &used, .Comment, "", body, zero, current)
         case .Processing as pi:

@@ -13,6 +13,7 @@
 // Not here: the `namespace` axis (always empty), `id()` (no DTD, so empty) and variables other than the
 // ones a caller binds in `Variables`. XSLT's extra functions arrive through `Extensions`.
 
+use e.fmt.cfloat as cfloat
 use e.fmt.xml as xml
 use e.math
 use e.mem
@@ -43,7 +44,7 @@ type Extensions = struct { current: XNode, has_current: bool }
 
 type Expr = struct { kind: u8, op: u8, left: u32, right: u32, text: str, number: f64, args: []u32, steps: []Step, absolute: bool, preds: []u32 }
 type Step = struct { axis: u8, test: u8, prefix: str, local: str, preds: []u32 }
-type Compiled = struct { exprs: []Expr, count: usize, root: u32, bindings: []const Binding }
+type Compiled = struct { exprs: []Expr, count: usize, root: u32, bindings: []const Binding, libxml2: bool }
 
 // Expression kinds.
 const E_OR: u8 = 1u8
@@ -141,6 +142,16 @@ fn scan_ncname(text: str, at: usize) -> usize {
 }
 
 // Whether the previous token makes the next `*` or name an operator (XPath 1.0 section 3.7).
+// libxml2 reads an exponent on a number literal (`1e10`, `5E-3`); the end of it, or `at` when none follows.
+fn exponent_end(text: str, at: usize) -> usize {
+    if at >= text.len || (text[at] != 101u8 && text[at] != 69u8) { ret at }
+    var j = at + 1usize
+    if j < text.len && (text[j] == 43u8 || text[j] == 45u8) { j += 1usize }
+    if j >= text.len || !is_digit(text[j]) { ret at }
+    while j < text.len && is_digit(text[j]) { j += 1usize }
+    ret j
+}
+
 fn operator_context(prev: u8, has_prev: bool) -> bool {
     if !has_prev { ret false }
     ret !(prev == K_AT || prev == K_COLONCOLON || prev == K_LPAREN || prev == K_LBRACKET || prev == K_COMMA || prev == K_SLASH || prev == K_SLASHSLASH || prev == K_PIPE || prev == K_PLUS || prev == K_MINUS || prev == K_EQ || prev == K_NE || prev == K_LT || prev == K_LE || prev == K_GT || prev == K_GE || prev == K_MUL || prev == K_AND || prev == K_OR || prev == K_MOD || prev == K_DIV)
@@ -152,7 +163,7 @@ const K_OR: u8 = 41u8
 const K_MOD: u8 = 42u8
 const K_DIV: u8 = 43u8
 
-fn tokenize(a: *mem.Arena, text: str) -> ([]Token, usize, err) {
+fn tokenize(a: *mem.Arena, text: str, lx: bool) -> ([]Token, usize, err) {
     let (tokens, alloc_error) = mem.alloc[Token](a, text.len + 2usize)
     if alloc_error != ok { ret (zero, 0usize, alloc_error) }
     var count = 0usize
@@ -213,6 +224,7 @@ fn tokenize(a: *mem.Arena, text: str) -> ([]Token, usize, err) {
             } else if i + 1usize < text.len && is_digit(text[i + 1usize]) {
                 var j = i + 1usize
                 while j < text.len && is_digit(text[j]) { j += 1usize }
+                if lx { j = exponent_end(text, j) }
                 kind = K_NUMBER
                 lexeme = text[i..j]
                 width = j - i
@@ -243,6 +255,7 @@ fn tokenize(a: *mem.Arena, text: str) -> ([]Token, usize, err) {
                 j += 1usize
                 while j < text.len && is_digit(text[j]) { j += 1usize }
             }
+            if lx { j = exponent_end(text, j) }
             kind = K_NUMBER
             lexeme = text[i..j]
             width = j - i
@@ -272,16 +285,21 @@ fn tokenize(a: *mem.Arena, text: str) -> ([]Token, usize, err) {
             ret (zero, 0usize, Invalid)
         }
         if kind == K_NUMBER {
-            var digits = lexeme
-            if digits.len > 0usize && digits[digits.len - 1usize] == 46u8 { digits = digits[..digits.len - 1usize] }
-            if digits.len > 0usize && digits[0usize] == 46u8 {
-                let (padded, pad_error) = str.concat(a, "0", digits)
-                if pad_error != ok { ret (zero, 0usize, pad_error) }
-                digits = padded
+            if lx {
+                number = text_number_lx(a, lexeme)
+                if number != number { ret (zero, 0usize, Invalid) }
+            } else {
+                var digits = lexeme
+                if digits.len > 0usize && digits[digits.len - 1usize] == 46u8 { digits = digits[..digits.len - 1usize] }
+                if digits.len > 0usize && digits[0usize] == 46u8 {
+                    let (padded, pad_error) = str.concat(a, "0", digits)
+                    if pad_error != ok { ret (zero, 0usize, pad_error) }
+                    digits = padded
+                }
+                let (v, parse_error) = str.parse_f64(digits)
+                if parse_error != ok { ret (zero, 0usize, Invalid) }
+                number = v
             }
-            let (v, parse_error) = str.parse_f64(digits)
-            if parse_error != ok { ret (zero, 0usize, Invalid) }
-            number = v
         }
         tokens[count] = Token { kind: kind, text: lexeme, number: number }
         count += 1usize
@@ -773,7 +791,12 @@ fn parse_path(p: *Parser) -> (u32, err) {
 
 // Parse `text` into an arena. `bindings` map the prefixes the expression uses to namespace URIs.
 fn compile(a: *mem.Arena, text: str, bindings: []const Binding) -> (Compiled, err) {
-    let (tokens, count, token_error) = tokenize(a, text)
+    let (c, e) = compile_with(a, text, bindings, false)
+    ret (c, e)
+}
+
+fn compile_with(a: *mem.Arena, text: str, bindings: []const Binding, lx: bool) -> (Compiled, err) {
+    let (tokens, count, token_error) = tokenize(a, text, lx)
     if token_error != ok { ret (zero, token_error) }
     if count == 0usize { ret (zero, Invalid) }
     let (exprs, exprs_error) = mem.alloc[Expr](a, count * 4usize + 8usize)
@@ -782,7 +805,26 @@ fn compile(a: *mem.Arena, text: str, bindings: []const Binding) -> (Compiled, er
     let (root, root_error) = parse_or(&p)
     if root_error != ok { ret (zero, root_error) }
     if peek_kind(&p) != K_END { ret (zero, Invalid) }
-    ret (Compiled { exprs: exprs, count: p.used, root: root, bindings: bindings }, ok)
+    // A prefix nobody bound is libxml2's "Undefined namespace prefix" error, not an empty match.
+    var e = 0usize
+    while e < p.used {
+        var s = 0usize
+        while s < exprs[e].steps.len {
+            let step = exprs[e].steps[s]
+            if step.prefix.len > 0usize {
+                var known = false
+                var k = 0usize
+                while k < bindings.len {
+                    if same(bindings[k].prefix, step.prefix) || same(step.prefix, "xml") { known = true }
+                    k += 1usize
+                }
+                if !known { ret (zero, Invalid) }
+            }
+            s += 1usize
+        }
+        e += 1usize
+    }
+    ret (Compiled { exprs: exprs, count: p.used, root: root, bindings: bindings, libxml2: lx }, ok)
 }
 
 // ---- values ----
@@ -857,12 +899,15 @@ fn expanded_name(d: *const xml.Document, n: XNode) -> (str, str) {
         let name = node.attributes[usize(n.attribute) - 1usize].name
         let (prefix, local) = split_name(name)
         if prefix.len == 0usize { ret ("", local) }
-        let (uri, _) = resolve_prefix(d, n.id, prefix)
+        let (uri, bound) = resolve_prefix(d, n.id, prefix)
+        // libxml2 keeps a name whose prefix nobody declared whole, with no namespace.
+        if !bound { ret ("", name) }
         ret (uri, local)
     }
     if node.kind == .Element {
         let (prefix, local) = split_name(node.name)
-        let (uri, _) = resolve_prefix(d, n.id, prefix)
+        let (uri, bound) = resolve_prefix(d, n.id, prefix)
+        if !bound { ret ("", node.name) }
         ret (uri, local)
     }
     if node.kind == .Processing { ret ("", node.name) }
@@ -1193,7 +1238,7 @@ fn char_offset(text: str, k: usize) -> usize {
 }
 
 // A number as XPath writes it: no exponent, no trailing zeros, NaN, Infinity, -Infinity, and 0 for -0.
-fn number_text(a: *mem.Arena, x: f64) -> (str, err) {
+fn number_text_spec(a: *mem.Arena, x: f64) -> (str, err) {
     if is_nan(x) { ret ("NaN", ok) }
     if x == infinity() { ret ("Infinity", ok) }
     if x == -infinity() { ret ("-Infinity", ok) }
@@ -1280,7 +1325,65 @@ fn number_text(a: *mem.Arena, x: f64) -> (str, err) {
     ret (strip_integer_fraction(str.done(&ob)), ok)
 }
 
-// "12.0" is not how XPath writes 12: drop a fraction that is all zeros.
+
+// A number as libxml2 writes it (xmlXPathFormatNumber): NaN, Infinity, -Infinity, 0 for either zero,
+// an integer in int range as digits, else 15 significant digits -- `%e` form with trailing zeros
+// dropped past 1e9 or below 1e-5, fixed form between.
+fn number_text(a: *mem.Arena, x: f64, libxml2: bool) -> (str, err) {
+    if !libxml2 {
+        let (spec, spec_error) = number_text_spec(a, x)
+        ret (spec, spec_error)
+    }
+    if is_nan(x) { ret ("NaN", ok) }
+    if x == infinity() { ret ("Infinity", ok) }
+    if x == -infinity() { ret ("-Infinity", ok) }
+    if x == 0.0f64 { ret ("0", ok) }
+    let (builder, builder_error) = str.builder(a, 640usize)
+    if builder_error != ok { ret ("", builder_error) }
+    var b = builder
+    if x > -2147483648.0f64 && x < 2147483647.0f64 && x == f64(i64(x)) {
+        try str.push_i64(&b, i64(x))
+        ret (str.done(&b), ok)
+    }
+    var ax = x
+    if x < 0.0f64 { ax = 0.0f64 - x }
+    if ax > 1000000000.0f64 || ax < 0.00001f64 {
+        var kept: [16]u8 = zero
+        let (exponent, digits_error) = cfloat.exp_digits(ax, 14usize, kept[..])
+        if digits_error != ok { ret ("", digits_error) }
+        if x < 0.0f64 { try str.push(&b, "-") }
+        try str.push_byte(&b, 48u8 + kept[0])
+        var shown = 15usize
+        while shown > 1usize && kept[shown - 1usize] == 0u8 { shown -= 1usize }
+        if shown > 1usize {
+            try str.push(&b, ".")
+            var d = 1usize
+            while d < shown {
+                try str.push_byte(&b, 48u8 + kept[d])
+                d += 1usize
+            }
+        }
+        try str.push(&b, "e")
+        var magnitude = exponent
+        if exponent < 0i64 {
+            try str.push(&b, "-")
+            magnitude = 0i64 - exponent
+        } else {
+            try str.push(&b, "+")
+        }
+        if magnitude >= 100i64 { try str.push_byte(&b, 48u8 + u8(magnitude / 100i64)) }
+        try str.push_byte(&b, 48u8 + u8(magnitude / 10i64 % 10i64))
+        try str.push_byte(&b, 48u8 + u8(magnitude % 10i64))
+        ret (str.done(&b), ok)
+    }
+    let integer_place = i64(math.log10[f64](ax))
+    var places = 15i64 - integer_place
+    if integer_place > 0i64 { places = 14i64 - integer_place }
+    try str.push_f64_fixed(&b, x, u8(places))
+    ret (strip_integer_fraction(str.done(&b)), ok)
+}
+
+// Trailing zeros of a fraction, and the point when none is left.
 fn strip_integer_fraction(text: str) -> str {
     let (dot, has_dot) = str.find(text, ".")
     if !has_dot { ret text }
@@ -1362,14 +1465,103 @@ fn text_number(a: *mem.Arena, text: str) -> f64 {
     ret sign * value
 }
 
+// The number a text converts to: libxml2's rules for R's xml2, the recommendation's otherwise.
+fn number_of_text(a: *mem.Arena, text: str, lx: bool) -> f64 {
+    if lx { ret text_number_lx(a, text) }
+    ret text_number(a, text)
+}
+
+// 10^e the way a correctly rounded pow gives it: exact up to 1e22, its reciprocal below.
+fn pow10(e: i64) -> f64 {
+    if e > 22i64 || e < -22i64 { ret math.pow[f64](10.0f64, f64(e)) }
+    var n = e
+    if n < 0i64 { n = 0i64 - n }
+    var r = 1.0f64
+    var k = 0i64
+    while k < n {
+        r = r * 10.0f64
+        k += 1i64
+    }
+    if e < 0i64 { ret 1.0f64 / r }
+    ret r
+}
+
+// libxml2's string to number (xmlXPathStringEvalNumber): blanks, an optional minus, digits with an
+// optional fraction and an optional exponent (`1e` reads as 1), blanks. The integer part accumulates
+// as ret * 10 + digit and the fraction as an integer over a power of ten, then the exponent scales,
+// so the last bit can differ from a correctly rounded parse.
+fn text_number_lx(a: *mem.Arena, text: str) -> f64 {
+    var i = 0usize
+    while i < text.len && is_space(text[i]) { i += 1usize }
+    if i >= text.len { ret not_a_number() }
+    if text[i] != 46u8 && !is_digit(text[i]) && text[i] != 45u8 { ret not_a_number() }
+    var negative = false
+    if text[i] == 45u8 {
+        negative = true
+        i += 1usize
+        if i >= text.len || (!is_digit(text[i]) && text[i] != 46u8) { ret not_a_number() }
+    }
+    var result = 0.0f64
+    var seen = false
+    while i < text.len && is_digit(text[i]) {
+        result = result * 10.0f64 + f64(text[i] - 48u8)
+        seen = true
+        i += 1usize
+    }
+    if i < text.len && text[i] == 46u8 {
+        i += 1usize
+        if (i >= text.len || !is_digit(text[i])) && !seen { ret not_a_number() }
+        var places = 0i64
+        while i < text.len && text[i] == 48u8 {
+            places += 1i64
+            i += 1usize
+        }
+        let limit = places + 20i64
+        var fraction = 0.0f64
+        while i < text.len && is_digit(text[i]) && places < limit {
+            fraction = fraction * 10.0f64 + f64(text[i] - 48u8)
+            places += 1i64
+            i += 1usize
+        }
+        fraction = fraction / pow10(places)
+        result = result + fraction
+        while i < text.len && is_digit(text[i]) { i += 1usize }
+    }
+    var exponent = 0i64
+    var exponent_negative = false
+    if i < text.len && (text[i] == 101u8 || text[i] == 69u8) {
+        i += 1usize
+        if i < text.len && text[i] == 45u8 {
+            exponent_negative = true
+            i += 1usize
+        } else {
+            if i < text.len && text[i] == 43u8 { i += 1usize }
+        }
+        while i < text.len && is_digit(text[i]) {
+            if exponent < 1000000i64 { exponent = exponent * 10i64 + i64(text[i] - 48u8) }
+            i += 1usize
+        }
+    }
+    while i < text.len && is_space(text[i]) { i += 1usize }
+    if i != text.len { ret not_a_number() }
+    if negative { result = result * -1.0f64 }
+    if exponent_negative { exponent = 0i64 - exponent }
+    ret result * pow10(exponent)
+}
+
 fn to_string(a: *mem.Arena, d: *const xml.Document, v: Value) -> (str, err) {
+    let (text, text_error) = to_string_mode(a, d, v, false)
+    ret (text, text_error)
+}
+
+fn to_string_mode(a: *mem.Arena, d: *const xml.Document, v: Value, libxml2: bool) -> (str, err) {
     if v.kind == Kind.String { ret (v.text, ok) }
     if v.kind == Kind.Boolean {
         if v.flag { ret ("true", ok) }
         ret ("false", ok)
     }
     if v.kind == Kind.Number {
-        let (text, text_error) = number_text(a, v.number)
+        let (text, text_error) = number_text(a, v.number, libxml2)
         ret (text, text_error)
     }
     if v.nodes.len == 0usize { ret ("", ok) }
@@ -1377,7 +1569,7 @@ fn to_string(a: *mem.Arena, d: *const xml.Document, v: Value) -> (str, err) {
     ret (text, text_error)
 }
 
-fn to_number(a: *mem.Arena, d: *const xml.Document, v: Value) -> (f64, err) {
+fn to_number(a: *mem.Arena, d: *const xml.Document, v: Value, lx: bool) -> (f64, err) {
     if v.kind == Kind.Number { ret (v.number, ok) }
     if v.kind == Kind.Boolean {
         if v.flag { ret (1.0f64, ok) }
@@ -1385,7 +1577,7 @@ fn to_number(a: *mem.Arena, d: *const xml.Document, v: Value) -> (f64, err) {
     }
     let (text, text_error) = to_string(a, d, v)
     if text_error != ok { ret (0.0f64, text_error) }
-    ret (text_number(a, text), ok)
+    ret (number_of_text(a, text, lx), ok)
 }
 
 fn to_boolean(v: Value) -> bool {
@@ -1412,7 +1604,7 @@ fn compare_strings(op: u8, x: str, y: str) -> bool {
 }
 
 // The comparison of two values by XPath 1.0 section 3.4, including the existential rules for node-sets.
-fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value) -> (bool, err) {
+fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value, lx: bool) -> (bool, err) {
     let relational = op == E_LT || op == E_LE || op == E_GT || op == E_GE
     if x.kind == Kind.NodeSet && y.kind == Kind.NodeSet {
         // Materialize the right node-set's strings once: the inner loop would
@@ -1434,7 +1626,7 @@ fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value) ->
             while j < y.nodes.len {
                 let ys = y_texts[j]
                 if relational {
-                    if compare_numbers(op, text_number(a, xs), text_number(a, ys)) { ret (true, ok) }
+                    if compare_numbers(op, number_of_text(a, xs, lx), number_of_text(a, ys, lx)) { ret (true, ok) }
                 } else if compare_strings(op, xs, ys) {
                     ret (true, ok)
                 }
@@ -1472,11 +1664,11 @@ fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value) ->
             if text_error != ok { ret (false, text_error) }
             var result = false
             if other.kind == Kind.Number {
-                if flipped { result = compare_numbers(op, other.number, text_number(a, text)) } else { result = compare_numbers(op, text_number(a, text), other.number) }
+                if flipped { result = compare_numbers(op, other.number, number_of_text(a, text, lx)) } else { result = compare_numbers(op, number_of_text(a, text, lx), other.number) }
             } else if relational {
-                let (on, on_error) = to_number(a, d, other)
+                let (on, on_error) = to_number(a, d, other, lx)
                 if on_error != ok { ret (false, on_error) }
-                if flipped { result = compare_numbers(op, on, text_number(a, text)) } else { result = compare_numbers(op, text_number(a, text), on) }
+                if flipped { result = compare_numbers(op, on, number_of_text(a, text, lx)) } else { result = compare_numbers(op, number_of_text(a, text, lx), on) }
             } else {
                 result = compare_strings(op, text, other.text)
             }
@@ -1486,17 +1678,17 @@ fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value) ->
         ret (false, ok)
     }
     if relational {
-        let (xn, xe) = to_number(a, d, x)
+        let (xn, xe) = to_number(a, d, x, lx)
         if xe != ok { ret (false, xe) }
-        let (yn, ye) = to_number(a, d, y)
+        let (yn, ye) = to_number(a, d, y, lx)
         if ye != ok { ret (false, ye) }
         ret (compare_numbers(op, xn, yn), ok)
     }
     if x.kind == Kind.Boolean || y.kind == Kind.Boolean { ret (compare_bools(op, to_boolean(x), to_boolean(y)), ok) }
     if x.kind == Kind.Number || y.kind == Kind.Number {
-        let (xn, xe) = to_number(a, d, x)
+        let (xn, xe) = to_number(a, d, x, lx)
         if xe != ok { ret (false, xe) }
-        let (yn, ye) = to_number(a, d, y)
+        let (yn, ye) = to_number(a, d, y, lx)
         if ye != ok { ret (false, ye) }
         ret (compare_numbers(op, xn, yn), ok)
     }
@@ -1652,7 +1844,7 @@ fn eval_inner(env: *Env, id: u32, ctx: Context) -> (Value, err) {
     if e.kind == E_NEG {
         let (inner, inner_error) = eval(env, e.left, ctx)
         if inner_error != ok { ret (zero, inner_error) }
-        let (n, n_error) = to_number(env.a, env.d, inner)
+        let (n, n_error) = to_number(env.a, env.d, inner, env.c.libxml2)
         if n_error != ok { ret (zero, n_error) }
         ret (number_value(-n), ok)
     }
@@ -1688,13 +1880,13 @@ fn eval_inner(env: *Env, id: u32, ctx: Context) -> (Value, err) {
     let (right, right_error) = eval(env, e.right, ctx)
     if right_error != ok { ret (zero, right_error) }
     if e.kind == E_EQ || e.kind == E_NE || e.kind == E_LT || e.kind == E_LE || e.kind == E_GT || e.kind == E_GE {
-        let (answer, answer_error) = compare(env.a, env.d, e.kind, left, right)
+        let (answer, answer_error) = compare(env.a, env.d, e.kind, left, right, env.c.libxml2)
         if answer_error != ok { ret (zero, answer_error) }
         ret (boolean_value(answer), ok)
     }
-    let (x, x_error) = to_number(env.a, env.d, left)
+    let (x, x_error) = to_number(env.a, env.d, left, env.c.libxml2)
     if x_error != ok { ret (zero, x_error) }
-    let (y, y_error) = to_number(env.a, env.d, right)
+    let (y, y_error) = to_number(env.a, env.d, right, env.c.libxml2)
     if y_error != ok { ret (zero, y_error) }
     if e.kind == E_ADD { ret (number_value(x + y), ok) }
     if e.kind == E_SUB { ret (number_value(x - y), ok) }
@@ -1730,14 +1922,14 @@ fn arg_value(env: *Env, e: Expr, k: usize, ctx: Context) -> (Value, err) {
 fn arg_string(env: *Env, e: Expr, k: usize, ctx: Context) -> (str, err) {
     let (v, v_error) = eval(env, e.args[k], ctx)
     if v_error != ok { ret ("", v_error) }
-    let (text, text_error) = to_string(env.a, env.d, v)
+    let (text, text_error) = to_string_mode(env.a, env.d, v, env.c.libxml2)
     ret (text, text_error)
 }
 
 fn arg_number(env: *Env, e: Expr, k: usize, ctx: Context) -> (f64, err) {
     let (v, v_error) = eval(env, e.args[k], ctx)
     if v_error != ok { ret (0.0f64, v_error) }
-    let (n, n_error) = to_number(env.a, env.d, v)
+    let (n, n_error) = to_number(env.a, env.d, v, env.c.libxml2)
     ret (n, n_error)
 }
 
@@ -2029,7 +2221,7 @@ fn call_function(env: *Env, e: Expr, ctx: Context) -> (Value, err) {
         if n == 0usize {
             let (text, text_error) = string_of(env.a, env.d, ctx.node)
             if text_error != ok { ret (zero, text_error) }
-            ret (number_value(text_number(env.a, text)), ok)
+            ret (number_value(number_of_text(env.a, text, env.c.libxml2)), ok)
         }
         let (x, x_error) = arg_number(env, e, 0usize, ctx)
         if x_error != ok { ret (zero, x_error) }
@@ -2045,7 +2237,7 @@ fn call_function(env: *Env, e: Expr, ctx: Context) -> (Value, err) {
         while i < v.nodes.len {
             let (text, text_error) = string_of(env.a, env.d, v.nodes[i])
             if text_error != ok { ret (zero, text_error) }
-            total += text_number(env.a, text)
+            total += number_of_text(env.a, text, env.c.libxml2)
             i += 1usize
         }
         ret (number_value(total), ok)
@@ -2094,6 +2286,17 @@ fn evaluate(a: *mem.Arena, c: *const Compiled, d: *const xml.Document, ctx: Cont
 
 fn no_variables() -> Variables { ret Variables { items: zero, count: 0usize } }
 fn no_extensions() -> Extensions { ret Extensions { current: XNode { id: 0u32, attribute: 0u32 }, has_current: false } }
+
+// `run` for the libxml2 that R's xml2 links: a number becomes a string by xmlXPathFormatNumber (15
+// significant digits, `%e` form past 1e9 and below 1e-5) where `run` follows the XPath recommendation.
+fn run_libxml2(a: *mem.Arena, d: *const xml.Document, text: str, bindings: []const Binding) -> (Value, err) {
+    let (c, c_error) = compile_with(a, text, bindings, true)
+    if c_error != ok { ret (zero, c_error) }
+    let vars = no_variables()
+    let ext = no_extensions()
+    let (v, v_error) = evaluate(a, &c, d, Context { node: XNode { id: d.root, attribute: 0u32 }, position: 1usize, size: 1usize }, &vars, &ext)
+    ret (v, v_error)
+}
 
 // Convenience: compile and evaluate with the document node as context.
 fn run(a: *mem.Arena, d: *const xml.Document, text: str, bindings: []const Binding) -> (Value, err) {
