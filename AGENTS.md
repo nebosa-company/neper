@@ -52,3 +52,13 @@
   applies. No Python patch script or `python - <<EOF` heredoc carrying
   `old`/`new` strings — Edit or `build/windows/patch.exe` spec only.
   Scripts are for content they compute.
+
+## Local model for small mechanical tasks
+
+`scripts/localllm.py` asks the local Qwen3.5-9B (llama-server on 127.0.0.1:8080, 32k context,
+about 40 tokens/s, thinking off). Use it instead of reading long text yourself when the answer
+is extraction, not judgement: gap lists or statuses out of a workflow output file, the failing
+lines of a fixture log, a one-line summary of a long diff or R output, reformatting to JSON
+(`--json`). Do not use it for code edits, scoring, acceptance decisions or anything unverified
+that you would act on: it miscounts (it said 10 items where there were 12) and its answers are
+checked, not trusted. Exit code 3 means the server is down: do the task yourself.
