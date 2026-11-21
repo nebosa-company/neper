@@ -1359,6 +1359,11 @@ fmt_mp4_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_mp4_written" = 'executable written' ]
 chmod +x "$test_build/fmt-mp4-selfhost"
 "$test_build/fmt-mp4-selfhost"
+# `e.fmt.av1` and the av1_* modules: a libaom-encoded MP4 clip (e.fmt.mp4) decoded, every plane hashed against ffmpeg's decode.
+fmt_av1_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_av1/src/main.e" "$repo" x64 linux "$test_build/fmt-av1-selfhost")
+[ "$fmt_av1_written" = 'executable written' ]
+chmod +x "$test_build/fmt-av1-selfhost"
+"$test_build/fmt-av1-selfhost"
 # `e.gfx.hclpal_tables`: row and field counts, two rows whole, the CVD matrices against `e.gfx.cvd_table`.
 gfx_hclpal_tables_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_hclpal_tables/src/main.e" "$repo" x64 linux "$test_build/gfx-hclpal-tables-selfhost")
 [ "$gfx_hclpal_tables_written" = 'executable written' ]

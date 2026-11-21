@@ -1406,6 +1406,12 @@ $fmtMp4Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtMp4Written -ne 'executable written') { throw 'fmt_mp4 emission failed' }
 & $fmtMp4Path
 if ($LASTEXITCODE -ne 0) { throw "a fmt_mp4 check failed: exit $LASTEXITCODE" }
+# `e.fmt.av1` and the av1_* modules: a libaom-encoded MP4 clip (e.fmt.mp4) decoded, every plane hashed against ffmpeg's decode.
+$fmtAv1Path = Join-Path $testBuild 'fmt-av1-selfhost.exe'
+$fmtAv1Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_av1\src\main.e') $repo 'x64' 'windows' $fmtAv1Path
+if ($LASTEXITCODE -ne 0 -or $fmtAv1Written -ne 'executable written') { throw 'fmt_av1 emission failed' }
+& $fmtAv1Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_av1 check failed: exit $LASTEXITCODE" }
 # `e.gfx.hclpal_tables`: row and field counts, two rows whole, the CVD matrices against `e.gfx.cvd_table`.
 $gfxHclpalTablesPath = Join-Path $testBuild 'gfx-hclpal-tables-selfhost.exe'
 $gfxHclpalTablesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_hclpal_tables\src\main.e') $repo 'x64' 'windows' $gfxHclpalTablesPath
