@@ -51837,3 +51837,7 @@ L497: every acceptance entry except ga() has passing oracle cases on Windows and
 ## D7732 — L516 tgp, L519 caret remainder, L397 hunspell closed
 
 Each passed an acceptance verifier with a mutation check and all its fixtures on Windows in the integration worktree. L516 had no Acceptance list, so btgp, btlm, bcart, btgpllm and treed design were taken as the target. Linux runs are batched for later. L438, L375, L439, L319 and L517 stay partial with their gap lists in the queue evidence.
+
+## D7733 — L468 fpc closed
+
+All 22 oracle_fpc* fixtures pass on Windows and the verifier found every acceptance entry covered; Linux is batched. L407, L417, L306, L453, L376, L367 and L409 stay partial; their remaining gaps (Linux runs, loose fit tolerances, missing acceptance lists) are in the queue evidence.
