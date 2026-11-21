@@ -367,17 +367,6 @@
       "evidence": "Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the month-end rules, quarter, semester, decimal_date, epiweek, isoweek, floor_date and ceiling_date for dates, equal to lubridate and timeDate on 6249 cases on Windows (oracle_lubridate); Linux pending. Open: parse_date_time, periods and durations, intervals, time zones, financial holiday calendars, isBizday, timeNthNdayInMonth, date-times. Original: Open (CRAN ranks 102, 134). Mid. e.time and e.time.parse exist; verify each row against R first. Acceptance, equal to lubridate: parse_date_time with every orders and the guess_formats heuristic, ymd_hms family, period and duration arithmetic with the %m+%, %m-% and add_with_rollback month-end rules, floor_date, round_date, ceiling_date with every unit and week_start, intervals (int_overlaps, int_aligns, int_diff, %within%), with_tz, force_tz, epiweek, isoweek, quarter, semester, decimal_date; equal to timeDate: holiday calendars for NYSE, LONDON, TARGET, Zurich and the other financial centres, Easter and the movable feasts, isBizday, timeNthNdayInMonth, timeLastDayInMonth."
     },
     {
-      "id": "L317",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 672,
-      "title": "igraph: random graph generators and layouts",
-      "score": 0.08,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6062): e.algo.graph.layout has layout_in_circle (with order), as_star, on_grid and on_sphere, equal to igraph on 580 summaries on Windows (oracle_layout); Linux pending. Open: all random generators, layout_with_fr, kk, mds, graphopt, drl, as_tree, nicely. Original: Open (CRAN rank 109). Mid. Needs the R RNG streams (e.algo.rand.r). Acceptance, equal to igraph value for value under set.seed: sample_gnp, sample_gnm, sample_pa (Barabasi), sample_smallworld, sample_sbm, sample_degseq (configuration and Viger-Latapy), sample_k_regular; layout_with_fr, layout_with_kk, layout_with_mds, layout_with_graphopt, layout_with_drl, layout_in_circle, layout_as_tree, layout_nicely."
-    },
-    {
       "id": "L275",
       "category": "library",
       "group": "CRAN parity",
@@ -999,10 +988,10 @@
       "group": "CRAN parity",
       "order": 790,
       "title": "forecast: exact ARIMA, ETS, auto.arima, Box-Cox",
-      "score": 0.05,
+      "score": 0.4,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partly done (D6063): e.algo.stat.fcast has BoxCox, InvBoxCox and BoxCox.lambda by loglik, equal to forecast on 171 cases on Windows (oracle_fcast); Linux pending. Open: guerrero, Arima, auto.arima, ndiffs, ets, tbats, croston, thetaf, stlf, intervals. Original: Open (CRAN rank 128). Large. e.algo.timeseries has holt_winters, stl and conditional-sum-of-squares ARMA. Acceptance, equal to forecast: Arima with exact Gardner Kalman likelihood and seasonal terms, auto.arima (stepwise and exhaustive, KPSS ndiffs, nsdiffs by OCSB and CH), ets for all 30 state-space models with AICc selection, tbats and bats, BoxCox and BoxCox.lambda (Guerrero and loglik), croston, thetaf, stlf, forecast intervals and fitted values; ndiffs needs L303."
+      "evidence": "Partial (2026-11-21, merged 080899ea1; Windows fixtures pass, score from the agent report): Branch is master 99b84b853 plus the 10 round-1 commits, cherry-picked instead of merged. A merge of worktree-wf_2a4edd8a-889-14 conflicted in unrelated files, because that branch was cut from an older master. Two new commits follow: 084e11ed0 (bats and tbats) and d18397798 (tolerance and Arima start changes). tbats and bats now have a port and an R forecast oracle group, in lib/e/algo/stat/batsfit.e. oracle_batsfit passes all 1205 cases on Windows in about 10 s. - Fit coverage: Box-Cox with Guerrero lambda, trend, damped trend, several periods (BATS mask/GCD seed cut), TBATS harmonic search (i Remaining: (1) Linux run of oracle_batsfit, oracle_etsfit, oracle_fcast, oracle_arimafc, oracle_autoarima, oracle_stlf and oracle_etsfc is pending (Windows-first rule); only the Windows runs above were don | (2) Looser-than-1e-8 tolerances remain: arimafc differenced ML coefficients at 2e-5 and autoarima differenced fits at 5e-6. R's own optim stopping rule explains it; making them tighter would nee | (4) Not ported, and outside the Acceptance list: HEGY and the individual and dummy CH variants (only the joint CH p-value nsdiffs uses is ported); ets edge cases (Fourier/tslm start for fewer th | (5) bats/tbats gaps: constant or missing-value series, refitting a given model (model =), simulate/bootstrap intervals, use.parallel (serial gives the same answer), non-default arguments passed  | (6) Fetched nothing: only existing sources under D:/Temp/claude/src were read (forecast 4.x R and C++ sources, R 4.6.1 stats arima.c)."
     },
     {
       "id": "L319",
@@ -4508,10 +4497,10 @@
       "group": "CRAN parity",
       "order": 527,
       "title": "YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)",
-      "score": 0,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open. Needs L264. Verifies the partial rows for yaml and xml2 in docs/cran-gaps.tsv. Acceptance: yaml.load and as.yaml equal yaml for 1.1 scalars (yes/no booleans, octal, sexagesimal, merge keys, anchors, tags) on a seeded corpus; read_xml and read_html with recover, XPath 1.0 results, namespace handling and xml_validate against XSD equal xml2 on the same corpus; each failing case becomes a fixture."
+      "evidence": "Partial (2026-11-21, merged 080899ea1). This item was DEFERRED by the user and a workflow round ran on it without asking; confirm it is still wanted. Windows fixtures pass (oracle_xml2_html, oracle_xml2, oracle_xml2_xsd, oracle_yaml): Branch is master (99b84b853) plus the six commits cherry-picked from worktree-wf_2a4edd8a-889-10 (a plain merge conflicted, and my first base lagged master), plus five new commits. All verifier gaps below are closed except those under remaining. After the last change I re-ran oracle_xml2_html, oracle_xml2, oracle_xml2_xsd, oracle_yaml, fmt_xml, fmt_xsd_schema, fmt_xsd_types, fmt_yaml and fmt_encode, and they all pass on x64-windows; fmt_gaps_b, x_lint_scan and x_migrate passed once, before the l Remaining: (2) xml_validate corpus still omits three libxml2 quirks: xs:time facets with a zone offset (libxml2 normalises them oddly), base64Binary '-_-_' (libxml2 accepts it), and a maxOccurs=0 element i | (3) e.fmt.xml still refuses a DOCTYPE that declares entities (R expands them; deliberate, XXE-safe). | (4) R yaml loader: multi-line plain/quoted scalars, an anchor on a mapping key, directives, multi-document streams and complex (non-scalar) `?` keys are still Unsupported or unchecked. as.yaml f | (5) XPath numbers with decimal exponent beyond 22 can differ in the last bit from R's MSVC pow; the as.yaml 1e-80 threshold case is unchanged."
     },
     {
       "id": "L283",
@@ -4522,7 +4511,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "high",
-      "evidence": "DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Needs L264. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
+      "evidence": "DEFERRED by the user, but a workflow round ran on it without asking and landed oracle_commonmark (080899ea1, passes on Windows; the verifier reported complete). Decide whether to close it or keep it deferred. DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Needs L264. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
     },
     {
       "id": "L276",

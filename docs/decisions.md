@@ -51841,3 +51841,7 @@ Each passed an acceptance verifier with a mutation check and all its fixtures on
 ## D7733 — L468 fpc closed
 
 All 22 oracle_fpc* fixtures pass on Windows and the verifier found every acceptance entry covered; Linux is batched. L407, L417, L306, L453, L376, L367 and L409 stay partial; their remaining gaps (Linux runs, loose fit tolerances, missing acceptance lists) are in the queue evidence.
+
+## D7734 — L317 igraph closed; L318, L287 and L283 advanced
+
+L317 passed its acceptance verifier and all seven oracle_igraph* fixtures on Windows (and under WSL by cross-emit). L318 gained tbats and bats; L287 gained an HTML4 recovery parser and libxml2 recovery cases. L283 and L287 had been deferred by the user and were started without asking; both stay open until the user decides.
