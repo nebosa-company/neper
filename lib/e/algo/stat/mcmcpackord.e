@@ -1,7 +1,7 @@
 // R MCMCpack::MCMCoprobit with mcmc.method "Cowles" (R's default): the ordered probit Gibbs sampler with the Cowles (1996) Metropolis step for the cut points,
 // on the Scythe Mersenne-Twister stream. The start values come from MASS::polr as in R (masspolr.e), the tuning is the scalar tune.
 //
-// Not here: the "AC" method (Scythe BFGS and a multivariate t proposal) and a user-supplied beta.start.
+// The "AC" method is in e.algo.stat.mcmcpackac; beta.start is taken as given (R 4.6 accepts only a scalar one, recycled).
 
 use e.algo.stat.masspolr as mp
 use e.algo.stat.mcmcpackdraw as md

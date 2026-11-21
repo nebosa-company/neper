@@ -44,7 +44,7 @@ fn parse(a: *mem.Arena, x: []const f64, at: usize) -> (Parsed, err) {
         o += 2usize + n
         k += 1usize
     }
-    sp = g.Spec { n: n, p: p, x: xm, y: y, t: t, gs: gs, ng: ng, ck: ck, nv: nv, vk: vk[0usize..nv], vn: vn[0usize..nv], vc: vc[0usize..nv * n], reml: reml, q: 0usize, z: x[0usize..0usize] }
+    sp = g.Spec { n: n, p: p, x: xm, y: y, t: t, gs: gs, ng: ng, ck: ck, nv: nv, vk: vk[0usize..nv], vn: vn[0usize..nv], vc: vc[0usize..nv * n], reml: reml, q: 0usize, z: x[0usize..0usize], pd: 0i64 }
     ret (Parsed { s: sp, next: o }, ok)
 }
 

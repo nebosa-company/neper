@@ -4,6 +4,9 @@
 # Output vector: coef (p), sigma, logLik, AIC, BIC, natural correlation parameters, natural variance parameters, se (p), lower (p), upper (p).
 # ck: 0 none, 1 AR1, 2 CompSymm, 3 CAR1, 4 ARMA(1,1), 6 Exp, 7 Gaus, 8 Spher, 9 Lin, 10 Ratio, 11 Symm.
 # vk: 1 varIdent, 2 varPower, 3 varExp, 4 varConstPower, 5 varFixed.
+# Tolerance rel 1e-6 / abs 1e-8: gls() runs nlminb at its default msTol 1e-5 on a forward-difference gradient, so its estimates sit ~1e-7 to 1e-6 from the
+# optimum of the likelihood; the likelihood is flat there (logLik, AIC, BIC agree far tighter). Neper minimises to the exact optimum, so the reference
+# cannot be reproduced closer than R's own stopping point without rebuilding every structure's objective on the R side (done for lme in nlmelist.R, not for gls).
 suppressMessages(library(nlme))
 cases <- list()
 set.seed(20261120)

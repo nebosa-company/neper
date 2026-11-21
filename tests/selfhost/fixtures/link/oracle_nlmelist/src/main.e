@@ -29,14 +29,17 @@ fn parse_lme(a: *mem.Arena, x: []const f64, at: usize) -> Parsed {
     o += n
     let xm = x[o..o + n * p]
     o += n * p
-    let qz = usize(x[o])
+    // qz is the number of random effects; 100 pd + qz selects the class: 0 full, 1 pdDiag, 2 pdIdent, 3 pdCompSymm
+    let qraw = i64(x[o])
+    let pdk = qraw / 100i64
+    let qz = usize(qraw % 100i64)
     o += 1usize
     let z = x[o..o + n * qz]
     o += n * qz
     let (vk, e1) = mem.alloc[f64](a, nv + 1usize)
     let (vn, e2) = mem.alloc[f64](a, nv + 1usize)
     let (vc, e3) = mem.alloc[f64](a, nv * n + 1usize)
-    var sp = g.Spec { n: n, p: p, x: xm, y: y, t: t, gs: gs, ng: ng, ck: ck, nv: nv, vk: vk[0usize..0usize], vn: vn[0usize..0usize], vc: vc[0usize..0usize], reml: reml, q: qz, z: z }
+    var sp = g.Spec { n: n, p: p, x: xm, y: y, t: t, gs: gs, ng: ng, ck: ck, nv: nv, vk: vk[0usize..0usize], vn: vn[0usize..0usize], vc: vc[0usize..0usize], reml: reml, q: qz, z: z, pd: pdk }
     var res = Parsed { sp: sp, end: 0usize, good: false }
     if e1 != ok || e2 != ok || e3 != ok { ret res }
     var k = 0usize
@@ -155,8 +158,8 @@ fn same_fit(x: []const f64, y: []const f64) -> bool {
     ret true
 }
 
-fn main(a: *mem.Arena, args: []str) -> err {
-    let (golden, load_error) = oracle.load(a, "tests/oracle/nlmelist.json")
+fn run_file(a: *mem.Arena, path: str) -> usize {
+    let (golden, load_error) = oracle.load(a, path)
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     let (cache, ce) = mem.alloc[f64](a, 4096usize)
@@ -190,6 +193,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         at += 1usize
     }
-    if failures > 0usize { os.exit(1) }
+    ret failures
+}
+
+// nlmelist.json: lme; nlmenls.json: lmList, self-starts and nls; lmepd.json: lme with the pdDiag, pdIdent and pdCompSymm random-effects classes
+fn main(a: *mem.Arena, args: []str) -> err {
+    let f1 = run_file(a, "tests/oracle/nlmelist.json")
+    let f2 = run_file(a, "tests/oracle/lmepd.json")
+    let f4 = run_file(a, "tests/oracle/nlmelist2.json")
+    let f3 = run_file(a, "tests/oracle/nlmenls.json")
+    if f1 + f2 + f3 + f4 > 0usize { os.exit(1) }
     ret ok
 }

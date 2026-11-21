@@ -389,7 +389,7 @@ fn lme_fit(a: *mem.Arena, s: g.Spec, out: []f64) -> err {
     out[p + 3usize] = 0.0f64 - 2.0f64 * f.loglik + npar * math.log[f64](nobs)
     var o = p + 4usize
     var d: [64]f64 = zero
-    g.re_cov(q, pv[0usize..nr], d[0usize..64usize])
+    g.re_cov(q, pv[0usize..nr], d[0usize..64usize], s.pd)
     var k = 0usize
     while k < q {
         out[o + k] = f.sigma * math.sqrt[f64](d[k * q + k])
@@ -503,7 +503,7 @@ fn lme_fit(a: *mem.Arena, s: g.Spec, out: []f64) -> err {
         out[vo + k] = 0.0f64 / 0.0f64
         k += 1usize
     }
-    if q > 2usize { ret ok }
+    if q > 2usize || s.pd != 0i64 { ret ok }
     if q == 1usize {
         th[0usize] = math.log[f64](f.sigma * math.sqrt[f64](d[0usize]))
     } else {

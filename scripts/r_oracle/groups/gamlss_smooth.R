@@ -176,14 +176,14 @@ css <- function(var, df = 3, spar = -1) {
   call <- if (spar >= 0) paste0("cs(", var, ", df=NULL, spar=", spar, ")") else if (df != 3) paste0("cs(", var, ", df=", df, ")") else paste0("cs(", var, ")")
   list(var = var, vcol = var, call = call, type = 2, a = 0, b = 0, c = 0, df = if (spar >= 0) -1 else df, lambda = spar, method = 0, start = 0)
 }
-# cs(): the df target is met by the sbart spar search (golden section and Brent steps stopping on a spar tolerance), so scenarios with df/GCV spar reproduce R to about 3e-9, not machine precision; compared at 1e-8
-for (a in 0:2) mk(0, a, yno, one, d0, list(list(lin = "x2", sm = list(css("x1"))), sg0), c(4, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 1e-8)
-mk(0, 0, yno, one, d0, list(list(lin = nolin, sm = list(css("x1", df = 5))), list(lin = "x1", sm = list())), c(4, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 1e-8)
-mk(0, 1, yno, one, d0, list(list(lin = nolin, sm = list(css("x1", spar = 0.7))), list(lin = nolin, sm = list(css("x2", df = 2)))), c(4, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 1e-8)
-mk(0, 0, yno, sample(1:3, n, TRUE), d0, list(list(lin = nolin, sm = list(css("x1"))), sg0), c(4, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 1e-8)
-for (a in 0:1) mk(1, a, yga, one, d0, list(list(lin = nolin, sm = list(css("x1"))), list(lin = "x2", sm = list())), c(5, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 1e-8)
-mk(3, 0, ywe, one, d0, list(list(lin = nolin, sm = list(css("x1"))), sg0), c(5, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 1e-8)
-mk(2, 0, ypo, one, d0, list(list(lin = "x2", sm = list(css("x1")))), c(5, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 1e-8)
+# cs(): the df target is met by the sbart spar search (golden section and Brent steps stopping on a spar tolerance), so scenarios with df/GCV spar reproduce R to about 3e-9, not machine precision; compared at 5e-9 (measured worst 3e-9)
+for (a in 0:2) mk(0, a, yno, one, d0, list(list(lin = "x2", sm = list(css("x1"))), sg0), c(4, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 5e-9)
+mk(0, 0, yno, one, d0, list(list(lin = nolin, sm = list(css("x1", df = 5))), list(lin = "x1", sm = list())), c(4, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 5e-9)
+mk(0, 1, yno, one, d0, list(list(lin = nolin, sm = list(css("x1", spar = 0.7))), list(lin = nolin, sm = list(css("x2", df = 2)))), c(4, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 5e-9)
+mk(0, 0, yno, sample(1:3, n, TRUE), d0, list(list(lin = nolin, sm = list(css("x1"))), sg0), c(4, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 5e-9)
+for (a in 0:1) mk(1, a, yga, one, d0, list(list(lin = nolin, sm = list(css("x1"))), list(lin = "x2", sm = list())), c(5, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 5e-9)
+mk(3, 0, ywe, one, d0, list(list(lin = nolin, sm = list(css("x1"))), sg0), c(5, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 5e-9)
+mk(2, 0, ypo, one, d0, list(list(lin = "x2", sm = list(css("x1")))), c(5, 5, 4), c(1, 1, 1), 0.001, 20, 1, 20, TRUE, 5e-9)
 # gamlss.cs called directly: [86, out kind, out index, n, df, spar, y, w, x] with df -1 for none; kinds 0 lambda, 1 nl.df, 2 fitted value
 dcs <- function(y, w, x, df = -1, spar = -1) {
   n <- length(y)

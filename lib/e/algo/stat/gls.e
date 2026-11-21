@@ -18,13 +18,48 @@ use e.math
 use e.math.nmath_beta as nb
 use e.mem
 
-type Spec = struct { n: usize, p: usize, x: []const f64, y: []const f64, t: []const f64, gs: []const f64, ng: usize, ck: i64, nv: usize, vk: []const f64, vn: []const f64, vc: []const f64, reml: bool, q: usize, z: []const f64 }
+type Spec = struct { n: usize, p: usize, x: []const f64, y: []const f64, t: []const f64, gs: []const f64, ng: usize, ck: i64, nv: usize, vk: []const f64, vn: []const f64, vc: []const f64, reml: bool, q: usize, z: []const f64, pd: i64 }
 
 // number of random-effects parameters (lme): the log-Cholesky factor of the relative precision-free covariance, column by column
-fn nre(s: *const Spec) -> usize { ret s.q * (s.q + 1usize) / 2usize }
+// pd selects the pdMat class: 0 pdLogChol (the default, q (q + 1) / 2), 1 pdDiag (q log sds), 2 pdIdent (one log sd), 3 pdCompSymm
+// (log sd and nlme's logit-like parameter of the correlation)
+fn nre(s: *const Spec) -> usize {
+    if s.pd == 1i64 { ret s.q }
+    if s.pd == 2i64 { ret 1usize }
+    if s.pd == 3i64 { ret 2usize }
+    ret s.q * (s.q + 1usize) / 2usize
+}
 
 // relative random-effects covariance D = L L' (q by q row-major); L has exp of the first parameter of each column on its diagonal
-fn re_cov(q: usize, par: []const f64, d: []f64) {
+fn re_cov(q: usize, par: []const f64, d: []f64, pd: i64) {
+    if pd != 0i64 {
+        var i0 = 0usize
+        while i0 < q * q {
+            d[i0] = 0.0f64
+            i0 += 1usize
+        }
+        var i1 = 0usize
+        while i1 < q {
+            var lp = par[0usize]
+            if pd == 1i64 { lp = par[i1] }
+            d[i1 * q + i1] = math.exp[f64](2.0f64 * lp)
+            i1 += 1usize
+        }
+        if pd == 3i64 {
+            let e = math.exp[f64](par[1usize])
+            let rho = (e - 1.0f64 / (f64(q) - 1.0f64)) / (e + 1.0f64)
+            var a1 = 0usize
+            while a1 < q {
+                var b1 = 0usize
+                while b1 < q {
+                    if a1 != b1 { d[a1 * q + b1] = math.exp[f64](2.0f64 * par[0usize]) * rho }
+                    b1 += 1usize
+                }
+                a1 += 1usize
+            }
+        }
+        ret
+    }
     var l: [64]f64 = zero
     var k = 0usize
     var j = 0usize
@@ -61,7 +96,7 @@ fn add_re(s: *const Spec, par: []const f64, r: []f64) {
     let q = s.q
     let n = s.n
     var d: [64]f64 = zero
-    re_cov(q, par, d[0usize..64usize])
+    re_cov(q, par, d[0usize..64usize], s.pd)
     var st = 0usize
     var g = 0usize
     while g < s.ng {
@@ -106,6 +141,7 @@ fn maxgs(s: *const Spec) -> usize {
 fn ncor(s: *const Spec) -> usize {
     let k = s.ck
     if k == 0i64 { ret 0usize }
+    if k >= 1000i64 { ret arma_p(k) + arma_q(k) }
     if k == 4i64 { ret 2usize }
     if k == 11i64 {
         let m = maxgs(s)
@@ -114,7 +150,9 @@ fn ncor(s: *const Spec) -> usize {
     ret 1usize
 }
 
-fn nvar1(kind: i64, nstr: usize) -> usize {
+fn nvar1(kind0: i64, nstr: usize) -> usize {
+    var kind = kind0
+    if kind >= 10i64 { kind -= 10i64 }
     if kind == 1i64 { ret nstr - 1usize }
     if kind == 2i64 || kind == 3i64 { ret 1usize }
     if kind == 4i64 { ret 2usize }
@@ -170,6 +208,7 @@ fn corr_val(ck: i64, md: f64, par: []const f64, d: f64, a: usize, b: usize, ma: 
         ret (e - 1.0f64 / (f64(ma) - 1.0f64)) / (e + 1.0f64)
     }
     if ck == 3i64 { ret math.pow[f64](logistic(par[0usize]), d) }
+    if ck >= 1000i64 { ret u[usize(d + 0.5f64)] }
     if ck == 4i64 {
         let ph = th2(par[0usize])
         let th = th2(par[1usize])
@@ -207,6 +246,13 @@ fn fill_corr(s: *const Spec, par: []const f64, r: []f64) {
     let md = mind(s)
     var u: [64]f64 = zero
     if s.ck == 11i64 { symm_factor(par, ma, u[0usize..64usize]) }
+    if s.ck >= 1000i64 {
+        var cp: [8]f64 = zero
+        let ap = arma_p(s.ck)
+        let aq = arma_q(s.ck)
+        arma_const(ap, aq, par, cp[0usize..8usize])
+        arma_corr(ap, aq, ma, cp[0usize..8usize], u[0usize..64usize])
+    }
     var st = 0usize
     var g = 0usize
     while g < s.ng {
@@ -451,30 +497,114 @@ fn ncnat(s: *const Spec) -> usize {
 // length of the output vector of gls_fit
 fn out_len(s: *const Spec) -> usize { ret 4usize + 4usize * s.p + ncnat(s) + nvnat(s) }
 
+// writes X beta into the covariate of every variance term of kind >= 10
+fn set_fitted(s: *const Spec, vc: []f64, beta: []const f64) {
+    let n = s.n
+    var k = 0usize
+    while k < s.nv {
+        if s.vk[k] >= 10.0f64 {
+            var i = 0usize
+            while i < n {
+                var v = 0.0f64
+                var j = 0usize
+                while j < s.p {
+                    v += s.x[j * n + i] * beta[j]
+                    j += 1usize
+                }
+                vc[k * n + i] = v
+                i += 1usize
+            }
+        }
+        k += 1usize
+    }
+}
+
 // x is n by p column-major; out follows out_len: coef, sigma, logLik, AIC, BIC, natural correlation (corSymm: lower triangle by
 // columns), natural variance parameters, se, lower and upper 95% limits
-fn gls_fit(a: *mem.Arena, s: Spec, out: []f64) -> err {
+fn gls_fit(a: *mem.Arena, s0: Spec, out: []f64) -> err {
+    var s = s0
     let n = s.n
     let p = s.p
     let np = ncor(&s) + nvar(&s)
     let (par, e1) = mem.alloc[f64](a, np + 1usize)
     let (coef, e2) = mem.alloc[f64](a, p)
     let (xi, e3) = mem.alloc[f64](a, p * p)
-    if e1 != ok || e2 != ok || e3 != ok { ret e1 }
+    let (oldp, e4) = mem.alloc[f64](a, p + np + 1usize)
+    let (vk2, e5) = mem.alloc[f64](a, s.nv + 1usize)
+    let (vc2, e6) = mem.alloc[f64](a, s.nv * n + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret e1 }
+    // variance covariates ~ fitted(.) are kinds 12, 13, 14 (kind + 10): the covariate is the fitted value of the previous pass
+    var nfit = 0usize
+    var kk = 0usize
+    while kk < s.nv {
+        var kd = s0.vk[kk]
+        var cv = 0.0f64
+        if kd >= 10.0f64 {
+            kd -= 10.0f64
+            nfit += 1usize
+            cv = 1.0f64
+        }
+        vk2[kk] = kd
+        var ii = 0usize
+        while ii < n {
+            if cv != 0.0f64 { vc2[kk * n + ii] = cv } else { vc2[kk * n + ii] = s0.vc[kk * n + ii] }
+            ii += 1usize
+        }
+        kk += 1usize
+    }
+    s.vk = vk2[0usize..s.nv]
+    s.vc = vc2[0usize..s.nv * n]
     let pv = par[0usize..np]
     start_pars(&s, pv)
     let nr = f64(n) - f64(p) * (if_reml(s.reml))
     let cst = nr * (math.log[f64](nr) - (1.0f64 + math.log[f64](2.0f64 * 3.141592653589793f64))) / 2.0f64
     var c = Ctx { a: a, s: s, cst: cst }
-    if np > 0usize {
-        var ctl: [2]f64 = zero
-        ctl[0usize] = 200.0f64
-        ctl[1usize] = 200.0f64
-        let r = nlb.nlminb[Ctx](a, &c, obj, nograd, false, pv, ctl[0usize..2usize])
-        if r.iterations == 0usize && r.fevals == 0usize { ret Singular }
+    if nfit > 0usize {
+        let f0 = core(a, &s, pv, coef, xi)
+        if !f0.good { ret Singular }
+        var j0 = 0usize
+        while j0 < p {
+            oldp[j0] = coef[j0]
+            j0 += 1usize
+        }
+        j0 = 0usize
+        while j0 < np {
+            oldp[p + j0] = pv[j0]
+            j0 += 1usize
+        }
+        set_fitted(&s0, vc2, coef)
     }
-    let f = core(a, &s, pv, coef, xi)
-    if !f.good { ret Singular }
+    var f = Fit { sigma: 0.0f64, loglik: 0.0f64, good: false }
+    var pass = 0usize
+    while true {
+        if np > 0usize {
+            var ctl: [2]f64 = zero
+            ctl[0usize] = 200.0f64
+            ctl[1usize] = 200.0f64
+            let r = nlb.nlminb[Ctx](a, &c, obj, nograd, false, pv, ctl[0usize..2usize])
+            if r.iterations == 0usize && r.fevals == 0usize { ret Singular }
+        }
+        f = core(a, &s, pv, coef, xi)
+        if !f.good { ret Singular }
+        if nfit == 0usize { break }
+        // nlme's convergence rule: relative change of the coefficients and the parameters, tolerance 1e-6, at most 50 passes
+        var cmax = 0.0f64
+        var j1 = 0usize
+        while j1 < p + np {
+            var nw = pv[0usize]
+            if j1 < p { nw = coef[j1] } else { nw = pv[j1 - p] }
+            var dn = nw
+            if dn == 0.0f64 { dn = 1.0f64 }
+            let dv = math.abs[f64]((oldp[j1] - nw) / dn)
+            if dv > cmax { cmax = dv }
+            oldp[j1] = nw
+            j1 += 1usize
+        }
+        set_fitted(&s0, vc2, coef)
+        if cmax <= 1.0e-6f64 { break }
+        pass += 1usize
+        if pass > 50usize { ret Singular }
+    }
     var j = 0usize
     while j < p {
         out[j] = coef[j]
@@ -514,6 +644,8 @@ fn natural(s: *const Spec, pv: []const f64, out: []f64) -> usize {
         out[o] = (e - 1.0f64 / (f64(maxgs(s)) - 1.0f64)) / (e + 1.0f64)
     } else if s.ck == 3i64 {
         out[o] = logistic(pv[0usize])
+    } else if s.ck >= 1000i64 {
+        arma_const(arma_p(s.ck), arma_q(s.ck), pv, out[o..o + nc])
     } else if s.ck == 4i64 {
         out[o] = th2(pv[0usize])
         out[o + 1usize] = th2(pv[1usize])
@@ -564,6 +696,197 @@ fn if_reml(r: bool) -> f64 {
 fn th2(x: f64) -> f64 {
     let e = math.exp[f64](x)
     ret (e - 1.0f64) / (e + 1.0f64)
+}
+
+// corARMA(p, q) other than (1, 1) is ck = 1000 + 10 p + q: nlme's ARMA_constCoef / ARMA_cross / ARMA_corr in order, including the
+// theta index of the `i = p + 1 .. q` tail of ARMA_corr, which is as in the C source
+fn arma_p(ck: i64) -> usize {
+    if ck == 4i64 { ret 1usize }
+    ret usize((ck - 1000i64) / 10i64)
+}
+
+fn arma_q(ck: i64) -> usize {
+    if ck == 4i64 { ret 1usize }
+    ret usize(ck % 10i64)
+}
+
+// unconstrained to constrained coefficients in place; nn is p or q, sgn -1 for phi, +1 for theta
+fn arma_untrans(nn: usize, sgn: f64, pars: []f64) {
+    var aux: [8]f64 = zero
+    var i = 0usize
+    while i < nn {
+        let e = math.exp[f64](0.0f64 - pars[i])
+        let v = (1.0f64 - e) / (1.0f64 + e)
+        pars[i] = v
+        aux[i] = v
+        if i > 0usize {
+            var j = 0usize
+            while j < i {
+                pars[j] = aux[j] + sgn * v * aux[i - j - 1usize]
+                j += 1usize
+            }
+            j = 0usize
+            while j < i {
+                aux[j] = pars[j]
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+}
+
+fn arma_const(p: usize, q: usize, un: []const f64, out: []f64) {
+    var i = 0usize
+    while i < p + q {
+        out[i] = un[i]
+        i += 1usize
+    }
+    arma_untrans(p, 0.0f64 - 1.0f64, out[0usize..p])
+    arma_untrans(q, 1.0f64, out[p..p + q])
+}
+
+// autocorrelations crr[0 ..= maxlag] of the ARMA(p, q) process with constrained coefficients pars (phi then theta)
+fn arma_corr(p: usize, q: usize, maxlag: usize, pars: []const f64, crr: []f64) {
+    var psi: [8]f64 = zero
+    var mm = q + 1usize
+    if p > mm { mm = p }
+    psi[0usize] = 1.0f64
+    var i = 1usize
+    while i < mm {
+        if q >= i { psi[i] = pars[p + i - 1usize] }
+        var pm = p
+        if i < pm { pm = i }
+        var j = 0usize
+        while j < pm {
+            psi[i] += pars[j] * psi[i - j - 1usize]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var ml = maxlag
+    if q > ml { ml = q }
+    if p > ml { ml = p }
+    ml += 1usize
+    i = 0usize
+    while i < ml {
+        crr[i] = 0.0f64
+        i += 1usize
+    }
+    crr[0usize] = 1.0f64
+    i = 1usize
+    while i <= q {
+        crr[0usize] += pars[p + i - 1usize] * psi[i]
+        i += 1usize
+    }
+    let pp = p + 1usize
+    if p > 0usize {
+        var mpq = p
+        if q < mpq { mpq = q }
+        i = 1usize
+        while i <= mpq {
+            var j = i
+            while j <= q {
+                crr[i] += pars[p - 1usize + j] * psi[j - i]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        // solve coef x = crr[0 .. pp), coef[r][c] = [r == c] - sum of phi_j over |r - j - 1| == c, by Gauss with pivoting
+        var m: [36]f64 = zero
+        var b: [6]f64 = zero
+        var r = 0usize
+        while r < pp {
+            m[r * pp + r] = 1.0f64
+            var j = 0usize
+            while j < p {
+                var k = 0usize
+                if r > j + 1usize { k = r - j - 1usize } else { k = j + 1usize - r }
+                m[r * pp + k] -= pars[j]
+                j += 1usize
+            }
+            b[r] = crr[r]
+            r += 1usize
+        }
+        var c = 0usize
+        while c < pp {
+            var pv = c
+            var r2 = c + 1usize
+            while r2 < pp {
+                if math.abs[f64](m[r2 * pp + c]) > math.abs[f64](m[pv * pp + c]) { pv = r2 }
+                r2 += 1usize
+            }
+            var k = 0usize
+            while k < pp {
+                let tmp = m[c * pp + k]
+                m[c * pp + k] = m[pv * pp + k]
+                m[pv * pp + k] = tmp
+                k += 1usize
+            }
+            let tb = b[c]
+            b[c] = b[pv]
+            b[pv] = tb
+            r2 = c + 1usize
+            while r2 < pp {
+                let f = m[r2 * pp + c] / m[c * pp + c]
+                k = c
+                while k < pp {
+                    m[r2 * pp + k] -= f * m[c * pp + k]
+                    k += 1usize
+                }
+                b[r2] -= f * b[c]
+                r2 += 1usize
+            }
+            c += 1usize
+        }
+        r = pp
+        while r > 0usize {
+            r -= 1usize
+            var sv = b[r]
+            var k = r + 1usize
+            while k < pp {
+                sv -= m[r * pp + k] * b[k]
+                k += 1usize
+            }
+            b[r] = sv / m[r * pp + r]
+        }
+        i = 0usize
+        while i < ml {
+            crr[i] = 0.0f64
+            if i < pp { crr[i] = b[i] }
+            i += 1usize
+        }
+    }
+    i = pp
+    while i <= q {
+        var j = 0usize
+        while j < p {
+            crr[i] += pars[j] * crr[i - j - 1usize]
+            j += 1usize
+        }
+        j = i
+        while j <= q {
+            crr[i] += pars[j - 1usize] * psi[j - i]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var mx = p
+    if q > mx { mx = q }
+    i = mx + 1usize
+    while i < ml {
+        var j = 0usize
+        while j < p {
+            crr[i] += pars[j] * crr[i - j - 1usize]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 1usize
+    while i < ml {
+        crr[i] = crr[i] / crr[0usize]
+        i += 1usize
+    }
+    crr[0usize] = 1.0f64
 }
 
 error Singular

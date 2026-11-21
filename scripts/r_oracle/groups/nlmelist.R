@@ -162,7 +162,10 @@ cfgs <- list(
   list(1, 4, integer(0), 1, 7), list(1, 7, integer(0), 0, 7), list(1, 8, integer(0), 1, 7), list(1, 9, integer(0), 1, 7),
   list(1, 10, integer(0), 1, 7), list(1, 11, integer(0), 0, 4), list(1, 11, integer(0), 1, 4), list(2, 10, integer(0), 1, 7),
   list(1, 0, 5, 1, 7), list(1, 0, 4, 0, 7), list(2, 0, 5, 0, 7), list(1, 1, 5, 1, 7), list(1, 6, c(5, 3), 1, 7), list(1, 0, integer(0), 1, 7, 1), list(1, 3, 2, 0, 7, 1))
+ci <- 0; firsthalf <- NULL
 for (cf in cfgs) {
+  ci <- ci + 1
+  if (ci == 14) { firsthalf <- cases; cases <- list() }
   qz <- cf[[1]]; ck <- cf[[2]]; vk <- cf[[3]]; reml <- cf[[4]]
   D <- mkdata(if (cf[[5]] == 4) 8 else 6, cf[[5]], 3, qz, ck, length(cf) >= 6)
   f <- fitlme(D, ck, vk, reml)
@@ -197,7 +200,8 @@ for (pr in prs) {
   if (abs(lr - lr0) > 1e-5 * abs(lr0) + 1e-6) { message("anova pair differs from nlme: ", lr, " ", lr0); next }
   cases[[length(cases) + 1]] <- case("nl", c(5, 0, mkargs(DA, A[[1]], A[[2]], A[[3]], reml), mkargs(DB, B[[1]], B[[2]], B[[3]], reml)), lr, rel = 5e-7, abs = 1e-8)
 }
-# lmList
+# lmList, self-starts and nls go to nlmenls.json (the lme cases above are nlmelist.json: one file would pass the 2 MB cap)
+lmecases <- cases; cases <- list()
 for (rep in 1:2) {
   ng <- 5; m <- 6 + rep; p <- 3; n <- ng * m
   g <- rep(seq_len(ng), each = m)
@@ -210,8 +214,10 @@ for (rep in 1:2) {
   for (q in seq_along(ov)) cases[[length(cases) + 1]] <- case("nl", c(2, q - 1, n, p, ng, rep(m, ng), y, X), ov[q], rel = 1e-9, abs = 1e-10)
 }
 # self-start model values and gradients
-ssf <- list(function(x, p) SSlogis(x, p[1], p[2], p[3]), function(x, p) SSasymp(x, p[1], p[2], p[3]), function(x, p) SSmicmen(x, p[1], p[2]),
-  function(x, p) SSfpl(x, p[1], p[2], p[3], p[4]), function(x, p) SSgompertz(x, p[1], p[2], p[3]))
+# the gradient attribute exists only when the parameter arguments are bare names
+ssf <- list(function(x, p) { Asym <- p[1]; xmid <- p[2]; scal <- p[3]; SSlogis(x, Asym, xmid, scal) }, function(x, p) { Asym <- p[1]; R0 <- p[2]; lrc <- p[3]; SSasymp(x, Asym, R0, lrc) },
+  function(x, p) { Vm <- p[1]; K <- p[2]; SSmicmen(x, Vm, K) }, function(x, p) { A <- p[1]; B <- p[2]; xmid <- p[3]; scal <- p[4]; SSfpl(x, A, B, xmid, scal) },
+  function(x, p) { Asym <- p[1]; b2 <- p[2]; b3 <- p[3]; SSgompertz(x, Asym, b2, b3) })
 pars <- list(list(c(10, 6, 1.5), c(3.2, -0.7, 0.9)), list(c(10, 2, -0.5), c(4, 7, 0.3)), list(c(200, 0.1), c(2.5, 1.7)),
   list(c(1, 9, 5, 1.2), c(-2, 3, 0.5, 2.1)), list(c(8, 3, 0.7), c(2, 0.4, 1.3)))
 for (kd in 1:5) for (pr in pars[[kd]]) for (x in c(0.2, 1, 2.5, 4.75, 8)) {
@@ -240,4 +246,6 @@ for (kd in 1:5) for (rep in 1:3) {
   ov <- c(coef(f), sigma(f), deviance(f), as.numeric(logLik(f)), AIC(f), BIC(f), summary(f)$coefficients[, 2])
   for (q in seq_along(ov)) cases[[length(cases) + 1]] <- case("nl", c(4, kd, q - 1, nrow(d), d$x, d$y), ov[q], rel = 1e-6, abs = 1e-8)
 }
-emit("nlmelist", "nlme", list(cases))
+emit("nlmelist", "nlme", list(firsthalf))
+emit("nlmelist2", "nlme", list(lmecases))
+emit("nlmenls", "nlme", list(cases))

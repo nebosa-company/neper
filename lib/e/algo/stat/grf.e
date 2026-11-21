@@ -6,11 +6,17 @@
 //
 // Opts.kind picks the forest: 0 regression, 1 instrumental (also the causal forest: the treatment is its own instrument; nuisance() grows Y.hat, W.hat,
 // Z.hat, and dr_scores/ate_all give average_treatment_effect), 2 quantile (predict_quantile), 3 local linear splitting (predict_ll for the local linear
-// predictions, ll_lambda_min for the tuned lambda), 4 survival (predict_survival). Each is checked against R in tests/oracle/grf.json.
+// predictions, ll_lambda_min for the tuned lambda), 4 survival (predict_survival), 5 probability (predict_prob; nclass classes). Each is checked against R in
+// tests/oracle/grf.json. Opts.cluster and equalize give cluster sampling; ate_target and ate_all_c give average_treatment_effect for every target.sample (TMLE
+// without clusters or sample weights, as in R) with the cluster-robust standard errors.
 //
-// Not here: missing values in X, clusters and equalize.cluster.weights, tune.parameters, fast.logrank, target.sample other than "all" and method TMLE, causal
-// survival and multi-arm forests, merge_forests. The overall-beta branch of the local linear split (ll.split.cutoff above 0) is not checked: R and this port
-// diverge on tie-broken splits there.
+// Boosted forests are boosted() and probability forests kind 5. Kinds 6 and 7 are multi_arm_causal_forest and multi_regression_forest (Data.ym outcomes, Data.tm
+// centred treatment columns; predict_multi): multi_arm_causal_forest (nuisance forests: kind 7 for Y.hat, kind 5 for W.hat) with stabilize.splits is checked against R
+// for one and several outcomes and with variance estimates for one outcome. Without stabilize.splits the rule has no minimum node size on the treatment, tiny nodes tie
+// exactly between isolating one sample from either side, and R breaks the tie by an ulp of Eigen's summation order in the relabelling, which this port does not reproduce.
+//
+// Not here: missing values in X, tune.parameters, fast.logrank, causal survival, merge_forests. TMLE with clusters is an error in R. The overall-beta branch of the
+// local linear split (ll.split.cutoff above 0) equals R in three oracle cases; a weight-penalty split (ridge on each column) with lambda 0.3 or more diverges in a few trees (cause open).
 
 use e.math
 use e.math.special as special
@@ -23,18 +29,20 @@ type Opts = struct {
     num_trees: usize, mtry: usize, min_node_size: usize, sample_fraction: f64, honesty: bool, honesty_fraction: f64, honesty_prune: bool,
     ci_group_size: usize, alpha: f64, imbalance_penalty: f64, seed: u64,
     kind: usize, stabilize: bool, rfw: f64, quantiles: []const f64,
-    ll_lambda: f64, ll_wpen: bool, ll_cutoff: usize, ll_beta: []const f64, ll_vars: []const usize
+    ll_lambda: f64, ll_wpen: bool, ll_cutoff: usize, ll_beta: []const f64, ll_vars: []const usize,
+    cluster: []const usize, equalize: bool, cl_start: []const usize, cl_rows: []const usize, spc: usize,
+    nclass: usize
 }
 
 // x is n by p row-major; w has length n, or length 0 for unit weights
 // kind 1 (instrumental, which is also the causal forest): t is the treatment and z the instrument; zsep false means z is the treatment column itself.
-type Data = struct { n: usize, p: usize, x: []const f64, y: []const f64, w: []const f64, t: []const f64, z: []const f64, zsep: bool, cens: []const f64 }
+type Data = struct { n: usize, p: usize, x: []const f64, y: []const f64, w: []const f64, t: []const f64, z: []const f64, zsep: bool, cens: []const f64, ym: []const f64, tm: []const f64, nout: usize, ntr: usize }
 
 type Tree = struct {
     nn: usize, root: usize,
     left: []usize, right: []usize, svar: []usize, sval: []f64,
     ls_start: []usize, ls_len: []usize, ls: []usize,
-    pv: []f64, pv_ok: []bool,
+    pv: []f64, pv_ok: []bool, pc: []f64, pcn: usize,
     nd: usize, drawn: []usize
 }
 
@@ -359,7 +367,8 @@ fn ceil_size(n: usize, frac: f64) -> usize { ret usize(math.ceil[f64](f64(n) * f
 type Scratch = struct {
     keys: []f64, ids: []usize, tk: []f64, ti: []usize, uniq: []f64, counter: []usize, sums: []f64, wsums: []f64,
     vars: []usize, flags: []bool, pool: []usize,
-    resp: []f64, nsm: []usize, sz: []f64, szz: []f64, cut: []f64, cls: []f64, cc: []f64, llx: []f64, llm: []f64, llb: []f64, llz: []f64, rel: []usize, sv: []f64
+    resp: []f64, nsm: []usize, sz: []f64, szz: []f64, cut: []f64, cls: []f64, cc: []f64, llx: []f64, llm: []f64, llb: []f64, llz: []f64, rel: []usize, sv: []f64,
+    rm: []f64, bs: []f64, bw: []f64, bq: []f64, bm: []usize, nv: []f64, nvi: []usize
 }
 
 // leaf value slots of the optimized strategies
@@ -693,6 +702,370 @@ fn split_value_prob(d: *const Data, sc: *Scratch, node: []const usize, v: usize,
     }
 }
 
+// the determinant and inverse of the k by k row-major matrix m by Gauss-Jordan elimination with partial pivoting (Eigen's PartialPivLU)
+fn lu_inverse(m: []const f64, k: usize, inv: []f64, work: []f64) -> f64 {
+    var det = 1.0f64
+    var i = 0usize
+    while i < k * k {
+        work[i] = m[i]
+        inv[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        inv[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        var piv = c
+        var r = c + 1usize
+        while r < k {
+            if math.abs[f64](work[r * k + c]) > math.abs[f64](work[piv * k + c]) { piv = r }
+            r += 1usize
+        }
+        if piv != c {
+            det = 0.0f64 - det
+            var j = 0usize
+            while j < k {
+                let t1 = work[c * k + j]
+                work[c * k + j] = work[piv * k + j]
+                work[piv * k + j] = t1
+                let t2 = inv[c * k + j]
+                inv[c * k + j] = inv[piv * k + j]
+                inv[piv * k + j] = t2
+                j += 1usize
+            }
+        }
+        let pv = work[c * k + c]
+        det *= pv
+        if pv == 0.0f64 { ret 0.0f64 }
+        r = c + 1usize
+        while r < k {
+            let fct = work[r * k + c] / pv
+            var j = 0usize
+            while j < k {
+                work[r * k + j] -= fct * work[c * k + j]
+                inv[r * k + j] -= fct * inv[c * k + j]
+                j += 1usize
+            }
+            r += 1usize
+        }
+        c += 1usize
+    }
+    c = k
+    while c > 0usize {
+        c -= 1usize
+        let pv = work[c * k + c]
+        var j = 0usize
+        while j < k {
+            inv[c * k + j] = inv[c * k + j] / pv
+            j += 1usize
+        }
+        var r = 0usize
+        while r < c {
+            let fct = work[r * k + c]
+            j = 0usize
+            while j < k {
+                inv[r * k + j] -= fct * inv[c * k + j]
+                j += 1usize
+            }
+            r += 1usize
+        }
+    }
+    ret det
+}
+
+// MultiCausalRelabelingStrategy::relabel: responses sc.rm[s * rl + o * K + t] = rho_weight(s, t) * residual(s, o); true means the node cannot be split
+fn relabel_multi(d: *const Data, sc: *Scratch, node: []const usize) -> bool {
+    let kk = d.ntr
+    let no = d.nout
+    let rl = kk * no
+    let m = node.len
+    if m <= kk { ret true }
+    var sw = 0.0f64
+    var ybar: [8]f64 = zero
+    var wbar: [8]f64 = zero
+    var i = 0usize
+    while i < m {
+        let s = node[i]
+        let w = weight_of(d, s)
+        var j = 0usize
+        while j < no {
+            ybar[j] += w * d.ym[s * no + j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < kk {
+            wbar[j] += w * d.tm[s * kk + j]
+            j += 1usize
+        }
+        sw += w
+        i += 1usize
+    }
+    var j = 0usize
+    while j < no {
+        ybar[j] = ybar[j] / sw
+        j += 1usize
+    }
+    j = 0usize
+    while j < kk {
+        wbar[j] = wbar[j] / sw
+        j += 1usize
+    }
+    if math.abs[f64](sw) <= 1.0e-16f64 { ret true }
+    var ww: [64]f64 = zero
+    i = 0usize
+    while i < m {
+        let s = node[i]
+        let w = weight_of(d, s)
+        var a1 = 0usize
+        while a1 < kk {
+            var b1 = 0usize
+            while b1 < kk {
+                ww[a1 * kk + b1] += (d.tm[s * kk + a1] - wbar[a1]) * w * (d.tm[s * kk + b1] - wbar[b1])
+                b1 += 1usize
+            }
+            a1 += 1usize
+        }
+        i += 1usize
+    }
+    var inv: [64]f64 = zero
+    var work: [64]f64 = zero
+    let det = lu_inverse(ww[0usize..64usize], kk, inv[0usize..64usize], work[0usize..64usize])
+    if math.abs[f64](det) < 1.0e-10f64 { ret true }
+    var wy: [32]f64 = zero
+    i = 0usize
+    while i < m {
+        let s = node[i]
+        let w = weight_of(d, s)
+        var a1 = 0usize
+        while a1 < kk {
+            var o1 = 0usize
+            while o1 < no {
+                wy[a1 * no + o1] += (d.tm[s * kk + a1] - wbar[a1]) * w * (d.ym[s * no + o1] - ybar[o1])
+                o1 += 1usize
+            }
+            a1 += 1usize
+        }
+        i += 1usize
+    }
+    var beta: [32]f64 = zero
+    var a2 = 0usize
+    while a2 < kk {
+        var o2 = 0usize
+        while o2 < no {
+            var acc = 0.0f64
+            var b2 = 0usize
+            while b2 < kk {
+                acc += inv[a2 * kk + b2] * wy[b2 * no + o2]
+                b2 += 1usize
+            }
+            beta[a2 * no + o2] = acc
+            o2 += 1usize
+        }
+        a2 += 1usize
+    }
+    i = 0usize
+    while i < m {
+        let s = node[i]
+        var o3 = 0usize
+        while o3 < no {
+            var fit = 0.0f64
+            var b3 = 0usize
+            while b3 < kk {
+                fit += (d.tm[s * kk + b3] - wbar[b3]) * beta[b3 * no + o3]
+                b3 += 1usize
+            }
+            let resid = (d.ym[s * no + o3] - ybar[o3]) - fit
+            var t3 = 0usize
+            while t3 < kk {
+                var rw = 0.0f64
+                var b4 = 0usize
+                while b4 < kk {
+                    rw += (d.tm[s * kk + b4] - wbar[b4]) * inv[t3 * kk + b4]
+                    b4 += 1usize
+                }
+                sc.rm[s * rl + o3 * kk + t3] = rw * resid
+                t3 += 1usize
+            }
+            o3 += 1usize
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+// MultiCausalSplittingRule (stab) and MultiRegressionSplittingRule (not stab) for one variable; kk is the number of treatment columns (0 for the regression
+// rule), rl the response length. sc.nv holds the node sums: [0, rl) responses, then kk each of sum w, sum w^2, mean w, min child size, [rl + 4 kk, 2 rl + 6 kk)
+// scratch for the left side, and the node weight and minimum child size at the end.
+fn split_multi(d: *const Data, sc: *Scratch, node: []const usize, v: usize, stab: bool, kk: usize, rl: usize, mns: usize, imb: f64, best: *Best) {
+    let size = node.len
+    var i = 0usize
+    while i < size {
+        sc.keys[i] = d.x[node[i] * d.p + v]
+        sc.ids[i] = node[i]
+        i += 1usize
+    }
+    msort(sc.keys, sc.ids, sc.tk, sc.ti, size)
+    var nu = 0usize
+    i = 0usize
+    while i < size {
+        if i == 0usize || sc.keys[i] != sc.keys[i - 1usize] {
+            sc.uniq[nu] = sc.keys[i]
+            nu += 1usize
+        }
+        i += 1usize
+    }
+    if nu < 2usize { ret }
+    let nsplit = nu - 1usize
+    let o_w = rl
+    let o_q = rl + kk
+    let o_mean = rl + 2usize * kk
+    let o_min = rl + 3usize * kk
+    let o_ls = rl + 4usize * kk
+    let o_lw = 2usize * rl + 4usize * kk
+    let o_lq = 2usize * rl + 5usize * kk
+    let wnode = sc.nv[2usize * rl + 6usize * kk]
+    let mc = usize(sc.nv[2usize * rl + 6usize * kk + 1usize])
+    i = 0usize
+    while i < nsplit {
+        sc.counter[i] = 0usize
+        sc.wsums[i] = 0.0f64
+        var r = 0usize
+        while r < rl {
+            sc.bs[i * rl + r] = 0.0f64
+            r += 1usize
+        }
+        r = 0usize
+        while r < kk {
+            sc.bw[i * kk + r] = 0.0f64
+            sc.bq[i * kk + r] = 0.0f64
+            sc.bm[i * kk + r] = 0usize
+            r += 1usize
+        }
+        i += 1usize
+    }
+    var si = 0usize
+    i = 0usize
+    while i + 1usize < size {
+        let s = sc.ids[i]
+        let w = weight_of(d, s)
+        sc.wsums[si] += w
+        var r = 0usize
+        while r < rl {
+            sc.bs[si * rl + r] += w * sc.rm[s * rl + r]
+            r += 1usize
+        }
+        sc.counter[si] += 1usize
+        r = 0usize
+        while r < kk {
+            let tv = d.tm[s * kk + r]
+            sc.bw[si * kk + r] += w * tv
+            sc.bq[si * kk + r] += w * (tv * tv)
+            if tv < sc.nv[o_mean + r] { sc.bm[si * kk + r] += 1usize }
+            r += 1usize
+        }
+        if sc.keys[i] != sc.keys[i + 1usize] { si += 1usize }
+        i += 1usize
+    }
+    var n_left = 0usize
+    var wl = 0.0f64
+    i = 0usize
+    while i < rl + 2usize * kk {
+        sc.nv[o_ls + i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < kk {
+        sc.nvi[kk + i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < nsplit {
+        n_left += sc.counter[i]
+        wl += sc.wsums[i]
+        var r = 0usize
+        while r < rl {
+            sc.nv[o_ls + r] += sc.bs[i * rl + r]
+            r += 1usize
+        }
+        r = 0usize
+        while r < kk {
+            sc.nvi[kk + r] += sc.bm[i * kk + r]
+            sc.nv[o_lw + r] += sc.bw[i * kk + r]
+            sc.nv[o_lq + r] += sc.bq[i * kk + r]
+            r += 1usize
+        }
+        let n_right = size - n_left
+        var skip = false
+        var stop = false
+        if stab {
+            r = 0usize
+            while r < kk {
+                if sc.nvi[kk + r] < mns || n_left - sc.nvi[kk + r] < mns { skip = true }
+                r += 1usize
+            }
+            if !skip {
+                r = 0usize
+                while r < kk {
+                    let small_r = i64(sc.nvi[r]) - i64(sc.nvi[kk + r])
+                    let large_r = i64(n_right) - small_r
+                    if small_r < i64(mns) || large_r < i64(mns) { stop = true }
+                    r += 1usize
+                }
+            }
+            if !skip && !stop {
+                let wr = wnode - wl
+                var any_l = false
+                var all_l0 = true
+                var any_r = false
+                var all_r0 = true
+                r = 0usize
+                while r < kk {
+                    let sl = sc.nv[o_lq + r] - sc.nv[o_lw + r] * sc.nv[o_lw + r] / wl
+                    let swr = sc.nv[o_w + r] - sc.nv[o_lw + r]
+                    let sr = sc.nv[o_q + r] - sc.nv[o_lq + r] - swr * swr / wr
+                    if sl < sc.nv[o_min + r] { any_l = true }
+                    if sl != 0.0f64 { all_l0 = false }
+                    if sr < sc.nv[o_min + r] { any_r = true }
+                    if sr != 0.0f64 { all_r0 = false }
+                    r += 1usize
+                }
+                if any_l || (imb > 0.0f64 && all_l0) { skip = true }
+                if any_r || (imb > 0.0f64 && all_r0) { skip = true }
+            }
+        } else {
+            if n_left < mc { skip = true }
+            if !skip && n_right < mc { stop = true }
+        }
+        if stop { break }
+        if skip {
+            i += 1usize
+            continue
+        }
+        let wr2 = wnode - wl
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        var r2 = 0usize
+        while r2 < rl {
+            let l = sc.nv[o_ls + r2]
+            let rr = sc.nv[r2] - l
+            s1 += l * l
+            s2 += rr * rr
+            r2 += 1usize
+        }
+        var dec = s1 / wl + s2 / wr2
+        dec -= imb * (1.0f64 / f64(n_left) + 1.0f64 / f64(n_right))
+        if dec > best.dec {
+            best.val = sc.uniq[i]
+            best.sv = v
+            best.dec = dec
+        }
+        i += 1usize
+    }
+}
+
 // column j of the training matrix: the covariates, then the outcome (ll.split.variables count from 1 in the R wrapper but index from 0 in the core,
 // so the default 1..p reaches the outcome column; the same here)
 fn colval(d: *const Data, s: usize, j: usize) -> f64 {
@@ -958,6 +1331,38 @@ fn honesty_prune(t: *Tree) {
     t.root = prune_node(t, t.root)
 }
 
+// RandomSampler::sample_from_clusters: every row of a cluster no bigger than samples_per_cluster, else a random samples_per_cluster of its rows
+fn expand_clusters(g: *Mt64, o: *const Opts, ids: []const usize, out: []usize, tmp: []usize) -> usize {
+    var m = 0usize
+    var i = 0usize
+    while i < ids.len {
+        let cs = o.cl_start[ids[i]]
+        let ln = o.cl_start[ids[i] + 1usize] - cs
+        var r = 0usize
+        if ln <= o.spc {
+            while r < ln {
+                out[m + r] = o.cl_rows[cs + r]
+                r += 1usize
+            }
+            m += ln
+        } else {
+            while r < ln {
+                tmp[r] = o.cl_rows[cs + r]
+                r += 1usize
+            }
+            shuffle(g, tmp, ln)
+            r = 0usize
+            while r < o.spc {
+                out[m + r] = tmp[r]
+                r += 1usize
+            }
+            m += o.spc
+        }
+        i += 1usize
+    }
+    ret m
+}
+
 fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, o: *const Opts) -> (Tree, err) {
     var t: Tree = zero
     let nc = clusters.len
@@ -967,18 +1372,43 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
         nsub = ceil_size(nc, o.honesty_fraction)
         nnew = nc - nsub
     }
-    let cap = 2usize * nsub + 2usize
+    let nsubc = nsub
+    let clustered = o.cl_start.len > 0usize
+    var nbound = nsub
+    var lsbound = nsub + nnew
+    var drawbound = nc
+    if clustered {
+        nbound = d.n
+        lsbound = d.n
+        drawbound = d.n
+    }
+    let cap = 2usize * nbound + 2usize
     let (left, e1) = gz_usize(a, cap)
     let (right, e2) = gz_usize(a, cap)
     let (svar, e3) = gz_usize(a, cap)
     let (sval, e4) = gz_f64(a, cap)
     let (ls_start, e5) = gz_usize(a, cap)
     let (ls_len, e6) = gz_usize(a, cap)
-    let (ls, e7) = gz_usize(a, nsub + nnew)
+    let (ls, e7) = gz_usize(a, lsbound)
     let (pv, e8) = gz_f64(a, cap * NV)
     let (e9v, e9) = gz_f64(a, 1usize)
     let (pv_ok, e10) = gz_bool(a, cap)
-    let (drawn, e11) = gz_usize(a, nc)
+    var pcn = 1usize
+    if o.kind == 5usize { pcn = o.nclass + 1usize }
+    var mrl = 0usize
+    var mkk = 0usize
+    if o.kind == 6usize {
+        mkk = d.ntr
+        mrl = d.ntr * d.nout
+        pcn = d.ntr * (d.ntr + d.nout + 1usize) + d.nout + 1usize
+    }
+    if o.kind == 7usize {
+        mrl = d.nout
+        pcn = d.nout + 1usize
+    }
+    let (pcv, e12) = gz_f64(a, cap * pcn)
+    if e12 != ok { ret (t, e12) }
+    let (drawn, e11) = gz_usize(a, drawbound)
     if e1 != ok { ret (t, e1) }
     if e2 != ok { ret (t, e2) }
     if e3 != ok { ret (t, e3) }
@@ -991,9 +1421,25 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
     if e10 != ok { ret (t, e10) }
     if e11 != ok { ret (t, e11) }
     var i = 0usize
-    while i < nc {
-        drawn[i] = clusters[i]
-        i += 1usize
+    var ndrawn = nc
+    if clustered {
+        ndrawn = 0usize
+        while i < nc {
+            let cs = o.cl_start[clusters[i]]
+            let ce = o.cl_start[clusters[i] + 1usize]
+            var r = cs
+            while r < ce {
+                drawn[ndrawn] = o.cl_rows[r]
+                ndrawn += 1usize
+                r += 1usize
+            }
+            i += 1usize
+        }
+    } else {
+        while i < nc {
+            drawn[i] = clusters[i]
+            i += 1usize
+        }
     }
     t.left = left
     t.right = right
@@ -1004,48 +1450,68 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
     t.ls = ls
     t.pv = pv
     t.pv_ok = pv_ok
-    t.nd = nc
+    t.pc = pcv
+    t.pcn = pcn
+    t.nd = ndrawn
     t.drawn = drawn
     t.root = 0usize
     let mark = mem.mark(a)
     let (shuf, h1) = gz_usize(a, nc)
-    let (perm, h2) = gz_usize(a, nsub)
+    let (perm, h2) = gz_usize(a, nbound)
+    let (newr, h17) = gz_usize(a, lsbound)
     let (nstart, h3) = gz_usize(a, cap)
     let (nlen, h4) = gz_usize(a, cap)
-    let (tmp, h5) = gz_usize(a, nsub)
-    let (keys, h6) = gz_f64(a, nsub)
-    let (ids, h7) = gz_usize(a, nsub)
-    let (tk, h8) = gz_f64(a, nsub)
-    let (ti, h9) = gz_usize(a, nsub)
-    let (uniq, h10) = gz_f64(a, nsub)
-    let (counter, h11) = gz_usize(a, nsub)
-    let (sums, h12) = gz_f64(a, nsub)
-    let (wsums, h13) = gz_f64(a, nsub)
+    let (tmp, h5) = gz_usize(a, nbound)
+    let (keys, h6) = gz_f64(a, nbound)
+    let (ids, h7) = gz_usize(a, nbound)
+    let (tk, h8) = gz_f64(a, nbound)
+    let (ti, h9) = gz_usize(a, nbound)
+    let (uniq, h10) = gz_f64(a, nbound)
+    let (counter, h11) = gz_usize(a, nbound)
+    let (sums, h12) = gz_f64(a, nbound)
+    let (wsums, h13) = gz_f64(a, nbound)
     var nskip = 1usize
     if o.kind == 4usize { nskip = 2usize }
     if o.kind == 1usize {
         nskip = 2usize
         if d.zsep { nskip = 3usize }
     }
+    if o.kind == 6usize { nskip = d.nout + d.ntr }
+    if o.kind == 7usize { nskip = d.nout }
     if d.w.len > 0usize { nskip += 1usize }
     let ncol = d.p + nskip
+    let (rmv, m1) = gz_f64(a, d.n * mrl)
+    let (bsv, m2) = gz_f64(a, nbound * mrl)
+    let (bwv, m3) = gz_f64(a, nbound * mkk)
+    let (bqv, m4) = gz_f64(a, nbound * mkk)
+    let (bmv, m5) = gz_usize(a, nbound * mkk)
+    let (nvv, m6) = gz_f64(a, 2usize * mrl + 6usize * mkk + 2usize)
+    let (nviv, m7) = gz_usize(a, 2usize * mkk)
+    if m1 != ok { ret (t, m1) }
+    if m2 != ok { ret (t, m2) }
+    if m3 != ok { ret (t, m3) }
+    if m4 != ok { ret (t, m4) }
+    if m5 != ok { ret (t, m5) }
+    if m6 != ok { ret (t, m6) }
+    if m7 != ok { ret (t, m7) }
     let (resp, g1) = gz_f64(a, d.n)
-    let (nsm, g2) = gz_usize(a, nsub)
-    let (szv, g3) = gz_f64(a, nsub)
-    let (szzv, g4) = gz_f64(a, nsub)
+    let (nsm, g2) = gz_usize(a, nbound)
+    let (szv, g3) = gz_f64(a, nbound)
+    let (szzv, g4) = gz_f64(a, nbound)
     if g1 != ok { ret (t, g1) }
     if g2 != ok { ret (t, g2) }
     if g3 != ok { ret (t, g3) }
     if g4 != ok { ret (t, g4) }
-    let ncls = o.quantiles.len + 1usize
+    var ncls = o.quantiles.len + 1usize
+    if o.kind == 5usize { ncls = o.nclass }
     let (cutv, g5) = gz_f64(a, o.quantiles.len)
-    let (clsv, g6) = gz_f64(a, nsub * ncls)
+    let (clsv, g6) = gz_f64(a, nbound * ncls)
     let (ccv, g7) = gz_f64(a, ncls)
     if g5 != ok { ret (t, g5) }
     if g6 != ok { ret (t, g6) }
     if g7 != ok { ret (t, g7) }
     let lk = o.ll_vars.len + 1usize
-    let (llxv, g8) = gz_f64(a, nsub * lk)
+    let (llxv, g8) = gz_f64(a, nbound * lk)
     let (llmv, g9) = gz_f64(a, lk * lk)
     let (llbv, g10) = gz_f64(a, lk)
     let (llzv, g11) = gz_f64(a, lk)
@@ -1055,7 +1521,7 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
     if g11 != ok { ret (t, g11) }
     let (relv, g12) = gz_usize(a, d.n)
     var svn = 1usize
-    if o.kind == 4usize { svn = 8usize * (nsub + 2usize) }
+    if o.kind == 4usize { svn = 8usize * (nbound + 2usize) }
     let (svv, g13) = gz_f64(a, svn)
     if g12 != ok { ret (t, g12) }
     if g13 != ok { ret (t, g13) }
@@ -1064,6 +1530,7 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
     let (pool, h16) = gz_usize(a, ncol)
     if h1 != ok { ret (t, h1) }
     if h2 != ok { ret (t, h2) }
+    if h17 != ok { ret (t, h17) }
     if h3 != ok { ret (t, h3) }
     if h4 != ok { ret (t, h4) }
     if h5 != ok { ret (t, h5) }
@@ -1103,6 +1570,13 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
     sc.llz = llzv
     sc.rel = relv
     sc.sv = svv
+    sc.rm = rmv
+    sc.bs = bsv
+    sc.bw = bwv
+    sc.bq = bqv
+    sc.bm = bmv
+    sc.nv = nvv
+    sc.nvi = nviv
     i = 0usize
     while i < d.n {
         resp[i] = 0.0f64
@@ -1115,16 +1589,28 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
         i += 1usize
     }
     if o.honesty { shuffle(g, shuf, nc) }
-    i = 0usize
-    while i < nsub {
-        perm[i] = shuf[i]
-        i += 1usize
+    if clustered {
+        // RandomSampler::sample_from_clusters: the growing clusters' rows first, then the honest half's
+        nsub = expand_clusters(g, o, shuf[0usize..nsubc], perm, tmp)
+        nnew = expand_clusters(g, o, shuf[nsubc..nc], newr, tmp)
+    } else {
+        i = 0usize
+        while i < nsub {
+            perm[i] = shuf[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < nnew {
+            newr[i] = shuf[nsub + i]
+            i += 1usize
+        }
     }
-    var skip: [4]usize = zero
-    skip[0usize] = d.p
-    skip[1usize] = d.p + 1usize
-    skip[2usize] = d.p + 2usize
-    skip[3usize] = d.p + 3usize
+    var skip: [16]usize = zero
+    var sk = 0usize
+    while sk < 16usize {
+        skip[sk] = d.p + sk
+        sk += 1usize
+    }
     let nindep = ncol - nskip
     nstart[0usize] = 0usize
     nlen[0usize] = nsub
@@ -1147,12 +1633,90 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
             if o.kind == 1usize { stop = relabel_iv(d, &sc, node, o.rfw) }
             if o.kind == 3usize { relabel_ll(d, &sc, node, o) }
             if o.kind == 4usize {
-                split_node_surv(d, &sc, node, mtry_s, o.alpha, nsub + 2usize, &best)
+                split_node_surv(d, &sc, node, mtry_s, o.alpha, nbound + 2usize, &best)
                 if best.dec > 0.0f64 { found = true }
                 stop = true
             }
-            if o.kind == 2usize {
-                relabel_quantile(d, &sc, node, o.quantiles)
+            if o.kind == 6usize || o.kind == 7usize {
+                stop = true
+                var rstop = false
+                if o.kind == 6usize {
+                    rstop = relabel_multi(d, &sc, node)
+                } else {
+                    var rq = 0usize
+                    while rq < ln {
+                        var ro = 0usize
+                        while ro < mrl {
+                            sc.rm[node[rq] * mrl + ro] = d.ym[node[rq] * mrl + ro]
+                            ro += 1usize
+                        }
+                        rq += 1usize
+                    }
+                }
+                if !rstop {
+                    // node sums: responses, then per treatment the weighted sum and sum of squares, the mean and the minimum child size
+                    var wnode = 0.0f64
+                    var q = 0usize
+                    while q < 2usize * mrl + 6usize * mkk + 2usize {
+                        sc.nv[q] = 0.0f64
+                        q += 1usize
+                    }
+                    q = 0usize
+                    while q < ln {
+                        let s = node[q]
+                        let w = weight_of(d, s)
+                        wnode += w
+                        var r = 0usize
+                        while r < mrl {
+                            sc.nv[r] += w * sc.rm[s * mrl + r]
+                            r += 1usize
+                        }
+                        r = 0usize
+                        while r < mkk {
+                            let tv = d.tm[s * mkk + r]
+                            sc.nv[mrl + r] += w * tv
+                            sc.nv[mrl + mkk + r] += w * (tv * tv)
+                            r += 1usize
+                        }
+                        q += 1usize
+                    }
+                    var u = 0usize
+                    while u < mkk {
+                        let sw1 = sc.nv[mrl + u]
+                        let size_node = sc.nv[mrl + mkk + u] - sw1 * sw1 / wnode
+                        sc.nv[mrl + 2usize * mkk + u] = sw1 / wnode
+                        sc.nv[mrl + 3usize * mkk + u] = size_node * o.alpha
+                        sc.nvi[u] = 0usize
+                        u += 1usize
+                    }
+                    q = 0usize
+                    while q < ln {
+                        u = 0usize
+                        while u < mkk {
+                            if d.tm[node[q] * mkk + u] < sc.nv[mrl + 2usize * mkk + u] { sc.nvi[u] += 1usize }
+                            u += 1usize
+                        }
+                        q += 1usize
+                    }
+                    sc.nv[2usize * mrl + 6usize * mkk] = wnode
+                    sc.nv[2usize * mrl + 6usize * mkk + 1usize] = f64(min_child)
+                    q = 0usize
+                    while q < mtry_s {
+                        split_multi(d, &sc, node, sc.vars[q], o.kind == 6usize && o.stabilize, mkk, mrl, o.min_node_size, o.imbalance_penalty, &best)
+                        q += 1usize
+                    }
+                    if best.dec > 0.0f64 { found = true }
+                }
+            }
+            if o.kind == 2usize || o.kind == 5usize {
+                if o.kind == 2usize { relabel_quantile(d, &sc, node, o.quantiles) }
+                if o.kind == 5usize {
+                    var rq = 0usize
+                    while rq < ln {
+                        sc.resp[node[rq]] = d.y[node[rq]]
+                        rq += 1usize
+                    }
+                }
                 var c = 0usize
                 while c < ncls {
                     sc.cc[c] = 0.0f64
@@ -1264,7 +1828,7 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
         }
         q = 0usize
         while q < nnew {
-            let s = shuf[nsub + q]
+            let s = newr[q]
             let lf = find_leaf(&t, d.x, d.p, s)
             ls_len[lf] += 1usize
             q += 1usize
@@ -1278,7 +1842,7 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
         }
         q = 0usize
         while q < nnew {
-            let s = shuf[nsub + q]
+            let s = newr[q]
             let lf = find_leaf(&t, d.x, d.p, s)
             ls[ls_start[lf] + ls_len[lf]] = s
             ls_len[lf] += 1usize
@@ -1298,6 +1862,99 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
             if !is_leaf(&t, q) { ls_len[q] = 0usize }
             q += 1usize
         }
+    }
+    if o.kind == 6usize || o.kind == 7usize {
+        let kk = d.ntr
+        let no = d.nout
+        var lq = 0usize
+        while lq < nn {
+            let cnt = ls_len[lq]
+            if cnt > 0usize {
+                var sw = 0.0f64
+                var sy: [8]f64 = zero
+                var swt: [8]f64 = zero
+                var syw: [64]f64 = zero
+                var sww: [64]f64 = zero
+                var r = 0usize
+                while r < cnt {
+                    let s = ls[ls_start[lq] + r]
+                    let w = weight_of(d, s)
+                    var j = 0usize
+                    if o.kind == 7usize {
+                        while j < no {
+                            sy[j] += w * d.ym[s * no + j]
+                            j += 1usize
+                        }
+                    } else {
+                        while j < no {
+                            sy[j] += w * d.ym[s * no + j]
+                            j += 1usize
+                        }
+                        j = 0usize
+                        while j < kk {
+                            swt[j] += w * d.tm[s * kk + j]
+                            var jo = 0usize
+                            while jo < no {
+                                syw[jo * kk + j] += (w * d.tm[s * kk + j]) * d.ym[s * no + jo]
+                                jo += 1usize
+                            }
+                            var jk = 0usize
+                            while jk < kk {
+                                sww[jk * kk + j] += (w * d.tm[s * kk + j]) * d.tm[s * kk + jk]
+                                jk += 1usize
+                            }
+                            j += 1usize
+                        }
+                    }
+                    sw += w
+                    r += 1usize
+                }
+                if math.abs[f64](sw) > 1.0e-16f64 {
+                    pv_ok[lq] = true
+                    let b = lq * pcn
+                    let c = f64(cnt)
+                    if o.kind == 7usize {
+                        var j = 0usize
+                        while j < no {
+                            pcv[b + j] = sy[j] / c
+                            j += 1usize
+                        }
+                        pcv[b + no] = sw / c
+                    } else {
+                        var at = 0usize
+                        pcv[b] = sw / c
+                        at = 1usize
+                        var j = 0usize
+                        while j < no {
+                            pcv[b + at] = sy[j] / c
+                            at += 1usize
+                            j += 1usize
+                        }
+                        j = 0usize
+                        while j < kk {
+                            pcv[b + at] = swt[j] / c
+                            at += 1usize
+                            j += 1usize
+                        }
+                        j = 0usize
+                        while j < kk * no {
+                            pcv[b + at] = syw[j] / c
+                            at += 1usize
+                            j += 1usize
+                        }
+                        j = 0usize
+                        while j < kk * kk {
+                            pcv[b + at] = sww[j] / c
+                            at += 1usize
+                            j += 1usize
+                        }
+                    }
+                }
+            }
+            lq += 1usize
+        }
+        mem.reset(a, mark)
+        ret (t, ok)
     }
     var q = 0usize
     while q < nn {
@@ -1326,6 +1983,20 @@ fn train_tree(a: *mem.Arena, d: *const Data, g: *Mt64, clusters: []const usize, 
                     szz += w * z * z
                 }
                 r += 1usize
+            }
+            if o.kind == 5usize && math.abs[f64](wt) > 1.0e-16f64 {
+                r = 0usize
+                while r < cnt {
+                    let s = ls[ls_start[q] + r]
+                    pcv[q * pcn + usize(d.y[s])] += weight_of(d, s)
+                    r += 1usize
+                }
+                var kc = 0usize
+                while kc < o.nclass {
+                    pcv[q * pcn + kc] = pcv[q * pcn + kc] / f64(cnt)
+                    kc += 1usize
+                }
+                pcv[q * pcn + o.nclass] = wt / f64(cnt)
             }
             if math.abs[f64](wt) > 1.0e-16f64 {
                 pv_ok[q] = true
@@ -1356,14 +2027,75 @@ fn sample_rows(g: *Mt64, out: []usize, n: usize) {
     shuffle(g, out, n)
 }
 
-fn train(a: *mem.Arena, d: *const Data, o: *const Opts) -> (Forest, err) {
+fn train(a: *mem.Arena, d: *const Data, o0: *const Opts) -> (Forest, err) {
     var f: Forest = zero
+    var oc = *o0
+    let o = &oc
+    // SamplingOptions: cluster labels become ids in order of first appearance; rows keep their order inside a cluster
+    var nu = d.n
+    if o0.cluster.len > 0usize {
+        let (cid, c1) = gz_usize(a, d.n)
+        let (cstart, c2) = gz_usize(a, d.n + 2usize)
+        let (crows, c3) = gz_usize(a, d.n)
+        let (cnt, c4) = gz_usize(a, d.n + 1usize)
+        let (lab, c5) = gz_usize(a, d.n)
+        if c1 != ok { ret (f, c1) }
+        if c2 != ok { ret (f, c2) }
+        if c3 != ok { ret (f, c3) }
+        if c4 != ok { ret (f, c4) }
+        if c5 != ok { ret (f, c5) }
+        var kk = 0usize
+        var s = 0usize
+        while s < d.n {
+            var found = false
+            var q = 0usize
+            while q < kk {
+                if lab[q] == o0.cluster[s] {
+                    cid[s] = q
+                    found = true
+                    q = kk
+                }
+                q += 1usize
+            }
+            if !found {
+                lab[kk] = o0.cluster[s]
+                cid[s] = kk
+                kk += 1usize
+            }
+            cnt[cid[s]] += 1usize
+            s += 1usize
+        }
+        var run = 0usize
+        var cq = 0usize
+        var smin = d.n
+        var smax = 0usize
+        while cq < kk {
+            cstart[cq] = run
+            run += cnt[cq]
+            if cnt[cq] < smin { smin = cnt[cq] }
+            if cnt[cq] > smax { smax = cnt[cq] }
+            cnt[cq] = 0usize
+            cq += 1usize
+        }
+        cstart[kk] = run
+        s = 0usize
+        while s < d.n {
+            crows[cstart[cid[s]] + cnt[cid[s]]] = s
+            cnt[cid[s]] += 1usize
+            s += 1usize
+        }
+        oc.cl_start = cstart[0usize..kk + 1usize]
+        oc.cl_rows = crows
+        oc.spc = smax
+        if o0.equalize { oc.spc = smin }
+        nu = kk
+    }
     let ci = o.ci_group_size
     let groups = o.num_trees / ci
     let ntree = groups * ci
     let (trees, te) = mem.alloc[Tree](a, ntree + 1usize)
-    let (pool, pe) = gz_usize(a, d.n)
-    let (sub, se) = gz_usize(a, d.n)
+    let (pool, pe) = gz_usize(a, nu)
+    let (sub, se) = gz_usize(a, nu)
     if te != ok { ret (f, te) }
     if pe != ok { ret (f, pe) }
     if se != ok { ret (f, se) }
@@ -1378,15 +2110,15 @@ fn train(a: *mem.Arena, d: *const Data, o: *const Opts) -> (Forest, err) {
     while gi < groups {
         mt64_seed(&g, (o.seed + u64(gi)) & 4294967295u64)
         if ci == 1usize {
-            let take = usize(f64(d.n) * o.sample_fraction)
-            sample_rows(&g, pool, d.n)
+            let take = usize(f64(nu) * o.sample_fraction)
+            sample_rows(&g, pool, nu)
             let (t, e) = train_tree(a, d, &g, pool[0usize..take], o)
             if e != ok { ret (f, e) }
             trees[ti] = t
             ti += 1usize
         } else {
-            let half = usize(f64(d.n) * 0.5f64)
-            sample_rows(&g, pool, d.n)
+            let half = usize(f64(nu) * 0.5f64)
+            sample_rows(&g, pool, nu)
             var j = 0usize
             while j < ci {
                 let sz = ceil_size(half, o.sample_fraction * 2.0f64)
@@ -1623,6 +2355,499 @@ fn predict(a: *mem.Arena, f: *const Forest, d: *const Data, xnew: []const f64, n
     ret (r, ok)
 }
 
+// probability_forest predictions: pred and vest are nnew by nclass row-major (vest only when want_var); a row with no usable tree is NaN
+fn predict_prob(a: *mem.Arena, f: *const Forest, xnew: []const f64, nnew: usize, oob: bool, want_var: bool, nclass: usize, pred: []f64, vest: []f64) -> err {
+    let pcn = nclass + 1usize
+    let (avg, e5) = gz_f64(a, pcn)
+    let (lnode, e6) = gz_usize(a, f.ntree)
+    let (lok, e7) = gz_bool(a, f.ntree)
+    let (inbag, e8) = gz_bool(a, f.ntree * f.n)
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    if e7 != ok { ret e7 }
+    if e8 != ok { ret e8 }
+    let nan = special.nan()
+    if oob {
+        var t = 0usize
+        while t < f.ntree {
+            var q = 0usize
+            while q < f.trees[t].nd {
+                inbag[t * f.n + f.trees[t].drawn[q]] = true
+                q += 1usize
+            }
+            t += 1usize
+        }
+    }
+    var s = 0usize
+    while s < nnew {
+        var k = 0usize
+        while k < pcn {
+            avg[k] = 0.0f64
+            k += 1usize
+        }
+        var nleaves = 0usize
+        var t = 0usize
+        while t < f.ntree {
+            lok[t] = false
+            if oob && inbag[t * f.n + s] {
+                t += 1usize
+                continue
+            }
+            let tr = &f.trees[t]
+            let node = find_leaf(tr, xnew, f.p, s)
+            if tr.pv_ok[node] {
+                nleaves += 1usize
+                lnode[t] = node
+                lok[t] = true
+                k = 0usize
+                while k < pcn {
+                    avg[k] += tr.pc[node * pcn + k]
+                    k += 1usize
+                }
+            }
+            t += 1usize
+        }
+        if nleaves == 0usize {
+            k = 0usize
+            while k < nclass {
+                pred[s * nclass + k] = nan
+                if want_var { vest[s * nclass + k] = nan }
+                k += 1usize
+            }
+            s += 1usize
+            continue
+        }
+        k = 0usize
+        while k < pcn {
+            avg[k] = avg[k] / f64(nleaves)
+            k += 1usize
+        }
+        let wbar = avg[nclass]
+        var c = 0usize
+        while c < nclass {
+            let mu = avg[c] / wbar
+            pred[s * nclass + c] = mu
+            if want_var {
+                var good = 0.0f64
+                var rho_sq = 0.0f64
+                var rho_grp_sq = 0.0f64
+                var grp = 0usize
+                while grp < f.ntree / f.ci {
+                    var all_ok = true
+                    var j = 0usize
+                    while j < f.ci {
+                        if !lok[grp * f.ci + j] { all_ok = false }
+                        j += 1usize
+                    }
+                    if all_ok {
+                        good += 1.0f64
+                        var group_rho = 0.0f64
+                        j = 0usize
+                        while j < f.ci {
+                            let ti = grp * f.ci + j
+                            let b = lnode[ti] * pcn
+                            let rho = (f.trees[ti].pc[b + c] - mu * f.trees[ti].pc[b + nclass]) / wbar
+                            rho_sq += rho * rho
+                            group_rho += rho
+                            j += 1usize
+                        }
+                        group_rho /= f64(f.ci)
+                        rho_grp_sq += group_rho * group_rho
+                    }
+                    grp += 1usize
+                }
+                let var_between = rho_grp_sq / good
+                let var_total = rho_sq / (good * f64(f.ci))
+                let group_noise = (var_total - var_between) / f64(f.ci - 1usize)
+                vest[s * nclass + c] = debias(var_between, group_noise, good)
+            }
+            c += 1usize
+        }
+        s += 1usize
+    }
+    ret ok
+}
+
+// multi_arm_causal_forest (kind 6: K treatment columns, nout outcomes; pred[s * K * nout + t + K * o] is the effect of treatment t on outcome o, vest[s * K + t]
+// the variance estimate, one outcome only) and multi_regression_forest (kind 7: pred[s * nout + o]); d carries the training counts
+fn predict_multi(a: *mem.Arena, f: *const Forest, kind: usize, kk: usize, no: usize, xnew: []const f64, nnew: usize, oob: bool, want_var: bool, pred: []f64, vest: []f64) -> err {
+    var pcn = no + 1usize
+    var plen = no
+    if kind == 6usize {
+        pcn = kk * (kk + no + 1usize) + no + 1usize
+        plen = kk * no
+    }
+    let (avg, e5) = gz_f64(a, pcn)
+    let (lnode, e6) = gz_usize(a, f.ntree)
+    let (lok, e7) = gz_bool(a, f.ntree)
+    let (inbag, e8) = gz_bool(a, f.ntree * f.n)
+    let (m1, e9) = gz_f64(a, kk * kk)
+    let (m2, e10) = gz_f64(a, kk * kk)
+    let (m3, e11) = gz_f64(a, kk * kk)
+    let (m4, e12) = gz_f64(a, kk * kk)
+    let (wk, e13) = gz_f64(a, kk * kk)
+    let (v1, e14) = gz_f64(a, kk)
+    let (v2, e15) = gz_f64(a, kk)
+    let (v3, e16) = gz_f64(a, kk)
+    let (v4, e17) = gz_f64(a, kk)
+    let (v5, e18) = gz_f64(a, kk)
+    let (v6, e19) = gz_f64(a, kk)
+    let (v7, e20) = gz_f64(a, kk)
+    let (v8, e21) = gz_f64(a, kk)
+    let (v9, e22) = gz_f64(a, kk)
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    if e7 != ok { ret e7 }
+    if e8 != ok { ret e8 }
+    if e9 != ok { ret e9 }
+    if e10 != ok { ret e10 }
+    if e11 != ok { ret e11 }
+    if e12 != ok { ret e12 }
+    if e13 != ok { ret e13 }
+    if e14 != ok { ret e14 }
+    if e15 != ok { ret e15 }
+    if e16 != ok { ret e16 }
+    if e17 != ok { ret e17 }
+    if e18 != ok { ret e18 }
+    if e19 != ok { ret e19 }
+    if e20 != ok { ret e20 }
+    if e21 != ok { ret e21 }
+    if e22 != ok { ret e22 }
+    let nan = special.nan()
+    if oob {
+        var t = 0usize
+        while t < f.ntree {
+            var q = 0usize
+            while q < f.trees[t].nd {
+                inbag[t * f.n + f.trees[t].drawn[q]] = true
+                q += 1usize
+            }
+            t += 1usize
+        }
+    }
+    let i_y = 1usize
+    let i_w = 1usize + no
+    let i_yw = 1usize + no + kk
+    let i_ww = 1usize + no + kk + kk * no
+    var s = 0usize
+    while s < nnew {
+        var k = 0usize
+        while k < pcn {
+            avg[k] = 0.0f64
+            k += 1usize
+        }
+        var nleaves = 0usize
+        var t = 0usize
+        while t < f.ntree {
+            lok[t] = false
+            if oob && inbag[t * f.n + s] {
+                t += 1usize
+                continue
+            }
+            let tr = &f.trees[t]
+            let node = find_leaf(tr, xnew, f.p, s)
+            if tr.pv_ok[node] {
+                nleaves += 1usize
+                lnode[t] = node
+                lok[t] = true
+                k = 0usize
+                while k < pcn {
+                    avg[k] += tr.pc[node * pcn + k]
+                    k += 1usize
+                }
+            }
+            t += 1usize
+        }
+        if nleaves == 0usize {
+            k = 0usize
+            while k < plen {
+                pred[s * plen + k] = nan
+                k += 1usize
+            }
+            if want_var {
+                k = 0usize
+                while k < kk {
+                    vest[s * kk + k] = nan
+                    k += 1usize
+                }
+            }
+            s += 1usize
+            continue
+        }
+        k = 0usize
+        while k < pcn {
+            avg[k] = avg[k] / f64(nleaves)
+            k += 1usize
+        }
+        if kind == 7usize {
+            k = 0usize
+            while k < no {
+                pred[s * plen + k] = avg[k] / avg[no]
+                k += 1usize
+            }
+            s += 1usize
+            continue
+        }
+        let wbar = avg[0usize]
+        // theta = (WW wbar - W W') ^ -1 (YW wbar - W Y'), kk by no
+        var a1 = 0usize
+        while a1 < kk {
+            var b1 = 0usize
+            while b1 < kk {
+                m1[a1 * kk + b1] = avg[i_ww + b1 * kk + a1] * wbar - avg[i_w + a1] * avg[i_w + b1]
+                b1 += 1usize
+            }
+            a1 += 1usize
+        }
+        let _d1 = lu_inverse(m1, kk, m2, wk)
+        var o1 = 0usize
+        while o1 < no {
+            var a2 = 0usize
+            while a2 < kk {
+                var acc = 0.0f64
+                var b2 = 0usize
+                while b2 < kk {
+                    acc += m2[a2 * kk + b2] * (avg[i_yw + o1 * kk + b2] * wbar - avg[i_w + b2] * avg[i_y + o1])
+                    b2 += 1usize
+                }
+                pred[s * plen + a2 + kk * o1] = acc
+                a2 += 1usize
+            }
+            o1 += 1usize
+        }
+        if want_var {
+            // one outcome: v1 = theta
+            a1 = 0usize
+            while a1 < kk {
+                v1[a1] = pred[s * plen + a1]
+                a1 += 1usize
+            }
+            var tw = 0.0f64
+            a1 = 0usize
+            while a1 < kk {
+                tw += v1[a1] * avg[i_w + a1]
+                a1 += 1usize
+            }
+            let main_effect = (avg[i_y] - tw) / wbar
+            // WW ^ -1
+            a1 = 0usize
+            while a1 < kk {
+                var b1 = 0usize
+                while b1 < kk {
+                    m3[a1 * kk + b1] = avg[i_ww + b1 * kk + a1]
+                    b1 += 1usize
+                }
+                a1 += 1usize
+            }
+            let _d2 = lu_inverse(m3, kk, m4, wk)
+            // v2 = WWi W
+            a1 = 0usize
+            while a1 < kk {
+                var acc = 0.0f64
+                var b1 = 0usize
+                while b1 < kk {
+                    acc += m4[a1 * kk + b1] * avg[i_w + b1]
+                    b1 += 1usize
+                }
+                v2[a1] = acc
+                a1 += 1usize
+            }
+            var wwiw = 0.0f64
+            a1 = 0usize
+            while a1 < kk {
+                wwiw += avg[i_w + a1] * v2[a1]
+                a1 += 1usize
+            }
+            let kcoef = wbar - wwiw
+            // term1 = WWi + (1 / k) (WWi W) (WWi W)' (WWi symmetric); term2 = (1 / k) WWi W
+            a1 = 0usize
+            while a1 < kk {
+                var b1 = 0usize
+                while b1 < kk {
+                    m1[a1 * kk + b1] = m4[a1 * kk + b1] + 1.0f64 / kcoef * v2[a1] * v2[b1]
+                    b1 += 1usize
+                }
+                v3[a1] = 1.0f64 / kcoef * v2[a1]
+                a1 += 1usize
+            }
+            var good = 0.0f64
+            a1 = 0usize
+            while a1 < kk {
+                v4[a1] = 0.0f64
+                v5[a1] = 0.0f64
+                a1 += 1usize
+            }
+            var grp = 0usize
+            while grp < f.ntree / f.ci {
+                var all_ok = true
+                var j = 0usize
+                while j < f.ci {
+                    if !lok[grp * f.ci + j] { all_ok = false }
+                    j += 1usize
+                }
+                if all_ok {
+                    good += 1.0f64
+                    a1 = 0usize
+                    while a1 < kk {
+                        v6[a1] = 0.0f64
+                        a1 += 1usize
+                    }
+                    j = 0usize
+                    while j < f.ci {
+                        let ti = grp * f.ci + j
+                        let b = lnode[ti] * pcn
+                        let pcv = f.trees[ti].pc
+                        // psi_1 = leaf_YW - leaf_WW theta - leaf_W main_effect, psi_2 = leaf_Y - leaf_W' theta - leaf_weight main_effect
+                        a1 = 0usize
+                        while a1 < kk {
+                            var lw = 0.0f64
+                            var b1 = 0usize
+                            while b1 < kk {
+                                lw += pcv[b + i_ww + b1 * kk + a1] * v1[b1]
+                                b1 += 1usize
+                            }
+                            v7[a1] = pcv[b + i_yw + a1] - lw - pcv[b + i_w + a1] * main_effect
+                            a1 += 1usize
+                        }
+                        var lwt = 0.0f64
+                        a1 = 0usize
+                        while a1 < kk {
+                            lwt += pcv[b + i_w + a1] * v1[a1]
+                            a1 += 1usize
+                        }
+                        let psi2 = pcv[b + i_y] - lwt - pcv[b] * main_effect
+                        a1 = 0usize
+                        while a1 < kk {
+                            var r1 = 0.0f64
+                            var b1 = 0usize
+                            while b1 < kk {
+                                r1 += m1[a1 * kk + b1] * v7[b1]
+                                b1 += 1usize
+                            }
+                            let rho = r1 - v3[a1] * psi2
+                            v4[a1] += rho * rho
+                            v6[a1] += rho
+                            a1 += 1usize
+                        }
+                        j += 1usize
+                    }
+                    a1 = 0usize
+                    while a1 < kk {
+                        let gr = v6[a1] / f64(f.ci)
+                        v5[a1] += gr * gr
+                        a1 += 1usize
+                    }
+                }
+                grp += 1usize
+            }
+            a1 = 0usize
+            while a1 < kk {
+                let var_between = v5[a1] / good
+                let var_total = v4[a1] / (good * f64(f.ci))
+                let group_noise = (var_total - var_between) / f64(f.ci - 1usize)
+                vest[s * kk + a1] = debias(var_between, group_noise, good)
+                a1 += 1usize
+            }
+        }
+        s += 1usize
+    }
+    ret ok
+}
+
+// boosted_regression_forest: a regression forest, then forests on the out-of-bag residuals. steps 0 stops by the error-reduction test on a small forest
+// (boost.error.reduction, boost.max.steps, boost.trees.tune); otherwise exactly `steps` forests are grown. d.y is the outcome; o the regression options.
+type Boosted = struct { forests: []Forest, nf: usize, yhat: []f64, errs: []f64 }
+
+fn mean_na(v: []const f64, n: usize, skip_nan: bool) -> f64 {
+    var s = 0.0f64
+    var k = 0usize
+    var i = 0usize
+    while i < n {
+        if !(skip_nan && v[i] != v[i]) {
+            s += v[i]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret s / f64(k)
+}
+
+fn boosted(a: *mem.Arena, d: *const Data, o: *const Opts, steps: usize, reduction: f64, max_steps: usize, tune_trees: usize) -> (Boosted, err) {
+    var b: Boosted = zero
+    let n = d.n
+    var cap = steps
+    if steps == 0usize { cap = max_steps }
+    let (forests, e1) = mem.alloc[Forest](a, cap + 1usize)
+    let (yhat, e2) = gz_f64(a, n)
+    let (errs, e3) = gz_f64(a, cap + 1usize)
+    let (resid, e4) = gz_f64(a, n)
+    if e1 != ok { ret (b, e1) }
+    if e2 != ok { ret (b, e2) }
+    if e3 != ok { ret (b, e3) }
+    if e4 != ok { ret (b, e4) }
+    b.forests = forests
+    b.yhat = yhat
+    b.errs = errs
+    var dd = *d
+    var oo = *o
+    let (f0, fe0) = train(a, &dd, &oo)
+    if fe0 != ok { ret (b, fe0) }
+    let (p0, pe0) = predict(a, &f0, &dd, dd.x, n, true, false, 0usize)
+    if pe0 != ok { ret (b, pe0) }
+    forests[0usize] = f0
+    var i = 0usize
+    while i < n {
+        yhat[i] = p0.pred[i]
+        i += 1usize
+    }
+    var cur_err = p0.err
+    errs[0usize] = mean_na(cur_err, n, false)
+    var nf = 1usize
+    var step = 2usize
+    while true {
+        i = 0usize
+        while i < n {
+            resid[i] = d.y[i] - yhat[i]
+            i += 1usize
+        }
+        if steps > 0usize {
+            if step > steps { break }
+        } else if step > max_steps {
+            break
+        } else {
+            var os = *o
+            os.num_trees = tune_trees
+            var ds = *d
+            ds.y = resid
+            let (fs, fse) = train(a, &ds, &os)
+            if fse != ok { ret (b, fse) }
+            let (ps, pse) = predict(a, &fs, &ds, ds.x, n, true, false, 0usize)
+            if pse != ok { ret (b, pse) }
+            let ms = mean_na(ps.err, n, true)
+            let mc = mean_na(cur_err, n, true)
+            if !(ms <= reduction * mc) { break }
+        }
+        var dr = *d
+        dr.y = resid
+        let (fr, fre) = train(a, &dr, &oo)
+        if fre != ok { ret (b, fre) }
+        let (pr, pre) = predict(a, &fr, &dr, dr.x, n, true, false, 0usize)
+        if pre != ok { ret (b, pre) }
+        i = 0usize
+        while i < n {
+            yhat[i] += pr.pred[i]
+            i += 1usize
+        }
+        cur_err = pr.err
+        forests[nf] = fr
+        errs[nf] = mean_na(cur_err, n, false)
+        nf += 1usize
+        step += 1usize
+    }
+    b.nf = nf
+    ret (b, ok)
+}
+
 // variable_importance(forest, decay.exponent, max.depth): the depth-weighted share of the splits on each variable
 fn variable_importance(a: *mem.Arena, f: *const Forest, decay: f64, max_depth: usize) -> ([]f64, err) {
     let p = f.p
@@ -1758,6 +2983,396 @@ fn ate_all(scores: []const f64, wts: []const f64, n: usize) -> Ate {
     r.estimate = est
     r.std_err = math.sqrt[f64](ss / (sw * sw) * nadj / (nadj - 1.0f64))
     ret r
+}
+
+// cluster labels as dense ids 0..k-1 (k 0: every row is its own cluster); acc and cnt are k-long scratch
+type Clu = struct { cid: []const usize, k: usize }
+
+type ClSum = struct { sumsq: f64, g: usize }
+
+// the sum over clusters of the squared cluster sums of u[0..m], with the number of clusters seen; cc[i] is the cluster of entry i
+fn clust_sum(acc: []f64, cnt: []usize, k: usize, cc: []const usize, u: []const f64, m: usize) -> ClSum {
+    var q = 0usize
+    while q < k {
+        acc[q] = 0.0f64
+        cnt[q] = 0usize
+        q += 1usize
+    }
+    var i = 0usize
+    while i < m {
+        acc[cc[i]] += u[i]
+        cnt[cc[i]] += 1usize
+        i += 1usize
+    }
+    var r: ClSum = zero
+    q = 0usize
+    while q < k {
+        r.sumsq += acc[q] * acc[q]
+        if cnt[q] > 0usize { r.g += 1usize }
+        q += 1usize
+    }
+    ret r
+}
+
+// ate_all with clusters: sigma2 is the clustered sum of the weighted centred scores
+fn ate_all_c(a: *mem.Arena, scores: []const f64, wts: []const f64, cl: *const Clu, n: usize) -> (Ate, err) {
+    var sw = 0.0f64
+    var sx = 0.0f64
+    var i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if wts.len > 0usize { w = wts[i] }
+        sw += w
+        sx += w * scores[i]
+        i += 1usize
+    }
+    let est = sx / sw
+    let (acc, e1) = gz_f64(a, cl.k + 1usize)
+    let (wacc, e2) = gz_f64(a, cl.k + 1usize)
+    var z: Ate = zero
+    if e1 != ok { ret (z, e1) }
+    if e2 != ok { ret (z, e2) }
+    i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if wts.len > 0usize { w = wts[i] }
+        acc[cl.cid[i]] += (scores[i] - est) * w
+        wacc[cl.cid[i]] += w
+        i += 1usize
+    }
+    var ss = 0.0f64
+    var nadj = 0.0f64
+    var q = 0usize
+    while q < cl.k {
+        ss += acc[q] * acc[q]
+        if wacc[q] > 0.0f64 { nadj += 1.0f64 }
+        q += 1usize
+    }
+    var r: Ate = zero
+    r.estimate = est
+    r.std_err = math.sqrt[f64](ss / (sw * sw) * nadj / (nadj - 1.0f64))
+    ret (r, ok)
+}
+
+// average_treatment_effect(causal forest, target.sample, method). tgt 0 all, 1 treated, 2 control, 3 overlap;
+// method 0 AIPW, 1 TMLE (not with sample weights or clusters, where R stops with an error). tau is the out-of-bag effect, yhat/what the nuisance predictions, wt the 0/1 treatment.
+type Reg = struct { beta: f64, v: f64 }
+
+// lm(B ~ A + 0) over the m entries, and its HC3 variance (sandwich::vcovHC)
+fn reg_origin(aa: []const f64, bb: []const f64, m: usize) -> Reg {
+    var saa = 0.0f64
+    var sab = 0.0f64
+    var i = 0usize
+    while i < m {
+        saa += aa[i] * aa[i]
+        sab += aa[i] * bb[i]
+        i += 1usize
+    }
+    var r: Reg = zero
+    r.beta = sab / saa
+    var meat = 0.0f64
+    i = 0usize
+    while i < m {
+        let e = bb[i] - aa[i] * r.beta
+        let h = aa[i] * aa[i] / saa
+        let o = e * e / ((1.0f64 - h) * (1.0f64 - h))
+        meat += aa[i] * aa[i] * o
+        i += 1usize
+    }
+    r.v = meat / (saa * saa)
+    ret r
+}
+
+fn var_of(x: []const f64, m: usize) -> f64 {
+    var mu = 0.0f64
+    var i = 0usize
+    while i < m {
+        mu += x[i]
+        i += 1usize
+    }
+    mu /= f64(m)
+    var s = 0.0f64
+    i = 0usize
+    while i < m {
+        s += (x[i] - mu) * (x[i] - mu)
+        i += 1usize
+    }
+    ret s / f64(m - 1usize)
+}
+
+// lm(yres ~ wres, weights) slope and its HC3 standard error
+fn overlap_ols(a: *mem.Arena, yr: []const f64, wr: []const f64, sw: []const f64, cl: *const Clu, n: usize) -> (Ate, err) {
+    var res: Ate = zero
+    let (acc0, c1) = gz_f64(a, cl.k + 1usize)
+    let (acc1, c2) = gz_f64(a, cl.k + 1usize)
+    let (seen, c3) = gz_usize(a, cl.k + 1usize)
+    if c1 != ok { ret (res, c1) }
+    if c2 != ok { ret (res, c2) }
+    if c3 != ok { ret (res, c3) }
+    var s0 = 0.0f64
+    var sx = 0.0f64
+    var sy = 0.0f64
+    var sxx = 0.0f64
+    var sxy = 0.0f64
+    var i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if sw.len > 0usize { w = sw[i] }
+        s0 += w
+        sx += w * wr[i]
+        sy += w * yr[i]
+        sxx += w * wr[i] * wr[i]
+        sxy += w * wr[i] * yr[i]
+        i += 1usize
+    }
+    let det = s0 * sxx - sx * sx
+    let b = (s0 * sxy - sx * sy) / det
+    let a0 = (sy - b * sx) / s0
+    var meat = 0.0f64
+    i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if sw.len > 0usize { w = sw[i] }
+        let e = yr[i] - a0 - b * wr[i]
+        let h = w * (sxx - 2.0f64 * sx * wr[i] + s0 * wr[i] * wr[i]) / det
+        let r = w * e
+        let o = r * r / ((1.0f64 - h) * (1.0f64 - h))
+        let c = (s0 * wr[i] - sx) / det
+        meat += o * c * c
+        if cl.k > 0usize {
+            acc0[cl.cid[i]] += r
+            acc1[cl.cid[i]] += r * wr[i]
+            seen[cl.cid[i]] += 1usize
+        }
+        i += 1usize
+    }
+    if cl.k > 0usize {
+        var g = 0usize
+        var q = 0usize
+        meat = 0.0f64
+        while q < cl.k {
+            if seen[q] > 0usize {
+                g += 1usize
+                let c = (s0 * acc1[q] - sx * acc0[q]) / det
+                meat += c * c
+            }
+            q += 1usize
+        }
+        meat *= f64(g) / f64(g - 1usize) * f64(n - 1usize) / f64(n - 2usize)
+    }
+    res.estimate = b
+    res.std_err = math.sqrt[f64](meat)
+    ret (res, ok)
+}
+
+fn in_target(tgt: usize, w: f64) -> bool {
+    var inn = tgt == 0usize
+    if tgt == 1usize && w == 1.0f64 { inn = true }
+    if tgt == 2usize && w == 0.0f64 { inn = true }
+    ret inn
+}
+
+fn ate_target(a: *mem.Arena, tgt: usize, method: usize, tau: []const f64, y: []const f64, yhat: []const f64, wt: []const f64, what: []const f64,
+              sw: []const f64, cl: *const Clu, n: usize) -> (Ate, err) {
+    var res: Ate = zero
+    if tgt == 3usize {
+        let (yr, e1) = gz_f64(a, n)
+        let (wr, e2) = gz_f64(a, n)
+        if e1 != ok { ret (res, e1) }
+        if e2 != ok { ret (res, e2) }
+        var i = 0usize
+        while i < n {
+            yr[i] = y[i] - yhat[i]
+            wr[i] = wt[i] - what[i]
+            i += 1usize
+        }
+        let (ov, ove) = overlap_ols(a, yr, wr, sw, cl, n)
+        ret (ov, ove)
+    }
+    let (y0, e3) = gz_f64(a, n)
+    let (y1, e4) = gz_f64(a, n)
+    let (aa, e5) = gz_f64(a, n)
+    let (bb, e6) = gz_f64(a, n)
+    if e3 != ok { ret (res, e3) }
+    if e4 != ok { ret (res, e4) }
+    if e5 != ok { ret (res, e5) }
+    if e6 != ok { ret (res, e6) }
+    let (acc, e8) = gz_f64(a, cl.k + 1usize)
+    let (cnt, e9) = gz_usize(a, cl.k + 1usize)
+    let (ub, e10) = gz_f64(a, n)
+    if e8 != ok { ret (res, e8) }
+    if e9 != ok { ret (res, e9) }
+    if e10 != ok { ret (res, e10) }
+    var i = 0usize
+    var sall = 0.0f64
+    var sgrp = 0.0f64
+    var n1 = 0usize
+    var n0 = 0usize
+    var raw = 0.0f64
+    while i < n {
+        var w = 1.0f64
+        if sw.len > 0usize { w = sw[i] }
+        y0[i] = yhat[i] - what[i] * tau[i]
+        y1[i] = yhat[i] + (1.0f64 - what[i]) * tau[i]
+        sall += w
+        if wt[i] == 1.0f64 { n1 += 1usize }
+        if wt[i] == 0.0f64 { n0 += 1usize }
+        if in_target(tgt, wt[i]) {
+            sgrp += w
+            raw += w * tau[i]
+        }
+        i += 1usize
+    }
+    raw /= sgrp
+    var tvar = 0.0f64
+    i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if sw.len > 0usize { w = sw[i] }
+        if in_target(tgt, wt[i]) { tvar += w * w * (tau[i] - raw) * (tau[i] - raw) }
+        i += 1usize
+    }
+    tvar /= sgrp * sgrp
+    var corr = 0.0f64
+    var sig2 = 0.0f64
+    if method == 0usize {
+        // gamma: reweight the other arm onto the tgt arm, normalised so the weights sum to sum(w) in each arm
+        var gc = 0.0f64
+        var gt = 0.0f64
+        i = 0usize
+        while i < n {
+            var w = 1.0f64
+            if sw.len > 0usize { w = sw[i] }
+            if wt[i] == 0.0f64 {
+                var g = 1.0f64
+                if tgt == 1usize { g = what[i] / (1.0f64 - what[i]) }
+                aa[i] = g
+                gc += w * g
+            } else if wt[i] == 1.0f64 {
+                var g = 1.0f64
+                if tgt == 2usize { g = (1.0f64 - what[i]) / what[i] }
+                aa[i] = g
+                gt += w * g
+            }
+            i += 1usize
+        }
+        var sdr = 0.0f64
+        var ssq = 0.0f64
+        var npos = 0usize
+        i = 0usize
+        while i < n {
+            var w = 1.0f64
+            if sw.len > 0usize { w = sw[i] }
+            var d = 0.0f64
+            if wt[i] == 0.0f64 {
+                d = -(aa[i] / gc * sall) * (y[i] - y0[i])
+            } else if wt[i] == 1.0f64 {
+                d = (aa[i] / gt * sall) * (y[i] - y1[i])
+            }
+            sdr += w * d
+            ssq += w * w * d * d
+            ub[i] = w * d
+            if w > 0.0f64 { npos += 1usize }
+            i += 1usize
+        }
+        corr = sdr / sall
+        sig2 = ssq / (sall * sall) * f64(npos) / f64(npos - 1usize)
+        if cl.k > 0usize {
+            let cs = clust_sum(acc, cnt, cl.k, cl.cid, ub, n)
+            // clusters whose weights sum to zero do not count
+            var nadj = 0usize
+            var q = 0usize
+            while q < cl.k {
+                cnt[q] = 0usize
+                q += 1usize
+            }
+            i = 0usize
+            while i < n {
+                var w = 1.0f64
+                if sw.len > 0usize { w = sw[i] }
+                if w > 0.0f64 { cnt[cl.cid[i]] += 1usize }
+                i += 1usize
+            }
+            q = 0usize
+            while q < cl.k {
+                if cnt[q] > 0usize { nadj += 1usize }
+                q += 1usize
+            }
+            sig2 = cs.sumsq / (sall * sall) * f64(nadj) / f64(nadj - 1usize)
+        }
+    } else {
+        // TMLE: refit the outcome of one arm on the inverse-propensity covariate and evaluate it at the tgt's mean covariate
+        var d0 = 0.0f64
+        var d1 = 0.0f64
+        var v0 = 0.0f64
+        var v1 = 0.0f64
+        if tgt != 2usize {
+            var m = 0usize
+            var cen = 0.0f64
+            i = 0usize
+            while i < n {
+                var a0 = 1.0f64 / (1.0f64 - what[i])
+                if tgt == 1usize { a0 = what[i] / (1.0f64 - what[i]) }
+                if wt[i] == 0.0f64 {
+                    aa[m] = a0
+                    bb[m] = y[i] - y0[i]
+                    m += 1usize
+                }
+                if tgt == 0usize { cen += a0 }
+                if tgt == 1usize && wt[i] == 1.0f64 { cen += a0 }
+                i += 1usize
+            }
+            if tgt == 0usize { cen /= f64(n) }
+            if tgt == 1usize { cen /= f64(n1) }
+            let r0 = reg_origin(aa, bb, m)
+            d0 = r0.beta * cen
+            v0 = r0.v * cen * cen
+        }
+        if tgt != 1usize {
+            var m = 0usize
+            var cen = 0.0f64
+            i = 0usize
+            while i < n {
+                var a1 = 1.0f64 / what[i]
+                if tgt == 2usize { a1 = (1.0f64 - what[i]) / what[i] }
+                if wt[i] == 1.0f64 {
+                    aa[m] = a1
+                    bb[m] = y[i] - y1[i]
+                    m += 1usize
+                }
+                if tgt == 0usize { cen += a1 }
+                if tgt == 2usize && wt[i] == 0.0f64 { cen += a1 }
+                i += 1usize
+            }
+            if tgt == 0usize { cen /= f64(n) }
+            if tgt == 2usize { cen /= f64(n0) }
+            let r1 = reg_origin(aa, bb, m)
+            d1 = r1.beta * cen
+            v1 = r1.v * cen * cen
+        }
+        corr = d1 - d0
+        sig2 = v0 + v1
+        if tgt != 0usize {
+            // the arm the tgt contains contributes its plain residual variance
+            var arm = 1.0f64
+            if tgt == 2usize { arm = 0.0f64 }
+            var m = 0usize
+            i = 0usize
+            while i < n {
+                if wt[i] == arm {
+                    var r = y[i] - y1[i]
+                    if tgt == 2usize { r = y[i] - y0[i] }
+                    bb[m] = r
+                    m += 1usize
+                }
+                i += 1usize
+            }
+            sig2 += var_of(bb, m) / f64(m)
+        }
+    }
+    res.estimate = raw + corr
+    res.std_err = math.sqrt[f64](tvar + sig2)
+    ret (res, ok)
 }
 
 // the trees whose drawn samples include s: inbag[t * n + s]
