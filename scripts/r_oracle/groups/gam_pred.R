@@ -86,4 +86,21 @@ for (rep in 1:24) {
   xn <- matrix(round(xn, 4), nn, q); zn <- matrix(round(rnorm(nn * m), 3), nn, m)
   runcase(fam = fam, x = x, z = z, y = y, w = w, xn = xn, zn = zn, kind = kind, p1 = p1, p2 = p2)
 }
+# n between 50 and 199 distinct x: the knot count comes from the thinned sknotl branches, so predict at new x exercises them (one s() term, Gaussian and Poisson)
+for (rep in 1:6) {
+  fam <- c(0, 2)[rep %% 2 + 1]; n <- c(55, 80, 120, 150, 180, 199)[rep]; nn <- 4
+  x <- matrix(round(runif(n, -2, 3), 4), n, 1); z <- matrix(0, n, 0)
+  eta <- 0.2 + sin(x[, 1]) * 0.8
+  y <- if (fam == 0) round(eta + rnorm(n, 0, 0.3), 4) else rpois(n, exp(eta))
+  xn <- matrix(round(runif(nn, -2.3, 3.3), 4), nn, 1); zn <- matrix(0, nn, 0)
+  runcase(fam = fam, x = x, z = z, y = y, w = rep(1, n), xn = xn, zn = zn, kind = 0, p1 = 4, p2 = 1)
+}
+# 800 or more distinct x use the log 140 / log 200 knot constants, 3200 or more the 200 + (n - 3200)^0.2 term (Gaussian, one s() term, df given; one new row keeps the file small)
+for (rep in 1:4) {
+  n <- c(900, 1200, 3300, 3400)[rep]; nn <- 1
+  x <- matrix(round(runif(n, -2, 3), 5), n, 1); z <- matrix(0, n, 0)
+  y <- round(0.2 + sin(x[, 1]) * 0.8 + rnorm(n, 0, 0.3), 4)
+  xn <- matrix(round(runif(nn, -2.3, 3.3), 4), nn, 1); zn <- matrix(0, nn, 0)
+  runcase(fam = 0, x = x, z = z, y = y, w = rep(1, n), xn = xn, zn = zn, kind = 0, p1 = 4, p2 = 1)
+}
 emit("gam_pred", "gam", list(cases))

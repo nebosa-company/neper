@@ -800,3 +800,8 @@ oracle_partykitmobx
 oracle_tgpdesigntree
 oracle_tgptree
 oracle_tgptreegp
+oracle_armglmsim
+oracle_armsim
+oracle_clue_ultra
+oracle_ghyphess2
+oracle_ghypnfit2

@@ -69,11 +69,11 @@ for (i in 1:400) {
   add(6, c(a, b, cv, x), g(hyperg_2F1, a, b, cv, x))
   add(8, c(a, b, cv, x), g(hyperg_2F1_renorm, a, b, cv, x))
 }
-# loose set: value within max(1e-4, 100*err/|val|) relative; error estimate within a factor of two (rel 1)
+# loose set (R's own err above 1e-7 of the value): the value is only known to R's err, so it is compared within max(1e-9, 10*err/|val|); the error estimate at 1e-8, except hyperg_1F1 with |x| above 50 where the estimate is a sum of rounding terms of a cancelling series and moves tens of percent between libms (recorded: 1F1(24.0, 0.75, 174.9) 1.05e63 vs R 8.14e62) -> rel 0.5
 for (k in seq_along(loose)) {
   if (k > 400) break
   l <- loose[[k]]; r <- l[[3]]
-  cases[[length(cases) + 1]] <- case("h", c(l[[1]], 0, l[[2]]), r$val, rel = min(1, max(1e-4, 100 * r$err / abs(r$val))), abs = 1e-300)
-  cases[[length(cases) + 1]] <- case("h", c(l[[1]], 1, l[[2]]), r$err, rel = 1, abs = 1e-300)
+  cases[[length(cases) + 1]] <- case("h", c(l[[1]], 0, l[[2]]), r$val, rel = min(1, max(1e-9, 10 * r$err / abs(r$val))), abs = 1e-300)
+  cases[[length(cases) + 1]] <- case("h", c(l[[1]], 1, l[[2]]), r$err, rel = if (l[[1]] == 1 && abs(l[[2]][3]) > 50) 0.5 else 1e-8, abs = 1e-300)
 }
 emit("gslhyp", "gsl", list(cases))

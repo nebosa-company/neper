@@ -29,7 +29,7 @@ for (rep in 1:300) {
   nsub <- if (exists("nsub")) nsub else 0
   if (s$objval < best - 1e-7) nsub <- nsub + 1
   isint <- as.numeric(seq_len(n) %in% ints)
-  cases[[length(cases) + 1]] <- case("ip", c(nrow(A), n, cc, as.vector(t(A)), as.numeric(rel == ">="), b, isint), best, rel = 1e-8, abs = 1e-8)
+  cases[[length(cases) + 1]] <- case("ip", c(nrow(A), n, cc, as.vector(t(A)), as.numeric(rel == ">="), b, isint), best, rel = 1e-9, abs = 1e-9)
   ok <- ok + 1
   if (ok >= 60) break
 }
@@ -47,7 +47,7 @@ for (rep in 1:200) {
   s <- tryCatch(lp.transport(cost, dirn, rs, sup, cs, dem), error = function(e) NULL)
   if (is.null(s) || s$status != 0) next
   code <- function(v) match(v, c("<=", ">=", "=")) - 1
-  cases[[length(cases) + 1]] <- case("tr", c(m, n, as.numeric(dirn == "max"), as.vector(t(cost)), code(rs), sup, code(cs), dem), s$objval, rel = 1e-8, abs = 1e-8)
+  cases[[length(cases) + 1]] <- case("tr", c(m, n, as.numeric(dirn == "max"), as.vector(t(cost)), code(rs), sup, code(cs), dem), s$objval, rel = 1e-9, abs = 1e-9)
   nt <- nt + 1
   if (nt >= 30) break
 }

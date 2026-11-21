@@ -36,8 +36,25 @@ fn gauss_legendre(n: usize, x: []f64, w: []f64) {
     }
 }
 
+// a user integrand: ids 1000 to 1099 call the function registered by set_user (nc components written into out), ids 1100 to 1199 the same through R's tan map for infinite limits
+// ponytail: one process-wide slot, not thread safe; a context argument through every rule if concurrent integrands are needed
+type UserFn = fn([]const f64, []f64)
+var user_fn: [1]UserFn = zero
+var user_nc: [1]usize = zero
+
+fn set_user(f: UserFn, nc: usize) {
+    user_fn[0usize] = f
+    user_nc[0usize] = nc
+}
+
 // the integrand `id` at the point p of dimension d: 0 exp(-sum x^2), 1 prod cos(x), 2 1 / (1 + sum x), 3 (sum x)^2 exp(-prod x)
 fn integrand(id: usize, d: usize, p: []const f64) -> f64 {
+    if id >= 1000usize && id < 1100usize {
+        var uo: [8]f64 = zero
+        let uf = user_fn[0usize]
+        uf(p, uo[0usize..8usize])
+        ret uo[0usize]
+    }
     if id >= 100usize {
         // an infinite box seen through R's map x = tan(t): the integrand over atan(lo) .. atan(hi) is f(tan t) / prod(cos t)^2
         var pt: [8]f64 = zero
@@ -547,6 +564,11 @@ fn pcubature_1d(id: usize, lo: f64, hi: f64, tol: f64, max_eval: usize, out: []f
 
 // a vector integrand of nc components: id 0 (exp(-sum x^2), prod cos x), id 1 (1 / (1 + sum x), (sum x)^2 exp(-prod x), exp(-sum x^2)); answers the number of components
 fn integrand_vec(id: usize, d: usize, p: []const f64, out: []f64) -> usize {
+    if id >= 1000usize && id < 1100usize {
+        let uf = user_fn[0usize]
+        uf(p, out)
+        ret user_nc[0usize]
+    }
     if id >= 100usize {
         var pt: [8]f64 = zero
         var cp = 1.0f64
@@ -1964,6 +1986,7 @@ fn cuhre(a: *mem.Arena, id: usize, vec: usize, d: usize, lo: []const f64, hi: []
     if vec == 1usize {
         nc0 = 2usize
         if id >= 1usize { nc0 = 3usize }
+        if id >= 1000usize { nc0 = user_nc[0usize] }
     }
     let (sn, e1) = mem.alloc[usize](a, 16usize)
     let (wt, e2) = mem.alloc[f64](a, 16usize * 5usize)
@@ -2296,6 +2319,7 @@ fn vegas(a: *mem.Arena, id: usize, vec: usize, d: usize, lo: []const f64, hi: []
     if vec == 1usize {
         nc0 = 2usize
         if id >= 1usize { nc0 = 3usize }
+        if id >= 1000usize { nc0 = user_nc[0usize] }
     }
     let (sn, e1) = mem.alloc[usize](a, 1usize)
     let (wt, e2) = mem.alloc[f64](a, 1usize)
@@ -2716,6 +2740,7 @@ fn suave(a: *mem.Arena, id: usize, vec: usize, d: usize, lo: []const f64, hi: []
     if vec == 1usize {
         nc0 = 2usize
         if id >= 1usize { nc0 = 3usize }
+        if id >= 1000usize { nc0 = user_nc[0usize] }
     }
     let (sn, e1) = mem.alloc[usize](a, 1usize)
     let (wt, e2) = mem.alloc[f64](a, 1usize)
@@ -5004,6 +5029,7 @@ fn divonne(a: *mem.Arena, id: usize, vec: usize, d: usize, lo: []const f64, hi: 
     if vec == 1usize {
         nc0 = 2usize
         if id >= 1usize { nc0 = 3usize }
+        if id >= 1000usize { nc0 = user_nc[0usize] }
     }
     let nc = nc0
     if d < 2usize || d > 8usize {

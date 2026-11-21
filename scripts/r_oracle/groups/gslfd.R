@@ -14,9 +14,12 @@ for (i in 1:60) {
   x <- c(runif(1, -40, -1), runif(1, -1, 1), runif(1, 1, 4), runif(1, 4, 10), runif(1, 10, 30), runif(1, 30, 200), runif(1, 200, 1e5))[sample(1:7, 1)]
   for (code in 0:6) add(code, x, 0, g(fl[[code + 1]], x))
   j <- sample(c(-6:-2, 3:14), 1); xj <- c(runif(1, -30, 0), runif(1, 0, 1.5), runif(1, 1.5, 50), runif(1, 50, 300))[sample(1:4, 1)]
-  add(7, j, xj, g(fermi_dirac_int, j, xj), vrel = 1e-9, erel = 1e-6)
+  rj <- g(fermi_dirac_int, j, xj); er7 <- 1e-8
+  # the reflected term cos(j pi) fermi_dirac_int(j, -x) adds its own error estimate, a difference of two Levin-u iterates (rounding-level, libm-dependent, about 40 percent between R and Neper); so the tolerance on the total is that term's share of the estimate, never less than 1e-8
+  if (j >= 3 && xj >= 1.5 && !is.null(rj)) { rn <- g(fermi_dirac_int, j, -xj); if (!is.null(rn) && is.finite(rn$err) && rj$err > 0) er7 <- max(1e-8, 1.5 * rn$err / rj$err) }
+  add(7, j, xj, rj, vrel = 1e-9, erel = er7)
   b <- runif(1, 0, 20); add(8, x, b, g(fermi_dirac_inc_0, x, b))
 }
 add(7, 5, 0, g(fermi_dirac_int, 5, 0))
-# integer order err: for x < 0 and the asymptotic series err is |f - f_previous| of the Levin-u iteration, a rounding-level difference, so it is compared at 1e-6. Recorded failing case at erel = 1e-8: fermi_dirac_int(8, 6.020023795310408) err, got 1.466894614229207e-11, R 1.4668945708611146e-11 (3e-8 relative)
+# integer order err: 1e-8 everywhere except the region marked in the loop, where the reflected Levin-u term dominates (recorded: fermi_dirac_int(8, 6.020023795310408) err, got 1.466894614229207e-11, R 1.4668945708611146e-11)
 emit("gslfd", "gsl", list(cases))

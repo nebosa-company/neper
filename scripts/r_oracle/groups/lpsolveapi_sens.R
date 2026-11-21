@@ -4,7 +4,7 @@
 #   Programs with <=, >= and = rows built around a feasible point; "degenerate" programs add a redundant row (the sum of two binding rows) last.
 suppressMessages(library(lpSolveAPI))
 cases <- list()
-add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-8, abs = 1e-9)
+add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-9)
 relstr <- c("<=", ">=", "=")
 build <- function(sense, A, relc, b, cc) {
   lpm <- make.lp(0, ncol(A))

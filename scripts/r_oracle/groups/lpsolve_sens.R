@@ -9,13 +9,13 @@ for (rep in 1:60) {
   if (is.null(r) || r$status != 0) next
   a <- c(n, m, mx, cc, as.vector(t(A)), b, rep(1 - mx, m))
   for (k in seq_len(m + n)) {
-    cases[[length(cases) + 1]] <- case("sd", c(a, 0, k), r$duals[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <- case("sd", c(a, 1, k), r$duals.from[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <- case("sd", c(a, 2, k), r$duals.to[k], rel = 1e-8, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 0, k), r$duals[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 1, k), r$duals.from[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 2, k), r$duals.to[k], rel = 1e-9, abs = 1e-9)
   }
   for (k in seq_len(n)) {
-    cases[[length(cases) + 1]] <- case("sd", c(a, 3, k), r$sens.coef.from[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <- case("sd", c(a, 4, k), r$sens.coef.to[k], rel = 1e-8, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 3, k), r$sens.coef.from[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 4, k), r$sens.coef.to[k], rel = 1e-9, abs = 1e-9)
   }
 }
 # mixed row directions: max with <= rows and a few >= rows with small right-hand sides, min with >= rows and a few <= rows with large ones
@@ -28,13 +28,13 @@ for (rep in 1:60) {
   if (is.null(r) || r$status != 0) next
   a <- c(n, m, mx, cc, as.vector(t(A)), b, as.numeric(dir == ">="))
   for (k in seq_len(m + n)) {
-    cases[[length(cases) + 1]] <- case("sd", c(a, 0, k), r$duals[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <- case("sd", c(a, 1, k), r$duals.from[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <- case("sd", c(a, 2, k), r$duals.to[k], rel = 1e-8, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 0, k), r$duals[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 1, k), r$duals.from[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 2, k), r$duals.to[k], rel = 1e-9, abs = 1e-9)
   }
   for (k in seq_len(n)) {
-    cases[[length(cases) + 1]] <- case("sd", c(a, 3, k), r$sens.coef.from[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <- case("sd", c(a, 4, k), r$sens.coef.to[k], rel = 1e-8, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 3, k), r$sens.coef.from[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("sd", c(a, 4, k), r$sens.coef.to[k], rel = 1e-9, abs = 1e-9)
   }
 }
 # equality rows: a random mix of <=, >= and = rows built around a feasible point, either direction
@@ -42,13 +42,13 @@ addsens <- function(r, n, m, mx, cc, A, dirs, b) {
   code <- match(dirs, c("<=", ">=", "=")) - 1
   a <- c(n, m, mx, cc, as.vector(t(A)), b, code)
   for (k in seq_len(m + n)) {
-    cases[[length(cases) + 1]] <<- case("sd", c(a, 0, k), r$duals[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <<- case("sd", c(a, 1, k), r$duals.from[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <<- case("sd", c(a, 2, k), r$duals.to[k], rel = 1e-8, abs = 1e-9)
+    cases[[length(cases) + 1]] <<- case("sd", c(a, 0, k), r$duals[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <<- case("sd", c(a, 1, k), r$duals.from[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <<- case("sd", c(a, 2, k), r$duals.to[k], rel = 1e-9, abs = 1e-9)
   }
   for (k in seq_len(n)) {
-    cases[[length(cases) + 1]] <<- case("sd", c(a, 3, k), r$sens.coef.from[k], rel = 1e-8, abs = 1e-9)
-    cases[[length(cases) + 1]] <<- case("sd", c(a, 4, k), r$sens.coef.to[k], rel = 1e-8, abs = 1e-9)
+    cases[[length(cases) + 1]] <<- case("sd", c(a, 3, k), r$sens.coef.from[k], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <<- case("sd", c(a, 4, k), r$sens.coef.to[k], rel = 1e-9, abs = 1e-9)
   }
 }
 neq <- 0

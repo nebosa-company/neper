@@ -26,6 +26,7 @@ add <- function(seed, n, fam, kind, sm, method, gen, whats = c(0:4, 6, 7:10)) {
   res <- r$res
   vals <- c(as.numeric(res$param), res$maxLik, if (length(res$conv)) res$conv else NA, res$iter, as.numeric(res$paramStart))
   tol <- c(1e-9, 1e-9, 1e-9, 1e-9, 1e-9, 0, 0, 1e-9, 1e-9, 1e-9, 1e-9)
+  # BFGS/CG/L-BFGS-B stop on an optim finite-difference gradient (reltol/pgtol), so a last-bit besselK difference (R calls its own C besselK, not ported bit-for-bit) moves the end point: 2e-4 on the estimate, the likelihood stays at 1e-9
   if (method > 0 && method != 4) tol[1:4] <- 2e-4
   # nlminb reports its convergence code in iter (and nothing in conv), exact; a bound-active run ends where finite-difference noise decides
   if (method == 4) tol[1:4] <- 3e-3

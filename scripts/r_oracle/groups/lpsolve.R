@@ -2,7 +2,7 @@
 #   args: (m, n, c[n]..., A row-major m by n..., rel[m]... (0 for <=, 1 for >=), b[m]...)   fn "obj" (the optimum) "x" (the solution weighted by position)
 suppressMessages(library(lpSolve))
 cases <- list()
-add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-8, abs = 1e-9)
+add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-9)
 set.seed(20261229)
 rep_ok <- 0
 for (rep in 1:60) {

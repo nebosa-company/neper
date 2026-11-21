@@ -2,7 +2,7 @@
 #   "gv3" (B, n, k, nruns, seed, w[B], memberships B by n by k row-major): the checksum sum(M * (10 * row + column)) of the consensus membership; set.seed(seed) precedes the call
 suppressMessages(library(clue))
 cases <- list()
-add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-8, abs = 1e-9)
+add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-12, abs = 1e-12)
 tight <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-13, abs = 1e-13)
 chk <- function(M, n, k) sum(M * outer(seq_len(n), seq_len(k), function(i, j) 10 * i + j))
 set.seed(20262491)

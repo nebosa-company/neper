@@ -59,9 +59,9 @@ for (rep in c(1, 1, 1, 1)) for (bay in 0:1) for (sp in specs2) {
   pre <- c(sd0, ns, n, k, fam, link, bay, 1, y, as.vector(t(X)), pm, pd, psc)
   add2 <- function(wh, from, len, v, rel, abs) cases[[length(cases) + 1]] <<- case("simglm2", c(pre, wh, from, len), sum(seq_len(len) * v), rel = rel, abs = abs)
   add2(0, 0, ns, sm@sigma, 1e-9, 1e-11); add2(2, 0, k, unname(coef(f)), 1e-9, 1e-11)
-  # R's eigen() sign for V.beta flips under a 1e-15 perturbation in about a third of the fits, so a draw equals R's only when V.beta is R's to the last bit; seed 21804 (a bayesglm inverse.gaussian fit
-  # whose IRLS ends 3 ulp from R's) is the one fit in this group where it is not, so its draws are left out; its sigma, coefficients and V.beta are still checked
-  if (!(sd0 %in% c(21804))) for (i in 1:ns) add2(1, i - 1, k, sm@coef[i, ], 1e-9, 1e-11)
+  # R's eigen() sign for V.beta flips under a 1e-15 perturbation in about a third of the fits, so a draw equals R's only when V.beta is R's to the last bit, which holds for every fit here including bayesglm inverse.gaussian seed 21804 (its 1/mu^2 link needs eta^1.5
+  # double-rounded through x87 like exp and log: armglm.pow15)
+  for (i in 1:ns) add2(1, i - 1, k, sm@coef[i, ], 1e-9, 1e-11)
   sf <- summary(f, correlation = TRUE, dispersion = f$dispersion); sdb <- sf$coef[, 2, drop = FALSE]; Vb <- sf$corr * array(sdb, c(k, k)) * t(array(sdb, c(k, k)))
   for (i in 1:k) cases[[length(cases) + 1]] <- case("simglm2", c(pre, 3, i - 1), sum(seq_len(k) * Vb[i, ]), rel = 1e-13, abs = 1e-16)
 }
@@ -118,4 +118,7 @@ for (rep in 1:30) {
   cf <- as.numeric(coef(sm))
   for (j in seq_along(cf)) cases[[length(cases) + 1]] <- case("stdfit", c(n, nv, sy, bm - 1, famc, lk, 0, 0, kinds, unch, y, as.vector(t(X)), j - 1), cf[j], rel = 1e-11, abs = 1e-13)
 }
-emit("armglm", "arm", list(cases))
+# the simglm2 cases live in armglmsim.json (checked by oracle_armglmsim) to keep each file under 2 MB
+issim <- vapply(cases, function(c) c$fn == "simglm2", NA)
+emit("armglm", "arm", list(cases[!issim]))
+emit("armglmsim", "arm", list(cases[issim]))

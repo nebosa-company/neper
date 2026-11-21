@@ -1,5 +1,9 @@
 // e.algo.stat.gam predict at newdata against R gam::gam s() and lo() terms. tests/oracle/gam_pred.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gam_pred`; the argument layout is at the top of scripts/r_oracle/groups/gam_pred.R.
+// Tolerance: 1e-9 relative, except the 40 df-matched s() cases (up to 1.5e-6). There R's own Brent search for spar stops on a criterion flat
+// to rounding, so R itself moves by that much when the weights change by 1e-11 (gam_pred.R measures the move and sets the case tolerance to
+// 20 times it); those cases cannot be matched tighter than R reproduces itself. Cases at fixed spar or lo() span stay at 1e-9.
+// The file holds 3 fits (24 rows) that the package crashes on in the generating environment, merged from an earlier generation.
 
 use e.algo.stat.gam as gm
 use e.io

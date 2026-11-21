@@ -5,7 +5,7 @@
 #   "medoid" (B, n, k, labels B by n): the 1-based index of cl_medoid's choice
 suppressMessages(library(clue))
 cases <- list()
-add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-8, abs = 1e-9)
+add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-9)
 set.seed(20262420)
 chk <- function(M, n, k) sum(M * outer(seq_len(n), seq_len(k), function(i, j) 10 * i + j))
 mk <- function(lab) as.cl_partition(factor(lab))

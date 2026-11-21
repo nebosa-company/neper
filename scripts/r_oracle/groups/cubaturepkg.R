@@ -317,4 +317,50 @@ for (rep in 1:15) {
   id <- 5 + (rep - 1) %% 5; d <- 2 + rep %% 2; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3)
   dvcase(gs[[id - 4]], 1, id, 0, lo, hi, c(1e-3, 1e-4)[1 + rep %% 2], 1e-12, 0, 100000)
 }
+# user integrands the module does not hard-code: the fixture registers them with set_user (ids 1000 to 1003; 1100 + k is the same function through the tan map). Sums run in double in a loop on both sides.
+# u0 (1 + s) sin(3 q) exp(-0.3 s), u1 (s^2 cos q, exp(-s) / (1 + q)), u2 exp(-q) (2 + sin s), u3 (exp(-q) (2 + sin s), exp(-q) cos s) with s the sum and q the sum of squares
+sq <- function(x) { s <- 0; q <- 0; for (v in x) { s <- s + v; q <- q + v * v }; c(s, q) }
+us <- list(function(x) { w <- sq(x); (1 + w[1]) * sin(3 * w[2]) * exp(-0.3 * w[1]) },
+           function(x) { w <- sq(x); c(w[1] * w[1] * cos(w[2]), exp(-w[1]) / (1 + w[2])) },
+           function(x) { w <- sq(x); exp(-w[2]) * (2 + sin(w[1])) },
+           function(x) { w <- sq(x); c(exp(-w[2]) * (2 + sin(w[1])), exp(-w[2]) * cos(w[1])) })
+unc <- c(1, 2, 1, 2)
+set.seed(20262040)
+for (rep in 1:30) {
+  k <- c(1, 2)[1 + rep %% 2]; nc <- unc[k]; d <- 1 + rep %% 3; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3); tl <- c(1e-4, 1e-6, 1e-8)[1 + rep %% 3]
+  if (nc == 1) { r <- hcubature(us[[k]], lo, hi, tol = tl, maxEval = 40000); if (r$functionEvaluations < 40000) hgput(c(999 + k, d, lo, hi, tl, 40000), r)
+    r <- pcubature(us[[k]], lo, hi, tol = tl, maxEval = 100000); nm <- if (d == 1) "pc" else "pn"
+    if (r$functionEvaluations <= 60000) { a <- c(999 + k, d, lo, hi, tl, 100000); for (w in 0:3) cases[[length(cases) + 1]] <- case(nm, c(a, w), c(r$integral, r$error, r$functionEvaluations, r$returnCode)[w + 1], rel = if (w < 2) 1e-9 else 0, abs = c(1e-12, 1e-13, 0, 0)[w + 1]) } }
+  else { d <- 2 + rep %% 2; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3)
+    r <- hcubature(us[[k]], lo, hi, tol = tl, maxEval = 40000, fDim = nc); if (r$functionEvaluations < 40000) hvput(c(999 + k, d, lo, hi, tl, 40000), r, nc)
+    r <- pcubature(us[[k]], lo, hi, tol = tl, maxEval = 100000, fDim = nc); if (r$functionEvaluations <= 60000) hvput(c(999 + k, d, lo, hi, tl, 100000), r, nc, "pv", 1e-13) }
+}
+# a user integrand with infinite limits for hcubature and pcubature (ids 1100 + k over atan(lo) .. atan(hi))
+for (rep in 1:20) {
+  b <- infbox(); k <- c(3, 4)[1 + rep %% 2]; nc <- unc[k]; tl <- c(1e-4, 1e-6)[1 + (rep %% 4 > 1)]
+  a <- c(1099 + k, b$d, atan(b$lo), atan(b$hi), tl, 40000)
+  if (nc == 1) {
+    r <- hcubature(us[[k]], b$lo, b$hi, tol = tl, maxEval = 40000); if (r$functionEvaluations < 40000) hgput(a, r)
+    r <- pcubature(us[[k]], b$lo, b$hi, tol = tl, maxEval = 40000); nm <- if (b$d == 1) "pc" else "pn"
+    if (r$functionEvaluations <= 60000) for (w in 0:3) cases[[length(cases) + 1]] <- case(nm, c(a, w), c(r$integral, r$error, r$functionEvaluations, r$returnCode)[w + 1], rel = if (w < 2) 1e-9 else 0, abs = c(1e-12, 1e-13, 0, 0)[w + 1])
+  } else {
+    r <- hcubature(us[[k]], b$lo, b$hi, tol = tl, maxEval = 40000, fDim = nc); if (r$functionEvaluations < 40000) hvput(a, r, nc)
+    r <- pcubature(us[[k]], b$lo, b$hi, tol = tl, maxEval = 40000, fDim = nc); if (r$functionEvaluations <= 60000) hvput(a, r, nc, "pv", 1e-13)
+  }
+}
+# the Cuba methods on user integrands (finite and infinite boxes)
+for (rep in 1:12) {
+  k <- 1 + rep %% 4; nc <- unc[k]; vec <- as.numeric(nc > 1); id <- 999 + k
+  if (k <= 2) { d <- 2 + rep %% 2; lo <- round(runif(d, 0, 0.5), 3); hi <- lo + round(runif(d, 0.4, 1.5), 3) } else { b <- infbox(); d <- b$d; lo <- b$lo; hi <- b$hi }
+  chcase(us[[k]], nc, id, vec, lo, hi, c(1e-4, 1e-6)[1 + rep %% 2], 1e-12, 0, 1e5, 0)
+  vgcase(us[[k]], nc, id, vec, lo, hi, 1e-3, 1e-12, 0, 10000, 800, 400, c(12345, 7, 0)[1 + rep %% 3])
+  svcase(us[[k]], nc, id, vec, lo, hi, 1e-2, 1e-12, 0, 10000, 500, 2, 25, c(12345, 0)[1 + rep %% 2])
+  if (d >= 2) dvcase(us[[k]], nc, id, vec, lo, hi, 1e-3, 1e-12, 0, 100000)
+}
 emit("cubaturepkg", "cubature", list(cases))
+# the reason for every loosened tolerance, stored in the oracle meta (cases not named here are exact: integers equal, reals at rel 1e-9)
+loose <- paste0('"loose":{"ch":"the chi-square probability (chisqsum - avg * chisum) is a cancellation to rounding noise; abs is 4 times the largest move of R own value under eight perturbed integrands (2e-16 to 1e-14), rel 1e-8; every other cuhre quantity is exact or rel 1e-9",',
+  '"dv":"divonne partitioning follows an optimiser whose steps compare function values: a case whose own R result moves under a 1e-15 or 1e-14 perturbed integrand gets error rel 1e-5 and the evaluation count a 0.2 percent allowance; the chi-square probability is abs 0.02; stable cases are exact",',
+  '"vg_sv":"seeded draws equal R (Mersenne Twister, same seed), rel 1e-9"}')
+pth <- file.path(out_dir, "cubaturepkg.json"); ln <- readLines(pth, warn = FALSE, encoding = "UTF-8")
+ln[1] <- sub("}}", paste0("},", loose, "}"), ln[1], fixed = TRUE); writeLines(ln, pth, useBytes = TRUE)

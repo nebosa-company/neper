@@ -12,13 +12,6 @@ for (rep in 1:15) {
   fit <- lm(y ~ x - 1); se <- se.coef(fit)
   for (j in 1:p) add("se", c(n, p, as.vector(t(x)), y, j - 1), se[j])
 }
-for (rep in 1:25) {
-  n <- sample(30:120, 1); nclass <- sample(c(0, 3, 4, 6, 10), 1); if (nclass == 0) nclass <- floor(sqrt(n))
-  x <- if (rep %% 2 == 0) round(rnorm(n), 1) else round(rnorm(n), 5); y <- round(rnorm(n), 4)
-  bn <- binned.resids(x, y, nclass)$binned
-  for (b in seq_len(nrow(bn))) for (cc in 1:6) add("binned", c(nclass, n, x, y, cc - 1, b - 1), bn[b, cc])
-  add("binned_rows", c(nclass, n, x, y, 0, 0), nrow(bn))
-}
 # "rescale" (mode, n, x, index): numeric and two-valued inputs under each binary.inputs mode
 modes <- c("center", "0/1", "-0.5,0.5", "full")
 for (rep in 1:24) {
@@ -102,17 +95,5 @@ for (rep in 1:12) {
   f <- tryCatch(suppressWarnings(bayesglm(y ~ ., data = d, family = list(gaussian, binomial, poisson)[[fam + 1]], prior.mean = pm, prior.df = pd, prior.scale = psc)), error = function(e) NULL)
   if (is.null(f)) next
   for (j in 0:(k - 1)) cases[[length(cases) + 1]] <- case("bayesglm3", c(n, k, fam, as.vector(t(X)), y, j, c(0, pm), c(1, pd), c(10, psc)), unname(coef(f))[j + 1], rel = 1e-9, abs = 1e-11)
-}
-# sim(lm): "simlm" args (seed, nsims, n, k, y[n], x[n*k] row-major, which, s) with which 0 sigma[s], 1 sum((beta[s, ] - beta.hat)^2): a sum of squares does not depend on the sign or the basis of the
-# eigenvectors mvrnorm uses (a LAPACK build may flip one), so it checks the draws without fixing the signs
-for (rep in 1:34) {
-  n <- sample(15:50, 1); k <- sample(2:4, 1); X <- matrix(round(rnorm(n * k), 4), n, k); X[, 1] <- 1; if (rep > 14) X[, k] <- round(X[, k] * 10^sample(c(-2, 2, 3), 1), 6); y <- round(rnorm(n, X %*% rnorm(k)), 4)
-  fit <- lm(y ~ X - 1); sd0 <- sample(1:100000, 1); ns <- 6
-  set.seed(sd0); s <- sim(fit, ns)
-  for (i in 1:ns) {
-    cases[[length(cases) + 1]] <- case("simlm", c(sd0, ns, n, k, y, as.vector(t(X)), 0, i - 1), s@sigma[i], rel = 1e-12, abs = 1e-14)
-    for (j in 1:k) cases[[length(cases) + 1]] <- case("simlmc", c(sd0, ns, n, k, y, as.vector(t(X)), 2, i - 1, j - 1), s@coef[i, j], rel = 1e-11, abs = 1e-13)
-    if (rep <= 14) cases[[length(cases) + 1]] <- case("simlm", c(sd0, ns, n, k, y, as.vector(t(X)), 1, i - 1), sum((s@coef[i, ] - coef(fit))^2), rel = 1e-11, abs = 1e-13)
-  }
 }
 emit("arm", "arm", list(cases))

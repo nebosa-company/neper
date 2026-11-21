@@ -30,8 +30,7 @@ fn pow15(x: f64) -> f64 {
     let (sp, se) = gb.two_prod(sq, sq)
     let lo = ((x - sp) - se) / (2.0f64 * sq)
     let (s, t) = gb.dd_mul(sq, lo, x, 0.0f64)
-    let _ = t
-    ret s
+    ret xe.r64(s, t)
 }
 
 fn linkfun(link: usize, mu: f64) -> f64 {

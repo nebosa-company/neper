@@ -20,10 +20,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let okind = ocode + m
     let of = okind + n
     let (du, e1) = mem.alloc[f64](a, m + n)
+    let (df, g1) = mem.alloc[f64](a, m + n)
+    let (dt, g2) = mem.alloc[f64](a, m + n)
+    let (cf, g3) = mem.alloc[f64](a, n)
+    let (ct, g4) = mem.alloc[f64](a, n)
     let (rel, e2) = mem.alloc[usize](a, m)
     let (isint, e3) = mem.alloc[bool](a, n)
     let (isbin, e4) = mem.alloc[bool](a, n)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret nan }
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || g1 != ok || g2 != ok || g3 != ok || g4 != ok { ret nan }
     var i = 0usize
     while i < m {
         rel[i] = usize(z[ocode + i])
@@ -35,10 +39,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         isbin[i] = usize(z[okind + i]) == 2usize
         i += 1usize
     }
-    let (v, e) = lpi.lp_sens_int(a, z[oc..oc + n], z[oa..oa + m * n], z[ob..ob + m], rel, m, n, mx, isint, isbin, du)
+    let (v, e) = lpi.lp_sens_int(a, z[oc..oc + n], z[oa..oa + m * n], z[ob..ob + m], rel, m, n, mx, isint, isbin, du, df, dt, cf, ct)
     if e != ok { ret nan }
     if usize(z[of]) == 1usize { ret v }
-    ret du[usize(z[of + 1usize]) - 1usize]
+    let at = usize(z[of + 1usize]) - 1usize
+    let fld = usize(z[of])
+    if fld == 2usize { ret df[at] }
+    if fld == 3usize { ret dt[at] }
+    if fld == 4usize { ret cf[at] }
+    if fld == 5usize { ret ct[at] }
+    ret du[at]
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

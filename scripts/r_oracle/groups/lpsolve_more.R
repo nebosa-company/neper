@@ -6,7 +6,7 @@
 #   "asmin" (n, x...): lp.assign(min)$objval   "asmincols" (n, x...): the solution matrix weighted by 10 * row + col
 suppressMessages({library(lpSolve)})
 cases <- list()
-add <- function(fn, args, want, rel = 1e-8, abs = 1e-9) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
+add <- function(fn, args, want, rel = 1e-9, abs = 1e-9) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
 code <- function(v) match(v, c("<=", ">=", "=")) - 1
 set.seed(20262601)
 rep_ok <- 0

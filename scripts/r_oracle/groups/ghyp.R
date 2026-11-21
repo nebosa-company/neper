@@ -118,5 +118,5 @@ for (from in 1:5) for (to in 1:5) for (rep in 1:4) {
 fit_fns <- c("nigFit", "hyperbFit")
 cdf_fns <- c("pghyp", "pnig", "phyperb", "qghyp", "pgig")
 part <- if (exists("ghyp_part")) ghyp_part else "ghyp"
-fns <- function(k) if (k$fn %in% fit_fns) "ghypnfit" else if (k$fn %in% cdf_fns) "ghypcdf" else "ghyp"
+fns <- function(k) if (k$fn == "hyperbFit") "ghypnfit2" else if (k$fn %in% fit_fns) "ghypnfit" else if (k$fn %in% cdf_fns) "ghypcdf" else "ghyp"
 emit(part, "GeneralizedHyperbolic", list(cases[vapply(cases, function(k) fns(k) == part, NA)]))

@@ -3,9 +3,50 @@
 
 use e.algo.stat.cubaturepkg as cb
 use e.io
+use e.math
 use e.mem
 use e.os
 use e.test.oracle as oracle
+
+// the user integrands of the R generator (ids 1000 to 1003): s the sum and q the sum of squares, added in order in double
+fn user_sums(x: []const f64, w: []f64) {
+    var s = 0.0f64
+    var q = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s = s + x[i]
+        q = q + x[i] * x[i]
+        i += 1usize
+    }
+    w[0usize] = s
+    w[1usize] = q
+}
+
+fn user0(x: []const f64, out: []f64) {
+    var w: [2]f64 = zero
+    user_sums(x, w[0usize..2usize])
+    out[0usize] = (1.0f64 + w[0usize]) * math.sin[f64](3.0f64 * w[1usize]) * math.exp[f64](0.0f64 - 0.3f64 * w[0usize])
+}
+
+fn user1(x: []const f64, out: []f64) {
+    var w: [2]f64 = zero
+    user_sums(x, w[0usize..2usize])
+    out[0usize] = w[0usize] * w[0usize] * math.cos[f64](w[1usize])
+    out[1usize] = math.exp[f64](0.0f64 - w[0usize]) / (1.0f64 + w[1usize])
+}
+
+fn user2(x: []const f64, out: []f64) {
+    var w: [2]f64 = zero
+    user_sums(x, w[0usize..2usize])
+    out[0usize] = math.exp[f64](0.0f64 - w[1usize]) * (2.0f64 + math.sin[f64](w[0usize]))
+}
+
+fn user3(x: []const f64, out: []f64) {
+    var w: [2]f64 = zero
+    user_sums(x, w[0usize..2usize])
+    out[0usize] = math.exp[f64](0.0f64 - w[1usize]) * (2.0f64 + math.sin[f64](w[0usize]))
+    out[1usize] = math.exp[f64](0.0f64 - w[1usize]) * math.cos[f64](w[0usize])
+}
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/cubaturepkg.json")
@@ -18,6 +59,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let x = c.args
         let d = usize(x[1usize])
+        // the cuhre/vegas/suave/divonne cases carry (id, vec, d, ...) and the others (id, d, ...); a user id is registered before the call
+        let uid = usize(x[0usize])
+        if uid >= 1000usize && uid < 1200usize {
+            let uk = uid % 100usize
+            if uk == 0usize { cb.set_user(user0, 1usize) }
+            if uk == 1usize { cb.set_user(user1, 2usize) }
+            if uk == 2usize { cb.set_user(user2, 1usize) }
+            if uk == 3usize { cb.set_user(user3, 2usize) }
+        }
         if c.name.len == 2usize && c.name[0usize] == 112u8 && c.name[1usize] == 118u8 {
             // "pv": (id, d, lo[d], hi[d], tol, maxEval, which) answered by the vector pcubature
             var pvo: [16]f64 = zero

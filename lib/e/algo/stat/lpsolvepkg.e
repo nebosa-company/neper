@@ -276,6 +276,24 @@ fn transport(a: *mem.Arena, cost: []const f64, m: usize, n: usize, maximise: boo
 // columns in index order when the program is degenerate. duals receive the m constraint prices then the n reduced costs; dfrom / dto the right-hand-side ranges (+-1e30 where lpSolve reports none),
 // the variable entries ranging the variable's value; cfrom / cto the objective coefficient ranges. The answer is the optimum value.
 fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, rel: []const usize, m: usize, n: usize, maximise: bool, x: []f64, duals: []f64, dfrom: []f64, dto: []f64, cfrom: []f64, cto: []f64) -> (f64, err) {
+    let (isint, e7) = mem.alloc[bool](a, n)
+    let (fx, e8) = mem.alloc[bool](a, n)
+    if e7 != ok || e8 != ok { ret (0.0f64, mem.Full) }
+    var j = 0usize
+    while j < n {
+        isint[j] = false
+        fx[j] = false
+        j += 1usize
+    }
+    let (lv, st) = lp_general(a, maximise, c, am, rel, b, m, n, isint, x)
+    let _ = lv
+    if st != 0usize { ret (0.0f64, Malformed) }
+    let (ov, oe) = lp_sens_at(a, c, am, b, rel, m, n, maximise, x, fx, duals, dfrom, dto, cfrom, cto)
+    ret (ov, oe)
+}
+
+// The same at a given point x: the columns flagged in fx are nonbasic wherever x puts them (an integer variable held at a bound by branching), the basic values come from b less what those columns carry.
+fn lp_sens_at(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, rel: []const usize, m: usize, n: usize, maximise: bool, x: []f64, fx: []const bool, duals: []f64, dfrom: []f64, dto: []f64, cfrom: []f64, cto: []f64) -> (f64, err) {
     let big = 1.0e30f64
     var sc = 1.0f64
     if !maximise { sc = 0.0f64 - 1.0f64 }
@@ -284,19 +302,10 @@ fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, rel: 
     let (tab, e3) = mem.alloc[f64](a, (m + 2usize) * width)
     let (basis, e4) = mem.alloc[usize](a, m)
     let (sg, e5) = mem.alloc[f64](a, m)
-    let (isint, e7) = mem.alloc[bool](a, n)
     let (inb, e8) = mem.alloc[bool](a, n + m)
     let (rowdone, e9) = mem.alloc[bool](a, m)
-    if e0 != ok || e3 != ok || e4 != ok || e5 != ok || e7 != ok || e8 != ok || e9 != ok { ret (0.0f64, mem.Full) }
+    if e0 != ok || e3 != ok || e4 != ok || e5 != ok || e8 != ok || e9 != ok { ret (0.0f64, mem.Full) }
     var j = 0usize
-    while j < n {
-        isint[j] = false
-        j += 1usize
-    }
-    let (lv, st) = lp_general(a, maximise, c, am, rel, b, m, n, isint, x)
-    let _ = lv
-    if st != 0usize { ret (0.0f64, Malformed) }
-    j = 0usize
     while j < n + m {
         c2[j] = 0.0f64
         inb[j] = false
@@ -324,12 +333,18 @@ fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, rel: 
             j += 1usize
         }
         tab[i * width + n + i] = 1.0f64
-        tab[i * width + width - 1usize] = sg[i] * b[i]
+        var bi = b[i]
+        j = 0usize
+        while j < n {
+            if fx[j] { bi = bi - am[i * n + j] * x[j] }
+            j += 1usize
+        }
+        tab[i * width + width - 1usize] = sg[i] * bi
         i += 1usize
     }
     j = 0usize
     while j < n {
-        if x[j] > 1.0e-9f64 { inb[j] = true }
+        if x[j] > 1.0e-9f64 && !fx[j] { inb[j] = true }
         j += 1usize
     }
     i = 0usize
@@ -465,7 +480,9 @@ fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, rel: 
         if rowof[j] == m {
             // nonbasic: the coefficient may move away from the optimum by its reduced cost only
             let zj = c[j] - duals[m + j]
-            if maximise {
+            // held at an upper bound by branching (its reduced cost pays to raise it) the range lies on the other side
+            let upb = fx[j] && x[j] > 1.0e-9f64 && ((maximise && duals[m + j] > 1.0e-12f64) || (!maximise && duals[m + j] < 0.0f64 - 1.0e-12f64))
+            if maximise != upb {
                 cfrom[j] = 0.0f64 - big
                 cto[j] = zj
             } else {
@@ -481,8 +498,13 @@ fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, rel: 
                 if rowof[q] == m && !(q >= n && rel[q - n] == 2usize) {
                     let tq = tab[r * width + q]
                     let dq = tab[m * width + q]
-                    if tq > 1.0e-12f64 && 0.0f64 - dq / tq > lo { lo = 0.0f64 - dq / tq }
-                    if tq < 0.0f64 - 1.0e-12f64 && 0.0f64 - dq / tq < hi { hi = 0.0f64 - dq / tq }
+                    let fl = q < n && fx[q] && x[q] > 1.0e-9f64 && dq < 0.0f64 - 1.0e-12f64
+                    let tp = tq > 1.0e-12f64
+                    let tn = tq < 0.0f64 - 1.0e-12f64
+                    if tp && fl && 0.0f64 - dq / tq < hi { hi = 0.0f64 - dq / tq }
+                    if tn && fl && 0.0f64 - dq / tq > lo { lo = 0.0f64 - dq / tq }
+                    if tp && !fl && 0.0f64 - dq / tq > lo { lo = 0.0f64 - dq / tq }
+                    if tn && !fl && 0.0f64 - dq / tq < hi { hi = 0.0f64 - dq / tq }
                 }
                 q += 1usize
             }
@@ -535,8 +557,8 @@ fn lp_sens(a: *mem.Arena, c: []const f64, am: []const f64, b: []const f64, rel: 
                     if lo > 0.0f64 - big { dto[k] = b[k] - lo }
                 }
             } else {
-                if lo > 0.0f64 - big { dfrom[k] = lo }
-                if hi < big { dto[k] = hi }
+                if lo > 0.0f64 - big { dfrom[k] = lo + x[k - m] }
+                if hi < big { dto[k] = hi + x[k - m] }
             }
         }
         k += 1usize

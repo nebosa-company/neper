@@ -11,7 +11,9 @@ setpar <- function(gen, set) {
   as.numeric(hyperbChangePars(2, set, gen))
 }
 set.seed(20262106)
+hpart <- if (exists("hess_part")) hess_part else "ghyphess"
 for (rep in 1:6) {
+  ncase0 <- length(cases)
   n <- sample(100:200, 1); sd0 <- sample(1:100000, 1)
   gen <- c(rnorm(1), runif(1, 0.5, 2), runif(1, 1.2, 3)); gen <- c(gen, runif(1, -0.6, 0.6) * gen[3])
   for (fam in 0:1) {
@@ -33,9 +35,11 @@ for (rep in 1:6) {
   pr <- c(log(chi), log(psi), lam)
   H <- tryCatch(gigHessian(x, pr), error = function(e) NULL)
   if (!is.null(H)) {
+    # R hessian is optimHess (finite differences, step 1e-3 of the parameter), whose error is ~1e-3 relative and is not reproduced bit for bit: 5e-3 (se 2e-2)
     for (i in 1:3) for (j in i:3) cases[[length(cases) + 1]] <- case("gighess", c(sd0, n, i - 1, j - 1, pr, chi, psi, lam), H[i, j], rel = 5e-3, abs = 0.05)
     se <- if (min(eigen(-H, symmetric = TRUE)$values) > 0 && rcond(-H) > 1e-3) tryCatch(sqrt(diag(solve(-H))), error = function(e) NULL, warning = function(w) NULL) else NULL
     if (!is.null(se) && all(is.finite(se))) for (j in 1:3) cases[[length(cases) + 1]] <- case("gighess", c(sd0, n, 3, j - 1, pr, chi, psi, lam), se[j], rel = 2e-2, abs = 1e-4)
   }
+  if ((hpart == "ghyphess2") != (rep > 3)) cases <- cases[seq_len(ncase0)]
 }
-emit("ghyphess", "GeneralizedHyperbolic", list(cases))
+emit(hpart, "GeneralizedHyperbolic", list(cases))

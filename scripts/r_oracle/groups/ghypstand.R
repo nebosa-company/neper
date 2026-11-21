@@ -24,6 +24,7 @@ addfs <- function(seed, n, kind, sm, method, gen) {
     as.numeric(st$paramStart)[1:2]}), error = function(e) c(NA, NA))
   vals <- c(as.numeric(res$param), res$maxLik, res$conv, res$iter, rz)
   tol <- c(1e-9, 1e-9, 1e-9, 1e-9, 1e-9, 0, 0, 1e-9, 1e-9)
+  # optim BFGS/CG/L-BFGS-B/nlminb/nlm stop on finite-difference gradients, so R's own C besselK (not ported bit for bit) moves the end point: 2e-4, nlminb 3e-3
   if (method > 0) tol[1:4] <- 2e-4
   if (method == 4) tol[1:4] <- 3e-3
   if (method == 5) tol[1:4] <- 2e-4

@@ -6,6 +6,7 @@
 
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.rand.r as rr
+use e.algo.stat.armld as ld
 use e.math
 use e.math.nmath as nm
 use e.mem
@@ -419,20 +420,7 @@ fn consensus_gv3(a: *mem.Arena, g: *rr.Rng, mems: []const f64, w: []const f64, b
             i += 1usize
         }
         if run > 0usize {
-            var mean = 0.0f64
-            i = 0usize
-            while i < sz {
-                mean += m0[i]
-                i += 1usize
-            }
-            mean = mean / f64(sz)
-            var ss = 0.0f64
-            i = 0usize
-            while i < sz {
-                ss += (m0[i] - mean) * (m0[i] - mean)
-                i += 1usize
-            }
-            let sdv = math.sqrt[f64](ss / f64(sz - 1usize)) / math.sqrt[f64](3.0f64)
+            let sdv = math.sqrt[f64](ld.var_ld(m0[0usize..sz])) / math.sqrt[f64](3.0f64)
             i = 0usize
             while i < sz {
                 x[i] = m0[i] + rr.rnorm(g, 0.0f64, sdv)
