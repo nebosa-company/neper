@@ -157,11 +157,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (po, ep) = mem.alloc[f64](a, mp * nk)
         if ep != ok { ret nan }
         od.clm_predict_prob(z[5usize + n + n * p..5usize + n + n * p + mp * p], mp, p, nk, link, par, po)
-        let jc = usize(z[5usize + n + n * p + mp * p])
         var sp = 0.0f64
         var ir = 0usize
         while ir < mp {
-            sp += po[ir * nk + jc] * f64(ir + 1usize)
+            var jc = 0usize
+            while jc < nk {
+                sp += po[ir * nk + jc] * f64((ir + 1usize) * (jc + 1usize))
+                jc += 1usize
+            }
             ir += 1usize
         }
         ret sp

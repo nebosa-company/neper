@@ -2,7 +2,7 @@
 # positions in rev(lambda) (1 based), 2 the sum of their lambda values. The fitted pieces are passed in; the fit is arima(x, c(1, 0, 1)).
 suppressMessages(library(TSA))
 cases <- list()
-add <- function(fn, args, want, rel = 1e-7, abs = 1e-9) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
+add <- function(fn, args, want, rel = 1e-9, abs = 1e-11) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
 set.seed(20261241)
 for (rep in 1:12) {
   n <- sample(80:150, 1)

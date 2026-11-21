@@ -18,7 +18,8 @@ use e.algo.stat.olsfit as olsf
 type ArCtx = struct {
     ar: *mem.Arena, x: []const f64, xreg: []const f64, p: usize, q: usize, d: usize, narma: usize, ncx: usize,
     nfree: usize, coefv: []f64, delta: []f64, kappa: f64, ncond: usize, trans: bool, mode: usize, sp: usize, sq: usize, sd: usize, per: usize,
-    parscale: []f64, full: []f64, gb: []f64, bad: bool
+    parscale: []f64, full: []f64, gb: []f64, bad: bool,
+    ext: bool, nout: usize, ntr: usize, tf: []const f64, tfp: []const f64, tfq: []const f64, iof: []const f64
 }
 
 type ArFit = struct {
@@ -28,6 +29,11 @@ type ArFit = struct {
 
 fn fa(ar: *mem.Arena, n: usize) -> []f64 {
     let (s, e) = mem.alloc[f64](ar, n)
+    var i = 0usize
+    while i < s.len {
+        s[i] = 0.0f64
+        i += 1usize
+    }
     ret s
 }
 
@@ -749,6 +755,138 @@ fn arima_like(ar: *mem.Arena, m: *kal.SsModel, phi: []const f64, theta: []const 
     ret (ssq, sumlog, nu)
 }
 
+fn ar_count_ok(v: []const f64) -> usize {
+    var k = 0usize
+    var i = 0usize
+    while i < v.len {
+        if !ar_isnan(v[i]) { k += 1usize }
+        i += 1usize
+    }
+    ret k
+}
+
+// R's filter(v, f, method = "recursive", sides = 1) with a zero start, in place: v[t] + f[0] v'[t-1] + f[1] v'[t-2] ...
+fn ar_rec_filter(v: []f64, f: []const f64) {
+    var t = 0usize
+    while t < v.len {
+        var s = v[t]
+        var j = 0usize
+        while j < f.len && j < t {
+            s += f[j] * v[t - 1usize - j]
+            j += 1usize
+        }
+        v[t] = s
+        t += 1usize
+    }
+}
+
+// the filter(v, f, "convolution", sides = 1) of v into out: sum f[j] v[t-j], NaN while the history is short
+fn ar_conv_filter(v: []const f64, f: []const f64, out: []f64) {
+    var t = 0usize
+    while t < v.len {
+        if t + 1usize < f.len {
+            out[t] = ar_nan()
+        } else {
+            var s = 0.0f64
+            var j = 0usize
+            while j < f.len {
+                s += f[j] * v[t - j]
+                j += 1usize
+            }
+            out[t] = s
+        }
+        t += 1usize
+    }
+}
+
+fn ar_any_nonzero(v: []const f64) -> bool {
+    var i = 0usize
+    while i < v.len {
+        if v[i] != 0.0f64 { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// TSA arimax: x2 = x - xreg %*% b, a column flagged innovative-outlier first run through the ARMA filter (Delta, then phi, then 1 + theta),
+// less every transfer term (the xtransf column through its AR part and then its MA part) with the parameters after the regressors
+fn ar_ext_x2(c: *ArCtx, full: []const f64, phi: []const f64, theta: []const f64, x2: []f64) {
+    let n = c.x.len
+    let st = mem.mark(c.ar)
+    let cols = fa(c.ar, n * c.ncx + 1usize)
+    let tmp = fa(c.ar, n)
+    let ft = fa(c.ar, theta.len + 1usize)
+    ft[0usize] = 1.0f64
+    var k = 0usize
+    while k < theta.len {
+        ft[k + 1usize] = theta[k]
+        k += 1usize
+    }
+    k = 0usize
+    while k < c.ncx {
+        let col = cols[k * n..k * n + n]
+        var i = 0usize
+        while i < n {
+            col[i] = c.xreg[k * n + i]
+            i += 1usize
+        }
+        if c.iof[k] != 0.0f64 {
+            if c.delta.len > 0usize { ar_rec_filter(col, c.delta) }
+            if ar_any_nonzero(phi) { ar_rec_filter(col, phi) }
+            i = 0usize
+            while i < n {
+                tmp[i] = 0.0f64
+                var j = 0usize
+                while j < ft.len && j <= i {
+                    tmp[i] += ft[j] * col[i - j]
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            i = 0usize
+            while i < n {
+                col[i] = tmp[i]
+                i += 1usize
+            }
+        }
+        k += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var s = 0.0f64
+        k = 0usize
+        while k < c.ncx {
+            s += cols[k * n + i] * full[c.narma + k]
+            k += 1usize
+        }
+        x2[i] = c.x[i]
+        if c.ncx > 0usize { x2[i] = c.x[i] - s }
+        i += 1usize
+    }
+    var at = c.narma + c.ncx
+    k = 0usize
+    while k < c.ntr {
+        let tp = usize(c.tfp[k])
+        let tq = usize(c.tfq[k])
+        i = 0usize
+        while i < n {
+            tmp[i] = c.tf[k * n + i]
+            i += 1usize
+        }
+        if tp > 0usize && ar_any_nonzero(full[at..at + tp]) { ar_rec_filter(tmp, full[at..at + tp]) }
+        let out = fa(c.ar, n)
+        ar_conv_filter(tmp, full[at + tp..at + tp + tq], out)
+        i = 0usize
+        while i < n {
+            x2[i] = x2[i] - out[i]
+            i += 1usize
+        }
+        at += tp + tq
+        k += 1usize
+    }
+    mem.reset(c.ar, st)
+}
+
 // the objective in scaled coordinates: the Gaussian ML (mode 0) or half the log CSS (mode 1)
 fn ar_obj(c: *ArCtx, b: []const f64) -> f64 {
     let full = c.full
@@ -773,12 +911,14 @@ fn ar_obj(c: *ArCtx, b: []const f64) -> f64 {
         i += 1usize
     }
     var res = 0.0f64
+    var tr = c.trans
+    if c.mode == 1usize && !c.ext { tr = false }
+    trans_pars(full, c.p, c.q, c.sp, c.sq, c.per, tr, phi, theta)
+    if c.ext { ar_ext_x2(c, full, phi, theta, x2) }
     if c.mode == 1usize {
-        trans_pars(full, c.p, c.q, c.sp, c.sq, c.per, false, phi, theta)
         let v = css_value(c.ar, x2, phi.len, theta.len, c.d, c.sd, c.per, phi, theta, c.ncond, zero)
         res = 0.5f64 * math.log[f64](v)
     } else {
-        trans_pars(full, c.p, c.q, c.sp, c.sq, c.per, c.trans, phi, theta)
         let (mdl, good) = make_arima(c.ar, phi, theta, c.delta, c.kappa)
         if !good {
             res = 1.7976931348623157e308f64
@@ -787,6 +927,12 @@ fn ar_obj(c: *ArCtx, b: []const f64) -> f64 {
             let (ssq, sumlog, nu) = arima_like(c.ar, &m, phi, theta, c.delta, x2, x2[0usize..0usize])
             let s2 = ssq / f64(nu)
             res = 0.5f64 * (math.log[f64](s2) + sumlog / f64(nu))
+            if c.ext {
+                // TSA arimax: the inner arima's log likelihood re-based on the outer n.used
+                let nin = f64(ar_count_ok(x2) - c.delta.len)
+                let no = f64(c.nout)
+                res = nin * res / no + (nin - no) * (1.0f64 + math.log[f64](2.0f64 * 3.141592653589793f64)) / (2.0f64 * no)
+            }
         }
     }
     mem.reset(c.ar, st)
@@ -1186,6 +1332,38 @@ fn ma_invert(ar: *mem.Arena, ma: []f64) {
     mem.reset(ar, st)
 }
 
+// arima's Delta: minus the coefficients (after the leading 1) of (1 - B)^d (1 - B^per)^sd
+fn ar_delta(ar: *mem.Arena, d: usize, sd: usize, per: usize) -> []f64 {
+    let dtot = d + sd * per
+    let delta = fa(ar, dtot)
+    let dpoly = fa(ar, dtot + 2usize)
+    var i = 0usize
+    while i < dtot + 2usize {
+        dpoly[i] = 0.0f64
+        i += 1usize
+    }
+    dpoly[0usize] = 1.0f64
+    var dl = 1usize
+    var k = 0usize
+    while k < d + sd {
+        var lag = 1usize
+        if k >= d { lag = per }
+        var j = dl + lag - 1usize
+        while j >= lag {
+            dpoly[j] = dpoly[j] - dpoly[j - lag]
+            j -= 1usize
+        }
+        dl += lag
+        k += 1usize
+    }
+    i = 0usize
+    while i < dtot {
+        delta[i] = 0.0f64 - dpoly[i + 1usize]
+        i += 1usize
+    }
+    ret delta
+}
+
 // arima(x, order = c(p, d, q), include.mean, xreg = intercept (kind 1) or drift (kind 2) with the coefficient free (xfixed NaN) or fixed,
 // method 0 CSS-ML, 1 ML, 2 CSS)
 fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind: usize, xfixed: f64, method0: usize) -> ArFit {
@@ -1225,33 +1403,8 @@ fn arima_fit_s(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, sp:
     let nused = nna - dtot
     var ncond = 0usize
     if method != 1usize { ncond = dtot + pl }
-    // Delta: the differencing polynomial
-    let delta = fa(ar, dtot)
-    let dpoly = fa(ar, dtot + 2usize)
-    i = 0usize
-    while i < dtot + 2usize {
-        dpoly[i] = 0.0f64
-        i += 1usize
-    }
-    dpoly[0usize] = 1.0f64
-    var dl = 1usize
+    let delta = ar_delta(ar, d, sd, per)
     var k = 0usize
-    while k < d + sd {
-        var lag = 1usize
-        if k >= d { lag = per }
-        var j = dl + lag - 1usize
-        while j >= lag {
-            dpoly[j] = dpoly[j] - dpoly[j - lag]
-            j -= 1usize
-        }
-        dl += lag
-        k += 1usize
-    }
-    i = 0usize
-    while i < dtot {
-        delta[i] = 0.0f64 - dpoly[i + 1usize]
-        i += 1usize
-    }
     var xfree = false
     if ncx == 1usize && ar_isnan(xfixed) { xfree = true }
     var nfree = narma
@@ -1365,7 +1518,7 @@ fn arima_fit_s(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, sp:
     if ncx == 1usize && !xfree { coefv[narma] = xfixed }
     let full = fa(ar, ntot)
     let gb = fa(ar, nfree + 1usize)
-    var c = ArCtx{ ar: ar, x: x, xreg: xreg, p: p, q: q, d: d, narma: narma, ncx: ncx, nfree: nfree, coefv: coefv, delta: delta, kappa: 1.0e6f64, ncond: ncond, trans: false, mode: 1usize, sp: sp, sq: sq, sd: sd, per: per, parscale: parscale, full: full, gb: gb, bad: false }
+    var c = ArCtx{ ar: ar, x: x, xreg: xreg, p: p, q: q, d: d, narma: narma, ncx: ncx, nfree: nfree, coefv: coefv, delta: delta, kappa: 1.0e6f64, ncond: ncond, trans: false, mode: 1usize, sp: sp, sq: sq, sd: sd, per: per, parscale: parscale, full: full, gb: gb, bad: false, ext: false, nout: 0usize, ntr: 0usize, tf: x[0usize..0usize], tfp: x[0usize..0usize], tfq: x[0usize..0usize], iof: x[0usize..0usize] }
     let b = fa(ar, nfree + 1usize)
     let coef = fa(ar, ntot)
     let hess = fa(ar, nfree * nfree + 1usize)

@@ -1,30 +1,18 @@
 // R sm: the normal-reference bandwidth hnorm, sm.density in one and two dimensions with the Gaussian kernel, and sm.regression at evaluation points
 // (local constant or local linear, Gaussian kernel), all on unbinned data (sm bins only above 100 observations).
 //
-// Not here: h.select dispatch, bands and standard errors, sm.ancova, sm.survival and sm.options.
+// Also: the reference-band model fits, the sm.options defaults, sm.ancova and sm.survival at one point.
 
 use e.math
 use e.mem
+use e.algo.stat.armld as ld
+use e.algo.stat.armx87 as xe
+use e.str
 use e.math.nmath as nm
 use e.algo.stat.fdrtool as fd
 use e.algo.stat.rnm
 
-fn sd_of(x: []const f64) -> f64 {
-    var m = 0.0f64
-    var i = 0usize
-    while i < x.len {
-        m += x[i]
-        i += 1usize
-    }
-    m = m / f64(x.len)
-    var s = 0.0f64
-    i = 0usize
-    while i < x.len {
-        s += (x[i] - m) * (x[i] - m)
-        i += 1usize
-    }
-    ret math.sqrt[f64](s / f64(x.len - 1usize))
-}
+fn sd_of(x: []const f64) -> f64 { ret math.sqrt[f64](ld.var_ld(x)) }
 
 fn phi(z: f64) -> f64 { ret math.exp[f64](0.0f64 - z * z / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64) }
 
@@ -254,10 +242,89 @@ fn hsj(a: *mem.Arena, x: []const f64) -> (f64, err) {
     ret (h0 + (h1 - h0) * math.abs[f64](v0) / (math.abs[f64](v0) + math.abs[f64](v1)), ok)
 }
 
+// h.select's density cross-validation score as sm's cv.crit.dens evaluates it: long double sums of the full n x n matrix less its diagonal, column by column
+fn cv_density_hs(x: []const f64, h: f64) -> f64 {
+    let n = x.len
+    let nn = f64(n)
+    let s2 = math.sqrt[f64](2.0f64)
+    let c = math.sqrt[f64](2.0f64 * 3.141592653589793f64)
+    let d0 = 0.3989422804014327f64 / (s2 * h * 1.0f64)
+    var t0 = ld.ld_zero()
+    var i = 0usize
+    while i < n {
+        t0 = ld.ld_add(t0, ld.ld_from(d0))
+        i += 1usize
+    }
+    var hc = ld.ld_to(t0) / (nn * (nn - 1.0f64))
+    var all = ld.ld_zero()
+    var dg = ld.ld_zero()
+    var all2 = ld.ld_zero()
+    var dg2 = ld.ld_zero()
+    var j = 0usize
+    while j < n {
+        i = 0usize
+        while i < n {
+            let d = x[i] - x[j]
+            let z = d / (h * s2)
+            let v = xe.exp_r(0.0f64 - 0.5f64 * (z * z)) / (c * h * s2)
+            let z2 = d / (h * 1.0f64)
+            let v2 = xe.exp_r(0.0f64 - 0.5f64 * (z2 * z2)) / (c * h * 1.0f64)
+            all = ld.ld_add(all, ld.ld_from(v))
+            all2 = ld.ld_add(all2, ld.ld_from(v2))
+            if i == j {
+                dg = ld.ld_add(dg, ld.ld_from(v))
+                dg2 = ld.ld_add(dg2, ld.ld_from(v2))
+            }
+            i += 1usize
+        }
+        j += 1usize
+    }
+    hc = hc + (ld.ld_to(all) - ld.ld_to(dg)) * (nn - 2.0f64) / (nn * ((nn - 1.0f64) * (nn - 1.0f64)))
+    hc = hc - (ld.ld_to(all2) - ld.ld_to(dg2)) * 2.0f64 / (nn * (nn - 1.0f64))
+    ret hc
+}
+
+// h.select's leave-one-out score as sm's cv.crit.reg evaluates it: row sums and (I - S) y in the BLAS order, the squares summed in long double
+fn cv_regression_hs(x: []const f64, y: []const f64, h: f64) -> f64 {
+    let n = x.len
+    var tot = ld.ld_zero()
+    var i = 0usize
+    while i < n {
+        var s0 = 0.0f64
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        var j = 0usize
+        while j < n {
+            let wd = x[i] - x[j]
+            var w = xe.exp_r(0.0f64 - 0.5f64 * ((wd / h) * (wd / h)))
+            if i == j { w = 0.0f64 }
+            s0 += w
+            s1 += w * wd
+            s2 += w * (wd * wd)
+            j += 1usize
+        }
+        var fit = 0.0f64
+        j = 0usize
+        while j < n {
+            let wd = x[i] - x[j]
+            var w = xe.exp_r(0.0f64 - 0.5f64 * ((wd / h) * (wd / h)))
+            if i == j { w = 0.0f64 }
+            let s = w * (s2 - wd * s1) / (s2 * s0 - s1 * s1)
+            var m = 0.0f64 - s
+            if i == j { m = 1.0f64 - s }
+            fit += m * y[j]
+            j += 1usize
+        }
+        tot = ld.ld_add(tot, ld.ld_from(fit * fit))
+        i += 1usize
+    }
+    ret ld.ld_to(tot) / f64(n)
+}
+
 type CvCtx = struct { x: []const f64 }
 
 fn cv_log(c: *CvCtx, lh: f64) -> f64 {
-    let v = cv_density(c.x, math.exp[f64](lh))
+    let v = cv_density_hs(c.x, xe.exp_r(lh))
     if v != v { ret 1.0e10f64 }
     ret v
 }
@@ -266,13 +333,13 @@ fn cv_log(c: *CvCtx, lh: f64) -> f64 {
 fn hselect_cv(x: []const f64) -> f64 {
     let start = sd_of(x) / 2.0f64
     var c = CvCtx { x: x }
-    ret math.exp[f64](fd.brent_min[CvCtx](&c, cv_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+    ret xe.exp_r(fd.brent_min[CvCtx](&c, cv_log, xe.log_r(start / 8.0f64), xe.log_r(start * 4.0f64)))
 }
 
 type CvRegCtx = struct { x: []const f64, y: []const f64 }
 
 fn cv_reg_log(c: *CvRegCtx, lh: f64) -> f64 {
-    let v = cv_regression(c.x, c.y, math.exp[f64](lh)) / f64(c.x.len)
+    let v = cv_regression_hs(c.x, c.y, xe.exp_r(lh))
     if v != v { ret 1.0e10f64 }
     ret v
 }
@@ -281,7 +348,7 @@ fn cv_reg_log(c: *CvRegCtx, lh: f64) -> f64 {
 fn hselect_cv_reg(x: []const f64, y: []const f64) -> f64 {
     let start = sd_of(x) / 2.0f64
     var c = CvRegCtx { x: x, y: y }
-    ret math.exp[f64](fd.brent_min[CvRegCtx](&c, cv_reg_log, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+    ret xe.exp_r(fd.brent_min[CvRegCtx](&c, cv_reg_log, xe.log_r(start / 8.0f64), xe.log_r(start * 4.0f64)))
 }
 
 // the local-linear smoother at x[i] with bandwidth h: trace entry s_ii and the fit sum_j s_ij y[j]
@@ -410,6 +477,55 @@ fn regression_se(a: *mem.Arena, x: []const f64, y: []const f64, h: f64, p: f64) 
         j += 1usize
     }
     ret (sg * math.sqrt[f64](q), ok)
+}
+
+// the se sm.regression reports at p (unit weights) under a reference model: kind 1 no.effect, 2 linear; sigma * sqrt(sum (w_j - m_j)^2) with w the local-linear row and m the model's smoother row (1/n, or the least-squares line's hat row)
+fn regression_se_model(a: *mem.Arena, x: []const f64, y: []const f64, h: f64, p: f64, kind: usize) -> (f64, err) {
+    let (sg, e) = sm_sigma(a, x, y)
+    if e != ok { ret (0.0f64, e) }
+    let n = x.len
+    var sx = 0.0f64
+    var j = 0usize
+    while j < n {
+        sx += x[j]
+        j += 1usize
+    }
+    let mx = sx / f64(n)
+    var sxx = 0.0f64
+    var s0 = 0.0f64
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    j = 0usize
+    while j < n {
+        let wd = x[j] - p
+        let w = math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+        s0 += w
+        s1 += w * wd
+        s2 += w * wd * wd
+        sxx += (x[j] - mx) * (x[j] - mx)
+        j += 1usize
+    }
+    var q = 0.0f64
+    j = 0usize
+    while j < n {
+        let wd = x[j] - p
+        let w = math.exp[f64](0.0f64 - 0.5f64 * (wd / h) * (wd / h))
+        let swj = w * (s2 - wd * s1) / (s2 * s0 - s1 * s1)
+        var m = 1.0f64 / f64(n)
+        if kind == 2usize { m += (p - mx) * (x[j] - mx) / sxx }
+        q += (swj - m) * (swj - m)
+        j += 1usize
+    }
+    ret (sg * math.sqrt[f64](q), ok)
+}
+
+// the 2-d sm.density variability band: se = dnorm(0, sd = sqrt(2)) / sqrt(4 n h1 h2); answers (se, lower, upper) as density_band does
+fn density_band2(est: f64, n: f64, h1: f64, h2: f64) -> (f64, f64, f64) {
+    let se = phi(0.0f64) / math.sqrt[f64](2.0f64) / math.sqrt[f64](4.0f64 * n * h1 * h2)
+    let up = math.sqrt[f64](est) + 2.0f64 * se
+    var lo = math.sqrt[f64](est) - 2.0f64 * se
+    if lo < 0.0f64 { lo = 0.0f64 }
+    ret (se, lo * lo, up * up)
 }
 
 fn brk(lo: f64, by: f64, k: usize) -> f64 {
@@ -1302,18 +1418,20 @@ fn smooth_row_2d(x1: []const f64, x2: []const f64, y: []const f64, i: usize, h1:
     var a22 = 0.0f64
     var a23 = 0.0f64
     var a33 = 0.0f64
+    var wbuf: [512]f64 = zero
     var j = 0usize
     while j < n {
-        var w = math.exp[f64](0.0f64 - 0.5f64 * ((x1[i] - x1[j]) / h1) * ((x1[i] - x1[j]) / h1)) * math.exp[f64](0.0f64 - 0.5f64 * ((x2[i] - x2[j]) / h2) * ((x2[i] - x2[j]) / h2))
+        var w = xe.exp_r(0.0f64 - 0.5f64 * ((x1[i] - x1[j]) / h1) * ((x1[i] - x1[j]) / h1)) * xe.exp_r(0.0f64 - 0.5f64 * ((x2[i] - x2[j]) / h2) * ((x2[i] - x2[j]) / h2))
         if cross && j == i { w = 0.0f64 }
         let d1 = x1[i] - x1[j]
         let d2 = x2[i] - x2[j]
+        if n <= 512usize { wbuf[j] = w }
         a11 += w
         a12 += w * d1
         a13 += w * d2
-        a22 += w * d1 * d1
+        a22 += w * (d1 * d1)
         a23 += w * d1 * d2
-        a33 += w * d2 * d2
+        a33 += w * (d2 * d2)
         j += 1usize
     }
     let d = a22 * a33 - a23 * a23
@@ -1326,11 +1444,20 @@ fn smooth_row_2d(x1: []const f64, x2: []const f64, y: []const f64, i: usize, h1:
     while j < n {
         let d1 = x1[i] - x1[j]
         let d2 = x2[i] - x2[j]
-        var w = math.exp[f64](0.0f64 - 0.5f64 * (d1 / h1) * (d1 / h1)) * math.exp[f64](0.0f64 - 0.5f64 * (d2 / h2) * (d2 / h2))
-        if cross && j == i { w = 0.0f64 }
-        let s = (b1 + b2 * d1 + b3 * d2) * w
-        fit += s * y[j]
-        if j == i { *sii = s }
+        var w = 0.0f64
+        if n <= 512usize {
+            w = wbuf[j]
+        } else {
+            w = xe.exp_r(0.0f64 - 0.5f64 * (d1 / h1) * (d1 / h1)) * xe.exp_r(0.0f64 - 0.5f64 * (d2 / h2) * (d2 / h2))
+            if cross && j == i { w = 0.0f64 }
+        }
+        let s =(b1 + b2 * d1 + b3 * d2) * w
+        var m = 0.0f64 - s
+        if j == i {
+            m = 1.0f64 - s
+            *sii = s
+        }
+        fit += m * y[j]
         j += 1usize
     }
     ret fit
@@ -1341,62 +1468,67 @@ type Crit2Ctx = struct { x1: []const f64, x2: []const f64, y: []const f64, kind:
 // the 2-d regression criteria of h.select at bandwidths (h1, h2): kind 0 cv, 1 df, 2 aicc
 fn crit2_val(c: *Crit2Ctx, h1: f64, h2: f64) -> f64 {
     let n = c.x1.len
-    var tr = 0.0f64
-    var rss = 0.0f64
+    var trl = ld.ld_zero()
+    var rssl = ld.ld_zero()
     var i = 0usize
     while i < n {
         var sii = 0.0f64
         let fit = smooth_row_2d(c.x1, c.x2, c.y, i, h1, h2, c.kind == 0usize, &sii)
-        tr += sii
-        rss += (c.y[i] - fit) * (c.y[i] - fit)
+        trl = ld.ld_add(trl, ld.ld_from(sii))
+        rssl = ld.ld_add(rssl, ld.ld_from(fit * fit))
         i += 1usize
     }
     let nn = f64(n)
+    let tr = ld.ld_to(trl)
+    let rss = ld.ld_to(rssl)
     if c.kind == 0usize {
         let v = rss / nn
         if v != v { ret 1.0e10f64 }
         ret v
     }
     if c.kind == 1usize { ret (tr - c.df) * (tr - c.df) }
-    let v = math.log[f64](rss / nn) + 1.0f64 + 2.0f64 * (tr + 1.0f64) / (nn - tr - 2.0f64)
+    let v = xe.log_r(rss / nn) + (1.0f64 + 2.0f64 * (tr + 1.0f64) / (nn - tr - 2.0f64))
     if v != v { ret 1.0e10f64 }
     ret v
 }
 
 fn crit2_log(c: *Crit2Ctx, lh: f64) -> f64 {
-    let h = math.exp[f64](lh)
+    let h = xe.exp_r(lh)
     ret crit2_val(c, h * c.s1, h * c.s2)
 }
 
 fn crit2_common(c: *Crit2Ctx, lh: f64) -> f64 {
-    let h = math.exp[f64](lh)
+    let h = xe.exp_r(lh)
     ret crit2_val(c, h, h)
 }
 
-fn crit2_sep(c: *Crit2Ctx, lh: []const f64) -> f64 { ret crit2_val(c, math.exp[f64](lh[0usize]), math.exp[f64](lh[1usize])) }
+fn crit2_sep(c: *Crit2Ctx, lh: []const f64) -> f64 { ret crit2_val(c, xe.exp_r(lh[0usize]), xe.exp_r(lh[1usize])) }
 
 // h.select(cbind(x1, x2), y, method, structure.2d = "common" (structure 1) or "separate" (2); df is not allowed for separate): the bandwidth for variable which
 fn hselect_reg_2d_other(a: *mem.Arena, x1: []const f64, x2: []const f64, y: []const f64, kind: usize, df: f64, structure: usize, which: usize) -> f64 {
     var c = Crit2Ctx { x1: x1, x2: x2, y: y, kind: kind, df: df, s1: sd_of(x1), s2: sd_of(x2) }
     if structure == 1usize {
-        let start = (c.s1 / 2.0f64 + c.s2 / 2.0f64) / 2.0f64
-        ret math.exp[f64](fd.brent_min[Crit2Ctx](&c, crit2_common, math.log[f64](start / 8.0f64), math.log[f64](start * 4.0f64)))
+        var sp: [2]f64 = zero
+        sp[0usize] = c.s1 / 2.0f64
+        sp[1usize] = c.s2 / 2.0f64
+        let start = ld.mean_ld(sp[0usize..2usize])
+        ret xe.exp_r(fd.brent_min[Crit2Ctx](&c, crit2_common, xe.log_r(start / 8.0f64), xe.log_r(start * 4.0f64)))
     }
     var st: [2]f64 = zero
-    st[0usize] = math.log[f64](c.s1 / 2.0f64)
-    st[1usize] = math.log[f64](c.s2 / 2.0f64)
+    st[0usize] = xe.log_r(c.s1 / 2.0f64)
+    st[1usize] = xe.log_r(c.s2 / 2.0f64)
     var xo: [2]f64 = zero
     let (fv, cnt, fail) = rnm.nmmin[Crit2Ctx](a, &c, crit2_sep, st[0usize..2usize], 0.0f64 - 1.0e308f64, 1.0e-6f64, 1.0f64, 0.5f64, 2.0f64, 500usize, 1.0f64, xo[0usize..2usize])
     let _ = fv
     let _ = cnt
     let _ = fail
-    ret math.exp[f64](xo[which])
+    ret xe.exp_r(xo[which])
 }
 
 // h.select(cbind(x1, x2), y, method = "cv" / "df" / "aicc") with the default scaled structure (start 0.5, df 12), unbinned: the bandwidth for variable which
 fn hselect_reg_2d(x1: []const f64, x2: []const f64, y: []const f64, kind: usize, df: f64, which: usize) -> f64 {
     var c = Crit2Ctx { x1: x1, x2: x2, y: y, kind: kind, df: df, s1: sd_of(x1), s2: sd_of(x2) }
-    let f = math.exp[f64](fd.brent_min[Crit2Ctx](&c, crit2_log, math.log[f64](0.5f64 / 8.0f64), math.log[f64](0.5f64 * 4.0f64)))
+    let f = xe.exp_r(fd.brent_min[Crit2Ctx](&c, crit2_log, xe.log_r(0.5f64 / 8.0f64), xe.log_r(0.5f64 * 4.0f64)))
     if which == 0usize { ret f * c.s1 }
     ret f * c.s2
 }
@@ -1409,4 +1541,673 @@ fn density_band(est: f64, n: f64, h: f64) -> (f64, f64, f64) {
     var lo = math.sqrt[f64](est) - 2.0f64 * se
     if lo < 0.0f64 { lo = 0.0f64 }
     ret (se, lo * lo, up * up)
+}
+
+// sm binning(cbind(x1, x2), y, nbins): nbins equal-width bins per axis over (min - 1e-5, max]; the non-empty cells in R's order (first axis fastest) go to bx1, bx2, bf, bm, bd (each nbins * nbins long); the answer is how many are non-empty
+fn binning2d(a: *mem.Arena, x1: []const f64, x2: []const f64, y: []const f64, nbins: usize, bx1: []f64, bx2: []f64, bf: []f64, bm: []f64, bd: []f64) -> (usize, err) {
+    let n = x1.len
+    var lo1 = x1[0usize]
+    var hi1 = x1[0usize]
+    var lo2 = x2[0usize]
+    var hi2 = x2[0usize]
+    var i = 0usize
+    while i < n {
+        if x1[i] < lo1 { lo1 = x1[i] }
+        if x1[i] > hi1 { hi1 = x1[i] }
+        if x2[i] < lo2 { lo2 = x2[i] }
+        if x2[i] > hi2 { hi2 = x2[i] }
+        i += 1usize
+    }
+    let cells = nbins * nbins
+    let (cnt, e0) = mem.alloc[f64](a, cells)
+    let (sum, e1) = mem.alloc[f64](a, cells)
+    let (idx, e2) = mem.alloc[usize](a, n)
+    if e0 != ok || e1 != ok || e2 != ok { ret (0usize, mem.Full) }
+    let by1 = (hi1 - lo1) / f64(nbins)
+    let by2 = (hi2 - lo2) / f64(nbins)
+    var k = 0usize
+    while k < cells {
+        cnt[k] = 0.0f64
+        sum[k] = 0.0f64
+        k += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j1 = 0usize
+        while j1 + 1usize < nbins && x1[i] > lo1 + f64(j1 + 1usize) * by1 { j1 += 1usize }
+        var j2 = 0usize
+        while j2 + 1usize < nbins && x2[i] > lo2 + f64(j2 + 1usize) * by2 { j2 += 1usize }
+        idx[i] = j1 + nbins * j2
+        cnt[idx[i]] += 1.0f64
+        sum[idx[i]] += y[i]
+        i += 1usize
+    }
+    var m = 0usize
+    k = 0usize
+    while k < cells {
+        if cnt[k] > 0.0f64 {
+            let mean = sum[k] / cnt[k]
+            var dev = 0.0f64
+            i = 0usize
+            while i < n {
+                if idx[i] == k { dev += (y[i] - mean) * (y[i] - mean) }
+                i += 1usize
+            }
+            let j1 = k % nbins
+            let j2 = k / nbins
+            bx1[m] = (brk(lo1, by1, j1) + brk(lo1, by1, j1 + 1usize)) / 2.0f64
+            bx2[m] = (brk(lo2, by2, j2) + brk(lo2, by2, j2 + 1usize)) / 2.0f64
+            bf[m] = cnt[k]
+            bm[m] = mean
+            bd[m] = dev
+            m += 1usize
+        }
+        k += 1usize
+    }
+    ret (m, ok)
+}
+
+// sm.weight / sm.weight2 (local linear, Gaussian kernel, poly.index 1) of the k points x1 (x2 too when two) with themselves, written into the block at offset o of smx (stride nt); wts are the point weights, hw the per-point bandwidth multipliers, cross zeroes the diagonal weight
+fn smooth_w(smx: []f64, nt: usize, o: usize, x1: []const f64, x2: []const f64, two: bool, wts: []const f64, hw: []const f64, h1: f64, h2: f64, cross: bool) {
+    let k = x1.len
+    var i = 0usize
+    while i < k {
+        var a11 = 0.0f64
+        var a12 = 0.0f64
+        var a13 = 0.0f64
+        var a22 = 0.0f64
+        var a23 = 0.0f64
+        var a33 = 0.0f64
+        var j = 0usize
+        while j < k {
+            let wd1 = x1[i] - x1[j]
+            var w = math.exp[f64](0.0f64 - 0.5f64 * (wd1 / (h1 * hw[j])) * (wd1 / (h1 * hw[j])))
+            var wd2 = 0.0f64
+            if two {
+                wd2 = x2[i] - x2[j]
+                w = w * math.exp[f64](0.0f64 - 0.5f64 * (wd2 / (h2 * hw[j])) * (wd2 / (h2 * hw[j])))
+            }
+            w = w * wts[j]
+            if cross && i == j { w = 0.0f64 }
+            a11 += w
+            a12 += w * wd1
+            a13 += w * wd2
+            a22 += w * wd1 * wd1
+            a23 += w * wd1 * wd2
+            a33 += w * wd2 * wd2
+            j += 1usize
+        }
+        var b1 = 0.0f64
+        var b2 = 0.0f64
+        var b3 = 0.0f64
+        if two {
+            let d = a22 * a33 - a23 * a23
+            b1 = 1.0f64 / (a11 - ((a12 * a33 - a13 * a23) * a12 + (a13 * a22 - a12 * a23) * a13) / d)
+            b2 = (a13 * a23 - a12 * a33) * b1 / d
+            b3 = (a12 * a23 - a13 * a22) * b1 / d
+        }
+        j = 0usize
+        while j < k {
+            let wd1 = x1[i] - x1[j]
+            var w = math.exp[f64](0.0f64 - 0.5f64 * (wd1 / (h1 * hw[j])) * (wd1 / (h1 * hw[j])))
+            var wd2 = 0.0f64
+            if two {
+                wd2 = x2[i] - x2[j]
+                w = w * math.exp[f64](0.0f64 - 0.5f64 * (wd2 / (h2 * hw[j])) * (wd2 / (h2 * hw[j])))
+            }
+            w = w * wts[j]
+            if cross && i == j { w = 0.0f64 }
+            if two {
+                smx[(o + i) * nt + o + j] = (b1 + b2 * wd1 + b3 * wd2) * w
+            } else {
+                smx[(o + i) * nt + o + j] = w * (a22 - wd1 * a12) / (a22 * a11 - a12 * a12)
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// the 5th smallest of the k values in v (insertion-sorted in place)
+fn fifth_smallest(v: []f64) -> f64 {
+    var i = 1usize
+    while i < v.len {
+        let t = v[i]
+        var j = i
+        while j > 0usize && v[j - 1usize] > t {
+            v[j] = v[j - 1usize]
+            j -= 1usize
+        }
+        v[j] = t
+        i += 1usize
+    }
+    ret v[4usize]
+}
+
+// sm.sigweight of one group's k points (rows in the group's order; 1-d x ascending) with weights wts, added into the block at offset o of bm (stride nt)
+fn sigweight_block(a: *mem.Arena, bm: []f64, nt: usize, o: usize, x1: []const f64, x2: []const f64, two: bool, wts: []const f64) -> err {
+    let k = x1.len
+    if !two {
+        var r = 1usize
+        while r + 1usize < k {
+            let x0 = x1[r - 1usize]
+            let xm = x1[r]
+            let xp = x1[r + 1usize]
+            var aa = (xp - xm) / (xp - x0)
+            var bb = (xm - x0) / (xp - x0)
+            if xp == x0 {
+                aa = 0.5f64
+                bb = 0.5f64
+            }
+            let cc = math.sqrt[f64](aa * aa / wts[r - 1usize] + bb * bb / wts[r + 1usize] + 1.0f64 / wts[r])
+            var rowv: [3]f64 = zero
+            rowv[0usize] = aa / cc
+            rowv[1usize] = 0.0f64 - 1.0f64 / cc
+            rowv[2usize] = bb / cc
+            var u = 0usize
+            while u < 3usize {
+                var v = 0usize
+                while v < 3usize {
+                    bm[(o + r - 1usize + u) * nt + o + r - 1usize + v] += rowv[u] * rowv[v]
+                    v += 1usize
+                }
+                u += 1usize
+            }
+            r += 1usize
+        }
+        ret ok
+    }
+    if k < 5usize { ret mem.Full }
+    let (hw, e0) = mem.alloc[f64](a, k)
+    let (tmp, e1) = mem.alloc[f64](a, k)
+    let (am, e2) = mem.alloc[f64](a, k * k)
+    let (sm2, e3) = mem.alloc[f64](a, k * k)
+    let (dg, e4) = mem.alloc[f64](a, k)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var m1 = 0.0f64
+    var m2 = 0.0f64
+    var i = 0usize
+    while i < k {
+        m1 += x1[i]
+        m2 += x2[i]
+        i += 1usize
+    }
+    m1 = m1 / f64(k)
+    m2 = m2 / f64(k)
+    var v1 = 0.0f64
+    var v2 = 0.0f64
+    i = 0usize
+    while i < k {
+        v1 += (x1[i] - m1) * (x1[i] - m1)
+        v2 += (x2[i] - m2) * (x2[i] - m2)
+        i += 1usize
+    }
+    v1 = v1 / (f64(k) - 1.0f64)
+    v2 = v2 / (f64(k) - 1.0f64)
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            tmp[j] = math.sqrt[f64]((x1[i] - x1[j]) * (x1[i] - x1[j]) / v1 + (x2[i] - x2[j]) * (x2[i] - x2[j]) / v2)
+            j += 1usize
+        }
+        hw[i] = fifth_smallest(tmp) / 2.0f64
+        i += 1usize
+    }
+    smooth_w(sm2, k, 0usize, x1, x2, true, wts, hw, math.sqrt[f64](v1), math.sqrt[f64](v2), true)
+    i = 0usize
+    while i < k * k {
+        var v = 0.0f64
+        if i / k == i % k { v = 1.0f64 }
+        am[i] = v - sm2[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += am[i * k + j] * am[i * k + j]
+            j += 1usize
+        }
+        dg[i] = s
+        i += 1usize
+    }
+    var u = 0usize
+    while u < k {
+        var v = 0usize
+        while v < k {
+            var s = 0.0f64
+            i = 0usize
+            while i < k {
+                s += am[i * k + u] * am[i * k + v] / dg[i]
+                i += 1usize
+            }
+            bm[(o + u) * nt + o + v] += s
+            v += 1usize
+        }
+        u += 1usize
+    }
+    ret ok
+}
+
+// sm.ancova(x, y, group, h, model = "equal" or "parallel") for one covariate (x2 empty) or two, binned to nbins per axis within each group when nbins > 0 (else unit weights); rows are ordered by group then, for one covariate, x as R does; h2 is unused for one covariate
+fn ancova_gen(a: *mem.Arena, x1: []const f64, x2: []const f64, y: []const f64, group: []const f64, h1: f64, h2: f64, nbins: usize, parallel: bool) -> (f64, err) {
+    let nobs = y.len
+    let two = x2.len > 0usize
+    let (ord, e0) = mem.alloc[usize](a, nobs)
+    if e0 != ok { ret (0.0f64, e0) }
+    var i = 0usize
+    var rlo = x1[0usize]
+    var rhi = x1[0usize]
+    while i < nobs {
+        ord[i] = i
+        if x1[i] < rlo { rlo = x1[i] }
+        if x1[i] > rhi { rhi = x1[i] }
+        i += 1usize
+    }
+    i = 1usize
+    while i < nobs {
+        let v = ord[i]
+        var j = i
+        while j > 0usize && (group[ord[j - 1usize]] > group[v] || (!two && group[ord[j - 1usize]] == group[v] && x1[ord[j - 1usize]] > x1[v])) {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = v
+        i += 1usize
+    }
+    let (ox1, f1) = mem.alloc[f64](a, nobs)
+    let (ox2, f2) = mem.alloc[f64](a, nobs)
+    let (oy, f3) = mem.alloc[f64](a, nobs)
+    let (xs, f4) = mem.alloc[f64](a, nobs)
+    let (xs2, f5) = mem.alloc[f64](a, nobs)
+    let (ys, f6) = mem.alloc[f64](a, nobs)
+    let (ws, f7) = mem.alloc[f64](a, nobs)
+    let (gs, f8) = mem.alloc[usize](a, nobs)
+    let (ones, f9) = mem.alloc[f64](a, nobs)
+    if f1 != ok || f2 != ok || f3 != ok || f4 != ok || f5 != ok || f6 != ok || f7 != ok || f8 != ok || f9 != ok { ret (0.0f64, mem.Full) }
+    var cap = nobs
+    if nbins > 0usize {
+        cap = nbins
+        if two { cap = nbins * nbins }
+    }
+    let (tb1, g1) = mem.alloc[f64](a, cap)
+    let (tb2, g2) = mem.alloc[f64](a, cap)
+    let (tbf, g3) = mem.alloc[f64](a, cap)
+    let (tbm, g4) = mem.alloc[f64](a, cap)
+    let (tbd, g5) = mem.alloc[f64](a, cap)
+    if g1 != ok || g2 != ok || g3 != ok || g4 != ok || g5 != ok { ret (0.0f64, mem.Full) }
+    i = 0usize
+    while i < nobs {
+        ox1[i] = x1[ord[i]]
+        ox2[i] = 0.0f64
+        if two { ox2[i] = x2[ord[i]] }
+        oy[i] = y[ord[i]]
+        ones[i] = 1.0f64
+        i += 1usize
+    }
+    var m = 0usize
+    var devsum = 0.0f64
+    var ng = 0usize
+    var st = 0usize
+    while st < nobs {
+        var en = st
+        while en < nobs && group[ord[en]] == group[ord[st]] { en += 1usize }
+        if nbins > 0usize {
+            var cnt = 0usize
+            if two {
+                let (c2, eb) = binning2d(a, ox1[st..en], ox2[st..en], oy[st..en], nbins, tb1, tb2, tbf, tbm, tbd)
+                if eb != ok { ret (0.0f64, eb) }
+                cnt = c2
+            } else {
+                let (c1, eb) = binning1d(a, ox1[st..en], oy[st..en], nbins, tb1, tbf, tbm, tbd)
+                if eb != ok { ret (0.0f64, eb) }
+                cnt = c1
+            }
+            var r = 0usize
+            while r < cnt {
+                xs[m] = tb1[r]
+                xs2[m] = 0.0f64
+                if two { xs2[m] = tb2[r] }
+                ys[m] = tbm[r]
+                ws[m] = tbf[r]
+                gs[m] = ng
+                devsum += tbd[r]
+                m += 1usize
+                r += 1usize
+            }
+        } else {
+            var r = st
+            while r < en {
+                xs[m] = ox1[r]
+                xs2[m] = ox2[r]
+                ys[m] = oy[r]
+                ws[m] = 1.0f64
+                gs[m] = ng
+                m += 1usize
+                r += 1usize
+            }
+        }
+        ng += 1usize
+        st = en
+    }
+    let nn = m * m
+    let (sd, h1e) = mem.alloc[f64](a, nn)
+    let (ss, h2e) = mem.alloc[f64](a, nn)
+    let (bm, h3e) = mem.alloc[f64](a, nn)
+    let (q, h4e) = mem.alloc[f64](a, nn)
+    let (q2, h5e) = mem.alloc[f64](a, nn)
+    let (t1, h6e) = mem.alloc[f64](a, nn)
+    if h1e != ok || h2e != ok || h3e != ok || h4e != ok || h5e != ok || h6e != ok { ret (0.0f64, mem.Full) }
+    i = 0usize
+    while i < nn {
+        sd[i] = 0.0f64
+        ss[i] = 0.0f64
+        bm[i] = 0.0f64
+        i += 1usize
+    }
+    st = 0usize
+    while st < m {
+        var en = st
+        while en < m && gs[en] == gs[st] { en += 1usize }
+        smooth_w(sd, m, st, xs[st..en], xs2[st..en], two, ws[st..en], ones[st..en], h1, h2, false)
+        let es = sigweight_block(a, bm, m, st, xs[st..en], xs2[st..en], two, ws[st..en])
+        if es != ok { ret (0.0f64, es) }
+        st = en
+    }
+    smooth_w(ss, m, 0usize, xs[0usize..m], xs2[0usize..m], two, ws[0usize..m], ones[0usize..m], h1, h2, false)
+    var sig2 = devsum
+    i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            sig2 += ys[i] * bm[i * m + j] * ys[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var obs = 0.0f64
+    if !parallel {
+        i = 0usize
+        while i < nn {
+            t1[i] = sd[i] - ss[i]
+            i += 1usize
+        }
+    } else {
+        var halpha = h1
+        if !two { halpha = 2.0f64 * (rhi - rlo) / f64(nobs) }
+        let kk = ng - 1usize
+        let (gsz, e10) = mem.alloc[usize](a, ng)
+        let (dmat, e11) = mem.alloc[f64](a, m * kk)
+        let (q0, e12) = mem.alloc[f64](a, nn)
+        let (am, e13) = mem.alloc[f64](a, m * kk)
+        let (gm, e14) = mem.alloc[f64](a, kk * (kk + m))
+        let (dm, e15) = mem.alloc[f64](a, nn)
+        if e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok { ret (0.0f64, mem.Full) }
+        i = 0usize
+        while i < ng {
+            gsz[i] = 0usize
+            i += 1usize
+        }
+        i = 0usize
+        while i < m {
+            gsz[gs[i]] += 1usize
+            i += 1usize
+        }
+        // R builds D with istart fixed at n[1] + 1 for every column, so column l marks rows n1 + 1 .. n1 + n[l + 1]
+        i = 0usize
+        while i < m {
+            var l0 = 0usize
+            while l0 < kk {
+                dmat[i * kk + l0] = 0.0f64
+                if i >= gsz[0usize] && i < gsz[0usize] + gsz[l0 + 1usize] { dmat[i * kk + l0] = 1.0f64 }
+                l0 += 1usize
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < nn {
+            q0[i] = 0.0f64
+            i += 1usize
+        }
+        smooth_w(q0, m, 0usize, xs[0usize..m], xs2[0usize..m], two, ws[0usize..m], ones[0usize..m], halpha, h2, false)
+        i = 0usize
+        while i < nn {
+            var v = 0.0f64
+            if i / m == i % m { v = 1.0f64 }
+            q0[i] = v - q0[i]
+            i += 1usize
+        }
+        // A = Q0 D; the system [A' W A | A' W Q0] is solved by Gauss-Jordan for M (kk by m)
+        i = 0usize
+        while i < m {
+            var l = 0usize
+            while l < kk {
+                var v = 0.0f64
+                var r = 0usize
+                while r < m {
+                    v += q0[i * m + r] * dmat[r * kk + l]
+                    r += 1usize
+                }
+                am[i * kk + l] = v
+                l += 1usize
+            }
+            i += 1usize
+        }
+        let wd = kk + m
+        var l = 0usize
+        while l < kk {
+            var c2 = 0usize
+            while c2 < kk {
+                var v = 0.0f64
+                var r = 0usize
+                while r < m {
+                    v += am[r * kk + l] * ws[r] * am[r * kk + c2]
+                    r += 1usize
+                }
+                gm[l * wd + c2] = v
+                c2 += 1usize
+            }
+            c2 = 0usize
+            while c2 < m {
+                var v = 0.0f64
+                var r = 0usize
+                while r < m {
+                    v += am[r * kk + l] * ws[r] * q0[r * m + c2]
+                    r += 1usize
+                }
+                gm[l * wd + kk + c2] = v
+                c2 += 1usize
+            }
+            l += 1usize
+        }
+        var col = 0usize
+        while col < kk {
+            var piv = col
+            var rr = col + 1usize
+            while rr < kk {
+                if math.abs[f64](gm[rr * wd + col]) > math.abs[f64](gm[piv * wd + col]) { piv = rr }
+                rr += 1usize
+            }
+            var cc2 = 0usize
+            while cc2 < wd {
+                let tt = gm[col * wd + cc2]
+                gm[col * wd + cc2] = gm[piv * wd + cc2]
+                gm[piv * wd + cc2] = tt
+                cc2 += 1usize
+            }
+            let pv = gm[col * wd + col]
+            cc2 = 0usize
+            while cc2 < wd {
+                gm[col * wd + cc2] = gm[col * wd + cc2] / pv
+                cc2 += 1usize
+            }
+            rr = 0usize
+            while rr < kk {
+                if rr != col {
+                    let fct = gm[rr * wd + col]
+                    cc2 = 0usize
+                    while cc2 < wd {
+                        gm[rr * wd + cc2] -= fct * gm[col * wd + cc2]
+                        cc2 += 1usize
+                    }
+                }
+                rr += 1usize
+            }
+            col += 1usize
+        }
+        i = 0usize
+        while i < m {
+            var j = 0usize
+            while j < m {
+                var v = 0.0f64
+                var l1 = 0usize
+                while l1 < kk {
+                    v += dmat[i * kk + l1] * gm[l1 * wd + kk + j]
+                    l1 += 1usize
+                }
+                dm[i * m + j] = v
+                j += 1usize
+            }
+            i += 1usize
+        }
+        // Qm = DM + Ss (I - DM) - Sd, into t1
+        i = 0usize
+        while i < m {
+            var j = 0usize
+            while j < m {
+                var v = dm[i * m + j] - sd[i * m + j]
+                var k = 0usize
+                while k < m {
+                    var e = 0.0f64
+                    if k == j { e = 1.0f64 }
+                    v += ss[i * m + k] * (e - dm[k * m + j])
+                    k += 1usize
+                }
+                t1[i * m + j] = v
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    // Q = t1' W t1 and obs = y' Q y / sigma^2 (the same linear map gives the parallel statistic sum(w (D alpha + ghat - ghati)^2))
+    i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            var v = 0.0f64
+            var k = 0usize
+            while k < m {
+                v += t1[k * m + i] * ws[k] * t1[k * m + j]
+                k += 1usize
+            }
+            q[i * m + j] = v
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            obs += ys[i] * q[i * m + j] * ys[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    obs = obs / sig2
+    // p.quad.moment(Q - B obs, diag(1/w), obs, sum(w) - length(w))
+    var sw = 0.0f64
+    i = 0usize
+    while i < m {
+        sw += ws[i]
+        i += 1usize
+    }
+    let ndevs = sw - f64(m)
+    i = 0usize
+    while i < nn {
+        q[i] = (q[i] - bm[i] * obs) / ws[i % m]
+        i += 1usize
+    }
+    mm(q2, q, q, m)
+    mm(t1, q2, q, m)
+    let k1 = trace(q, m) - obs * ndevs
+    let k2 = 2.0f64 * trace(q2, m) + 2.0f64 * obs * obs * ndevs
+    let k3 = 8.0f64 * trace(t1, m) - 8.0f64 * obs * obs * obs * ndevs
+    let aa = math.abs[f64](k3 / (4.0f64 * k2))
+    let bb = 8.0f64 * k2 * k2 * k2 / (k3 * k3)
+    let cc = k1 - aa * bb
+    ret (1.0f64 - nm.pchisq(0.0f64 - cc / aa, bb, true, false), ok)
+}
+
+// the model fit sm.regression reports as model.y at p (unit weights): the mean of y for no.effect (kind 0), the least-squares line for linear (kind 1)
+fn model_fit(x: []const f64, y: []const f64, kind: usize, p: f64) -> f64 {
+    let n = f64(x.len)
+    var sx = 0.0f64
+    var sy = 0.0f64
+    var j = 0usize
+    while j < x.len {
+        sx += x[j]
+        sy += y[j]
+        j += 1usize
+    }
+    let mx = sx / n
+    let my = sy / n
+    if kind == 0usize { ret my }
+    var sxy = 0.0f64
+    var sxx = 0.0f64
+    j = 0usize
+    while j < x.len {
+        sxy += (x[j] - mx) * (y[j] - my)
+        sxx += (x[j] - mx) * (x[j] - mx)
+        j += 1usize
+    }
+    ret my + sxy / sxx * (p - mx)
+}
+
+// sm.options() defaults that are a number or a logical (TRUE 1, FALSE 0, NA as NaN); the flag says whether name is one of them
+fn option_scalar(name: str) -> (f64, bool) {
+    let na = 0.0f64 / 0.0f64
+    if str.eq(name, "hmult") || str.eq(name, "hscale") || str.eq(name, "vscale") || str.eq(name, "lty") || str.eq(name, "lwd") || str.eq(name, "pch") || str.eq(name, "alpha.mesh") || str.eq(name, "poly.index") || str.eq(name, "verbose") || str.eq(name, "key") || str.eq(name, "rugplot") || str.eq(name, "hull") || str.eq(name, "describe") || str.eq(name, "show.script") || str.eq(name, "eval.grid") || str.eq(name, "partial.residuals") { ret (1.0f64, true) }
+    if str.eq(name, "add") || str.eq(name, "positive") || str.eq(name, "panel") || str.eq(name, "lit") || str.eq(name, "include.lower.reference") || str.eq(name, "eqscplot") { ret (0.0f64, true) }
+    if str.eq(name, "theta") { ret (0.0f64 - 30.0f64, true) }
+    if str.eq(name, "phi") { ret (40.0f64, true) }
+    if str.eq(name, "size") || str.eq(name, "diff.ord") { ret (2.0f64, true) }
+    if str.eq(name, "alpha") { ret (0.7f64, true) }
+    if str.eq(name, "nboot") { ret (100.0f64, true) }
+    if str.eq(name, "nlevels") { ret (20.0f64, true) }
+    if str.eq(name, "h.weights") || str.eq(name, "period") || str.eq(name, "band") || str.eq(name, "nbins") || str.eq(name, "delta") || str.eq(name, "display") || str.eq(name, "xlab") || str.eq(name, "ylab") || str.eq(name, "zlab") || str.eq(name, "x1lim") || str.eq(name, "x2lim") || str.eq(name, "xlim") || str.eq(name, "ylim") || str.eq(name, "zlim") || str.eq(name, "yht") || str.eq(name, "asp") || str.eq(name, "cex") || str.eq(name, "cex.axis") || str.eq(name, "cex.lab") || str.eq(name, "labcex") || str.eq(name, "panel.plot") || str.eq(name, "ngrid") || str.eq(name, "eval.points") || str.eq(name, "col") || str.eq(name, "superimpose") || str.eq(name, "se") || str.eq(name, "test") || str.eq(name, "df") || str.eq(name, "df.max") || str.eq(name, "method") || str.eq(name, "include.mean") || str.eq(name, "colour.key") || str.eq(name, "z.key") || str.eq(name, "deriv") || str.eq(name, "deriv.order") { ret (na, true) }
+    ret (0.0f64, false)
+}
+
+// sm.options() defaults that are one string; the flag says whether name is one of them
+fn option_text(name: str) -> (str, bool) {
+    if str.eq(name, "model") || str.eq(name, "reference") { ret ("none", true) }
+    if str.eq(name, "col.band") { ret ("cyan", true) }
+    if str.eq(name, "col.mesh") || str.eq(name, "col.points") { ret ("black", true) }
+    if str.eq(name, "structure.2d") { ret ("scaled", true) }
+    if str.eq(name, "mask.method") { ret ("hull", true) }
+    if str.eq(name, "include.terms") { ret ("single", true) }
+    ret ("", false)
+}
+
+// element k (from 0) of the vector defaults props, se.breaks and order; NaN past the end or for another name
+fn option_vector(name: str, k: usize) -> f64 {
+    let na = 0.0f64 / 0.0f64
+    if str.eq(name, "props") {
+        if k == 0usize { ret 75.0f64 }
+        if k == 1usize { ret 50.0f64 }
+        if k == 2usize { ret 25.0f64 }
+        ret na
+    }
+    if str.eq(name, "se.breaks") {
+        if k == 0usize { ret 0.0f64 - 3.0f64 }
+        if k == 1usize { ret 0.0f64 - 2.0f64 }
+        if k == 2usize { ret 2.0f64 }
+        if k == 3usize { ret 3.0f64 }
+        ret na
+    }
+    if str.eq(name, "order") && k < 3usize { ret f64(k + 1usize) }
+    ret na
 }

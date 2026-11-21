@@ -40,6 +40,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if wh == 5usize { ret ar_[ix] }
         ret ao[wh]
     }
+    if str.eq(c.name, "asub") {
+        let sx = c.args
+        let sn = usize(sx[0usize])
+        let (so, se) = mem.alloc[f64](a, 6usize * 8usize)
+        if se != ok { os.exit(13) }
+        let (nv, ser) = ts.armasubsets(a, sx[3usize..3usize + sn], usize(sx[1usize]), usize(sx[2usize]), so)
+        if ser != ok || nv == 0usize { os.exit(14) }
+        let sk = usize(sx[3usize + sn])
+        let sq = usize(sx[4usize + sn])
+        ret so[(sk - 1usize) * 6usize + sq]
+    }
     if str.eq(c.name, "bl") {
         let bx = c.args
         let bn = usize(bx[0usize])

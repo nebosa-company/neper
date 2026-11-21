@@ -32,19 +32,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let th = z[5usize + n * p + 2usize * n]
         let sg = z[5usize + n * p + 2usize * n + 1usize]
         let q = usize(z[5usize + n * p + 2usize * n + 2usize])
-        let (jo, jee) = mem.alloc[f64](a, 4usize)
+        let (jo, jee) = mem.alloc[f64](a, 6usize)
         if jee != ok { ret nan }
-        if lm.lmer_contest_joint(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, reml, th, sg, z[5usize + n * p + 2usize * n + 3usize..5usize + n * p + 2usize * n + 3usize + q * p], q, jo) != ok { ret nan }
-        ret jo[which - 6000usize]
+        if lm.lmer_contest_joint(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, reml, th, sg, z[5usize + n * p + 2usize * n + 3usize..5usize + n * p + 2usize * n + 3usize + q * p], q, false, jo) != ok { ret nan }
+        let k6 = which - 6000usize
+        if k6 == 0usize { ret jo[4usize] }
+        if k6 == 1usize { ret jo[2usize] }
+        if k6 == 2usize { ret jo[3usize] }
+        ret jo[5usize]
     }
     if which >= 5000usize {
         // ranova: which = 5000 + k (0 reduced criterion, 1 full criterion, 2 LRT, 3 p value), theta and sigma follow the data
         let th = z[5usize + n * p + 2usize * n]
         let sg = z[5usize + n * p + 2usize * n + 1usize]
-        let (ro, rae) = mem.alloc[f64](a, 4usize)
+        let (ro, rae) = mem.alloc[f64](a, 9usize)
         if rae != ok { ret nan }
-        if lm.lmer_ranova(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, th, sg, ro) != ok { ret nan }
-        ret ro[which - 5000usize]
+        if lm.lmer_ranova(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, true, th, sg, ro) != ok { ret nan }
+        let k5 = which - 5000usize
+        if k5 == 0usize { ret 0.0f64 - 2.0f64 * ro[4usize] }
+        if k5 == 1usize { ret 0.0f64 - 2.0f64 * ro[1usize] }
+        if k5 == 2usize { ret ro[6usize] }
+        ret ro[8usize]
     }
     if which >= 4000usize {
         // contest1D: which = 4000 + k (k 0..4 the output), the contrast L[p] follows theta and sigma
@@ -52,7 +60,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let sg = z[5usize + n * p + 2usize * n + 1usize]
         let (co, ce) = mem.alloc[f64](a, 5usize)
         if ce != ok { ret nan }
-        if lm.lmer_contest(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, reml, th, sg, z[5usize + n * p + 2usize * n + 2usize..5usize + n * p + 2usize * n + 2usize + p], co) != ok { ret nan }
+        if lm.lmer_contest(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, reml, th, sg, z[5usize + n * p + 2usize * n + 2usize..5usize + n * p + 2usize * n + 2usize + p], false, co) != ok { ret nan }
         ret co[which - 4000usize]
     }
     if which >= 1000usize {

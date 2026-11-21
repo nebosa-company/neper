@@ -376,12 +376,24 @@ fn sb_prefix_region(w: []const u8, n: usize) -> usize {
 
 // The Snowball stem of `word`; `out.len >= word.len + 1`.
 fn snowball(word: str, out: []u8) -> (str, err) {
+    let (s, e) = snowball_case(word, out, true)
+    ret (s, e)
+}
+
+// SnowballC wordStem keeps the case of its input and matches only lower-case suffixes: `Beautiful` stems to `Beauti`, `CATS` stays.
+fn snowball_exact(word: str, out: []u8) -> (str, err) {
+    let (s, e) = snowball_case(word, out, false)
+    ret (s, e)
+}
+
+fn snowball_case(word: str, out: []u8, fold: bool) -> (str, err) {
     if out.len < word.len + 1usize { ret ("", TooSmall) }
     var w = out
     var n = word.len
     var i = 0usize
     while i < n {
-        w[i] = lower(word[i])
+        w[i] = word[i]
+        if fold { w[i] = lower(word[i]) }
         i += 1usize
     }
     let (special, is_special) = sb_exception(w, n)

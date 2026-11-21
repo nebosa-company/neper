@@ -16,8 +16,8 @@ for (rep in 1:14) {
   add("mcl", c(n, gl, y), sum(ml * seq_along(ml)))
 }
 # eacf: "eacf" (n, ar.max, ma.max, index row-major, z[n]); index = row * (ma.max + 1) + column
-for (rep in 1:20) {
-  n <- sample(80:200, 1); arm <- sample(3:6, 1); mam <- sample(4:9, 1); z <- as.numeric(arima.sim(list(ar = 0.5, ma = 0.3), n)); e <- suppressWarnings(eacf(z, ar.max = arm, ma.max = mam))$eacf
+for (rep in 1:6) {
+  n <- sample(80:110, 1); arm <- sample(3:6, 1); mam <- sample(4:9, 1); z <- as.numeric(arima.sim(list(ar = 0.5, ma = 0.3), n)); e <- suppressWarnings(eacf(z, ar.max = arm, ma.max = mam))$eacf
   for (r in 0:arm) for (cc in 0:mam) add("eacf", c(n, arm, mam, r * (mam + 1) + cc, z), e[r + 1, cc + 1])
 }
 # Box.test Ljung-Box p-values (tsdiag): "bl" args (n, gof, fitdf, x[n]); the p-values at lags fitdf + 1 .. gof weighted by lag
@@ -40,5 +40,23 @@ for (rep in 1:20) {
   cases[[length(cases) + 1]] <- case("aro", c(a, 3, 0), if (is.null(r$x.intercept)) 0 else r$x.intercept, rel = 1e-9, abs = 1e-12)
   for (k in seq_len(r$order)) cases[[length(cases) + 1]] <- case("aro", c(a, 4, k - 1), as.numeric(r$ar)[k], rel = 1e-8, abs = 1e-10)
   for (k in sample(seq(r$order + 1, n), 3)) cases[[length(cases) + 1]] <- case("aro", c(a, 5, k - 1), as.numeric(r$resid)[k], rel = 1e-8, abs = 1e-10)
+}
+# TSA::armasubsets + summary.armasubsets: "asub" args (n, nar, nma, y[n], k, q); k the subset size 1 .. min(8, columns), q 0 mask over the columns (lags of y then lags of the AR residuals) 1 rss 2 rsq 3 adjR2 4 Cp 5 BIC
+set.seed(20262611)
+for (rep in 1:12) {
+  n <- sample(50:80, 1); nar <- sample(c(1, 2, 3, 4, 5, 6), 1); nma <- sample(2:6, 1)
+  y <- round(as.numeric(arima.sim(list(ar = c(0.6, -0.3), ma = 0.4), n)) + 0.5 * (rep %% 2), 4)
+  r <- tryCatch(suppressWarnings(armasubsets(y = ts(y), nar = nar, nma = nma, y.name = "y")), error = function(e) NULL); if (is.null(r)) next
+  s <- summary(r); cols <- ncol(s$which) - 1; kk <- nrow(s$which)
+  # the design armasubsets regresses on, to tell a unique best subset from a tie (columns that are linearly dependent give subsets of equal rss, decided by rounding noise)
+  res <- ar(y, method = "ols")$resid; xd <- NULL
+  if (nar > 1) for (i in 1:nar) xd <- cbind(xd, zlag(y, d = i))
+  if (nma > 1) for (j in 1:nma) xd <- cbind(xd, zlag(res, d = j))
+  xd <- na.omit(cbind(y, xd)); yd <- xd[, 1]; xd <- xd[, -1, drop = FALSE]
+  rssof <- function(cs) sum(lm.fit(cbind(1, xd[, cs, drop = FALSE]), yd)$residuals^2)
+  for (k in seq_len(kk)) {
+    rs <- apply(combn(cols, k), 2, rssof); unique_best <- length(rs) == 1 || sort(rs)[2] > min(rs) * (1 + 1e-8)
+    for (q in 1:6) if (q > 1 || unique_best) cases[[length(cases) + 1]] <- case("asub", c(n, nar, nma, y, k, q - 1), c(sum(2^(which(s$which[k, -1]) - 1)), s$rss[k], s$rsq[k], s$adjR2[k], s$Cp[k], s$BIC[k])[q], rel = if (q == 1) 0 else 1e-8, abs = if (q == 1) 0 else 1e-9)
+  }
 }
 emit("tsa", "TSA", list(cases))

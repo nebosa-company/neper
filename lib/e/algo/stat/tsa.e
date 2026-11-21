@@ -9,6 +9,7 @@ use e.math
 use e.math.nmath as nm
 use e.math.dist as dist
 use e.algo.linalg.decomp as decomp
+use e.algo.stat.earthleaps as el
 use e.algo.stat.gparot as gp
 use e.mem
 
@@ -660,6 +661,354 @@ fn ar_ols(a: *mem.Arena, x: []const f64, aic: bool, order_max0: usize, demean: b
         if intercept { cc = j + 1usize }
         out[4usize + j] = bh2[cc]
         j += 1usize
+    }
+    ret ok
+}
+
+// TSA::armasubsets(y, nar, nma) with regsubsets' defaults (exhaustive, nbest 1, nvmax 8): the columns are the lags 1..nar of y (only when nar > 1, as the R code) and
+// the lags 1..nma of the residuals of ar(y, method = "ols") (only when nma > 1); rows with an NA are dropped. out holds, per subset size k = 1 .. nvmax (min(8, columns)),
+// six values (bit mask over the columns, rss, rsq, adjusted r squared, Mallows cp, BIC); the BIC table of summary.armasubsets is the last of them. Returns nvmax.
+fn armasubsets(a: *mem.Arena, y: []const f64, nar: usize, nma: usize, out: []f64) -> (usize, err) {
+    let n = y.len
+    let (ao, e1) = mem.alloc[f64](a, 64usize)
+    let (rs, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret (0usize, e1) }
+    let er = ar_ols(a, y, true, 0usize, true, true, ao, rs)
+    if er != ok { ret (0usize, er) }
+    let ord = usize(ao[0usize])
+    var cols = 0usize
+    var t0 = 0usize
+    if nar > 1usize {
+        cols += nar
+        t0 = nar
+    }
+    if nma > 1usize {
+        cols += nma
+        if ord + nma > t0 { t0 = ord + nma }
+    }
+    let m = n - t0
+    let (x, e3) = mem.alloc[f64](a, m * cols)
+    let (yy, e4) = mem.alloc[f64](a, m)
+    if e3 != ok || e4 != ok { ret (0usize, e3) }
+    var i = 0usize
+    while i < m {
+        yy[i] = y[t0 + i]
+        var c = 0usize
+        if nar > 1usize {
+            while c < nar {
+                x[c * m + i] = y[t0 + i - c - 1usize]
+                c += 1usize
+            }
+        }
+        if nma > 1usize {
+            var j = 0usize
+            while j < nma {
+                x[c * m + i] = rs[t0 + i - j - 1usize]
+                c += 1usize
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    let (masks, e5) = mem.alloc[u32](a, cols + 2usize)
+    let (rss, e6) = mem.alloc[f64](a, cols + 2usize)
+    if e5 != ok || e6 != ok { ret (0usize, e5) }
+    var nv = 0usize
+    var sserr = 0.0f64
+    let e7 = dep_leaps(a, x, yy, m, cols, 8usize, &nv, masks, rss, &sserr)
+    if e7 != ok { ret (0usize, e7) }
+    var mu = 0.0f64
+    i = 0usize
+    while i < m {
+        mu += yy[i]
+        i += 1usize
+    }
+    mu /= f64(m)
+    var nullrss = 0.0f64
+    i = 0usize
+    while i < m {
+        nullrss += (yy[i] - mu) * (yy[i] - mu)
+        i += 1usize
+    }
+    // summary.regsubsets: size i counts the intercept; sigma2 = sserr / (n - last) with last = columns + 1
+    let n1 = f64(m - 1usize)
+    let sigma2 = sserr / (n1 + 1.0f64 - f64(cols + 1usize))
+    var k = 1usize
+    while k <= nv {
+        let ii = f64(k + 1usize)
+        let vr = rss[k - 1usize] / nullrss
+        let o = (k - 1usize) * 6usize
+        out[o] = f64(masks[k - 1usize])
+        out[o + 1usize] = rss[k - 1usize]
+        out[o + 2usize] = 1.0f64 - vr
+        out[o + 3usize] = 1.0f64 - vr * n1 / (n1 + 1.0f64 - ii)
+        out[o + 4usize] = rss[k - 1usize] / sigma2 - (n1 + 1.0f64 - 2.0f64 * ii)
+        out[o + 5usize] = (n1 + 1.0f64) * math.log[f64](vr) + ii * math.log[f64](n1 + 1.0f64)
+        k += 1usize
+    }
+    ret (nv, ok)
+}
+
+// INCLUD of leaps with a weight; the arrays are one-based (element 0 unused), xrow is overwritten
+fn dep_includ(np: usize, weight: f64, xrow: []f64, yel: f64, d: []f64, rbar: []f64, thetab: []f64, sserr: *f64) {
+    var w = weight
+    var y = yel
+    var nextr = 1usize
+    var i = 1usize
+    while i <= np {
+        if w == 0.0f64 { ret }
+        let xi = xrow[i]
+        if xi == 0.0f64 {
+            nextr = nextr + np - i
+            i += 1usize
+            continue
+        }
+        let di = d[i]
+        let wxi = w * xi
+        let dpi = di + wxi * xi
+        let cbar = di / dpi
+        let sbar = wxi / dpi
+        w = cbar * w
+        d[i] = dpi
+        var k = i + 1usize
+        while k <= np {
+            let xk = xrow[k]
+            xrow[k] = xk - xi * rbar[nextr]
+            rbar[nextr] = cbar * rbar[nextr] + sbar * xk
+            nextr += 1usize
+            k += 1usize
+        }
+        let xk2 = y
+        y = xk2 - xi * thetab[i]
+        thetab[i] = cbar * thetab[i] + sbar * xk2
+        i += 1usize
+    }
+    *sserr = *sserr + w * y * y
+}
+
+// leaps SING: zero the tiny rbar entries, flag a column whose diagonal is within its tolerance of zero as linearly dependent and fold its row into the later rows
+fn dep_sing(np: usize, d: []f64, rbar: []f64, thetab: []f64, sserr: *f64, tol: []const f64, lindep: []bool, work: []f64) {
+    var col = 1usize
+    while col <= np {
+        work[col] = math.sqrt[f64](d[col])
+        col += 1usize
+    }
+    col = 1usize
+    while col <= np {
+        let temp = tol[col]
+        var pos = col - 1usize
+        var row = 1usize
+        while row < col {
+            if math.abs[f64](rbar[pos]) * work[row] < temp { rbar[pos] = 0.0f64 }
+            pos = pos + np - row - 1usize
+            row += 1usize
+        }
+        lindep[col] = false
+        if work[col] <= temp {
+            lindep[col] = true
+            if col < np {
+                let nc2 = np - col
+                let pos2 = pos + np - col + 1usize
+                dep_includ(nc2, d[col], rbar[pos..rbar.len], thetab[col], d[col..d.len], rbar[pos2 - 1usize..rbar.len], thetab[col..thetab.len], sserr)
+            } else {
+                *sserr = *sserr + d[col] * thetab[col] * thetab[col]
+            }
+            d[col] = 0.0f64
+            work[col] = 0.0f64
+            thetab[col] = 0.0f64
+        }
+        col += 1usize
+    }
+}
+
+// regsubsets (exhaustive, nbest 1, an intercept) the way leaps runs it, linear dependencies included: the QR of the columns (leaps MAKEQR), TOLSET, SING; when a dependent
+// column stands before an independent one the columns are reordered (the dependent ones last, stable) and the QR is made again; nvmax drops to the last independent
+// position. masks / rss receive the best subset (bit j = original column j) and its residual sum of squares for each of the nrows = nvmax sizes 1 .. nrows; sserr is leaps' sserr.
+// The reordering map R reports is the first one, as here.
+fn dep_leaps(a: *mem.Arena, x: []const f64, y: []const f64, m: usize, cols: usize, nvmax0: usize, nrows: *usize, masks: []u32, rss_out: []f64, sserr_out: *f64) -> err {
+    let np = cols + 1usize
+    let nrbar = np * (np - 1usize) / 2usize
+    let (perm, e0) = mem.alloc[usize](a, cols + 1usize)
+    let (perm1, e0b) = mem.alloc[usize](a, cols + 1usize)
+    if e0 != ok || e0b != ok { ret mem.Exhausted }
+    var c = 0usize
+    while c < cols {
+        perm[c] = c
+        perm1[c] = c
+        c += 1usize
+    }
+    var s: el.Leaps = zero
+    var nvmax = 1usize
+    var pass = 0usize
+    while true {
+        let (d, e1) = mem.alloc[f64](a, np + 2usize)
+        let (rbar, e2) = mem.alloc[f64](a, nrbar + 2usize)
+        let (thetab, e3) = mem.alloc[f64](a, np + 2usize)
+        let (tol, e4) = mem.alloc[f64](a, np + 2usize)
+        let (rss, e5) = mem.alloc[f64](a, np + 2usize)
+        let (work, e6) = mem.alloc[f64](a, np + 2usize)
+        let (lindep, e7) = mem.alloc[bool](a, np + 2usize)
+        let (xrow, e8) = mem.alloc[f64](a, np + 2usize)
+        if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Exhausted }
+        var z = 0usize
+        while z < np + 2usize {
+            d[z] = 0.0f64
+            thetab[z] = 0.0f64
+            tol[z] = 0.0f64
+            rss[z] = 0.0f64
+            work[z] = 0.0f64
+            lindep[z] = false
+            z += 1usize
+        }
+        z = 0usize
+        while z < nrbar + 2usize {
+            rbar[z] = 0.0f64
+            z += 1usize
+        }
+        var sserr = 0.0f64
+        var i = 0usize
+        while i < m {
+            xrow[1usize] = 1.0f64
+            var j = 0usize
+            while j < cols {
+                xrow[j + 2usize] = x[perm[j] * m + i]
+                j += 1usize
+            }
+            el.lp_includ(np, xrow, y[i], d, rbar, thetab, &sserr)
+            i += 1usize
+        }
+        el.lp_tolset(np, d, rbar, tol)
+        dep_sing(np, d, rbar, thetab, &sserr, tol, lindep, work)
+        var anydep = false
+        var lastsafe = 0usize
+        i = 1usize
+        while i <= np {
+            if lindep[i] { anydep = true } else { lastsafe = i }
+            i += 1usize
+        }
+        var disorder = false
+        i = 2usize
+        while i <= np {
+            if lindep[i - 1usize] && !lindep[i] { disorder = true }
+            i += 1usize
+        }
+        if anydep && disorder && pass < 3usize {
+            let (np2, e9) = mem.alloc[usize](a, cols + 1usize)
+            if e9 != ok { ret e9 }
+            var t = 0usize
+            var pass2 = 0usize
+            while pass2 < 2usize {
+                var j = 0usize
+                while j < cols {
+                    var want = false
+                    if pass2 == 1usize { want = true }
+                    if lindep[j + 2usize] == want {
+                        np2[t] = perm[j]
+                        t += 1usize
+                    }
+                    j += 1usize
+                }
+                pass2 += 1usize
+            }
+            // the map R reports is the first reordering: the position of each new column among the old
+            if pass == 0usize {
+                var q = 0usize
+                var pass3 = 0usize
+                while pass3 < 2usize {
+                    var j = 0usize
+                    while j < cols {
+                        var want = false
+                        if pass3 == 1usize { want = true }
+                        if lindep[j + 2usize] == want {
+                            perm1[q] = j
+                            q += 1usize
+                        }
+                        j += 1usize
+                    }
+                    pass3 += 1usize
+                }
+            }
+            c = 0usize
+            while c < cols {
+                perm[c] = np2[c]
+                c += 1usize
+            }
+            pass += 1usize
+            continue
+        }
+        nvmax = nvmax0
+        if cols < nvmax { nvmax = cols }
+        nvmax += 1usize
+        if lastsafe < nvmax && lastsafe < np { nvmax = lastsafe }
+        el.lp_ssleaps(np, d, thetab, sserr, rss)
+        let (bound, e10) = mem.alloc[f64](a, nvmax + 2usize)
+        let (ress, e11) = mem.alloc[f64](a, nvmax + 2usize)
+        let (lopt, e12) = mem.alloc[usize](a, nvmax * (nvmax + 1usize) / 2usize + 2usize)
+        let (ss, e13) = mem.alloc[f64](a, np + 2usize)
+        let (sxx, e14) = mem.alloc[f64](a, np + 2usize)
+        let (sxy, e15) = mem.alloc[f64](a, np + 2usize)
+        let (iwk, e16) = mem.alloc[usize](a, np + 2usize)
+        let (vorder, e17) = mem.alloc[usize](a, np + 2usize)
+        if e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok { ret mem.Exhausted }
+        z = 0usize
+        while z < np + 2usize {
+            ss[z] = 0.0f64
+            sxx[z] = 0.0f64
+            sxy[z] = 0.0f64
+            iwk[z] = 0usize
+            vorder[z] = z
+            z += 1usize
+        }
+        var nv = 1usize
+        var pos = 1usize
+        while nv <= nvmax {
+            ress[nv] = rss[nv]
+            bound[nv] = ress[nv]
+            var k = 1usize
+            while k <= nv {
+                lopt[pos] = k
+                pos += 1usize
+                k += 1usize
+            }
+            nv += 1usize
+        }
+        s.np = np
+        s.nrbar = nrbar
+        s.d = d
+        s.rbar = rbar
+        s.thetab = thetab
+        s.sserr = sserr
+        s.tol = tol
+        s.rss = rss
+        s.vorder = vorder
+        s.bound = bound
+        s.ress = ress
+        s.lopt = lopt
+        s.nvmax = nvmax
+        s.first = 2usize
+        s.last = np
+        s.ss = ss
+        s.sxx = sxx
+        s.sxy = sxy
+        s.iwk = iwk
+        if !el.lp_exhaustive(&s) { ret mem.Exhausted }
+        *sserr_out = sserr
+        break
+    }
+    *nrows = nvmax - 1usize
+    var sz = 2usize
+    while sz <= nvmax {
+        var mk = 0u32
+        let l0 = sz * (sz - 1usize) / 2usize
+        var t = 1usize
+        while t <= sz {
+            let v = s.lopt[l0 + t]
+            if v >= 2usize { mk = mk | (1u32 << u32(perm1[v - 2usize])) }
+            t += 1usize
+        }
+        masks[sz - 2usize] = mk
+        rss_out[sz - 2usize] = s.ress[sz]
+        sz += 1usize
     }
     ret ok
 }
