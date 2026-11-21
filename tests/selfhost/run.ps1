@@ -1400,6 +1400,24 @@ $fmtGzipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtGzipWritten -ne 'executable written') { throw 'fmt_gzip emission failed' }
 & $fmtGzipPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_gzip check failed: exit $LASTEXITCODE" }
+# `e.fmt.mp4`: a hand-built av01 track read back field by field (stco and co64), five refusals.
+$fmtMp4Path = Join-Path $testBuild 'fmt-mp4-selfhost.exe'
+$fmtMp4Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_mp4\src\main.e') $repo 'x64' 'windows' $fmtMp4Path
+if ($LASTEXITCODE -ne 0 -or $fmtMp4Written -ne 'executable written') { throw 'fmt_mp4 emission failed' }
+& $fmtMp4Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_mp4 check failed: exit $LASTEXITCODE" }
+# `e.gfx.hclpal_tables`: row and field counts, two rows whole, the CVD matrices against `e.gfx.cvd_table`.
+$gfxHclpalTablesPath = Join-Path $testBuild 'gfx-hclpal-tables-selfhost.exe'
+$gfxHclpalTablesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_hclpal_tables\src\main.e') $repo 'x64' 'windows' $gfxHclpalTablesPath
+if ($LASTEXITCODE -ne 0 -or $gfxHclpalTablesWritten -ne 'executable written') { throw 'gfx_hclpal_tables emission failed' }
+& $gfxHclpalTablesPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_hclpal_tables check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.gbmpkg`: gaussian boosting of a step function worked out by hand, recorded trees, predict, influence.
+$statGbmpkgPath = Join-Path $testBuild 'stat-gbmpkg-selfhost.exe'
+$statGbmpkgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\stat_gbmpkg\src\main.e') $repo 'x64' 'windows' $statGbmpkgPath
+if ($LASTEXITCODE -ne 0 -or $statGbmpkgWritten -ne 'executable written') { throw 'stat_gbmpkg emission failed' }
+& $statGbmpkgPath
+if ($LASTEXITCODE -ne 0) { throw "a stat_gbmpkg check failed: exit $LASTEXITCODE" }
 # `e.fmt.zip`: Python's archive and a hand-built ZIP64 one read, seven refusals.
 $fmtZipPath = Join-Path $testBuild 'fmt-zip-selfhost.exe'
 $fmtZipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_zip\src\main.e') $repo 'x64' 'windows' $fmtZipPath

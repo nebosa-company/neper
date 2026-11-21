@@ -1354,6 +1354,21 @@ fmt_gzip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_gzip_written" = 'executable written' ]
 chmod +x "$test_build/fmt-gzip-selfhost"
 "$test_build/fmt-gzip-selfhost"
+# `e.fmt.mp4`: a hand-built av01 track read back field by field (stco and co64), five refusals.
+fmt_mp4_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mp4/src/main.e" "$repo" x64 linux "$test_build/fmt-mp4-selfhost")
+[ "$fmt_mp4_written" = 'executable written' ]
+chmod +x "$test_build/fmt-mp4-selfhost"
+"$test_build/fmt-mp4-selfhost"
+# `e.gfx.hclpal_tables`: row and field counts, two rows whole, the CVD matrices against `e.gfx.cvd_table`.
+gfx_hclpal_tables_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_hclpal_tables/src/main.e" "$repo" x64 linux "$test_build/gfx-hclpal-tables-selfhost")
+[ "$gfx_hclpal_tables_written" = 'executable written' ]
+chmod +x "$test_build/gfx-hclpal-tables-selfhost"
+"$test_build/gfx-hclpal-tables-selfhost"
+# `e.algo.stat.gbmpkg`: gaussian boosting of a step function worked out by hand, recorded trees, predict, influence.
+stat_gbmpkg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/stat_gbmpkg/src/main.e" "$repo" x64 linux "$test_build/stat-gbmpkg-selfhost")
+[ "$stat_gbmpkg_written" = 'executable written' ]
+chmod +x "$test_build/stat-gbmpkg-selfhost"
+"$test_build/stat-gbmpkg-selfhost"
 # `e.fmt.zip`: Python's archive and a hand-built ZIP64 one read, seven refusals.
 fmt_zip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_zip/src/main.e" "$repo" x64 linux "$test_build/fmt-zip-selfhost")
 [ "$fmt_zip_written" = 'executable written' ]
