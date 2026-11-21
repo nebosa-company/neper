@@ -4,7 +4,7 @@
 suppressMessages(library(afex))
 cases <- list()
 slots <- c("F_A", "p_A", "F_B", "p_B", "F_AB", "p_AB", "gg", "hf", "ggp_B", "hfp_B", "ggp_AB", "hfp_AB", "W", "pW", "ges_A", "ges_B", "ges_AB")
-add <- function(fn, args, want) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-6, abs = 1e-9)
+add <- function(fn, args, want) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-12)
 set.seed(20261207)
 for (rep in 1:16) {
   g <- c(1, 2, 3, 2)[(rep - 1) %% 4 + 1]; per <- sample(6:10, 1); k <- sample(3:5, 1); n <- g * per

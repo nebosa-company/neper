@@ -11,6 +11,36 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "mtab") {
+        let pt = usize(z[0usize])
+        var ot: [5]f64 = zero
+        mf.glm_margin(usize(z[1usize]), z[5usize + pt + pt * pt..5usize + pt + pt * pt + pt], z[5usize..5usize + pt], z[5usize + pt..5usize + pt + pt * pt], pt, z[2usize], z[3usize], ot[0usize..5usize])
+        ret ot[usize(z[4usize])]
+    }
+    if str.eq(c.name, "mcon") {
+        let nc = usize(z[0usize])
+        let pc = usize(z[1usize])
+        let (oc, ec) = mem.alloc[f64](a, 2usize)
+        if ec != ok { ret nan }
+        let hc = 5usize
+        let bc = hc + 2usize * pc
+        mf.glm_contrast(a, usize(z[2usize]), usize(z[3usize]), z[bc + pc + pc * pc..bc + pc + pc * pc + nc * pc], z[bc..bc + pc], z[bc + pc..bc + pc + pc * pc], nc, pc, z[hc..hc + pc], z[hc + pc..hc + 2usize * pc], oc)
+        ret oc[usize(z[4usize])]
+    }
+    if str.eq(c.name, "mrow") {
+        let nw = usize(z[0usize])
+        let pw = usize(z[1usize])
+        let (ow, ew) = mem.alloc[f64](a, 2usize)
+        if ew != ok { ret nan }
+        let bw = 7usize
+        let kw = usize(z[5usize])
+        if kw >= 3usize {
+            mf.glm_row_ratio(a, usize(z[4usize]), kw - 3usize, z[bw + pw + pw * pw..bw + pw + pw * pw + nw * pw], z[bw..bw + pw], z[bw + pw..bw + pw + pw * pw], nw, pw, usize(z[2usize]), usize(z[6usize]), ow)
+        } else {
+            mf.glm_row(a, usize(z[4usize]), kw, z[bw + pw + pw * pw..bw + pw + pw * pw + nw * pw], z[bw..bw + pw], z[bw + pw..bw + pw + pw * pw], nw, pw, usize(z[2usize]), usize(z[6usize]), ow)
+        }
+        ret ow[usize(z[3usize])]
+    }
     if str.eq(c.name, "mrat") {
         let nr = usize(z[0usize])
         let pr = usize(z[1usize])

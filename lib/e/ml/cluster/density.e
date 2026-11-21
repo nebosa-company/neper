@@ -667,3 +667,474 @@ fn optics_xi(a: *mem.Arena, order: []const usize, reach: []const f64, pred: []co
     }
     ret (nc, ok)
 }
+
+// dbscan::hdbscan(x, minPts, cluster_selection_epsilon): mutual reachability, Prim's tree, the robust single linkage merge order, the
+// condensed cluster tree with stabilities and GLOSH scores, and the stability based flat extraction, ported from the package's
+// hdbscan.cpp. Tree cluster ids are the package's (0 the root, children numbered in pairs); every tree array has ncl rows.
+type Hdb = struct {
+    n: usize, ncl: usize, nsal: usize,
+    cluster: []usize, order: []usize, nch: []usize, ch1: []usize, ch2: []usize, seq_pt: []usize, seq_cl: []usize, sal: []usize, qq: []usize,
+    coredist: []f64, prob: []f64, glosh: []f64, mheight: []f64, stab: []f64, birth: []f64, death: []f64, seq_eps: []f64, cscore: []f64,
+    mleft: []i64, mright: []i64
+}
+
+// the descendants of tree cluster c in breadth first order into h.qq; the count is answered
+fn hdb_descendants(h: *Hdb, c: usize) -> usize {
+    var head = 0usize
+    var tail = 0usize
+    h.qq[tail] = c
+    tail += 1usize
+    while head < tail {
+        let p = h.qq[head]
+        head += 1usize
+        if h.ch1[p] != 0usize {
+            h.qq[tail] = h.ch1[p]
+            tail += 1usize
+            h.qq[tail] = h.ch2[p]
+            tail += 1usize
+        }
+    }
+    let total = tail - 1usize
+    var i = 0usize
+    while i < total {
+        h.qq[i] = h.qq[i + 1usize]
+        i += 1usize
+    }
+    ret total
+}
+
+fn hdb_sal_remove(h: *Hdb, v: usize) {
+    var i = 0usize
+    while i < h.nsal {
+        if h.sal[i] == v {
+            var j = i
+            while j + 1usize < h.nsal {
+                h.sal[j] = h.sal[j + 1usize]
+                j += 1usize
+            }
+            h.nsal -= 1usize
+        } else {
+            i += 1usize
+        }
+    }
+}
+
+// fosc for the unsupervised case: the score of the subtree at cid; h.sal collects the salient clusters
+fn hdb_fosc(h: *Hdb, cid: usize, sel_eps: f64) -> f64 {
+    if h.ch1[cid] == 0usize {
+        h.sal[h.nsal] = cid
+        h.nsal += 1usize
+        ret h.stab[cid]
+    }
+    let c1 = h.ch1[cid]
+    let c2 = h.ch2[cid]
+    let s1 = hdb_fosc(h, c1, sel_eps)
+    let s2 = hdb_fosc(h, c2, sel_eps)
+    let old = h.stab[cid]
+    let sum = s1 + s2
+    var keep = true
+    var score = sum
+    if !(old < sum) {
+        score = old
+        keep = false
+    }
+    if h.death[cid] < sel_eps { keep = false }
+    if !keep && cid != 0usize {
+        let m = hdb_descendants(h, cid)
+        var i = 0usize
+        while i < m {
+            hdb_sal_remove(h, h.qq[i])
+            i += 1usize
+        }
+        h.sal[h.nsal] = cid
+        h.nsal += 1usize
+    }
+    ret score
+}
+
+fn hdbscan(a: *mem.Arena, x: []const f64, n: usize, d: usize, min_pts: usize, sel_eps: f64) -> (Hdb, err) {
+    var h: Hdb = zero
+    if n < 3usize || min_pts < 2usize || min_pts >= n || x.len < n * d { ret (h, Invalid) }
+    let cap = n + 2usize
+    let inf = 1.0e308f64 * 10.0f64
+    let (fb, e1) = mem.alloc[f64](a, 12usize * n + 5usize * cap + n * n)
+    let (ub, e2) = mem.alloc[usize](a, 17usize * n + 9usize * cap)
+    let (ib, e3) = mem.alloc[i64](a, 3usize * n)
+    if e1 != ok || e2 != ok || e3 != ok { ret (h, TooSmall) }
+    var z = 0usize
+    while z < fb.len {
+        fb[z] = 0.0f64
+        z += 1usize
+    }
+    z = 0usize
+    while z < ub.len {
+        ub[z] = 0usize
+        z += 1usize
+    }
+    z = 0usize
+    while z < ib.len {
+        ib[z] = 0i64
+        z += 1usize
+    }
+    var o = 0usize
+    h.coredist = fb[o..o + n]
+    o += n
+    h.prob = fb[o..o + n]
+    o += n
+    h.glosh = fb[o..o + n]
+    o += n
+    h.mheight = fb[o..o + n]
+    o += n
+    let mw = fb[o..o + n]
+    o += n
+    let pw = fb[o..o + n]
+    o += n
+    let scr = fb[o..o + n]
+    o += n
+    h.seq_eps = fb[o..o + n]
+    o += n
+    h.stab = fb[o..o + cap]
+    o += cap
+    h.birth = fb[o..o + cap]
+    o += cap
+    h.death = fb[o..o + cap]
+    o += cap
+    h.cscore = fb[o..o + cap]
+    o += cap
+    let mrd = fb[o..o + n * n]
+    o = 0usize
+    h.cluster = ub[o..o + n]
+    o += n
+    h.order = ub[o..o + n]
+    o += n
+    h.seq_pt = ub[o..o + n]
+    o += n
+    h.seq_cl = ub[o..o + n]
+    o += n
+    let from = ub[o..o + n]
+    o += n
+    let tov = ub[o..o + n]
+    o += n
+    let srt = ub[o..o + n]
+    o += n
+    let par = ub[o..o + n]
+    o += n
+    let visited = ub[o..o + n]
+    o += n
+    let tracker = ub[o..o + n]
+    o += n
+    let msize = ub[o..o + n]
+    o += n
+    let ptc = ub[o..o + n]
+    o += n
+    let stk = ub[o..o + 2usize * n]
+    o += 2usize * n
+    h.nch = ub[o..o + cap]
+    o += cap
+    h.ch1 = ub[o..o + cap]
+    o += cap
+    h.ch2 = ub[o..o + cap]
+    o += cap
+    h.sal = ub[o..o + cap]
+    o += cap
+    h.qq = ub[o..o + cap]
+    o += cap
+    let processed = ub[o..o + cap]
+    o += cap
+    let tlabel = ub[o..o + cap]
+    o = 0usize
+    h.mleft = ib[o..o + n]
+    o += n
+    h.mright = ib[o..o + n]
+    o += n
+    let labs = ib[o..o + n]
+    h.n = n
+
+    knn_distance(x, n, d, min_pts - 1usize, h.coredist, scr)
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var m = distance(x, d, i, j)
+            if h.coredist[i] > m { m = h.coredist[i] }
+            if h.coredist[j] > m { m = h.coredist[j] }
+            mrd[i * n + j] = m
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // Prim's tree rooted at row 0; the edge of node v is row v - 1, from v to its parent
+    i = 0usize
+    while i < n {
+        pw[i] = inf
+        i += 1usize
+    }
+    pw[0usize] = 0.0f64
+    var next = 0usize
+    var more = true
+    while more {
+        let node = next
+        more = false
+        var nextw = inf
+        visited[node] = 1usize
+        if node > 0usize {
+            from[node - 1usize] = node
+            tov[node - 1usize] = par[node]
+            mw[node - 1usize] = pw[node]
+        }
+        i = 1usize
+        while i < n {
+            if visited[i] == 0usize && node != i {
+                let w = mrd[node * n + i]
+                if w < pw[i] {
+                    pw[i] = w
+                    par[i] = node
+                }
+                if pw[i] < nextw {
+                    nextw = pw[i]
+                    next = i
+                    more = true
+                }
+            }
+            i += 1usize
+        }
+    }
+    // stable order of the edges by weight
+    i = 0usize
+    while i < n - 1usize {
+        var q = i
+        while q > 0usize && mw[srt[q - 1usize]] > mw[i] {
+            srt[q] = srt[q - 1usize]
+            q -= 1usize
+        }
+        srt[q] = i
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        labs[i] = 0i64 - i64(i) - 1i64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n - 1usize {
+        let e = srt[i]
+        let ll = labs[from[e]]
+        let lr = labs[tov[e]]
+        h.mleft[i] = ll
+        h.mright[i] = lr
+        h.mheight[i] = mw[e]
+        var c = 0usize
+        while c < n {
+            if labs[c] == ll || labs[c] == lr { labs[c] = i64(i) + 1i64 }
+            c += 1usize
+        }
+        i += 1usize
+    }
+    // dendrogram order of the leaves; the stack holds merge entries offset by 2n so they stay unsigned
+    let off = i64(2usize * n)
+    var sp = 0usize
+    var outn = 0usize
+    stk[sp] = usize(h.mright[n - 2usize] + off)
+    sp += 1usize
+    stk[sp] = usize(h.mleft[n - 2usize] + off)
+    sp += 1usize
+    while sp > 0usize {
+        sp -= 1usize
+        let v = i64(stk[sp]) - off
+        if v < 0i64 {
+            h.order[outn] = usize(0i64 - v)
+            outn += 1usize
+        } else {
+            let r = usize(v) - 1usize
+            stk[sp] = usize(h.mright[r] + off)
+            sp += 1usize
+            stk[sp] = usize(h.mleft[r] + off)
+            sp += 1usize
+        }
+    }
+    // member sizes of every merge
+    i = 0usize
+    while i < n - 1usize {
+        let lm = h.mleft[i]
+        let rm = h.mright[i]
+        if lm < 0i64 && rm < 0i64 {
+            msize[i] = 2usize
+        } else {
+            if lm < 0i64 {
+                msize[i] = msize[usize(rm) - 1usize] + 1usize
+            } else {
+                if rm < 0i64 {
+                    msize[i] = msize[usize(lm) - 1usize] + 1usize
+                } else {
+                    msize[i] = msize[usize(lm) - 1usize] + msize[usize(rm) - 1usize]
+                }
+            }
+        }
+        i += 1usize
+    }
+    h.birth[0usize] = h.mheight[n - 2usize]
+    var gid = 0usize
+    var nseq = 0usize
+    var k = n - 1usize
+    while k > 0usize {
+        k -= 1usize
+        let lm = h.mleft[k]
+        let rm = h.mright[k]
+        let cid = tracker[k]
+        let hk = h.mheight[k]
+        if lm < 0i64 && rm < 0i64 {
+            var ne = hk
+            if processed[cid] == 1usize { ne = h.death[cid] }
+            h.seq_pt[nseq] = usize(0i64 - lm) - 1usize
+            h.seq_cl[nseq] = cid
+            h.seq_eps[nseq] = ne
+            nseq += 1usize
+            h.seq_pt[nseq] = usize(0i64 - rm) - 1usize
+            h.seq_cl[nseq] = cid
+            h.seq_eps[nseq] = ne
+            nseq += 1usize
+            if processed[cid] == 0usize {
+                var dv = h.death[cid]
+                if hk < dv { dv = hk }
+                h.death[cid] = dv
+            }
+        } else {
+            if lm < 0i64 || rm < 0i64 {
+                var pt = lm
+                var sub = rm
+                if lm >= 0i64 {
+                    pt = rm
+                    sub = lm
+                }
+                var ne = hk
+                if processed[cid] == 1usize { ne = h.death[cid] }
+                h.seq_pt[nseq] = usize(0i64 - pt) - 1usize
+                h.seq_cl[nseq] = cid
+                h.seq_eps[nseq] = ne
+                nseq += 1usize
+                tracker[usize(sub) - 1usize] = cid
+            } else {
+                let s1 = msize[usize(lm) - 1usize]
+                let s2 = msize[usize(rm) - 1usize]
+                if s1 >= min_pts && s2 >= min_pts {
+                    h.death[cid] = hk
+                    processed[cid] = 1usize
+                    h.ch1[cid] = gid + 1usize
+                    h.ch2[cid] = gid + 2usize
+                    tracker[usize(lm) - 1usize] = gid + 1usize
+                    tracker[usize(rm) - 1usize] = gid + 2usize
+                    gid += 2usize
+                    h.birth[h.ch1[cid]] = hk
+                    h.birth[h.ch2[cid]] = hk
+                    h.death[h.ch1[cid]] = h.mheight[usize(lm) - 1usize]
+                    h.death[h.ch2[cid]] = h.mheight[usize(rm) - 1usize]
+                    h.nch[cid] = s1 + s2
+                } else {
+                    tracker[usize(lm) - 1usize] = cid
+                    tracker[usize(rm) - 1usize] = cid
+                }
+            }
+        }
+    }
+    h.ncl = gid + 1usize
+    var s = 0usize
+    while s < n {
+        ptc[h.seq_pt[s]] = h.seq_cl[s]
+        s += 1usize
+    }
+    // stability and GLOSH
+    var c = 0usize
+    while c < h.ncl {
+        var st = 0.0f64
+        s = 0usize
+        while s < n {
+            if h.seq_cl[s] == c { st += 1.0f64 / h.seq_eps[s] - 1.0f64 / h.birth[c] }
+            s += 1usize
+        }
+        let nc = f64(h.nch[c])
+        h.stab[c] = st + (nc / h.death[c] - nc / h.birth[c])
+        var emax = inf
+        if h.ch1[c] == 0usize {
+            emax = h.death[c]
+        } else {
+            let m = hdb_descendants(&h, c)
+            var q = 0usize
+            while q < m {
+                let t = h.qq[q]
+                if h.ch1[t] == 0usize && h.death[t] < emax { emax = h.death[t] }
+                q += 1usize
+            }
+        }
+        s = 0usize
+        while s < n {
+            if h.seq_cl[s] == c {
+                var g = 1.0f64 - emax / h.seq_eps[s]
+                if g != g { g = 0.0f64 }
+                h.glosh[h.seq_pt[s]] = g
+            }
+            s += 1usize
+        }
+        c += 1usize
+    }
+    // flat extraction
+    let top = hdb_fosc(&h, 0usize, sel_eps)
+    c = 0usize
+    while c < h.ncl {
+        tlabel[c] = 0usize
+        c += 1usize
+    }
+    var si = 0usize
+    while si < h.nsal {
+        let sc = h.sal[si]
+        tlabel[sc] = sc
+        let m = hdb_descendants(&h, sc)
+        var q = 0usize
+        while q < m {
+            tlabel[h.qq[q]] = sc
+            q += 1usize
+        }
+        si += 1usize
+    }
+    i = 0usize
+    while i < n {
+        h.cluster[i] = tlabel[ptc[i]]
+        h.prob[i] = 0.0f64
+        i += 1usize
+    }
+    si = 0usize
+    while si < h.nsal {
+        let sc = h.sal[si]
+        var maxf = 0.0f64
+        i = 0usize
+        while i < n {
+            if h.cluster[i] == sc && h.coredist[i] > maxf { maxf = h.coredist[i] }
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            if h.cluster[i] == sc { h.prob[i] = (maxf - h.coredist[i]) / maxf }
+            i += 1usize
+        }
+        h.cscore[si] = h.stab[sc]
+        si += 1usize
+    }
+    // package ids become the position among the salient clusters, noise stays 0
+    i = 0usize
+    while i < n {
+        var lab = 0usize
+        si = 0usize
+        while si < h.nsal {
+            if h.sal[si] == h.cluster[i] && h.cluster[i] != 0usize { lab = si + 1usize }
+            si += 1usize
+        }
+        ptc[i] = lab
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        h.cluster[i] = ptc[i]
+        i += 1usize
+    }
+    if top != top { ret (h, Invalid) }
+    ret (h, ok)
+}

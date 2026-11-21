@@ -291,7 +291,7 @@ fn logit_glm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) 
         w[i] = 1.0f64
         i += 1usize
     }
-    let e6 = fxg.binom_glm(a, x, n, p, y, sz, w, beta, false)
+    let e6 = fxg.binom_glm(a, x, n, p, y, sz, w, beta, false, w[0usize..0usize])
     if e6 != ok { ret (zero, e6) }
     var j = 0usize
     while j < p * p {
@@ -348,7 +348,7 @@ fn pois_glm_lm(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
         w[i] = 1.0f64
         i += 1usize
     }
-    let e5 = fxg.pois_glm(a, x, n, p, y, w, beta, false)
+    let e5 = fxg.pois_glm(a, x, n, p, y, w, beta, false, w[0usize..0usize])
     if e5 != ok { ret (zero, e5) }
     var j = 0usize
     while j < p * p {

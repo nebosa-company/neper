@@ -18,7 +18,9 @@ fitone <- function(y, m, o, so, kind, method, lambda) {
   # model with a diffuse (kappa 1e6) differenced state is flat, so the parameters at the stop are only determined to about
   # sqrt(1e-8) and move with the last bits of libm's log and tanh, which R's UCRT and Neper's math do not share. The Kalman
   # filter, getQ0, the transform and the lm start (QR coefficient and standard error) are ported term by term; measured worst
-  # 5.5e-6 relative, checked at 2e-5. Everything else (no differencing, or CSS) agrees to 1e-9.
+  # 5.5e-6 relative, checked at 2e-5. R-side proof of the limit: R's own Arima(ML) on y4i (1,1,0)(0,1,1) moves its coefficients by
+# 5.5e-6 relative when the data are scaled by 1 + k*2^-50 (k = 1..6), a perturbation of the last bits of the input, so no port can
+# match R's coefficients tighter than that without bit-identical libm; y12f moves 6.4e-7, y12 4.7e-8. Everything else (no differencing, or CSS) agrees to 1e-9.
   tolp <- if (o[2] + so[2] > 0 && method != 2) 2e-5 else 1e-9
   one <- function(q, v) add(c(q, base), v, rel = if (q <= 4) 1e-9 else tolp)
   fc <- forecast(f, h = 6, level = c(80, 95))

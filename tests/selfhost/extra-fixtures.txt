@@ -840,3 +840,9 @@ oracle_sm_hsel2
 oracle_sm_opt
 oracle_tm_dtm
 oracle_tsa_arimax
+oracle_afexaov
+oracle_dbscan_hdbscan
+oracle_margeff
+oracle_margeff2
+oracle_mediation2
+oracle_medsens

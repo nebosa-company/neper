@@ -56,7 +56,7 @@ for (s in sd_series) {
 }
 # auto.arima. The criteria are flat at the optimum (1e-9); coefficients of a differenced model come from optim stopping at
 # reltol 1e-8 on a flat diffuse-state likelihood (the parameters at the stop move with the last bits of libm, as in arimafc.R) and agree to
-# 5e-6 relative (measured worst 1.2e-6); the criteria, orders and the closed-form branches agree to 1e-9 or exactly.
+# 5e-6 relative (measured worst 1.2e-6; R's own ML fit of such a model moves 5.5e-6 under a 2^-50 relative data perturbation, see arimafc.R); the criteria, orders and the closed-form branches agree to 1e-9 or exactly.
 aa <- function(y, m, stepwise, appr, test = 0, stest = 0) {
   yy <- ts(y, frequency = m); n <- length(y)
   f <- auto.arima(yy, stepwise = stepwise, approximation = if (appr == 0) (n > 150 || m > 12) else appr == 2,
