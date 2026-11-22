@@ -106,7 +106,7 @@ Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the mont
 
 ### L275 — Unicode collation, transliteration and encoding detection (stringi) (8%)
 
-Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases; Linux pending). Grapheme clusters (D7594) and word boundaries without the colon (D7595) and simple case mapping (D7596) and single-byte decoding (D7597) and encoding (D7598) Any-Hex (D7599) and full lower- and upper-casing (D7600) and Latin-ASCII over the common ranges (D7601) equal stringi. Open: everything else in the acceptance. Needs L264. e.text.collate has codepoint, byte and natural compare only. Acceptance: stri_sort, stri_order, stri_compare with UCA and locale tailoring (en, de, sv, tr), stri_trans_general for Latin-ASCII, Any-Lower, Any-Hex and Any-NFD, stri_enc_detect and stri_encode over the shared charsets, sentence and grapheme splitting, all equal to stringi on a seeded multilingual corpus.
+Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases; Linux pending). Grapheme clusters (D7594) and word boundaries without the colon (D7595) and simple case mapping (D7596) and single-byte decoding (D7597) and encoding (D7598) Any-Hex (D7599) and full lower- and upper-casing (D7600) and Latin-ASCII over the common ranges (D7601) equal stringi. Open: everything else in the acceptance. Its dependency L264 is closed (it is in docs/work-done.jsonl), so nothing external blocks it: what remains is its own scope. The blocker was stale, not missing (D7789). e.text.collate has codepoint, byte and natural compare only. Acceptance: stri_sort, stri_order, stri_compare with UCA and locale tailoring (en, de, sv, tr), stri_trans_general for Latin-ASCII, Any-Lower, Any-Hex and Any-NFD, stri_enc_detect and stri_encode over the shared charsets, sentence and grapheme splitting, all equal to stringi on a seeded multilingual corpus.
 
 ### L274 — General linear mixed models (lme4) (10%)
 
@@ -114,7 +114,7 @@ Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and
 
 ### L284 — Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders) (0%)
 
-Open. Needs L264 and L265. e.math.mcmc has sampler basics; no autodiff, no ADVI. Acceptance: reverse-mode gradients of a closed set of Stan math functions (distributions from L265, matrix ops, log-sum-exp) agree with R-computed numDeriv gradients to 1e-8; NUTS with dual-averaging step size and diagonal mass-matrix adaptation recovers posterior means and sds of a seeded hierarchical model within Monte Carlo error of rstan; ADVI meanfield and fullrank match rstan vb ELBO trajectory shape and final means within tolerance. Stan language compiler is out of scope.
+Open. Its dependencies L264 and L265 are closed (both are in docs/work-done.jsonl), so nothing external blocks it: what remains is its own scope - reverse-mode autodiff, NUTS adaptation and ADVI. The blocker was stale, not missing (D7789). e.math.mcmc has sampler basics; no autodiff, no ADVI. Acceptance: reverse-mode gradients of a closed set of Stan math functions (distributions from L265, matrix ops, log-sum-exp) agree with R-computed numDeriv gradients to 1e-8; NUTS with dual-averaging step size and diagonal mass-matrix adaptation recovers posterior means and sds of a seeded hierarchical model within Monte Carlo error of rstan; ADVI meanfield and fullrank match rstan vb ELBO trajectory shape and final means within tolerance. Stan language compiler is out of scope.
 
 ### L338 — robustbase: robust regression and scale (85%)
 
@@ -282,7 +282,7 @@ Partly done (D6065): the planar convex hull, polygon area, point in polygon and 
 
 ### L285 — Raster core and CRS reprojection (terra) (0%)
 
-Open; large (terra is about 74k lines of C++ over GDAL, GEOS and PROJ). Needs L264. Acceptance: raster cell algebra, focal (window, function, edge), aggregate, resample (near, bilinear, cubic), crop, mask, zonal and extract over GeoTIFF inputs equal terra values; reprojection among EPSG 4326, 3857, UTM zones and a set of national grids matches PROJ to 1e-6 m; vector buffer, intersect and union on seeded polygons match GEOS after canonical ring ordering.
+Open; large (terra is about 74k lines of C++ over GDAL, GEOS and PROJ). Its dependency L264 is closed (it is in docs/work-done.jsonl), so nothing external blocks it: what remains is its own scope. The blocker was stale, not missing (D7789). Acceptance: raster cell algebra, focal (window, function, edge), aggregate, resample (near, bilinear, cubic), crop, mask, zonal and extract over GeoTIFF inputs equal terra values; reprojection among EPSG 4326, 3857, UTM zones and a set of national grids matches PROJ to 1e-6 m; vector buffer, intersect and union on seeded polygons match GEOS after canonical ring ordering.
 
 ### L349 — vegan: community ecology (85%)
 
@@ -1550,11 +1550,11 @@ Partial (2026-11-21, merged 080899ea1). This item was DEFERRED by the user and a
 
 ### L283 — CommonMark and GFM conformance with xml, latex and man renderers (commonmark) (0%)
 
-DEFERRED by the user, but a workflow round ran on it without asking and landed oracle_commonmark (080899ea1, passes on Windows; the verifier reported complete). Decide whether to close it or keep it deferred. DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Needs L264. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match.
+DEFERRED by the user, but a workflow round ran on it without asking and landed oracle_commonmark (080899ea1, passes on Windows; the verifier reported complete). Decide whether to close it or keep it deferred. DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Its dependency L264 is closed (it is in docs/work-done.jsonl), so nothing external blocks it: what remains is its own scope. The blocker was stale, not missing (D7789). Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match.
 
 ### L276 — Sass/SCSS compiler (sass, libsass) (0%)
 
-DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; largest gap (about 42k lines upstream). Needs L264. Acceptance: variables, nesting, mixins, functions, extend, maps, control directives, imports and the built-in function library compile to the same CSS as sass::sass for the libsass spec suite subset, in nested, expanded and compressed output styles.
+DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; largest gap (about 42k lines upstream). Its dependency L264 is closed (it is in docs/work-done.jsonl), so nothing external blocks it: what remains is its own scope. The blocker was stale, not missing (D7789). Acceptance: variables, nesting, mixins, functions, extend, maps, control directives, imports and the built-in function library compile to the same CSS as sass::sass for the libsass spec suite subset, in nested, expanded and compressed output styles.
 
 ### L518 — tweedie: powers above 2 and the series beyond statmod (20%)
 
