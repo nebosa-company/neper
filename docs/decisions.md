@@ -52056,3 +52056,17 @@ R's `lgamma`, `gamma`, `pnorm` and `qnorm` are its portable C code, and this run
 `erf` (408 disagreed) and `erfc` (414) do not match, and the reason is not what was first assumed: **R 4.6.2 has no `src/nmath/erf.c`**. Its source tarball's nmath directory holds `pnorm.c`, `pt.c`, `toms708.c` and the rest but no error-function file, so R's `erf`/`erfc` come from the **platform C library**, exactly like `exp`/`log` did before D7776. Our `e.math.special` carries a Taylor series below 2.5 and a Lentz continued fraction above, accurate to ~1e-16 but not the platform's algorithm. An earlier version of this entry claimed Cody's CALERF routines in `src/nmath/erf.c`; that file does not exist, and the correction changes the method - there is no portable R source to copy, so the fix is the one that worked for `exp` and `log`: implement `erf`/`erfc` correctly rounded in double-double against MPFR, accepting that R's value can still differ where the platform's erf is not correctly rounded.
 
 The fixture `link/math_nmath` stays **unregistered** until erf/erfc are green, for the same reason as before: a red fixture that reports its own breakdown is a measurement, not a test.
+## D7781 — A correctly rounded erf needs both branches in double-double; the crossover choice alone makes it worse
+
+An attempt at erf/erfc before the meeting: the small-range Taylor series was rewritten in double-double and measured against the 3943-case nmath fixture. Three configurations, all with lgamma/gamma/pnorm/qnorm still at zero:
+
+| configuration | erf | erfc |
+|---|---|---|
+| baseline (series and Lentz both plain double) | 408 | 414 |
+| dd series below 2.5, Lentz above (original crossover) | 348 | **466** |
+| dd series below 1.5, dd series below 2.5 for erfc | 293 | 464 |
+| dd series below 1.5 for erf, crossover 2.5 for erfc | 348 | 466 |
+
+The pattern is the finding: making the *series* correctly rounded improves `erf` (408 -> 293/348) but makes `erfc` **worse** (414 -> 464/466) whichever crossover is chosen. Two effects explain it and both are worth keeping. First, `erfc = 1 - erf` loses precision exactly where it matters: at x = 2.5, `erfc` is 4e-4, so a correctly rounded `erf` still leaves ~2.5e-13 relative error in `erfc` - a thousand ulps - and only a direct evaluation of `erfc` avoids that. Second, the Lentz continued fraction is still plain double, so moving its crossover down trades a more accurate branch (1 - erf) for a less accurate one (Lentz); the two branches have to be upgraded **together**, not one at a time.
+
+So the change was reverted rather than landed: the fixture is back at its truthful 822 of 3943 (erf 408, erfc 414) and no regression sits in the tree. The next attempt starts from the other end - `erfc` evaluated directly in double-double (its own dd series for small x, the continued fraction with a dd division for large x) - and only then re-times `erf`, which is `1 - erfc` above the crossover and should follow for free. The `dd_div` helper this needs is also what `log`'s series-argument division will want, so it is not a one-off.
