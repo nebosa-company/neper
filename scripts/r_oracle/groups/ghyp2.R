@@ -4,6 +4,9 @@
 suppressMessages(library(GeneralizedHyperbolic))
 suppressMessages(library(DistributionUtils))
 cases <- list()
+# the spline-method qghyp quantiles build a 501-point pghyp_tail table per case and cost 35-92 s each
+# (D7801), so they get their own oracle and fixture instead of blowing the ghyp2 budget
+slow <- list()
 nowarn <- function(expr) tryCatch(withCallingHandlers(expr, warning = function(w) stop("warn")), error = function(e) NA_real_)
 set.seed(20262101)
 for (rep in 1:25) {
@@ -90,7 +93,7 @@ for (rep in 1:14) {
   }
   if (rep <= 4) for (pp in c(0.001, 0.3, 0.8, 0.9995)) for (lo in c(TRUE, FALSE)) {
     v <- tryCatch(qghyp(pp, param = pr, lower.tail = lo), error = function(e) NA_real_)
-    if (is.finite(v)) cases[[length(cases) + 1]] <- case("qghypF", c(pp, pr, as.numeric(lo), 0), v, rel = 1e-9, abs = 1e-12)
+    if (is.finite(v)) slow[[length(slow) + 1]] <- case("qghypF", c(pp, pr, as.numeric(lo), 0), v, rel = 1e-9, abs = 1e-12)
   }
   if (rep <= 6) for (pp in c(0.001, 0.3, 0.9995)) {
     v <- tryCatch(qghyp(pp, param = pr, method = "integrate"), error = function(e) NA_real_)
@@ -177,3 +180,4 @@ for (rep in 1:20) {
   }
 }
 emit("ghyp2", c("GeneralizedHyperbolic", "DistributionUtils"), list(cases))
+emit("ghyp2slow", c("GeneralizedHyperbolic", "DistributionUtils"), list(slow))

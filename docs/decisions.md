@@ -52324,3 +52324,12 @@ The arithmetic then explains the observations without any bug: the cumulative Li
 Consequences, all measured: the fixture needs **splitting by case cost** (the expensive `qghypF`/`qghyp` spline cases into their own fixture) rather than any code change; the two unbounded loops remain code-quality issues to fix on their own merits, not because they cause this; and L407's evidence should stop describing the Linux gap as a "platform problem" - it is a fixture-budget problem, and the honest number is the per-case cost above.
 
 Six rounds, six measurements, and the conclusion is the opposite of the first hypothesis - and of the third. The one thing that did not change: no library code was modified to chase it.
+## D7802 — The ghyp2 split is prepared in the generator, but the oracle cannot be regenerated here: GeneralizedHyperbolic is not installed
+
+The fix for D7801 is a fixture split, and `scripts/r_oracle/groups/ghyp2.R` now does it: the spline-method `qghyp` quantiles (the 501-point `pghyp_tail` table, 35-92 s per case) are collected into a `slow` list and emitted as a second oracle, `ghyp2slow`, while everything cheap stays in `ghyp2`.
+
+Regeneration stopped immediately, though, and that is worth recording: `GeneralizedHyperbolic` is **no longer installed** in the R library (`D:/tools/R/library`, checked with `requireNamespace`), even though `tests/oracle/ghyp2.json` exists and is 437 KB - it was installed in a library that has since gone away, probably a temporary one. So the generator cannot run for this group, and the committed oracle cannot be replaced until the package is installed again.
+
+That leaves the split half-done in a way that is easy to misread later, so the state is stated plainly: the group file is patched, the JSON is **not** regenerated, no fixture was added, and nothing was registered. The next step is to install `GeneralizedHyperbolic` and `DistributionUtils` (with `R_ORACLE_LIB=D:/tools/R/library`), regenerate the two oracles, copy the `oracle_ghyp2` fixture to `oracle_ghyp2slow` with the new oracle path, register both, and measure them on both hosts.
+
+An alternative worth keeping in mind if the package cannot be reinstalled: split the existing JSON mechanically instead of regenerating - move the `qghypF` cases whose fourth argument is 0 into `ghyp2slow.json`. That preserves the already-computed `want` values exactly and needs no R packages at all, which is the lower-risk path on this machine.
