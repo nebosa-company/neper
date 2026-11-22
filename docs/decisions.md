@@ -51873,3 +51873,7 @@ Each closed item passed an acceptance verifier and its fixtures on Windows in th
 ## D7741 — L456 mlogit, L465 BayesFactor and L512 poLCA closed
 
 Each closed item passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. Partial items stay open with their gaps in the queue evidence.
+
+## D7742 — Windows fixture work here runs on a seed-built release stage-2, not the bootstrap stage-1
+
+At HEAD 584bd9fad the C bootstrap builds a stage-1 compiler whose `emit-executable`, `emit-em-all` and `run --json` exit with 0xC0000409 (`STATUS_STACK_BUFFER_OVERRUN`) whenever the crew build runs; `emit-em-all --whole`, `emit-object`, `check-file`, `codegen-file` and `self-test` all succeed on the same binary and tree, so the failure is in the multi-worker build path of a debug build rather than in parsing, checking or codegen. A release stage-2 built from a seed compiler does work: `build/windows/neper-t1.exe emit-executable src/main.e <repo> x64 windows build/windows/neper-rel.exe -j 1 --release`, then `neper-rel.exe emit-executable <fixture>/src/main.e <repo> x64 windows <out.exe>`. L407 was re-verified this way on Windows, and on Linux with the stage-1 that `scripts/build-bootstrap.sh` builds in WSL Ubuntu-24.04 (`build/linux/neper-try emit-executable ... x64 linux ...`). T074 is the row that owns getting the suite's own bootstrap path green again; this decision only records the route that unblocks per-item verification meanwhile.
