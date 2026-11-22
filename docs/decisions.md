@@ -52225,3 +52225,26 @@ So the fixture runs at about 40 cases/s on Linux - the same order as Windows - a
 The next bisect is a single run of eight truncated oracles in that window (1350, 1325, 1312, ...) and then one case, whose `qgig`/`pgig` arguments name the pathological parameters. No library code was changed in this round; the tree is clean.
 
 Worth recording as method: three of the four defects found in this investigation were in the *measurement* (a cached binary, a stale truncated file, a vanished `/tmp`), not in the code under test. Verify the instrument before believing the reading.
+## D7795 — The hang is one of cases 1313-1315 of oracle_ghyp2, with the arguments identified
+
+Bisect completed with a persistent probe (WSL's `/tmp` and the DrvFs mount both cost or lose the binary: the probe now lives in `$HOME`, which survives, and running it from `/mnt/d` was slow enough to time out a 60 s budget on a normally-31 s run):
+
+| cases (verified) | Linux |
+|---|---|
+| 1300 | 30 s pass |
+| 1310 | 31 s pass |
+| 1312 | 31 s pass |
+| **1315** | **timeout 60 s** |
+| 1318 | timeout |
+| 1320+ | timeout |
+
+So the 1362 s stall is in **cases 1313, 1314 or 1315** - three consecutive cases, and their arguments name the parameters:
+
+- 1313 `ghyprange(p=0.001, side=1, alpha=-0.2733, beta=0.9256, delta=3.4485, mu=2.5743)`
+- 1314 and 1315 `qghypF(p=0.001, the same shape parameters, ...)`
+
+Both paths run through `gig_range`'s upper-limit expansion and then `qgig_integrate`'s root find. The `p = 0.001` quantile with a large positive `beta` on the same shape is exactly the regime where the upper tail is long, which is consistent with the unbounded `while gh.dgig(hi, ...) > tol` expansion never reaching the tolerance.
+
+The next step is one case, not a window: run the three separately, take the first that hangs, and instrument that call's iteration count and `sd`. Only then decide the fix - and the earlier attempt (D7792) showed that bounding the loop without knowing where it should stop turns the Windows pass into a hang, so the bound must be derived from the case's own numbers.
+
+The full bisect cost about four rounds, three of them spent fixing the instrument rather than the code. That ratio is the transferable part: for a single pathological case in a 2570-case fixture, measurement hygiene dominates.
