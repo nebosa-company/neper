@@ -5,14 +5,285 @@
 // whole matrix (ape calls base.freq before it deletes anything), and each model turns the pairwise counts
 // into a distance (raw, JC69, K80, F81, F84, TN93, T92).
 //
-// Not here: the topology and labels, bionj, upgma, rooting, cophenetic distances, tree comparison, the
-// other dist.dna models (K81, GG95, the indel models), the rest of ape.
+// ape::read.tree (Newick) and the two things the row compares through it: the tips' patristic distances
+// (cophenetic.phylo) and the MRCA depth of each tip pair (getMRCA plus node.depth).
+//
+// Not here: write.tree and the Nexus reader, bionj, upgma, rooting, dist.topo and the tree comparisons,
+// drop.tip, ace, rtree and rcoal, the rest of ape.
 
 use e.math
 use e.mem
 
 // a dist.dna model this module does not port (ape's K81, GG95 and indel models)
 error Unsupported
+error TooSmall
+error Malformed
+
+// A Newick tree: node 0 is the root and the arrays are sized by the caller (2 * text.len + 1 entries is
+// always enough). label[i] is a slice of the parsed text (empty for an unnamed node), edge[i] is the
+// branch length to the parent, depth[i] the number of edges from the root, and tip[i] marks a leaf.
+type Tree = struct {
+    nn: usize,
+    parent: []i64,
+    edge: []f64,
+    depth: []usize,
+    label: []str,
+    tip: []bool,
+}
+
+// The number of edges between node i and the root.
+fn tree_depth_of(t: *Tree, i: usize) -> usize {
+    var n = 0usize
+    var at = i
+    while t.parent[at] >= 0i64 {
+        n += 1usize
+        at = usize(t.parent[at])
+    }
+    ret n
+}
+
+// The summed branch length between node i and the root.
+fn tree_path_len(t: *Tree, i: usize) -> f64 {
+    var s = 0.0f64
+    var at = i
+    while t.parent[at] >= 0i64 {
+        s += t.edge[at]
+        at = usize(t.parent[at])
+    }
+    ret s
+}
+
+// The deepest node on both i's and j's path to the root.
+fn tree_mrca(t: *Tree, i0: usize, j0: usize) -> usize {
+    var i = i0
+    var j = j0
+    var di = t.depth[i]
+    var dj = t.depth[j]
+    while di > dj {
+        i = usize(t.parent[i])
+        di -= 1usize
+    }
+    while dj > di {
+        j = usize(t.parent[j])
+        dj -= 1usize
+    }
+    while i != j {
+        i = usize(t.parent[i])
+        j = usize(t.parent[j])
+    }
+    ret i
+}
+
+fn skip_space(s: str, i0: usize) -> usize {
+    var i = i0
+    while i < s.len && (s[i] == 32u8 || s[i] == 9u8 || s[i] == 10u8 || s[i] == 13u8) { i += 1usize }
+    ret i
+}
+
+fn is_delim(b: u8) -> bool {
+    ret b == 40u8 || b == 41u8 || b == 44u8 || b == 58u8 || b == 59u8 || b == 32u8 || b == 9u8 || b == 10u8 || b == 13u8
+}
+
+// The branch length starting at s[i] (the caller has checked for the colon at i), and the index after it.
+// The digits are collected into an exact integer and the value is one division (or multiplication) by an
+// exactly representable power of ten, so a 10-digit length from write.tree reads back to the same double
+// R's strtod gives - accumulating 0.1 steps instead drifts in the last bits (D7761).
+fn read_length(s: str, i0: usize) -> (f64, usize, err) {
+    var i = skip_space(s, i0 + 1usize)
+    var neg = false
+    if i < s.len && (s[i] == 45u8 || s[i] == 43u8) {
+        neg = s[i] == 45u8
+        i += 1usize
+    }
+    var mant = 0u64
+    var digits = 0usize
+    var dec = 0i64
+    while i < s.len && s[i] >= 48u8 && s[i] <= 57u8 {
+        if mant < 1000000000000000000u64 { mant = mant * 10u64 + u64(s[i] - 48u8) }
+        digits += 1usize
+        i += 1usize
+    }
+    if i < s.len && s[i] == 46u8 {
+        i += 1usize
+        while i < s.len && s[i] >= 48u8 && s[i] <= 57u8 {
+            if mant < 1000000000000000000u64 {
+                mant = mant * 10u64 + u64(s[i] - 48u8)
+                dec += 1i64
+            }
+            digits += 1usize
+            i += 1usize
+        }
+    }
+    if digits == 0usize { ret (0.0f64, i, Malformed) }
+    var exp10 = 0i64 - dec
+    if i < s.len && (s[i] == 101u8 || s[i] == 69u8) {
+        i += 1usize
+        var eneg = false
+        if i < s.len && (s[i] == 45u8 || s[i] == 43u8) {
+            eneg = s[i] == 45u8
+            i += 1usize
+        }
+        var e = 0i64
+        while i < s.len && s[i] >= 48u8 && s[i] <= 57u8 {
+            e = e * 10i64 + i64(s[i] - 48u8)
+            i += 1usize
+        }
+        if eneg { e = 0i64 - e }
+        exp10 += e
+    }
+    var value = f64(mant)
+    var p = 1.0f64
+    var k = 0i64
+    while k < exp10 {
+        p = p * 10.0f64
+        k += 1i64
+    }
+    k = 0i64
+    while k > exp10 {
+        p = p * 10.0f64
+        k -= 1i64
+    }
+    if exp10 >= 0i64 { value = value * p } else { value = value / p }
+    if neg { value = 0.0f64 - value }
+    ret (value, i, ok)
+}
+
+// ape::read.tree on one Newick string: labels may be bare (no quotes) and branch lengths are optional on
+// both leaves and internal nodes. Returns the number of tips; the tips are numbered in the order they
+// appear, so their node indices are the tip order ape reports. The Tree arrays must be the same length and
+// at least 2 * text length + 1, which always holds a binary tree.
+fn read_tree(s: str, t: *Tree) -> (usize, err) {
+    let cap = t.parent.len
+    var nn = 0usize
+    var tips = 0usize
+    var stack: [128]usize = zero
+    var sp = 0usize
+    var cur: i64 = 0i64
+    var i = skip_space(s, 0usize)
+    if i >= s.len { ret (0usize, Malformed) }
+    if s[i] != 40u8 {
+        // the whole tree is one bare label
+        var b = i
+        while b < s.len && !is_delim(s[b]) { b += 1usize }
+        if b == i { ret (0usize, Malformed) }
+        if cap < 1usize { ret (0usize, TooSmall) }
+        t.parent[0usize] = -1i64
+        t.edge[0usize] = 0.0f64
+        t.label[0usize] = s[i..b]
+        t.tip[0usize] = true
+        t.depth[0usize] = 0usize
+        t.nn = 1usize
+        ret (1usize, ok)
+    }
+    // the root is node 0 and its child list is the first thing the text opens
+    if cap < 1usize { ret (0usize, TooSmall) }
+    t.parent[0usize] = -1i64
+    t.edge[0usize] = 0.0f64
+    t.label[0usize] = ""
+    t.tip[0usize] = false
+    nn = 1usize
+    stack[0usize] = 0usize
+    sp = 1usize
+    i += 1usize
+    while true {
+        i = skip_space(s, i)
+        if i >= s.len { ret (tips, Malformed) }
+        if s[i] == 41u8 {
+            // the innermost open internal node closes
+            if sp == 0usize { ret (tips, Malformed) }
+            sp -= 1usize
+            let closed = stack[sp]
+            i += 1usize
+            i = skip_space(s, i)
+            if i < s.len && s[i] == 58u8 {
+                let (len, after, le) = read_length(s, i)
+                if le != ok { ret (tips, le) }
+                t.edge[closed] = len
+                i = after
+                i = skip_space(s, i)
+            }
+            cur = t.parent[closed]
+            if i >= s.len || s[i] == 59u8 { break }
+            if s[i] == 44u8 {
+                i += 1usize
+                continue
+            }
+            if s[i] == 41u8 { continue }
+            ret (tips, Malformed)
+        }
+        if nn >= cap { ret (tips, TooSmall) }
+        let node = nn
+        nn += 1usize
+        t.parent[node] = cur
+        t.edge[node] = 0.0f64
+        t.label[node] = ""
+        t.tip[node] = false
+        if s[i] == 40u8 {
+            // an internal node opens a child list of its own
+            if sp >= 128usize { ret (tips, TooSmall) }
+            stack[sp] = node
+            sp += 1usize
+            cur = i64(node)
+            i += 1usize
+            continue
+        }
+        var b = i
+        while b < s.len && !is_delim(s[b]) { b += 1usize }
+        if b == i { ret (tips, Malformed) }
+        t.label[node] = s[i..b]
+        t.tip[node] = true
+        tips += 1usize
+        i = skip_space(s, b)
+        if i < s.len && s[i] == 58u8 {
+            let (len, after, le) = read_length(s, i)
+            if le != ok { ret (tips, le) }
+            t.edge[node] = len
+            i = after
+            i = skip_space(s, i)
+        }
+        if i >= s.len || s[i] == 59u8 { break }
+        if s[i] == 44u8 {
+            i += 1usize
+            continue
+        }
+        if s[i] == 41u8 { continue }
+        ret (tips, Malformed)
+    }
+    t.nn = nn
+    var k = 0usize
+    while k < nn {
+        t.depth[k] = tree_depth_of(t, k)
+        k += 1usize
+    }
+    ret (tips, ok)
+}
+// ape::cophenetic.phylo: the patristic distance between every pair of tips, in tip order (the order the
+// tips appear in the Newick, which is ape's tip.label order). out is n by n row-major; returns n.
+fn cophenetic(t: *Tree, out: []f64) -> (usize, err) {
+    var tips: [128]usize = zero
+    var n = 0usize
+    var i = 0usize
+    while i < t.nn {
+        if t.tip[i] {
+            if n >= 128usize { ret (n, TooSmall) }
+            tips[n] = i
+            n += 1usize
+        }
+        i += 1usize
+    }
+    if out.len < n * n { ret (n, TooSmall) }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let m = tree_mrca(t, tips[i], tips[j])
+            out[i * n + j] = tree_path_len(t, tips[i]) + tree_path_len(t, tips[j]) - 2.0f64 * tree_path_len(t, m)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (n, ok)
+}
 
 // ape's base order for the LogDet contingency table is A, G, C, T (its DNAbin codes are 136, 72, 40, 24),
 // while this module reads 0..3 as A, C, G, T, so the row and column indices are mapped here.
