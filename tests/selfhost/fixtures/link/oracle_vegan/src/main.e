@@ -33,6 +33,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "acc_0") || str.eq(c.name, "acc_1") || str.eq(c.name, "acc_2") {
+        var method = 0usize
+        if str.eq(c.name, "acc_1") { method = 1usize }
+        if str.eq(c.name, "acc_2") { method = 2usize }
+        let (acc, eacc) = mem.alloc[f64](a, nr)
+        if eacc != ok { ret nan }
+        if vg.specaccum(m, nr, nc, method, acc) != ok { ret nan }
+        while r < nr {
+            s += acc[r] * f64(r + 1usize)
+            r += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "rarefy") {
         while r < nr {
             s += vg.rarefy(m, nc, r, z[2usize]) * f64(r + 1usize)

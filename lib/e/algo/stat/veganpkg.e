@@ -63,6 +63,81 @@ fn rarefy(m: []const f64, nc: usize, r: usize, n: f64) -> f64 {
     ret s
 }
 
+// vegan::specaccum's accumulation curve (the deterministic methods): method 0 collector (species seen after
+// the first i sites in the given order), 1 exact (the expected species count over all random orders,
+// 1 - C(n - freq, i)/C(n, i) per species), 2 coleman (1 - (1 - i/n)^freq per species). out holds nr values.
+// The random, rarefaction and area methods are not ported here.
+fn specaccum(m: []const f64, nr: usize, nc: usize, method: usize, out: []f64) -> err {
+    if out.len < nr { ret mem.Full }
+    if method == 0usize {
+        var i = 0usize
+        while i < nr {
+            var seen = 0.0f64
+            var j = 0usize
+            while j < nc {
+                var t = 0usize
+                while t <= i {
+                    if m[t * nc + j] > 0.0f64 {
+                        seen += 1.0f64
+                        break
+                    }
+                    t += 1usize
+                }
+                j += 1usize
+            }
+            out[i] = seen
+            i += 1usize
+        }
+        ret ok
+    }
+    if method == 1usize {
+        let fnr = f64(nr)
+        var i = 0usize
+        while i < nr {
+            let ii = f64(i + 1usize)
+            let ldiv = lchoose(fnr, ii)
+            var total = 0.0f64
+            var j = 0usize
+            while j < nc {
+                var freq = 0.0f64
+                var t = 0usize
+                while t < nr {
+                    if m[t * nc + j] > 0.0f64 { freq += 1.0f64 }
+                    t += 1usize
+                }
+                if freq > 0.0f64 {
+                    var term = 0.0f64
+                    if fnr - freq >= ii { term = math.exp[f64](lchoose(fnr - freq, ii) - ldiv) }
+                    total += 1.0f64 - term
+                }
+                j += 1usize
+            }
+            out[i] = total
+            i += 1usize
+        }
+        ret ok
+    }
+    var i = 0usize
+    while i < nr {
+        let p = f64(i + 1usize) / f64(nr)
+        var total = 0.0f64
+        var j = 0usize
+        while j < nc {
+            var freq = 0.0f64
+            var t = 0usize
+            while t < nr {
+                if m[t * nc + j] > 0.0f64 { freq += 1.0f64 }
+                t += 1usize
+            }
+            total += 1.0f64 - math.pow[f64](1.0f64 - p, freq)
+            j += 1usize
+        }
+        out[i] = total
+        i += 1usize
+    }
+    ret ok
+}
+
 // log of the binomial coefficient, through lgamma
 fn lchoose(n: f64, k: f64) -> f64 {
     ret nm.lgammafn(n + 1.0f64) - nm.lgammafn(k + 1.0f64) - nm.lgammafn(n - k + 1.0f64)

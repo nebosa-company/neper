@@ -28,5 +28,8 @@ for (rep in 1:20) {
   add("d_15", a, ws(as.vector(vegdist(m, "mountford"))))
   add("d_16", a, ws(as.vector(vegdist(m, "binomial"))))
   add("d_17", a, ws(as.vector(vegdist(m, "mahalanobis"))))
+  add("acc_0", a, ws(specaccum(m, "collector")$richness))
+  add("acc_1", a, ws(specaccum(m, "exact")$richness))
+  add("acc_2", a, ws(specaccum(m, "coleman")$richness))
 }
 emit("vegan", "vegan", list(cases))
