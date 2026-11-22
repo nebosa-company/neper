@@ -8,7 +8,27 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn slices(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let z = c.args
+    let nan = 0.0f64 / 0.0f64
+    let n = usize(z[0usize])
+    let p = usize(z[1usize])
+    let (out, e1) = mem.alloc[f64](a, 9usize * (p + 1usize))
+    if e1 != ok { ret nan }
+    let e = tr.aalen_tests(a, z[5usize..5usize + n], z[5usize + n..5usize + 2usize * n], z[5usize + 2usize * n..5usize + 2usize * n + n * p], n, p, usize(z[2usize]), i64(z[3usize]), z[4usize], out)
+    if e != ok { ret nan }
+    let j = usize(c.name[5usize] - 48u8)
+    var s = 0.0f64
+    var i = 0usize
+    while i < p + 1usize {
+        s += out[j * (p + 1usize) + i] * f64(i + 1usize)
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.starts_with(c.name, "slice") { ret slices(a, c) }
     let z = c.args
     let nan = 0.0f64 / 0.0f64
     let n = usize(z[0usize])

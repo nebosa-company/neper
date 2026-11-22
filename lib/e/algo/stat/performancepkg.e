@@ -158,7 +158,7 @@ fn logit_r2(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, w
         sz[i] = 1.0f64
         i += 1usize
     }
-    if fx.binom_glm(a, xc, n, p, y, sz, w, b, false) != ok { ret 0.0f64 / 0.0f64 }
+    if fx.binom_glm(a, xc, n, p, y, sz, w, b, false, w[0usize..0usize]) != ok { ret 0.0f64 / 0.0f64 }
     var s1 = 0.0f64
     var s0 = 0.0f64
     var n1 = 0.0f64
@@ -398,7 +398,7 @@ fn logit_fitted(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usiz
         sz[i] = 1.0f64
         i += 1usize
     }
-    let e = fx.binom_glm(a, xc, n, p, y, sz, w, b, false)
+    let e = fx.binom_glm(a, xc, n, p, y, sz, w, b, false, w[0usize..0usize])
     if e != ok { ret e }
     i = 0usize
     while i < n {
@@ -509,7 +509,7 @@ fn poisson_checks(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: us
         w[i] = 1.0f64
         i += 1usize
     }
-    if fx.pois_glm(a, xc, n, p, y, w, b, false) != ok { ret 0.0f64 / 0.0f64 }
+    if fx.pois_glm(a, xc, n, p, y, w, b, false, w[0usize..0usize]) != ok { ret 0.0f64 / 0.0f64 }
     var chisq = 0.0f64
     var obs0 = 0.0f64
     var pred0 = 0.0f64
@@ -705,7 +705,7 @@ fn poisson_score(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
         w[i] = 1.0f64
         i += 1usize
     }
-    if fx.pois_glm(a, xc, n, p, y, w, b, false) != ok { ret 0.0f64 / 0.0f64 }
+    if fx.pois_glm(a, xc, n, p, y, w, b, false, w[0usize..0usize]) != ok { ret 0.0f64 / 0.0f64 }
     var s1 = 0.0f64
     var s2 = 0.0f64
     var lg = 0.0f64

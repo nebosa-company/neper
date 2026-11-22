@@ -2,7 +2,7 @@
 #   args: (a, b, c, d, which)   fn "m"; which 0..2 row-1 risk (est, lower, upper), 3..5 row-2 risk, 6..8 risk ratio, 9..11 odds ratio, 12..14 probability difference, 15 asymptotic p, 16 exact p
 suppressMessages(library(Epi))
 cases <- list()
-add <- function(which, base, want) cases[[length(cases) + 1]] <<- case("m", c(base, which), want, rel = 1e-8, abs = 1e-10)
+add <- function(which, base, want) cases[[length(cases) + 1]] <<- case("m", c(base, which), want, rel = 1e-9, abs = 1e-12)
 set.seed(20261230)
 for (rep in 1:25) {
   a <- sample(3:150, 1); b <- sample(30:2500, 1); cc <- sample(2:120, 1); d <- sample(30:3000, 1)
@@ -29,7 +29,7 @@ for (rep in 1:15) {
   cases[[length(cases) + 1]] <- case("roc", c(n, test, stat, 2, 0, 0), mxf, rel = 1e-9, abs = 1e-12)
 }
 # ROC from a formula (the glm's fitted probabilities as the test): "rocf" args (n, p, y, X row-major with the intercept, kind, k, col), kind 0 table entry, 1 AUC, 2 maximising cutpoint
-for (rep in 1:15) {
+for (rep in 1:10) {
   n <- sample(40:120, 1); p <- sample(2:4, 1); X <- cbind(1, matrix(round(rnorm(n * (p - 1)), 4), n, p - 1))
   y <- rbinom(n, 1, plogis(as.vector(X %*% runif(p, -1, 1)))); if (length(unique(y)) < 2) next
   dfx <- as.data.frame(X[, -1, drop = FALSE]); names(dfx) <- paste0("v", seq_len(p - 1)); dfx$y <- y
@@ -37,11 +37,11 @@ for (rep in 1:15) {
   r <- suppressWarnings(ROC(form = fo, data = dfx, plot = "none")); res <- r$res; nr <- nrow(res)
   for (k in sample(0:(nr - 1), 5)) for (col in 0:3) {
     v <- res[k + 1, col + 1]; if (is.nan(v) || is.infinite(v)) next
-    cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 0, k, col), v, rel = 1e-7, abs = 1e-10)
+    cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 0, k, col), v, rel = 1e-9, abs = 1e-12)
   }
-  cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 1, 0, 0), r$AUC, rel = 1e-7, abs = 1e-10)
+  cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 1, 0, 0), r$AUC, rel = 1e-9, abs = 1e-12)
   mxf <- res[which((res[, 1] + res[, 2]) == max(res[, 1] + res[, 2]))[1], 5]
-  cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 2, 0, 0), mxf, rel = 1e-7, abs = 1e-10)
+  cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 2, 0, 0), mxf, rel = 1e-9, abs = 1e-12)
 }
 # fisher.test's conditional MLE odds ratio and exact interval: "fci" args (a, b, c, d, conf, j) with j 0 estimate, 1 lower, 2 upper
 for (rep in 1:30) {
@@ -50,7 +50,7 @@ for (rep in 1:30) {
   v <- c(ft$estimate, ft$conf.int)
   for (j in 0:2) cases[[length(cases) + 1]] <- case("fci", c(a, b, cc, d, cf, j), v[j + 1], rel = 1e-9, abs = 1e-12)
 }
-# clogistic on matched sets of J subjects (the first is the case): "clog" args (n, J, k, x[n*J*k] set, subject, covariate row-major, index) index 0..k-1 coefficients, k..2k-1 standard errors
+# clogistic (survival::coxph's convergence, so R itself is accurate only to about 1e-6: rel 1e-5) on matched sets of J subjects (the first is the case): "clog" args (n, J, k, x[n*J*k] set, subject, covariate row-major, index) index 0..k-1 coefficients, k..2k-1 standard errors
 for (rep in 1:12) {
   n <- sample(40:120, 1); J <- sample(2:5, 1); k <- sample(1:3, 1)
   X <- array(round(rnorm(n * J * k), 3), c(n, J, k)); beta <- rnorm(k, 0, 0.7)

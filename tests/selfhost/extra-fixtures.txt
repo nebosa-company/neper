@@ -925,3 +925,12 @@ oracle_polspline_lspec
 oracle_polspline_oldlog
 oracle_spdepnb
 oracle_spdepreg
+oracle_clarabel
+oracle_epiapc
+oracle_epilexis
+oracle_glasso
+oracle_qgraphcor
+oracle_qgraphnet
+oracle_timereg_comprisk
+oracle_timereg_coxaalen
+oracle_timereg_propexcess
