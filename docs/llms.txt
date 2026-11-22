@@ -20,11 +20,11 @@ kernels.
 
 ## Language reference
 
-- [Neper LLM editing card](https://neper.dev/llm-neper-card): the compact grammar and editing rules for agents.
-- [Grammar](https://github.com/nebosa-company/neper/blob/main/docs/grammar.ebnf): the normative EBNF.
-- [Standard library module APIs](https://github.com/nebosa-company/neper/blob/main/docs/module-apis.md): what `e.*` and `x.*` provide.
-- [Design decisions](https://github.com/nebosa-company/neper/blob/main/docs/decisions.md): why the language and toolchain look the way they do.
-- [Diagnostics](https://github.com/nebosa-company/neper/blob/main/docs/diagnostics.md): error identities and repair guidance.
+- [Neper LLM editing card](https://github.com/nebosa-company/neper/blob/master/docs/llm-neper-card.md): the compact grammar and editing rules for agents.
+- [Grammar](https://github.com/nebosa-company/neper/blob/master/docs/grammar.ebnf): the normative EBNF.
+- [Standard library module APIs](https://github.com/nebosa-company/neper/blob/master/docs/module-apis.md): what `e.*` and `x.*` provide.
+- [Design decisions](https://github.com/nebosa-company/neper/blob/master/docs/decisions.md): why the language and toolchain look the way they do.
+- [Diagnostics](https://github.com/nebosa-company/neper/blob/master/docs/diagnostics.md): error identities and repair guidance.
 
 ## Blog
 

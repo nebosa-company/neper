@@ -82,12 +82,12 @@ expected/found values, so a repair can be made from the message alone. The full 
 
 ## Reference documents
 
-- LLM editing card: https://neper.dev/llm-neper-card — compact grammar and editing rules.
-- Grammar (normative EBNF): https://github.com/nebosa-company/neper/blob/main/docs/grammar.ebnf
-- Standard library module APIs: https://github.com/nebosa-company/neper/blob/main/docs/module-apis.md
-- Diagnostics: https://github.com/nebosa-company/neper/blob/main/docs/diagnostics.md
-- Design decisions: https://github.com/nebosa-company/neper/blob/main/docs/decisions.md
-- Tooling: https://github.com/nebosa-company/neper/blob/main/docs/tooling.md
+- LLM editing card: https://github.com/nebosa-company/neper/blob/master/docs/llm-neper-card.md — compact grammar and editing rules.
+- Grammar (normative EBNF): https://github.com/nebosa-company/neper/blob/master/docs/grammar.ebnf
+- Standard library module APIs: https://github.com/nebosa-company/neper/blob/master/docs/module-apis.md
+- Diagnostics: https://github.com/nebosa-company/neper/blob/master/docs/diagnostics.md
+- Design decisions: https://github.com/nebosa-company/neper/blob/master/docs/decisions.md
+- Tooling: https://github.com/nebosa-company/neper/blob/master/docs/tooling.md
 
 ## Blog — engineering notes
 

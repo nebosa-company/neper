@@ -58,7 +58,7 @@
 <main>
   <nav class="site" aria-label="Neper site"><a href="/">Neper</a> · <a href="/get-started.html">Get started</a> · <a href="/install.html">Install</a></nav>
   <h1>The Neper language in brief</h1>
-  <p>This page condenses the essentials. The normative references are <a href="https://github.com/nebosa-company/neper/blob/main/docs/grammar.ebnf">docs/grammar.ebnf</a> (revision 3), <a href="https://github.com/nebosa-company/neper/blob/main/docs/llm-neper-card.md">docs/llm-neper-card.md</a> (the editing card this page is derived from), <a href="https://github.com/nebosa-company/neper/blob/main/docs/spec.md">docs/spec.md</a> and <a href="https://github.com/nebosa-company/neper/blob/main/docs/module-apis.md">docs/module-apis.md</a> (the standard library index).</p>
+  <p>This page condenses the essentials. The normative references are <a href="https://github.com/nebosa-company/neper/blob/master/docs/grammar.ebnf">docs/grammar.ebnf</a> (revision 3), <a href="https://github.com/nebosa-company/neper/blob/master/docs/llm-neper-card.md">docs/llm-neper-card.md</a> (the editing card this page is derived from), <a href="https://github.com/nebosa-company/neper/blob/master/docs/spec.md">docs/spec.md</a> and <a href="https://github.com/nebosa-company/neper/blob/master/docs/module-apis.md">docs/module-apis.md</a> (the standard library index).</p>
 
   <h2>Program shape</h2>
   <pre><code>use e.io
@@ -99,7 +99,7 @@ fn main(a: *mem.Arena, args: []str) -&gt; err {
   <p>A local may not reuse a module-scope function, type or module name (the <code>E-NAME-0003</code> diagnostic). The full keyword list is in the editing card: <code>as break case const continue default defer else enum error extern false fn for if in isize let nil nocheck ok own resource ret shared struct switch true try type undef union unreachable use usize var when while zero</code>.</p>
 
   <h2>Standard library</h2>
-  <p>Everything is in modules under <code>e.</code>: <code>e.io</code>, <code>e.mem</code>, <code>e.str</code>, <code>e.net.http</code>, <code>e.game</code>, <code>e.ui</code>, <code>e.chart</code>, <code>e.algo.*</code>, <code>e.math.*</code> and more. The complete index is <a href="https://github.com/nebosa-company/neper/blob/main/docs/module-apis.md">docs/module-apis.md</a>; the machine-readable summary is <a href="/llms.txt">llms.txt</a>.</p>
+  <p>Everything is in modules under <code>e.</code>: <code>e.io</code>, <code>e.mem</code>, <code>e.str</code>, <code>e.net.http</code>, <code>e.game</code>, <code>e.ui</code>, <code>e.chart</code>, <code>e.algo.*</code>, <code>e.math.*</code> and more. The complete index is <a href="https://github.com/nebosa-company/neper/blob/master/docs/module-apis.md">docs/module-apis.md</a>; the machine-readable summary is <a href="/llms.txt">llms.txt</a>.</p>
 
   <h2>Next</h2>
   <p><a href="/install.html">Install Neper</a>, then read <a href="/get-started.html">the get-started walkthrough</a> and the <a href="/blog/">measured blog posts</a>.</p>
