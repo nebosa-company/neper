@@ -33,6 +33,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "ado") {
+        let grp2 = z[3usize + nr * nc..3usize + nr * nc + nr]
+        let (g2, eg2) = mem.alloc[usize](a, nr)
+        if eg2 != ok { ret nan }
+        var gi2 = 0usize
+        while gi2 < nr {
+            g2[gi2] = usize(grp2[gi2])
+            gi2 += 1usize
+        }
+        let (r2v, ear2) = vg.adonis_r2(a, m, nr, nc, g2)
+        if ear2 != ok { ret nan }
+        ret r2v
+    }
     if str.eq(c.name, "ano") {
         // args: (nr, nc, ngroups), then counts[nr*nc] and group[nr]
         let grp = z[3usize + nr * nc..3usize + nr * nc + nr]

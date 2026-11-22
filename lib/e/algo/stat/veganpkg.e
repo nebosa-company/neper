@@ -103,6 +103,95 @@ fn estimate_r(m: []const f64, nc: usize, r: usize, out: []f64) {
     out[3usize] = s_ace
 }
 
+// vegan::adonis2's R^2 for a single grouping factor (the permutation test needs R's RNG and is not produced
+// here): with the Bray-Curtis distances Gower-centred by G_ij = -0.5 (D^2_ij - rowmean - colmean + grandmean),
+// SS_total is the trace of G and SS_model is sum_k (1/n_k) of the sum over the pairs inside group k, so
+// R^2 = SS_model / SS_total. group holds one class code per site.
+fn adonis_r2(a: *mem.Arena, m: []const f64, nr: usize, nc: usize, group: []const usize) -> (f64, err) {
+    if nr < 2usize { ret (0.0f64 / 0.0f64, ok) }
+    let (dd, e1) = mem.alloc[f64](a, nr * nr)
+    let (gg, e2) = mem.alloc[f64](a, nr * nr)
+    let (rowmean, e3) = mem.alloc[f64](a, nr)
+    if e1 != ok { ret (0.0f64, e1) }
+    if e2 != ok { ret (0.0f64, e2) }
+    if e3 != ok { ret (0.0f64, e3) }
+    var i = 0usize
+    while i < nr {
+        var j = 0usize
+        while j < nr {
+            if i == j {
+                dd[i * nr + j] = 0.0f64
+            } else if i < j {
+                let d = vegdist(m, nr, nc, j, i, 2usize)
+                dd[i * nr + j] = d * d
+                dd[j * nr + i] = d * d
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var grand = 0.0f64
+    i = 0usize
+    while i < nr {
+        var s = 0.0f64
+        var j = 0usize
+        while j < nr {
+            s += dd[i * nr + j]
+            j += 1usize
+        }
+        rowmean[i] = s / f64(nr)
+        grand += s
+        i += 1usize
+    }
+    grand = grand / f64(nr * nr)
+    var ss_tot = 0.0f64
+    i = 0usize
+    while i < nr {
+        var j = 0usize
+        while j < nr {
+            gg[i * nr + j] = 0.0f64 - 0.5f64 * (dd[i * nr + j] - rowmean[i] - rowmean[j] + grand)
+            if i == j { ss_tot += gg[i * nr + j] }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if ss_tot == 0.0f64 { ret (0.0f64 / 0.0f64, ok) }
+    // one pass per group (groups are visited at their first site): its size and the sum of G over its block
+    var ss_mod = 0.0f64
+    var first = 0usize
+    while first < nr {
+        var seen = false
+        var t = 0usize
+        while t < first {
+            if group[t] == group[first] { seen = true }
+            t += 1usize
+        }
+        if !seen {
+            var size = 0.0f64
+            var k = 0usize
+            while k < nr {
+                if group[k] == group[first] { size += 1.0f64 }
+                k += 1usize
+            }
+            var block = 0.0f64
+            var r = 0usize
+            while r < nr {
+                if group[r] == group[first] {
+                    var c = 0usize
+                    while c < nr {
+                        if group[c] == group[first] { block += gg[r * nr + c] }
+                        c += 1usize
+                    }
+                }
+                r += 1usize
+            }
+            if size > 0.0f64 { ss_mod += block / size }
+        }
+        first += 1usize
+    }
+    ret (ss_mod / ss_tot, ok)
+}
+
 // vegan::anosim's R statistic (the permutation p-value needs R's RNG and is not produced here): rank every
 // pairwise Bray-Curtis dissimilarity (average ranks for ties), then R = (mean rank between groups - mean rank
 // within groups) / (n (n - 1) / 4). group holds one class code per site.

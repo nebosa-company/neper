@@ -79,4 +79,15 @@ for (rep in 1:10) {
   an <- anosim(mm, g, permutations = 0)
   cases[[length(cases) + 1]] <- case("ano", c(nn, pp, length(unique(g)), as.vector(t(mm)), g - 1), an$statistic, rel = 1e-12, abs = 1e-14)
 }
+# adonis2: the R2 of a single grouping factor (permutations = 0 keeps the RNG out of the oracle)
+set.seed(20270104)
+for (rep in 1:10) {
+  nn <- sample(6:10, 1); pp <- sample(5:12, 1)
+  mm <- matrix(rpois(nn * pp, 2), nn)
+  g <- rep(seq_len(2), length.out = nn)[sample(nn)]
+  if (length(unique(g)) < 2) next
+  dd2 <- as.dist(vegdist(mm, "bray"))
+  ad <- adonis2(dd2 ~ g, permutations = 0, data = data.frame(g = g))
+  cases[[length(cases) + 1]] <- case("ado", c(nn, pp, length(unique(g)), as.vector(t(mm)), g - 1), ad$R2[1], rel = 1e-10, abs = 1e-13)
+}
 emit("vegan", "vegan", list(cases))
