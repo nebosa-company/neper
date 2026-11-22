@@ -34,10 +34,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var fec = 0usize
     var fpn = 0usize
     var fqn = 0usize
+    var fe_plain = 0usize
+    var fec_plain = 0usize
+    var both = 0usize
     while at < golden.cases.len {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let got = answer(c)
+        if s.eq(c.name, "erf") || s.eq(c.name, "erfc") {
+            var alt = sp.erf_plain(c.args[0usize])
+            if s.eq(c.name, "erfc") { alt = sp.erfc_plain(c.args[0usize]) }
+            let alt_case = oracle.Case { name: c.name, args: c.args, want: c.want, rel: c.rel, abs: c.abs, text: c.text, inputs: c.inputs }
+            if !oracle.agrees(alt, &alt_case) {
+                if s.eq(c.name, "erf") { fe_plain += 1usize }
+                if s.eq(c.name, "erfc") { fec_plain += 1usize }
+            }
+        }
         if !oracle.agrees(got, c) {
             shown += 1usize
             if s.eq(c.name, "lgamma") { flg += 1usize }
@@ -72,6 +84,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let _ = s.push_usize(&b, fpn)
     let _ = s.push(&b, ", qnorm ")
     let _ = s.push_usize(&b, fqn)
+    let _ = s.push(&b, ", plain erf ")
+    let _ = s.push_usize(&b, fe_plain)
+    let _ = s.push(&b, ", plain erf ")
+    let _ = s.push_usize(&b, fec_plain)
     let _ = s.push(&b, ")\n")
     let _ = io.print(s.done(&b))
     if shown > 0usize { os.exit(1) }

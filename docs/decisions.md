@@ -52081,3 +52081,17 @@ Second, and more important: **the oracle's reference for erf/erfc was wrong.** M
 That leaves 77 erf and 250 erfc cases that are genuinely ours, and they are concentrated where the series is longest or where the continued fraction takes over at 5.5. The honest status is that erf/erfc are **not** finished and the fixture stays unregistered; the number to beat is now 327 against the true value rather than 822 against R's.
 
 One measurement caveat to carry forward: the comparison "old code versus MPFR" came back identical to the new code's, which is not credible for a change this size and most likely means the rebuild reused a cached module. The next session should confirm with a forced clean build before trusting either number.
+## D7783 — The in-build A/B settles it: the pair-based erf/erfc is two to four times closer to the true value
+
+D7782 left an anomaly - "old code versus MPFR" came back identical to the new code's - and blamed a possible cached module. The real explanation was the experiment, not the build: stashing a source file and rebuilding while piping the compiler output to `Out-Null` means a silent failure leaves the previous binary in place, so the "old" run may simply have re-run the new code. Neper keeps no artifact cache (`$USERPROFILE` holds only `.neper-cache-key`, and `neper` reads `lib/e/*` from disk with `special.e` in the manifest's input hashes), so caching was never the culprit.
+
+The fix is to stop rebuilding to compare: `e.math.special` now carries `erf_plain` and `erfc_plain` - the previous single-double implementations - beside `erf_pair`/`erf`/`erfc`, and the fixture computes both for every erf and erfc case against the same MPFR expectations, in one binary and one run. The result:
+
+| implementation | erf disagreements | erfc disagreements |
+|---|---|---|
+| pair-based (current) | **77** | **250** |
+| plain double (previous) | **312** | **405** |
+
+So the double-double work is a genuine improvement, four times better on erf and 1.6 times on erfc against the true value - the opposite of what the contaminated comparison suggested. The plain variants stay in the file for now as the reference side of the comparison; they cost nothing at run time (nothing calls them) and they make any future erf change measurable the same way.
+
+Both are still not correctly rounded: 77 and 250 remain, concentrated in the long series and in the continued fraction above 5.5. The fixture stays unregistered until those are zero.

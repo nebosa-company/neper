@@ -356,5 +356,52 @@ fn choose(n: f64, k: f64) -> f64 {
     }
     ret gamma(n + 1.0f64) / (gamma(kk + 1.0f64) * gamma(n - kk + 1.0f64))
 }
+// The previous implementation, kept beside the pair-based one for one A/B in a single build (D7783): the same
+// Taylor series and Lentz fraction, evaluated in plain double. Comparing the two against the same MPFR
+// expectations removes any question of which binary ran.
+fn erf_plain(x: f64) -> f64 {
+    if x == infinity() { ret 1.0f64 }
+    if x == negative_infinity() { ret 0.0f64 - 1.0f64 }
+    if x < 0.0f64 { ret 0.0f64 - erf_plain(0.0f64 - x) }
+    if x < 2.5f64 {
+        var term = x
+        var sum = x
+        var n = 0.0f64
+        var i = 0usize
+        while i < 200usize {
+            n += 1.0f64
+            term = term * (0.0f64 - x * x) / n
+            let add2 = term / (2.0f64 * n + 1.0f64)
+            sum += add2
+            if math.abs[f64](add2) < 1.0e-17f64 * math.abs[f64](sum) { break }
+            i += 1usize
+        }
+        ret 1.1283791670955126f64 * sum
+    }
+    ret 1.0f64 - erfc_plain(x)
+}
 
-
+fn erfc_plain(x: f64) -> f64 {
+    if x == infinity() { ret 0.0f64 }
+    if x == negative_infinity() { ret 2.0f64 }
+    if x < 2.5f64 { ret 1.0f64 - erf_plain(x) }
+    var f = x
+    var c = x
+    var d = 0.0f64
+    var n = 1.0f64
+    var i = 0usize
+    while i < 300usize {
+        let a = n / 2.0f64
+        d = x + a * d
+        if d == 0.0f64 { d = 1.0e-300f64 }
+        d = 1.0f64 / d
+        c = x + a / c
+        if c == 0.0f64 { c = 1.0e-300f64 }
+        let delta = c * d
+        f = f * delta
+        if math.abs[f64](delta - 1.0f64) < 1.0e-16f64 { break }
+        n += 1.0f64
+        i += 1usize
+    }
+    ret math.exp[f64](0.0f64 - x * x) / (1.7724538509055159f64 * f)
+}
