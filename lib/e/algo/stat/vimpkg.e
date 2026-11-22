@@ -301,6 +301,50 @@ fn knn_impute_multi(a: *mem.Arena, x: []const f64, n: usize, p: usize, vars: []c
     ret ok
 }
 
+// VIM::aggr's counts part (plot = FALSE): the number of missing values per column and the missingness
+// patterns of the rows, in `table()` order. A pattern is one bit per column, the first column the most
+// significant, so ascending masks are the lexicographic order VIM gets from its "a:b:c" strings; two rows
+// with the same pattern share one entry. masks and counts hold n entries and receive one per distinct
+// pattern; the number of patterns is returned. Percentages are count * 100 / n, as VIM computes them.
+fn aggr_counts(d: []const f64, n: usize, p: usize, missings: []usize, masks: []u32, counts: []usize) -> usize {
+    var c = 0usize
+    while c < p {
+        missings[c] = 0usize
+        c += 1usize
+    }
+    var patterns = 0usize
+    var i = 0usize
+    while i < n {
+        var mask = 0u32
+        c = 0usize
+        while c < p {
+            if d[i * p + c] != d[i * p + c] {
+                missings[c] += 1usize
+                mask |= 1u32 << u32(p - 1usize - c)
+            }
+            c += 1usize
+        }
+        // insertion into the growing sorted pattern list: ascending mask is table() order
+        var at = 0usize
+        while at < patterns && masks[at] < mask { at += 1usize }
+        if at < patterns && masks[at] == mask {
+            counts[at] += 1usize
+        } else {
+            var q = patterns
+            while q > at {
+                masks[q] = masks[q - 1usize]
+                counts[q] = counts[q - 1usize]
+                q -= 1usize
+            }
+            masks[at] = mask
+            counts[at] = 1usize
+            patterns += 1usize
+        }
+        i += 1usize
+    }
+    ret patterns
+}
+
 // VIM::hotdeck over every column (variable = NULL, ord_var = NULL, domain_var = NULL, imp_var = FALSE):
 // x is n by p row-major with NaN where missing and out receives the filled matrix. The rows are put in
 // ascending order of runif(n) from seed (VIM's RandomVariableForImputationWithHotdeck), and a missing
