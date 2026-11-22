@@ -1,24 +1,26 @@
 // R ape::nj: Saitou and Nei neighbour joining of a distance matrix; the 2n - 3 edge lengths are returned sorted ascending (the tree topology is not exposed), which fixes the total length, the unrooted tree up to leaf labelling and every order-free summary.
 //
 // ape::dist.dna over an alignment with global deletion (pairwise.deletion = FALSE, ape's default): sites
-// where any sequence holds a non-ACGT code are dropped first, the base frequencies are counted over what
-// remains, and each model turns the pairwise counts into a distance (raw, JC69, K80, F81).
+// where any sequence holds a non-ACGT code are dropped first, the base frequencies are counted over the
+// whole matrix (ape calls base.freq before it deletes anything), and each model turns the pairwise counts
+// into a distance (raw, JC69, K80, F81, F84, TN93, T92).
 //
 // Not here: the topology and labels, bionj, upgma, rooting, cophenetic distances, tree comparison, the
-// other dist.dna models (K81, F84, T92, TN93, GG95, LogDet, the indel models), the rest of ape.
+// other dist.dna models (K81, GG95, LogDet, the indel models), the rest of ape.
 
 use e.math
 use e.mem
 
-// a dist.dna model this module does not port (ape's K81, F84, T92, TN93, GG95, LogDet and indel models)
+// a dist.dna model this module does not port (ape's K81, GG95, LogDet and indel models)
 error Unsupported
 
 // The DNA codes this module reads: 0..3 are A, C, G and T and anything else is an unknown base or a gap.
 // A site is kept only when every sequence has 0..3 there (ape's global deletion), and the distance of a
-// pair counts the differing kept sites. model: 0 raw, 1 JC69, 2 K80 (transitions/transversions), 3 F81
-// (with the base frequencies of the kept matrix). out is n by n row-major with a zero diagonal.
+// pair counts the differing kept sites. model: 0 raw, 1 JC69, 2 K80 (transitions/transversions), 3 F81,
+// 4 F84, 5 TN93 and 6 T92, all with the base frequencies of the whole matrix. out is n by n row-major with
+// a zero diagonal.
 fn dist_dna(a: *mem.Arena, x: []const u8, n: usize, l: usize, model: u8, out: []f64) -> err {
-    if model > 3u8 { ret Unsupported }
+    if model > 6u8 { ret Unsupported }
     let (keep, e1) = mem.alloc[bool](a, l)
     if e1 != ok { ret e1 }
     var s = 0usize
@@ -64,12 +66,23 @@ fn dist_dna(a: *mem.Arena, x: []const u8, n: usize, l: usize, model: u8, out: []
         b += 1usize
     }
     var e81 = 1.0f64
+    var pi: [4]f64 = zero
     b = 0usize
     while b < 4usize {
-        let pi = freq[b] / total
-        e81 -= pi * pi
+        pi[b] = freq[b] / total
+        e81 -= pi[b] * pi[b]
         b += 1usize
     }
+    // the base-frequency constants F84 and T92 use, and TN93's three weights
+    let a84 = (pi[0] * pi[2]) / (pi[0] + pi[2]) + (pi[1] * pi[3]) / (pi[1] + pi[3])
+    let b84 = pi[0] * pi[2] + pi[1] * pi[3]
+    let c84 = (pi[0] + pi[2]) * (pi[1] + pi[3])
+    let wg = 2.0f64 * (pi[1] + pi[2]) * (1.0f64 - (pi[1] + pi[2]))
+    let gr = pi[0] + pi[2]
+    let gy = pi[1] + pi[3]
+    let k1 = 2.0f64 * pi[0] * pi[2] / gr
+    let k2 = 2.0f64 * pi[1] * pi[3] / gy
+    let k3 = 2.0f64 * (gr * gy - pi[0] * pi[2] * gy / gr - pi[1] * pi[3] * gr / gy)
     var i = 0usize
     while i < n {
         var j = 0usize
@@ -84,7 +97,8 @@ fn dist_dna(a: *mem.Arena, x: []const u8, n: usize, l: usize, model: u8, out: []
         var j = i + 1usize
         while j < n {
             var diffs = 0usize
-            var transitions = 0usize
+            var ts_purine = 0usize
+            var ts_pyrimidine = 0usize
             s = 0usize
             while s < l {
                 if keep[s] {
@@ -92,27 +106,45 @@ fn dist_dna(a: *mem.Arena, x: []const u8, n: usize, l: usize, model: u8, out: []
                     let bj = x[j * l + s]
                     if ai != bj {
                         diffs += 1usize
-                        // a transition is A<->G or C<->T: both purines (0, 2) or both pyrimidines (1, 3)
-                        let purine_a = ai == 0u8 || ai == 2u8
-                        let purine_b = bj == 0u8 || bj == 2u8
-                        if purine_a == purine_b { transitions += 1usize }
+                        // A<->G and C<->T are the two transition kinds TN93 weighs separately
+                        if (ai == 0u8 && bj == 2u8) || (ai == 2u8 && bj == 0u8) { ts_purine += 1usize }
+                        if (ai == 1u8 && bj == 3u8) || (ai == 3u8 && bj == 1u8) { ts_pyrimidine += 1usize }
                     }
                 }
                 s += 1usize
             }
             let len = f64(kept)
             let nd = f64(diffs)
+            let ns = f64(ts_purine + ts_pyrimidine)
             var d = 0.0f64
             if model == 0u8 {
                 d = nd / len
             } else if model == 1u8 {
                 d = 0.0f64 - 0.75f64 * math.log[f64](1.0f64 - 4.0f64 * (nd / len) / 3.0f64)
             } else if model == 2u8 {
-                let p = f64(transitions) / len
-                let q = (nd - f64(transitions)) / len
+                let p = ns / len
+                let q = (nd - ns) / len
                 d = 0.0f64 - 0.5f64 * math.log[f64]((1.0f64 - 2.0f64 * p - q) * math.sqrt[f64](1.0f64 - 2.0f64 * q))
-            } else {
+            } else if model == 3u8 {
                 d = 0.0f64 - e81 * math.log[f64](1.0f64 - (nd / len) / e81)
+            } else if model == 4u8 {
+                let p = ns / len
+                let q = (nd - ns) / len
+                let f1 = 0.0f64 - 2.0f64 * a84 * math.log[f64](1.0f64 - p / (2.0f64 * a84) - (a84 - b84) * q / (2.0f64 * a84 * c84))
+                let f2 = 2.0f64 * (a84 - b84 - c84) * math.log[f64](1.0f64 - q / (2.0f64 * c84))
+                d = f1 + f2
+            } else if model == 5u8 {
+                let p1 = f64(ts_purine) / len
+                let p2 = f64(ts_pyrimidine) / len
+                let q = (nd - f64(ts_purine) - f64(ts_pyrimidine)) / len
+                let w1 = 1.0f64 - p1 / k1 - q / (2.0f64 * gr)
+                let w2 = 1.0f64 - p2 / k2 - q / (2.0f64 * gy)
+                let w3 = 1.0f64 - q / (2.0f64 * gr * gy)
+                d = 0.0f64 - k1 * math.log[f64](w1) - k2 * math.log[f64](w2) - k3 * math.log[f64](w3)
+            } else {
+                let p = ns / len
+                let q = (nd - ns) / len
+                d = 0.0f64 - wg * math.log[f64](1.0f64 - p / wg - q) - 0.5f64 * (1.0f64 - wg) * math.log[f64](1.0f64 - 2.0f64 * q)
             }
             out[i * n + j] = d
             out[j * n + i] = d

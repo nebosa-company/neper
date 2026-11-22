@@ -33,10 +33,10 @@ for (rep in 1:25) {
   ch <- matrix(letters[pmin(codes, 3L) + 1L], n, L)
   ch[codes == 4L] <- sample(c("n", "-"), sum(codes == 4L), replace = TRUE)
   db <- as.DNAbin(ch)
-  for (model in c("raw", "JC69", "K80", "F81")) {
+  for (model in c("raw", "JC69", "K80", "F81", "F84", "TN93", "T92")) {
     d <- tryCatch(as.matrix(dist.dna(db, model = model, pairwise.deletion = FALSE)), error = function(e) NULL)
     if (is.null(d) || any(!is.finite(d))) next
-    add(c(n, L, match(model, c("raw", "JC69", "K80", "F81")) - 1L, as.vector(t(codes))), wsum(d))
+    add(c(n, L, match(model, c("raw", "JC69", "K80", "F81", "F84", "TN93", "T92")) - 1L, as.vector(t(codes))), wsum(d))
   }
 }
 emit("ape_dna", "ape", list(cases))
