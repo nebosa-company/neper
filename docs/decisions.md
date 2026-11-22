@@ -52124,3 +52124,14 @@ Measured against MPFR, in the same in-build A/B:
 The two middle bands halved as predicted, and the plain-double reference stays at 312 / 405, so the improvement is real and not a reference artefact. The `<1` band grew from 14 to 36 because erfc below 1 still goes through `1 - erf_pair`; that is the next target, and it needs an erfc series of its own rather than the erf one inverted. Ten of the twelve remaining `>5.5` cases are the continued fraction's own last bits.
 
 Still not correctly rounded, still unregistered; 196 of 3943 is the number to beat.
+## D7786 — Closing the libm arc: exp/log/pow exact, nmath measured, erf/erfc accepted at 196
+
+The arc is closed with an explicit decision rather than an open-ended hunt.
+
+**Achieved and registered.** `exp`, `log` and `pow` are correctly rounded in double-double and match R's platform libm bit for bit on all 1712 measured cases; `link/math_libm` is registered in `extra-fixtures.txt` and passes on x64-windows and x64-linux. R's `lgamma`, `gamma`, `pnorm` and `qnorm` - its portable nmath code - already matched exactly and still do, 0 of 3943 in their families.
+
+**Measured and accepted.** `erf` (32 of 400) and `erfc` (164 of 800) stay at **196 of 3943** for now. The measured reason is structural, not a missing constant: erfc needs an O(1) intermediate (erf, or the continued fraction's terms) to carry a result as small as 1e-12, so a 106-bit chain is the ceiling, and the middle bands sit exactly at it. Getting the rest means a third component in the erf/erfc chain, which is a different size of job from the constants and crossovers that produced the last 626-case improvement, and it buys nothing for any row - so it is recorded, not started. `link/math_nmath` stays **unregistered**; it is a measurement fixture whose printed breakdown is the point.
+
+**Two invariants for every future row check.** First, `erf` and `pow` are compared against **MPFR**, never against R's value: R takes those two from the platform C library and is frequently a ulp off (233 of 400 erf cases), so an R-referenced fixture there manufactures false failures - the same mistake cost a whole round with `pow` in D7777. Second, L306's fitdistr tolerance stays at 1e-7 with the numerical-Hessian reason (D7779): 12 failures at 1e-11, 3 at 1e-8, 0 at 1e-7, and the residual is R's own path, not this runtime's arithmetic.
+
+What the arc bought the backlog is therefore a sharper claim, not a higher score: any remaining tolerance above ~1e-13 in a fixture that goes through exp, log, pow, lgamma or pnorm is now attributable to R's side, and the rows it does not explain are the ones worth re-timing.
