@@ -39,14 +39,14 @@ L376	library	0.9	1857	gam: backfitting generalized additive models	Partial (2026
 L393	library	0.7	1462	ordinal: cumulative link models	Partial (2026-11-21, merged 0de9a3a3a;
 L415	library	0.6	1272	marginaleffects: predictions, slopes and comparisons	Partial (2026-11-21, merged b1d65869c;
 L416	library	0.4	1836	polspline: polynomial spline models	Partial (2026-11-22, merged 25645e1ce;
-L434	library	0.1	735	qgraph: network estimation	Partial (D6646).
-L436	library	0.1	756	MatchIt: matching for causal inference	Partial (D6638).
+L434	library	0.9	898	qgraph: network estimation	Partial (2026-11-22, merged 731d89a22;
+L436	library	0.6	1840	MatchIt: matching for causal inference	Partial (2026-11-22, merged 731d89a22;
 L456	library	0.15	1322	mlogit: discrete-choice models	D7367: Wald tests of conditional logit coefficients (statistic and p value from the covariance matrix) equal to mlogit.
 L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L488	library	0.5	1613	drc: dose-response models	Partial (2026-11-22, merged 686357d41;
-L489	library	0.15	799	osqp and clarabel: quadratic and conic solvers	Partial (D6643).
+L489	library	0.8	1502	osqp and clarabel: quadratic and conic solvers	Partial (2026-11-22, merged 731d89a22;
 L512	library	0.15	1248	poLCA: latent class analysis	D7345: latent class regression with covariates (log-likelihood, response probabilities, coefficient magnitudes) equal to poLCA.
-L513	library	0.15	704	Epi: epidemiology tools	Partial (D6412, D7253, D7254, D7255 the conditional MLE odds ratio and its exact interval, D7256 clogistic on matched sets).
+L513	library	0.7	1001	Epi: epidemiology tools	Partial (2026-11-22, merged 731d89a22;
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
 L304	library	0.9	1510	haven: SAS, SPSS and Stata file formats	Partial (2026-11-21, merged 0de9a3a3a;
 L315	library	0.1	744	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix);
@@ -62,7 +62,7 @@ L463	library	0.5	1555	actuar: actuarial science	Partial (2026-11-22, merged 41f8
 L467	library	0.6	1507	hetGP: heteroskedastic Gaussian processes	Partial (2026-11-22, merged 25645e1ce;
 L514	library	0.5	1285	copula: dependence models	Partial (2026-11-22, merged 41f86e864;
 L311	library	0.14	3155	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	D7366: tmerge event() equal to survival.
-L490	library	0.15	657	timereg: Aalen additive and Cox-Aalen hazard models	Partial (D6641).
+L490	library	0.6	1615	timereg: Aalen additive and Cox-Aalen hazard models	Partial (2026-11-22, merged 731d89a22;
 L491	library	0.15	673	riskRegression: risk prediction scoring	Partial (D6642).
 L440	library	0.15	855	flexsurv and rstpm2: flexible parametric survival models	Partial (D6640).
 L312	library	0.4	2208	psych: reliability, factor analysis and correlation tools	D7342: fa.parallel (principal components, resampled and simulated eigenvalues under set.seed) equal to psych.

@@ -51865,3 +51865,7 @@ Each closed item passed an acceptance verifier and its fixtures on Windows in th
 ## D7739 — L345 FactoMineR, L372 spdep, L435 sna and L455 geometry closed
 
 Each closed item passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. Partial items stay open with their gaps in the queue evidence.
+
+## D7740 — L434 qgraph, L436 MatchIt, L489 osqp, L513 Epi and L490 timereg advanced
+
+Each closed item passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. Partial items stay open with their gaps in the queue evidence.
