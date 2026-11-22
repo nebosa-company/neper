@@ -52135,3 +52135,14 @@ The arc is closed with an explicit decision rather than an open-ended hunt.
 **Two invariants for every future row check.** First, `erf` and `pow` are compared against **MPFR**, never against R's value: R takes those two from the platform C library and is frequently a ulp off (233 of 400 erf cases), so an R-referenced fixture there manufactures false failures - the same mistake cost a whole round with `pow` in D7777. Second, L306's fitdistr tolerance stays at 1e-7 with the numerical-Hessian reason (D7779): 12 failures at 1e-11, 3 at 1e-8, 0 at 1e-7, and the residual is R's own path, not this runtime's arithmetic.
 
 What the arc bought the backlog is therefore a sharper claim, not a higher score: any remaining tolerance above ~1e-13 in a fixture that goes through exp, log, pow, lgamma or pnorm is now attributable to R's side, and the rows it does not explain are the ones worth re-timing.
+## D7787 — special.e lost six nmath functions to an over-wide replacement, and a row fixture caught it
+
+Restoring the record first: when `erf`/`erfc` were rewritten, the replacement span in `e.math.special` ran from the old erf comment to the "regularised lower incomplete gamma" marker, and it silently deleted `normal_cdf`, `normal_quantile`, `t_cdf`, `chi_squared_cdf`, `f_cdf` and `choose` along with them. Nothing in the libm or nmath fixtures uses those, so four rounds of measurement said the file was fine; `oracle_robustbase_reg` caught it the moment it was rebuilt, with a plain compile error (`special has no member normal_quantile`). The functions are restored from the commit before the rewrite and the file now lists them all, with the new erf/erfc beside them.
+
+The lesson is the one this arc keeps teaching from different angles: the fixture that catches a regression is usually not the one on the desk. A module edited by span replacement needs a *consumer* rebuilt, not just its own oracle.
+
+## D7788 — L338's nlrob exp models tightened from 1e-4 to 1e-5, and no further
+
+With `exp` correctly rounded, the tolerance was re-timed on `oracle_robustbase_reg` (1126 cases): 1e-4 passes, `1e-7` fails 12, `1e-6` fails 2, `1e-5` passes. So the row's tolerance is **1e-5**, a tenfold tightening, and the evidence now records the ladder rather than the old single reason.
+
+It stops at 1e-5 for the measured reason the old note guessed at: `nlrob`'s forward-difference gradient (step 1.5e-8) amplifies last-bit differences in the log-likelihood into the fit, so the same amplification that pinned MASS `fitdistr` at 1e-7 (D7779) pins this at 1e-5 - with the difference that here it could be measured ten times tighter than before, because the runtime side is no longer contributing. The exp-free models (2 and 4) still agree at 1e-9, which is the control that shows the residual is the gradient and not the exp.

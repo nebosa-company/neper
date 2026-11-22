@@ -54,7 +54,7 @@ for (rep in 1:48) {
   m <- 1 + (rep - 1) %% 4; n <- sample(20:50, 1); x <- if (m == 2) round(runif(n, 0.2, 5), 3) else round(runif(n, 0, 2), 3)
   tr <- list(c(1.5, 0.8), c(4, 1.2), c(1, 2, 1.3), c(3, 1.5))[[m]]; np <- length(tr)
   mu <- switch(m, tr[1] * exp(tr[2] * x), tr[1] * x / (tr[2] + x), tr[1] + tr[2] * exp(-tr[3] * x), tr[1] / (1 + tr[2] * x * x))
-  tl <- if (m %in% c(1, 3)) 1e-4 else 1e-9
+  tl <- if (m %in% c(1, 3)) 1e-5 else 1e-9
   y <- round(mu + rnorm(n, 0, 0.15), 4); o <- sample(n, max(2, n %/% 10)); y[o] <- y[o] + sample(c(-1, 1), length(o), TRUE) * runif(length(o), 1, 3)
   st <- tr * (1 + c(0.15, -0.1, 0.1)[seq_len(np)]); cc <- c(1.345, 1.345, 1.0, 2.0)[1 + (rep %/% 4) %% 4]
   df <- data.frame(x = x, y = y)
