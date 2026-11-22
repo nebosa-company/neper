@@ -57,6 +57,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "d_14") { method = 14usize }
     if str.eq(c.name, "d_15") { method = 15usize }
     if str.eq(c.name, "d_16") { method = 16usize }
+    if str.eq(c.name, "d_17") { method = 17usize }
+    if method == 17usize {
+        // mahalanobis whitens the whole matrix, so the distance matrix is built once
+        let (md, e17) = mem.alloc[f64](a, nr * nr)
+        if e17 != ok { ret nan }
+        if vg.mahalanobis_dist(a, m, nr, nc, md) != ok { ret nan }
+        var pos = 1usize
+        var cb = 0usize
+        while cb < nr {
+            var ra = cb + 1usize
+            while ra < nr {
+                s += md[ra * nr + cb] * f64(pos)
+                pos += 1usize
+                ra += 1usize
+            }
+            cb += 1usize
+        }
+        ret s
+    }
     // R lists the lower triangle by columns
     var pos = 1usize
     var cb = 0usize

@@ -2,8 +2,10 @@
 //
 // Not here: ordination, ACE, Fisher alpha, the remaining vegdist methods, permutation tests and the community-ecology tests.
 
+use e.algo.linalg.lapack_syevr as sy
 use e.math
 use e.math.nmath as nm
+use e.mem
 
 // diversity of row r: out = Shannon (natural log), Simpson 1 - sum p^2, inverse Simpson, Pielou evenness, richness, Chao1 (bias-corrected)
 fn diversity(m: []const f64, nr: usize, nc: usize, r: usize, out: []f64) {
@@ -83,6 +85,116 @@ fn hyper_cdf(q: f64, m: f64, n: f64, k: f64) -> f64 {
         i += 1.0f64
     }
     ret sum
+}
+
+// vegan's vegdist(method = "mahalanobis"): the data are centred and whitened by the inverse square root of
+// their covariance, then Euclidean distance is taken between the whitened rows. The square root comes from
+// eigen(s2, symmetric = TRUE), keeping the eigenvalues above max(tol, tol * largest) with tol =
+// sqrt(.Machine$double.eps); only z z^T is used, so eigenvector signs do not matter. out is nr by nr row-major.
+fn mahalanobis_dist(a: *mem.Arena, m: []const f64, nr: usize, nc: usize, out: []f64) -> err {
+    let (centre, e1) = mem.alloc[f64](a, nc)
+    let (s, e2) = mem.alloc[f64](a, nc * nc)
+    let (w, e3) = mem.alloc[f64](a, nc)
+    let (z, e4) = mem.alloc[f64](a, nc * nc)
+    let (sis, e5) = mem.alloc[f64](a, nc * nc)
+    let (y, e6) = mem.alloc[f64](a, nr * nc)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    var j = 0usize
+    while j < nc {
+        var mean = 0.0f64
+        var i = 0usize
+        while i < nr {
+            mean += m[i * nc + j]
+            i += 1usize
+        }
+        centre[j] = mean / f64(nr)
+        j += 1usize
+    }
+    // the covariance, divided by nr - 1 (R's cov)
+    var c = 0usize
+    while c < nc {
+        var r = 0usize
+        while r < nc {
+            var sum = 0.0f64
+            var i = 0usize
+            while i < nr {
+                sum += (m[i * nc + c] - centre[c]) * (m[i * nc + r] - centre[r])
+                i += 1usize
+            }
+            s[c * nc + r] = sum / f64(nr - 1usize)
+            r += 1usize
+        }
+        c += 1usize
+    }
+    if sy.dsyevr_all(a, s, nc, w, z) != ok { ret mem.Full }
+    let tol = 1.4901161193847656e-8f64
+    var lam_max = 0.0f64
+    j = 0usize
+    while j < nc {
+        if w[j] > lam_max { lam_max = w[j] }
+        j += 1usize
+    }
+    var cut = tol
+    if tol * lam_max > cut { cut = tol * lam_max }
+    j = 0usize
+    while j < nc * nc {
+        sis[j] = 0.0f64
+        j += 1usize
+    }
+    var k = 0usize
+    while k < nc {
+        if w[k] > cut {
+            let scale = 1.0f64 / math.sqrt[f64](w[k])
+            var r = 0usize
+            while r < nc {
+                var c2 = 0usize
+                while c2 < nc {
+                    sis[r * nc + c2] += z[k * nc + r] * z[k * nc + c2] * scale
+                    c2 += 1usize
+                }
+                r += 1usize
+            }
+        }
+        k += 1usize
+    }
+    // y = centred data times the inverse square root
+    var i = 0usize
+    while i < nr {
+        var q = 0usize
+        while q < nc {
+            var sum = 0.0f64
+            var jj = 0usize
+            while jj < nc {
+                sum += (m[i * nc + jj] - centre[jj]) * sis[q * nc + jj]
+                jj += 1usize
+            }
+            y[i * nc + q] = sum
+            q += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < nr {
+        var r = 0usize
+        while r < nr {
+            var sum = 0.0f64
+            var q = 0usize
+            while q < nc {
+                let d = y[i * nc + q] - y[r * nc + q]
+                sum += d * d
+                q += 1usize
+            }
+            out[i * nr + r] = math.sqrt[f64](sum)
+            r += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
 }
 
 // vegdist between rows a and b (morisita is clipped at 0 as vegan does, gower divides by the non-constant columns); method 0 euclidean, 1 manhattan, 2 bray, 3 kulczynski, 4 canberra, 5 gower, 6 horn, 7 morisita, 8 jaccard, 9 binary jaccard (binary bray gives the same ordering as 2B/(1+B)), 10 altGower (|a - b| averaged over the sites where not both are zero), 11 cao (the entropy term of Cao et al. with values below 0.1 floored, natural log), 12 clark (((a - b)/(a + b))^2 averaged over the sites where not both are zero, square rooted)
