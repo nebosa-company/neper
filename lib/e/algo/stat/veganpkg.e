@@ -41,6 +41,67 @@ fn diversity(m: []const f64, nr: usize, nc: usize, r: usize, out: []f64) {
     out[5usize] = s + f1 * (f1 - 1.0f64) / (2.0f64 * (f2 + 1.0f64))
 }
 
+// vegan::estimateR's abundance-based rows for row r: out = S.obs, S.chao1, se.chao1, S.ACE. The rare
+// species are the ones with abundance at most 10 (vegan's threshold), and a[i] counts the species seen
+// exactly i times. se.ACE needs the delta-method gradient over the ten abundance classes and is not ported.
+fn estimate_r(m: []const f64, nc: usize, r: usize, out: []f64) {
+    var a: [11]f64 = zero
+    var s_obs = 0.0f64
+    var s_rare = 0.0f64
+    var s_abund = 0.0f64
+    var n_rare = 0.0f64
+    var j = 0usize
+    while j < nc {
+        let x = m[r * nc + j]
+        if x > 0.0f64 {
+            s_obs += 1.0f64
+            if x <= 10.0f64 {
+                s_rare += 1.0f64
+                n_rare += x
+                let k = usize(x)
+                if k <= 10usize { a[k] += 1.0f64 }
+            } else {
+                s_abund += 1.0f64
+            }
+        }
+        j += 1usize
+    }
+    // Chao1 with the bias correction (SSC = 1)
+    let a1 = a[1usize]
+    let a2 = a[2usize]
+    let chao1 = s_obs + a1 * (a1 - 1.0f64) / (a2 + 1.0f64) / 2.0f64
+    // its standard error, vegan's closed form
+    let inner1 = (0.0f64 - (a2 * a2) + (0.0f64 - 2.0f64 * a2 - a1) * a1) * a1
+    let inner2 = (0.0f64 - 1.0f64 + (0.0f64 - 4.0f64 + (0.0f64 - 5.0f64 - 2.0f64 * a2) * a2) * a2 +
+        (0.0f64 - 2.0f64 + (0.0f64 - 1.0f64 + (2.0f64 * a2 + 2.0f64) * a2) * a2 +
+            (4.0f64 + (6.0f64 + 4.0f64 * a2) * a2 + a1 * a2) * a1) * a1) * chao1
+    var se_chao1 = 0.0f64 / 0.0f64
+    if chao1 != 0.0f64 {
+        se_chao1 = a1 * (inner1 + inner2) / 4.0f64 / math.pow[f64](a2 + 1.0f64, 4.0f64) / chao1
+        // a row with no singletons has a variance of exactly zero, which is a real answer and not a failure
+        if se_chao1 < 0.0f64 { se_chao1 = 0.0f64 / 0.0f64 } else { se_chao1 = math.sqrt[f64](se_chao1) }
+    }
+    // ACE, with C.ace the sample coverage of the rare species
+    var c_ace = 0.0f64 / 0.0f64
+    var s_ace = 0.0f64 / 0.0f64
+    if n_rare > 1.0f64 {
+        c_ace = 1.0f64 - a1 / n_rare
+        var sum_i = 0.0f64
+        var i = 1usize
+        while i <= 10usize {
+            sum_i += f64(i) * f64(i - 1usize) * a[i]
+            i += 1usize
+        }
+        var gam = sum_i * s_rare / (c_ace * n_rare * (n_rare - 1.0f64)) - 1.0f64
+        if gam < 0.0f64 { gam = 0.0f64 }
+        s_ace = s_abund + s_rare / c_ace + gam * a1 / c_ace
+    }
+    out[0usize] = s_obs
+    out[1usize] = chao1
+    out[2usize] = se_chao1
+    out[3usize] = s_ace
+}
+
 // vegan rarefy: expected richness of a subsample of size n from row r
 fn rarefy(m: []const f64, nc: usize, r: usize, n: f64) -> f64 {
     var tot = 0.0f64

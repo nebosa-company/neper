@@ -33,6 +33,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "er_0") || str.eq(c.name, "er_1") || str.eq(c.name, "er_2") || str.eq(c.name, "er_3") {
+        var slot2 = 0usize
+        if str.eq(c.name, "er_1") { slot2 = 1usize }
+        if str.eq(c.name, "er_2") { slot2 = 2usize }
+        if str.eq(c.name, "er_3") { slot2 = 3usize }
+        let (er, eer) = mem.alloc[f64](a, 4usize)
+        if eer != ok { ret nan }
+        while r < nr {
+            vg.estimate_r(m, nc, r, er)
+            s += er[slot2] * f64(r + 1usize)
+            r += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "acc_0") || str.eq(c.name, "acc_1") || str.eq(c.name, "acc_2") {
         var method = 0usize
         if str.eq(c.name, "acc_1") { method = 1usize }
