@@ -102,6 +102,45 @@ fn estimate_r(m: []const f64, nc: usize, r: usize, out: []f64) {
     out[3usize] = s_ace
 }
 
+// vegan::fisher.alpha: the alpha of the log-series, the root of alpha * ln(1 + N/alpha) = S with S the
+// species count and N the individual count of row r (0 when the row is empty). R's fisherfit calls uniroot
+// with its default tolerance (about 1e-4), so the oracle solves the same equation more precisely instead of
+// comparing against the loosely converged value (D7770); bisection is used because the left side is
+// monotone increasing in alpha. A row where every species is a singleton (S == N) has no root - R warns
+// that alpha is arbitrarily high there - so the oracle skips the draws that contain one.
+fn fisher_alpha(m: []const f64, nc: usize, r: usize) -> f64 {
+    var s = 0.0f64
+    var n = 0.0f64
+    var j = 0usize
+    while j < nc {
+        let x = m[r * nc + j]
+        if x > 0.0f64 {
+            s += 1.0f64
+            n += x
+        }
+        j += 1usize
+    }
+    if s <= 0.0f64 { ret 0.0f64 }
+    var lo = 0.1f64
+    var hi = 50.0f64
+    var f_hi = hi * math.log[f64](1.0f64 + n / hi) - s
+    var guard = 0usize
+    while f_hi < 0.0f64 && guard < 60usize {
+        hi = hi * 2.0f64
+        f_hi = hi * math.log[f64](1.0f64 + n / hi) - s
+        guard += 1usize
+    }
+    var i = 0usize
+    while i < 200usize {
+        let mid = 0.5f64 * (lo + hi)
+        let f_mid = mid * math.log[f64](1.0f64 + n / mid) - s
+        if f_mid < 0.0f64 { lo = mid } else { hi = mid }
+        if hi - lo <= 1.0e-15f64 * hi { break }
+        i += 1usize
+    }
+    ret 0.5f64 * (lo + hi)
+}
+
 // vegan rarefy: expected richness of a subsample of size n from row r
 fn rarefy(m: []const f64, nc: usize, r: usize, n: f64) -> f64 {
     var tot = 0.0f64

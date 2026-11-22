@@ -28,6 +28,17 @@ for (rep in 1:20) {
   add("d_15", a, ws(as.vector(vegdist(m, "mountford"))))
   add("d_16", a, ws(as.vector(vegdist(m, "binomial"))))
   add("d_17", a, ws(as.vector(vegdist(m, "mahalanobis"))))
+  # fisher.alpha: solve the log-series equation precisely (fisherfit stops at uniroot's 1e-4 default)
+  # only draws where every row has at least one species with abundance above 1: with S == N (all
+  # singletons) the log-series equation has no root and vegan answers "arbitrarily high"
+  if (all(rowSums(m) > rowSums(m > 0))) {
+    fa <- apply(m, 1, function(v) {
+      S <- sum(v > 0); N <- sum(v)
+      if (S == 0) return(0)
+      uniroot(function(a) a * log(1 + N/a) - S, c(0.1, 50), extendInt = "upX", tol = 1e-13)$root
+    })
+    add("fa", a, ws(fa))
+  }
   est <- estimateR(m)
   add("er_0", a, ws(est["S.obs", ]))
   add("er_1", a, ws(est["S.chao1", ]))

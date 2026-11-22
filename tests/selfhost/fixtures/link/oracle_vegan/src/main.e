@@ -33,6 +33,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "fa") {
+        var r2 = 0usize
+        while r2 < nr {
+            s += vg.fisher_alpha(m, nc, r2) * f64(r2 + 1usize)
+            r2 += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "er_0") || str.eq(c.name, "er_1") || str.eq(c.name, "er_2") || str.eq(c.name, "er_3") {
         var slot2 = 0usize
         if str.eq(c.name, "er_1") { slot2 = 1usize }
