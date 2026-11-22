@@ -175,3 +175,40 @@ fn congru_next(state: *u64, modulus: u64, mult: u64, incr: u64) -> f64 {
     *state = x
     ret f64(x) / f64(modulus)
 }
+
+// qrng::korobov's generator vector when one value is given: a, a^2, ..., a^(d-1) mod n (qrng's
+// generator^(0:(d-1)) %% n), a value per dimension.
+fn korobov_generator(base: u64, n: u64, d: usize, out: []u64) -> err {
+    if n == 0u64 { ret Invalid }
+    if out.len < d { ret TooSmall }
+    var x = 1u64 % n
+    var j = 0usize
+    while j < d {
+        out[j] = x
+        x = (x * (base % n)) % n
+        j += 1usize
+    }
+    ret ok
+}
+
+// qrng::korobov with randomize = "none": out (n by d row-major) receives the sequence. Each column is a
+// running sum of generator[j] / n that wraps by one when it passes 1, exactly as qrng's C does, so a point
+// is (index * generator[j] mod n) / n only up to the accumulation's rounding - the wrap is `> 1`, not `>=`.
+fn korobov_sequence(n: u64, generator: []const u64, d: usize, out: []f64) -> err {
+    if n < 2u64 { ret Invalid }
+    if generator.len < d || out.len < usize(n) * d { ret TooSmall }
+    var j = 0usize
+    while j < d {
+        let aux = f64(generator[j]) / f64(n)
+        out[j] = 0.0f64
+        var i = 1usize
+        while u64(i) < n {
+            var v = out[(i - 1usize) * d + j] + aux
+            if v > 1.0f64 { v = v - 1.0f64 }
+            out[i * d + j] = v
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
