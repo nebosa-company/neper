@@ -33,6 +33,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "proc_0") || str.eq(c.name, "proc_1") {
+        // args: (n, k, kind), then x[n*k] centred-free input and y[n*k]
+        let kk = usize(z[1usize])
+        let kind = usize(z[2usize])
+        let xm = z[3usize..3usize + nr * kk]
+        let ym = z[3usize + nr * kk..3usize + 2usize * nr * kk]
+        var scale = 0.0f64
+        let (ss, epr) = vg.procrustes_fit(a, xm, ym, nr, kk, &scale)
+        if epr != ok { ret nan }
+        if kind == 0usize { ret scale }
+        ret ss
+    }
     if str.eq(c.name, "fa") {
         var r2 = 0usize
         while r2 < nr {

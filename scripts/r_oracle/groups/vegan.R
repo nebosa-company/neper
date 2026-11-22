@@ -48,4 +48,14 @@ for (rep in 1:20) {
   add("acc_1", a, ws(specaccum(m, "exact")$richness))
   add("acc_2", a, ws(specaccum(m, "coleman")$richness))
 }
+# procrustes: scale c and residual sum of squares on two random matrices
+set.seed(20270101)
+for (rep in 1:10) {
+  nn <- sample(6:12, 1); kk <- sample(2:4, 1)
+  X <- matrix(rnorm(nn * kk), nn); Y <- matrix(rnorm(nn * kk), nn)
+  pr <- procrustes(X, Y)
+  prargs <- c(nn, kk, as.vector(t(X)), as.vector(t(Y)))
+  cases[[length(cases) + 1]] <- case("proc_0", c(nn, kk, 0, as.vector(t(X)), as.vector(t(Y))), pr$scale, rel = 1e-10, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("proc_1", c(nn, kk, 1, as.vector(t(X)), as.vector(t(Y))), pr$ss, rel = 1e-10, abs = 1e-12)
+}
 emit("vegan", "vegan", list(cases))

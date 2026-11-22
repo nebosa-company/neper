@@ -2,6 +2,7 @@
 //
 // Not here: ordination, ACE, Fisher alpha, the remaining vegdist methods, permutation tests and the community-ecology tests.
 
+use e.algo.linalg.decomp as dc
 use e.algo.linalg.lapack_syevr as sy
 use e.math
 use e.math.nmath as nm
@@ -100,6 +101,77 @@ fn estimate_r(m: []const f64, nc: usize, r: usize, out: []f64) {
     out[1usize] = chao1
     out[2usize] = se_chao1
     out[3usize] = s_ace
+}
+
+// vegan::procrustes with its defaults (asymmetric, scale = TRUE) on two n by k matrices: both are centred by
+// column, the SVD of X'Y gives the singular values d, the isotropic scale is c = sum(d)/trace(Y) with
+// trace(M) = sum(M^2), and the residual sum of squares is trace(X) + c^2 trace(Y) - 2 c sum(d), clamped at 0.
+// Returns ss and, through scale_out, the scale c. The rotation and the rotated scores follow from the same
+// SVD and are not returned here.
+fn procrustes_fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, scale_out: *f64) -> (f64, err) {
+    let (cx, e1) = mem.alloc[f64](a, n * k)
+    let (cy, e2) = mem.alloc[f64](a, n * k)
+    let (cross, e3) = mem.alloc[f64](a, k * k)
+    if e1 != ok { ret (0.0f64, e1) }
+    if e2 != ok { ret (0.0f64, e2) }
+    if e3 != ok { ret (0.0f64, e3) }
+    var j = 0usize
+    while j < k {
+        var mx = 0.0f64
+        var my = 0.0f64
+        var i = 0usize
+        while i < n {
+            mx += x[i * k + j]
+            my += y[i * k + j]
+            i += 1usize
+        }
+        mx = mx / f64(n)
+        my = my / f64(n)
+        i = 0usize
+        while i < n {
+            cx[i * k + j] = x[i * k + j] - mx
+            cy[i * k + j] = y[i * k + j] - my
+            i += 1usize
+        }
+        j += 1usize
+    }
+    var r = 0usize
+    while r < k {
+        var c = 0usize
+        while c < k {
+            var sum = 0.0f64
+            var i = 0usize
+            while i < n {
+                sum += cx[i * k + r] * cy[i * k + c]
+                i += 1usize
+            }
+            cross[r * k + c] = sum
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let (sv, e4) = dc.jacobi_svd(a, cross, k, k)
+    if e4 != ok { ret (0.0f64, e4) }
+    var sum_d = 0.0f64
+    var i = 0usize
+    while i < sv.k {
+        sum_d += sv.d[i]
+        i += 1usize
+    }
+    var tr_x = 0.0f64
+    var tr_y = 0.0f64
+    i = 0usize
+    while i < n * k {
+        tr_x += cx[i] * cx[i]
+        tr_y += cy[i] * cy[i]
+        i += 1usize
+    }
+    var scale = 0.0f64
+    if tr_y != 0.0f64 { scale = sum_d / tr_y }
+    var ss = tr_x + scale * scale * tr_y - 2.0f64 * scale * sum_d
+    if ss < 0.0f64 { ss = 0.0f64 }
+    *scale_out = scale
+    ret (ss, ok)
 }
 
 // vegan::fisher.alpha: the alpha of the log-series, the root of alpha * ln(1 + N/alpha) = S with S the
