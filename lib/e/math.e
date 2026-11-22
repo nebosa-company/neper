@@ -733,10 +733,12 @@ fn log_dd(x: f64) -> (f64, f64) {
         e += 1i64
     }
     let nh = m - 1.0f64
-    let dh = m + 1.0f64
+    // m + 1 is NOT exact for m in [0.7, 1.42]: it needs one bit more than the significand holds, so the
+    // denominator itself is a pair and its rounding error must be carried into the residual (D7778)
+    let (dh, dhl) = two_sum(m, 1.0f64)
     let rh = nh / dh
     let (ph, pe) = two_prod(rh, dh)
-    let rl = (nh - ph - pe) / dh
+    let rl = ((nh - ph - pe) - rh * dhl) / dh
     let (sh, sl) = log_series(rh, rl)
     let (lh, ll) = two_sum(f64(e) * k(LN2_HI), f64(e) * k(LN2_LO))
     let (yh, yl) = dd_add(lh, ll, sh, sl)
@@ -1770,7 +1772,7 @@ fn pow64(x: f64, y: f64) -> f64 {
     ret s * with_high_word(z, u32(jz))
 }
 
-fn pow[F: type](x: F, y: F) -> F { ret F(pow64(f64(x), f64(y))) }
+fn pow[F: type](x: F, y: F) -> F { ret F(pow_cr(f64(x), f64(y))) }
 
 
 // --- Saturating integer arithmetic (#837), generic over every integer type.

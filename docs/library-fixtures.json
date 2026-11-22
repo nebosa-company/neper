@@ -2824,6 +2824,7 @@
     "math_fft_filter_plan",
     "math_filter",
     "math_inverse",
+    "math_libm",
     "math_mc",
     "math_mcmc",
     "math_narrow",
