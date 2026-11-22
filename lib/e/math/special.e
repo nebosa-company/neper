@@ -69,35 +69,66 @@ fn gamma(x: f64) -> f64 {
     ret math.exp[f64](lgamma(x))
 }
 
-// The error function, by the erfc continued fraction for |x| >= 2.5 and the
-// Taylor series below (Abramowitz & Stegun 7.1.5 / 7.1.14).
+// (ah, al) / d for a single double divisor: the quotient is corrected by its own product residual (D7782).
+fn dd_div_d(ah: f64, al: f64, d: f64) -> (f64, f64) {
+    let q = ah / d
+    let (p, e) = math.two_prod(q, d)
+    let (h, l) = math.two_sum(q, ((ah - p) - e + al) / d)
+    ret (h, l)
+}
+
+// erf(x) as a double-double pair, by its Taylor series: the recurrence is carried in the pair because a
+// single-double recurrence loses the bits that 1 - erf needs to be accurate for erfc (D7782).
+fn erf_pair(x: f64) -> (f64, f64) {
+    let (x2h, x2l) = math.two_prod(x, x)
+    var th = x
+    var tl = 0.0f64
+    var sh = x
+    var sl = 0.0f64
+    var k = 0usize
+    while k < 200usize {
+        // t_{k+1} = -t_k x^2 (2k+1) / ((k+1)(2k+3))
+        let (mh, ml) = math.dd_mul(th, tl, 0.0f64 - x2h, 0.0f64 - x2l)
+        let num = 2.0f64 * f64(k) + 1.0f64
+        let den = (f64(k) + 1.0f64) * (2.0f64 * f64(k) + 3.0f64)
+        let (m2h, m2l) = math.dd_mul(mh, ml, num, 0.0f64)
+        let (t2h, t2l) = dd_div_d(m2h, m2l, den)
+        th = t2h
+        tl = t2l
+        let (nh, nl) = math.dd_add(sh, sl, th, tl)
+        sh = nh
+        sl = nl
+        if math.abs[f64](th) < 1.0e-30f64 { break }
+        k += 1usize
+    }
+    let (eh, el) = math.dd_mul(sh, sl, 1.1283791670955126f64, 0.0f64)
+    ret (eh, el)
+}
+
+// The error function: the series below 1.5, and 1 - erfc above (where erfc is already small, so no digits
+// are lost by the subtraction).
 fn erf(x: f64) -> f64 {
     if x == infinity() { ret 1.0f64 }
     if x == negative_infinity() { ret 0.0f64 - 1.0f64 }
     if x < 0.0f64 { ret 0.0f64 - erf(0.0f64 - x) }
-    if x < 2.5f64 {
-        var term = x
-        var sum = x
-        var n = 0.0f64
-        var i = 0usize
-        while i < 200usize {
-            n += 1.0f64
-            term = term * (0.0f64 - x * x) / n
-            let add = term / (2.0f64 * n + 1.0f64)
-            sum += add
-            if math.abs[f64](add) < 1.0e-17f64 * math.abs[f64](sum) { break }
-            i += 1usize
-        }
-        ret 1.1283791670955126f64 * sum
+    if x < 1.5f64 {
+        let (h, l) = erf_pair(x)
+        ret h + l
     }
     ret 1.0f64 - erfc(x)
 }
 
-// The complementary error function, accurate in the tail.
+// The complementary error function. Below 5.5 it is 1 - erf taken from the SERIES PAIR, so the cancellation
+// happens inside the pair and erfc keeps its digits even at 2.5 where it is 4e-4; above that the continued
+// fraction takes over, where erfc is small enough for a single-double evaluation to be safe.
 fn erfc(x: f64) -> f64 {
     if x == infinity() { ret 0.0f64 }
     if x == negative_infinity() { ret 2.0f64 }
-    if x < 2.5f64 { ret 1.0f64 - erf(x) }
+    if x < 5.5f64 {
+        let (eh, el) = erf_pair(x)
+        let (ch, cl) = math.dd_add(1.0f64, 0.0f64, 0.0f64 - eh, 0.0f64 - el)
+        ret ch + cl
+    }
     // Lentz's continued fraction: erfc(x) = exp(-x^2)/sqrt(pi) * 1/(x + 1/2/(x + 1/(x + 3/2/(x + ...)))).
     var f = x
     var c = x
@@ -119,7 +150,6 @@ fn erfc(x: f64) -> f64 {
     }
     ret math.exp[f64](0.0f64 - x * x) / (1.7724538509055159f64 * f)
 }
-
 // The regularised lower incomplete gamma P(a, x), a > 0, x >= 0.
 fn gamma_p(a: f64, x: f64) -> f64 {
     if a <= 0.0f64 || x < 0.0f64 { ret nan() }

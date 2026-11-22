@@ -12,8 +12,8 @@ for (x in c(runif(n, 1e-3, 20), runif(n / 2, 0.5, 3), 10^runif(n / 4, -2, 4))) {
   add("gamma", x, gamma(x))
 }
 for (x in c(runif(n, -6, 6), rnorm(n / 2), seq(-4, 4, by = 0.1))) {
-  add("erf", x, erf(x))
-  add("erfc", x, erfc(x))
+  add("erf", x, as.numeric(erf(mpfr(x, 400))))
+  add("erfc", x, as.numeric(erfc(mpfr(x, 400))))
   add("pnorm", x, pnorm(x))
 }
 for (p in c(runif(n, 1e-12, 1 - 1e-12), 10^runif(n / 4, -12, -1))) add("qnorm", p, qnorm(p))
