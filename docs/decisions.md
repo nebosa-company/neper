@@ -52286,3 +52286,18 @@ It falls below p = 0.001 at k = 7 on both hosts, so `qgig_integrate`'s `while pg
 That reframes the fix completely: it is not a loop bound but a question of how much accuracy `pgig_ssf` costs at `eps^0.85` and `nmax` on each host. The next measurement is the same probe at the real tolerance and nmax that `qghypF` passes, timing one call on both hosts - if Linux takes orders of magnitude longer per call, the repair is in the incomplete BesselK's convergence test, not in any loop in this module.
 
 This is the fourth theory about the same hang, and the first three were all about loops that turned out to be innocent. The pattern to carry is that a hang in a numerical module is more often an expensive inner call than a missing bound.
+## D7799 — The failing call never reaches qgig: it builds a 501-point spline from pghyp_tail, and that is where the time goes
+
+Following the fixture's own dispatch settled the call chain exactly. `qghypF` is `ghypdist.qghyp_full(p, mu, delta, alpha, beta, lambda, lower, spline, 501, 0.0001220703125, 100)`, and the failing case has `lower = true, spline = true`, so it takes the spline path:
+
+- `ghyp_calc_range(...)` for the bracket,
+- then 501 evaluations of `pghyp_tail(&c, xs[i], true, mode)` to fill the spline table,
+- then `fmm_spline` and a `zeroin` root find.
+
+So neither `qgig` nor `qgig_integrate` is ever entered - the tail probe of D7798 could not have found the cost because that code is not on this path at all. With 501 `pghyp_tail` calls and `pgig`-style integration inside each, a per-call cost difference of even a few milliseconds between the hosts turns into minutes: 501 × 0.2 s is already 100 s.
+
+That is consistent with everything measured so far: the fixture runs 40 cases/s on Linux for the cheap cases, the expensive ones (this shape, p = 0.001) are the ones that time out, and Windows finishes the full fixture in 155-185 s only because its per-call cost is low enough.
+
+The next measurement is one `pghyp_tail` call on that shape, timed on both hosts - and if Linux is orders of magnitude slower there, the repair is inside `pghyp_tail`'s integration, which is where the GH distribution's cost has lived all along. It also means the earlier interest in `qgig_integrate`'s and `gig_range`'s loops was misdirected for this case: both are real code-quality issues (unbounded loops), but neither is on the failing path.
+
+Five theories, five measurements, and the value of each was to eliminate a suspect rather than confirm one.
