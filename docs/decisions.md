@@ -52106,3 +52106,21 @@ So it is not the tail. Two thirds of the failures sit in the middle bands, which
 The consequence is concrete: `erfc` must be evaluated **directly** from about x = 1, not as `1 - erf`. The continued fraction already does that above 5.5 and is single-double; it needs to move down to 1 and be carried in double-double, which is where the general `dd_div` I deferred (only `dd_div_d`, division by a single double, exists today) finally becomes necessary - the Lentz recurrence divides pairs by pairs.
 
 This also explains the earlier no-op: moving the *negative tail* between branches changed 0 of the 250 because the tail is only 18 cases and was already close.
+## D7785 — dd_div and a double-double continued fraction halve the erfc residual: 327 -> 196
+
+`dd_div` (pair / pair, one Newton step with the residual taken through `two_prod`, `(ah + al) - q1 (bh + bl)` evaluated with the error terms kept) is the primitive the Lentz recurrence needed, and it turned out to be worth more than the tail analysis suggested:
+- `erfc` is now evaluated **directly** from x = 1 by the continued fraction carried in double-double, and only below 1 as `1 - erf_pair`, where `erfc >= 0.15` and the cancellation is harmless.
+- `erf` is the series below 1 and `1 - erfc` above.
+
+Measured against MPFR, in the same in-build A/B:
+
+| | before (D7783) | after |
+|---|---|---|
+| erf | 77 | **32** |
+| erfc | 250 | **164** |
+| total | 327 | **196** |
+| erfc bands `<1 / 1-2.5 / 2.5-5.5 / >5.5` | 14 / 109 / 109 / 18 | 36 / 59 / 57 / 12 |
+
+The two middle bands halved as predicted, and the plain-double reference stays at 312 / 405, so the improvement is real and not a reference artefact. The `<1` band grew from 14 to 36 because erfc below 1 still goes through `1 - erf_pair`; that is the next target, and it needs an erfc series of its own rather than the erf one inverted. Ten of the twelve remaining `>5.5` cases are the continued fraction's own last bits.
+
+Still not correctly rounded, still unregistered; 196 of 3943 is the number to beat.
