@@ -52205,3 +52205,23 @@ The first three points are linear at roughly 5.6 cases/s, which would put all 25
 That leaves the diagnosis exactly where it was: the fixture is roughly linear and slower on Linux, and the 1362 s figure implies at least one case that is pathological rather than the whole file being slow. The next step is to fix the harness (verify each truncated file's case count inside the container before running) and then bisect between 500 and 2570 with the clock checked per run - not to change any library code until a single case is identified, since D7792 showed a blind bound makes the working platform hang.
 
 No library change was made in this round; the tree is clean.
+## D7794 — The ghyp2 hang is narrowed to cases 1301-1400 of 2570, with the harness now verified
+
+D7793's harness was fixed before trusting it again: the probe binary is rebuilt inside the same script (WSL's `/tmp` does not survive a restart, which is why the first retry failed with exit 127), and each truncated oracle's case count is asserted in the container with `grep -o '"fn"' | wc -l` before the run. With those two defects removed the bisect is clean and monotone:
+
+| cases (verified) | Linux | verdict |
+|---|---|---|
+| 1 | 0 s | pass |
+| 50 | 6 s | pass |
+| 500 | 28 s | pass |
+| 1200 | 30 s | pass |
+| 1300 | 31 s | pass |
+| 1400 | **timeout 120 s** | hang |
+| 1500 | timeout 150 s | hang |
+| 2000 | timeout 150 s | hang |
+
+So the fixture runs at about 40 cases/s on Linux - the same order as Windows - and the 1362 s hang comes from **between one and a hundred cases in the 1301-1400 window**. Everything before that window is normal, which is why the linear extrapolation in D7793 was wrong and why a blanket loop bound was the wrong instrument (D7792).
+
+The next bisect is a single run of eight truncated oracles in that window (1350, 1325, 1312, ...) and then one case, whose `qgig`/`pgig` arguments name the pathological parameters. No library code was changed in this round; the tree is clean.
+
+Worth recording as method: three of the four defects found in this investigation were in the *measurement* (a cached binary, a stale truncated file, a vanished `/tmp`), not in the code under test. Verify the instrument before believing the reading.
