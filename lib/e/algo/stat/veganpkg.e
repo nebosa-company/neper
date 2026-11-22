@@ -120,6 +120,7 @@ fn vegdist(m: []const f64, nr: usize, nc: usize, ra: usize, rb: usize, method: u
     var rsim = 0.0f64
     var rt1 = 0.0f64
     var rt2 = 0.0f64
+    var millar = 0.0f64
     var j = 0usize
     while j < nc {
         var x = m[ra * nc + j]
@@ -164,6 +165,14 @@ fn vegdist(m: []const f64, nr: usize, nc: usize, ra: usize, rb: usize, method: u
         if x + y > 0.0f64 {
             can += math.abs[f64](x - y) / (x + y)
             nz += 1.0f64
+            // Millar's binomial deviance term
+            let nk = x + y
+            let lnnk = math.log[f64](nk)
+            var mt1 = 0.0f64
+            if x > 0.0f64 { mt1 = x * (math.log[f64](x) - lnnk) }
+            var mt2 = 0.0f64
+            if y > 0.0f64 { mt2 = y * (math.log[f64](y) - lnnk) }
+            millar += (mt1 + mt2 + nk * math.log[f64](2.0f64)) / nk
         }
         if x > 0.0f64 || y > 0.0f64 {
             alt += math.abs[f64](x - y)
@@ -255,6 +264,37 @@ fn vegdist(m: []const f64, nr: usize, nc: usize, ra: usize, rb: usize, method: u
         let d = 1.0f64 - u * v / (u + v - u * v)
         if d < 0.0f64 { ret 0.0f64 }
         ret d
+    }
+    if method == 15usize {
+        // mountford: the Newton iteration on exp(d a) + exp(d b) - exp(d (a + b - j)) = 1; the two
+        // degenerate cases set the root theta, and the answer is ln(2) - theta (so no shared species
+        // answers ln(2), and one richness contained in the other answers 0)
+        let ln2 = math.log[f64](2.0f64)
+        if rt1 == 0.0f64 || rt2 == 0.0f64 { ret 0.0f64 / 0.0f64 }
+        if rsim == 0.0f64 { ret ln2 }
+        if rsim == rt1 || rsim == rt2 { ret 0.0f64 }
+        let a = rt1
+        let b = rt2
+        var d = 2.0f64 * rsim / (2.0f64 * a * b - (a + b) * rsim)
+        var iter = 0usize
+        while iter < 20usize {
+            let od = d
+            let fa = math.exp[f64](d * a)
+            let fb = math.exp[f64](d * b)
+            let fj = math.exp[f64](d * (a + b - rsim))
+            let f = fa + fb - fj - 1.0f64
+            let fp = a * fa + b * fb - (a + b - rsim) * fj
+            d = d - f / fp
+            let diff = math.abs[f64](od - d)
+            if diff / od < 1.0e-5f64 || diff < 1.0e-12f64 { break }
+            iter += 1usize
+        }
+        ret ln2 - d
+    }
+    if method == 16usize {
+        // binomial: Millar's deviance sum, clamped at 0
+        if millar < 0.0f64 { ret 0.0f64 }
+        ret millar
     }
     if method == 14usize {
         // Raup-Crick: 1 - phyper(sim - 1, min richness, count - min, max richness), count the sites

@@ -25,5 +25,7 @@ for (rep in 1:20) {
   add("d_12", a, ws(as.vector(vegdist(m, "clark"))))
   add("d_13", a, ws(as.vector(vegdist(m, "chao"))))
   add("d_14", a, ws(as.vector(vegdist(m, "raup"))))
+  add("d_15", a, ws(as.vector(vegdist(m, "mountford"))))
+  add("d_16", a, ws(as.vector(vegdist(m, "binomial"))))
 }
 emit("vegan", "vegan", list(cases))
