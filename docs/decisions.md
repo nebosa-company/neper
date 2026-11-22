@@ -52301,3 +52301,10 @@ That is consistent with everything measured so far: the fixture runs 40 cases/s 
 The next measurement is one `pghyp_tail` call on that shape, timed on both hosts - and if Linux is orders of magnitude slower there, the repair is inside `pghyp_tail`'s integration, which is where the GH distribution's cost has lived all along. It also means the earlier interest in `qgig_integrate`'s and `gig_range`'s loops was misdirected for this case: both are real code-quality issues (unbounded loops), but neither is on the failing path.
 
 Five theories, five measurements, and the value of each was to eliminate a suspect rather than confirm one.
+## D7800 — The timing probe produced no output and exited 0; no conclusion drawn, harness to be fixed first
+
+The next measurement after D7799 was meant to time `qghyp_full(..., spline = false)` for the failing shape on Windows, to separate the 501-point spline cost from the integration path. The probe compiled, ran for 0.43 s, printed **nothing** and exited **0** - which is not a result, it is a broken instrument: a `main` that returns `ok` without emitting its buffered line means the print was never reached (an early return whose error was swallowed, or a builder that reported failure after the point where the error is checked).
+
+Two rules from this investigation apply directly and were both learned the hard way earlier in it (D7792, D7794): the measurement has to be verified before the reading is believed, and a probe that exits cleanly without output is a failed probe, not a fast one. Nothing was concluded about `pghyp_tail`'s cost from this run, and no library code was touched.
+
+The next attempt should (a) print the value with a plain `io.print` of a constant first, to prove the output path works, (b) check `$LASTEXITCODE` alongside the output, and (c) time the *fixture binary itself* on the one-case oracle, which is known to run and to hang - that sidesteps the probe entirely and gives the number that matters (how long the failing case takes per host), even if it only produces "timed out" versus "N seconds".
