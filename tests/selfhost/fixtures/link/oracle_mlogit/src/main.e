@@ -1,194 +1,253 @@
-// e.algo.stat.mlogitpkg against mlogit conditional logit. tests/oracle/mlogit.json comes from
+// e.algo.stat.mlogitpkg against mlogit. tests/oracle/mlogit.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R mlogit`; the layout is at the top of scripts/r_oracle/groups/mlogit.R.
 
+use e.algo.rand.r as rr
 use e.algo.stat.mlogitpkg as ml
 use e.io
+use e.math
 use e.mem
 use e.math.nmath as nm
 use e.os
 use e.str
 use e.test.oracle as oracle
 
+// R's model.matrix of the data gen(s, n, J, kx, kz) of the oracle: n rows of j alternatives of the constants (asc), x1..xkx, then for each z the alternatives 2..j
+fn design(a: *mem.Arena, s: f64, n: usize, j: usize, kx: usize, kz: usize, asc: bool) -> ([]f64, usize) {
+    var na = 0usize
+    if asc { na = j - 1usize }
+    let kk = na + kx + kz * (j - 1usize)
+    let (xv, e1) = mem.alloc[f64](a, n * j * kx + n * kz + n * j * kk)
+    if e1 != ok { ret (xv, 0usize) }
+    var r: rr.Rng = zero
+    rr.seed(&r, i64(s))
+    var t = 0usize
+    while t < n * j * kx + n * kz {
+        xv[t] = rr.rnorm(&r, 0.0f64, 1.0f64)
+        t += 1usize
+    }
+    let zv = xv[n * j * kx..n * j * kx + n * kz]
+    let d = xv[n * j * kx + n * kz..n * j * kx + n * kz + n * j * kk]
+    var i = 0usize
+    while i < n {
+        var jj = 0usize
+        while jj < j {
+            let row = d[(i * j + jj) * kk..(i * j + jj + 1usize) * kk]
+            var c = 0usize
+            while c < kk {
+                row[c] = 0.0f64
+                c += 1usize
+            }
+            if jj > 0usize && asc { row[jj - 1usize] = 1.0f64 }
+            c = 0usize
+            while c < kx {
+                row[na + c] = xv[(i * j + jj) * kx + c]
+                c += 1usize
+            }
+            if jj > 0usize {
+                var l = 0usize
+                while l < kz {
+                    row[na + kx + l * (j - 1usize) + jj - 1usize] = zv[i * kz + l]
+                    l += 1usize
+                }
+            }
+            jj += 1usize
+        }
+        i += 1usize
+    }
+    ret (d, kk)
+}
+
+fn wsum(v: []const f64) -> f64 {
+    var s = 0.0f64
+    var t = 0usize
+    while t < v.len {
+        s += v[t] * f64(t + 1usize)
+        t += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
-    if str.starts_with(c.name, "nl_") {
-        let n = usize(z[0usize])
-        let j = usize(z[1usize])
-        let k = usize(z[2usize])
-        let asc = z[3usize] > 0.5f64
-        let nn = usize(z[4usize])
-        let (nest, ne) = mem.alloc[usize](a, j)
-        let (out, oe) = mem.alloc[f64](a, 2usize * j + 2usize * k + 4usize)
-        if ne != ok || oe != ok { ret nan }
+    if str.starts_with(c.name, "gl_") {
+        var u: [40]f64 = zero
+        var w: [40]f64 = zero
+        ml.gauss_laguerre(40usize, u[0usize..40usize], w[0usize..40usize])
+        if str.eq(c.name, "gl_node") { ret wsum(u[0usize..40usize]) }
         var t = 0usize
-        while t < j {
-            nest[t] = usize(z[5usize + t])
+        while t < 40usize {
+            w[t] = math.log[f64](w[t])
             t += 1usize
         }
-        let chs = z[5usize + j..5usize + j + n]
-        let xs = z[5usize + j + n..5usize + j + n + n * j * k]
-        var q = k
-        if asc { q = j - 1usize + k }
-        if ml.nested_logit(a, xs, chs, n, j, k, asc, nest, nn, out) != ok { ret nan }
-        var nl = 0usize
-        var m = 0usize
-        while m < nn {
-            var cnt = 0usize
-            t = 0usize
+        ret wsum(w[0usize..40usize])
+    }
+    let n = usize(z[1usize])
+    let j = usize(z[2usize])
+    let kx = usize(z[3usize])
+    let kz = usize(z[4usize])
+    let asc = z[5usize] > 0.5f64
+    let ne = usize(z[6usize])
+    let ex = z[7usize..7usize + ne]
+    let chs = z[7usize + ne..7usize + ne + n]
+    let (x, k) = design(a, z[0usize], n, j, kx, kz, asc)
+    if k == 0usize { ret nan }
+    var na = 0usize
+    if asc { na = j - 1usize }
+    if str.starts_with(c.name, "nl_") || str.starts_with(c.name, "hl_") || str.starts_with(c.name, "mx_") {
+        var m: ml.Model = zero
+        if str.starts_with(c.name, "nl_") {
+            let nn = usize(ex[2usize])
+            let (nest, ne2) = mem.alloc[usize](a, j)
+            if ne2 != ok { ret nan }
+            var t = 0usize
             while t < j {
-                if nest[t] == m { cnt += 1usize }
+                nest[t] = usize(ex[3usize + t])
                 t += 1usize
             }
-            if cnt > 1usize { nl += 1usize }
-            m += 1usize
-        }
-        if str.eq(c.name, "nl_ll") { ret out[q + nl] }
-        if str.eq(c.name, "nl_se") {
-            let (nse, nee) = mem.alloc[f64](a, q + nl)
-            if nee != ok { ret nan }
-            if !ml.nested_se(a, xs, chs, n, j, k, asc, nest, nn, out[0usize..q + nl], nse) { ret nan }
-            var ss = 0.0f64
-            t = 0usize
-            while t < q + nl {
-                ss += nse[t] * f64(t + 1usize)
+            let (m1, me) = ml.nested_model(a, x, chs, n, j, k, nest, nn)
+            if me != ok { ret nan }
+            m = m1
+        } else if str.starts_with(c.name, "hl_") {
+            let (m2, me) = ml.hetero_model(a, x, chs, n, j, k)
+            if me != ok { ret nan }
+            m = m2
+        } else {
+            let nr = usize(ex[2usize])
+            let (ridx, re) = mem.alloc[usize](a, nr)
+            if re != ok { ret nan }
+            var t = 0usize
+            while t < nr {
+                ridx[t] = usize(ex[3usize + t])
                 t += 1usize
             }
-            ret ss
+            let (m3, me) = ml.mixed_model(a, x, chs, n, j, k, usize(ex[0usize]), usize(ex[1usize]), ridx)
+            if me != ok { ret nan }
+            m = m3
         }
-        var lo = 0usize
-        var hi = q
-        if str.eq(c.name, "nl_iv") {
-            lo = q
-            hi = q + nl
+        let dim = ml.model_dim(&m)
+        let (par, pe) = mem.alloc[f64](a, dim + n * j)
+        if pe != ok { ret nan }
+        let (ll, fe) = ml.fit_model(a, &m, par[0usize..dim])
+        if fe != ok { ret nan }
+        if str.ends_with(c.name, "_coef") { ret wsum(par[0usize..dim]) }
+        if str.ends_with(c.name, "_ll") { ret ll }
+        if str.ends_with(c.name, "_se") {
+            if !ml.model_se(a, &m, par[0usize..dim], par[dim..dim + dim]) { ret nan }
+            ret wsum(par[dim..dim + dim])
         }
+        let prob = par[dim..dim + n * j]
+        if str.ends_with(c.name, "_prob") {
+            let _ = ml.model_ll(&m, par[0usize..dim], prob[0usize..0usize], prob)
+            ret wsum(prob)
+        }
+        // nl_pred: the probabilities on the data gen(s2, n2, ...) at the estimates
+        let n2 = usize(ex[1usize])
+        let (x2, k2) = design(a, ex[0usize], n2, j, kx, kz, asc)
+        let (c2, ce) = mem.alloc[f64](a, n2 + n2 * j)
+        if k2 != k || ce != ok { ret nan }
+        var t = 0usize
+        while t < n2 {
+            c2[t] = 0.0f64
+            t += 1usize
+        }
+        let (mp, mpe) = ml.nested_model(a, x2, c2[0usize..n2], n2, j, k, m.nest, m.nn)
+        if mpe != ok { ret nan }
+        var mm = mp
+        let _ = ml.model_ll(&mm, par[0usize..dim], c2[0usize..0usize], c2[n2..n2 + n2 * j])
+        ret wsum(c2[n2..n2 + n2 * j])
+    }
+    let (out, e1) = mem.alloc[f64](a, 2usize * k + 1usize + j * j)
+    if e1 != ok { ret nan }
+    if ml.clogit(a, x, chs, n, j, k, false, out) != ok { ret nan }
+    let cf = out[0usize..k]
+    let mo = out[2usize * k + 1usize..2usize * k + 1usize + j * j]
+    if str.eq(c.name, "coef") { ret wsum(cf) }
+    if str.eq(c.name, "se") { ret wsum(out[k..2usize * k]) }
+    if str.eq(c.name, "ll") { ret out[2usize * k] }
+    if str.eq(c.name, "wald") || str.eq(c.name, "wald_p") {
+        // the last coefficient (k = 1) or the last two
+        let (wv, wve) = mem.alloc[f64](a, k * k)
+        if wve != ok { ret nan }
+        if !ml.clogit_vcov(a, x, n, j, k, false, cf, wv) { ret nan }
+        var sel: [2]usize = zero
+        var ns = 1usize
+        sel[0usize] = k - 1usize
+        if k >= 2usize {
+            sel[0usize] = k - 2usize
+            sel[1usize] = k - 1usize
+            ns = 2usize
+        }
+        var wo: [2]f64 = zero
+        if !ml.wald_test(a, cf, wv, k, sel[0usize..ns], wo[0usize..2usize]) { ret nan }
+        if str.eq(c.name, "wald") { ret wo[0usize] }
+        ret wo[1usize]
+    }
+    if str.eq(c.name, "shares") {
+        ml.clogit_shares(x, n, j, k, false, cf, mo[0usize..j])
+        ret wsum(mo[0usize..j])
+    }
+    if str.eq(c.name, "effects") {
+        ml.clogit_effects(x, n, j, k, false, cf, na, mo)
         var s = 0.0f64
-        t = lo
-        while t < hi {
-            s += out[t] * f64(t - lo + 1usize)
+        var t = 0usize
+        while t < j * j {
+            s += mo[t] * f64(t + 1usize) * f64(t + 1usize)
             t += 1usize
         }
         ret s
     }
-    if str.starts_with(c.name, "mnl_") {
-        let mn = usize(z[0usize])
-        let mj = usize(z[1usize])
-        let mq = usize(z[2usize])
-        let kk = (mj - 1usize) * mq
-        let (dx, de) = mem.alloc[f64](a, mn * mj * kk)
-        let (mo, me) = mem.alloc[f64](a, 2usize * (mj - 1usize + kk) + 1usize)
-        if de != ok || me != ok { ret nan }
+    if str.eq(c.name, "pred") {
+        let n2 = usize(ex[1usize])
+        let (x2, k2) = design(a, ex[0usize], n2, j, kx, kz, asc)
+        let (p2, pe) = mem.alloc[f64](a, n2 * j)
+        if k2 != k || pe != ok { ret nan }
         var i = 0usize
-        while i < mn * mj * kk {
-            dx[i] = 0.0f64
+        while i < n2 {
+            ml.clogit_probs(x2, i, j, k, false, cf, p2[i * j..i * j + j])
             i += 1usize
         }
-        // X[i][j][(j - 1) q + l] = z[i][l] for alternatives j >= 1
-        i = 0usize
-        while i < mn {
-            var jj = 1usize
-            while jj < mj {
-                var l = 0usize
-                while l < mq {
-                    dx[(i * mj + jj) * kk + (jj - 1usize) * mq + l] = z[3usize + mn + i * mq + l]
-                    l += 1usize
-                }
-                jj += 1usize
-            }
-            i += 1usize
-        }
-        if ml.clogit(a, dx, z[3usize..3usize + mn], mn, mj, kk, true, mo) != ok { ret nan }
-        let qn = mj - 1usize + kk
-        if str.eq(c.name, "mnl_ll") { ret mo[2usize * qn] }
-        var lo2 = 0usize
-        if str.eq(c.name, "mnl_se") { lo2 = qn }
-        var s2 = 0.0f64
-        var t = 0usize
-        while t < qn {
-            s2 += mo[lo2 + t] * f64(t + 1usize)
-            t += 1usize
-        }
-        ret s2
+        ret wsum(p2)
     }
-    let n = usize(z[0usize])
-    let j = usize(z[1usize])
-    let k = usize(z[2usize])
-    let asc = z[3usize] > 0.5f64
-    var q = k
-    if asc { q = j - 1usize + k }
-    let (out, e1) = mem.alloc[f64](a, 2usize * q + 1usize)
-    if e1 != ok { ret nan }
-    if ml.clogit(a, z[4usize + n..4usize + n + n * j * k], z[4usize..4usize + n], n, j, k, asc, out) != ok { ret nan }
-    if str.eq(c.name, "wald") || str.eq(c.name, "wald_p") {
-        // the Wald test of the last covariate (k = 1) or of the last two (k >= 2)
-        let wx = z[4usize + n..4usize + n + n * j * k]
-        let (wv, wve) = mem.alloc[f64](a, q * q)
-        if wve != ok { ret nan }
-        if !ml.clogit_vcov(a, wx, n, j, k, asc, out[0usize..q], wv) { ret nan }
-        var sel: [2]usize = zero
-        var ns = 1usize
-        sel[0usize] = q - 1usize
-        if k >= 2usize {
-            sel[0usize] = q - 2usize
-            sel[1usize] = q - 1usize
-            ns = 2usize
-        }
-        var wo: [2]f64 = zero
-        if !ml.wald_test(a, out[0usize..q], wv, q, sel[0usize..ns], wo[0usize..2usize]) { ret nan }
-        if str.eq(c.name, "wald") { ret wo[0usize] }
-        ret wo[1usize]
-    }
-    if str.eq(c.name, "lrt") || str.eq(c.name, "lrt_p") {
-        // drop the last covariate: the model on the first k - 1 columns of x
-        let (xr, xe) = mem.alloc[f64](a, n * j * (k - 1usize))
-        let (o0, oe) = mem.alloc[f64](a, 2usize * (q - 1usize) + 1usize)
-        if xe != ok || oe != ok { ret nan }
-        var ii = 0usize
-        while ii < n * j {
-            var cc = 0usize
-            while cc + 1usize < k {
-                xr[ii * (k - 1usize) + cc] = z[4usize + n + ii * k + cc]
-                cc += 1usize
+    // lrt, lrt_p, score, score_p: the restricted model drops x_kx, design column na + kx - 1
+    let drop = na + kx - 1usize
+    let (xr, xe) = mem.alloc[f64](a, n * j * (k - 1usize) + 2usize * k + 1usize)
+    if xe != ok { ret nan }
+    var r = 0usize
+    while r < n * j {
+        var cc = 0usize
+        var o = 0usize
+        while cc < k {
+            if cc != drop {
+                xr[r * (k - 1usize) + o] = x[r * k + cc]
+                o += 1usize
             }
-            ii += 1usize
+            cc += 1usize
         }
-        if ml.clogit(a, xr, z[4usize..4usize + n], n, j, k - 1usize, asc, o0) != ok { ret nan }
-        let stat = 2.0f64 * (out[2usize * q] - o0[2usize * (q - 1usize)])
+        r += 1usize
+    }
+    let o0 = xr[n * j * (k - 1usize)..n * j * (k - 1usize) + 2usize * k + 1usize]
+    if ml.clogit(a, xr[0usize..n * j * (k - 1usize)], chs, n, j, k - 1usize, false, o0) != ok { ret nan }
+    if str.starts_with(c.name, "lrt") {
+        let stat = 2.0f64 * (out[2usize * k] - o0[2usize * (k - 1usize)])
         if str.eq(c.name, "lrt") { ret stat }
         ret nm.pchisq(stat, 1.0f64, false, false)
     }
-    if str.eq(c.name, "shares") || str.eq(c.name, "effects") {
-        let xs = z[4usize + n..4usize + n + n * j * k]
-        let (mo, me) = mem.alloc[f64](a, j * j)
-        if me != ok { ret nan }
-        var ws = 0.0f64
-        if str.eq(c.name, "shares") {
-            ml.clogit_shares(xs, n, j, k, asc, out[0usize..q], mo[0usize..j])
-            var t = 0usize
-            while t < j {
-                ws += mo[t] * f64(t + 1usize)
-                t += 1usize
-            }
-            ret ws
+    // the restricted estimates with a zero for x_kx
+    var t = 0usize
+    var o = 0usize
+    while t < k {
+        mo[t] = 0.0f64
+        if t != drop {
+            mo[t] = o0[o]
+            o += 1usize
         }
-        ml.clogit_effects(xs, n, j, k, asc, out[0usize..q], 0usize, mo)
-        var t2 = 0usize
-        while t2 < j * j {
-            ws += mo[t2] * f64(t2 + 1usize)
-            t2 += 1usize
-        }
-        ret ws
+        t += 1usize
     }
-    if str.eq(c.name, "ll") { ret out[2usize * q] }
-    var lo = 0usize
-    if str.eq(c.name, "se") { lo = q }
-    var s = 0.0f64
-    var i = 0usize
-    while i < q {
-        s += out[lo + i] * f64(i + 1usize)
-        i += 1usize
-    }
-    ret s
+    var so: [2]f64 = zero
+    if !ml.clogit_score(a, x, chs, n, j, k, mo[0usize..k], 1usize, so[0usize..2usize]) { ret nan }
+    if str.eq(c.name, "score") { ret so[0usize] }
+    ret so[1usize]
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -204,8 +263,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
-                let _ = io.print(oracle.describe(a, c, got))
-                let _ = io.print("\n")
+                // the seed stands in for the arguments, which run to hundreds of choices
+                let (initial, be) = str.builder(a, 96usize)
+                if be == ok {
+                    var b = initial
+                    let _ = str.push(&b, c.name)
+                    let _ = str.push(&b, " seed ")
+                    let _ = str.push_f64(&b, c.args[0usize])
+                    let _ = str.push(&b, ": got ")
+                    let _ = str.push_f64(&b, got)
+                    let _ = str.push(&b, ", R says ")
+                    let _ = str.push_f64(&b, c.want)
+                    let _ = io.print(str.done(&b))
+                    let _ = io.print("\n")
+                }
             }
         }
         mem.reset(a, start)

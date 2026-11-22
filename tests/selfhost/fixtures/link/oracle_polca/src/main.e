@@ -1,281 +1,89 @@
 // e.algo.stat.polcapkg against poLCA. tests/oracle/polca.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R polca`; the layout is at the top of scripts/r_oracle/groups/polca.R.
 
+use e.algo.rand.r as rg
 use e.algo.stat.polcapkg as pl
 use e.io
-use e.math
 use e.mem
 use e.os
 use e.str
 use e.test.oracle as oracle
 
-fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+fn fit_case(a: *mem.Arena, c: *const oracle.Case) -> (pl.Fit, err) {
     let z = c.args
-    let nan = 0.0f64 / 0.0f64
-    if str.eq(c.name, "rs") {
-        // args (n, J, R, ncat[J], nrep, seed, data[n*J] row-major 1-based, q)
-        let rn = usize(z[0usize])
-        let rj = usize(z[1usize])
-        let rr = usize(z[2usize])
-        let (rc, re1) = mem.alloc[usize](a, rj)
-        if re1 != ok { ret nan }
-        var rtc = 0usize
-        var ri = 0usize
-        while ri < rj {
-            rc[ri] = usize(z[3usize + ri])
-            rtc += rc[ri]
-            ri += 1usize
-        }
-        let nrep = usize(z[3usize + rj])
-        let seed = i64(z[4usize + rj])
-        let (rd, re2) = mem.alloc[f64](a, rn * rj)
-        let (rp, re3) = mem.alloc[f64](a, rr * rtc)
-        let (rpr, re4) = mem.alloc[f64](a, rr)
-        if re2 != ok || re3 != ok || re4 != ok { ret nan }
-        ri = 0usize
-        while ri < rn * rj {
-            rd[ri] = z[5usize + rj + ri] - 1.0f64
-            ri += 1usize
-        }
-        let rll = pl.em_restarts(a, rd, rn, rj, rc, rr, nrep, seed, 1.0e-10f64, 1000usize, rp, rpr)
-        let rq = usize(z[5usize + rj + rn * rj])
-        if rq == 0usize { ret rll }
-        if rq == 1usize {
-            var sp = 0.0f64
-            ri = 0usize
-            while ri < rr {
-                sp += rpr[ri] * rpr[ri]
-                ri += 1usize
-            }
-            ret sp
-        }
-        var sq = 0.0f64
-        var idx = 0usize
-        var roff = 0usize
-        var rv = 0usize
-        while rv < rj {
-            var rcl = 0usize
-            while rcl < rr {
-                var rk = 0usize
-                while rk < rc[rv] {
-                    idx += 1usize
-                    sq += rp[rcl * rtc + roff + rk] * rp[rcl * rtc + roff + rk]
-                    rk += 1usize
-                }
-                rcl += 1usize
-            }
-            roff += rc[rv]
-            rv += 1usize
-        }
-        ret sq
-    }
-    if str.starts_with(c.name, "rg") {
-        let gn = usize(z[0usize])
-        let gj = usize(z[1usize])
-        let gr = usize(z[2usize])
-        let gq = usize(z[3usize])
-        let (gc, ge1) = mem.alloc[usize](a, gj)
-        if ge1 != ok { ret nan }
-        var gtc = 0usize
-        var gi = 0usize
-        while gi < gj {
-            gc[gi] = usize(z[4usize + gi])
-            gtc += gc[gi]
-            gi += 1usize
-        }
-        let (gp, ge2) = mem.alloc[f64](a, gr * gtc)
-        let (gd, ge3) = mem.alloc[f64](a, gn * gj)
-        let (gcf, ge4) = mem.alloc[f64](a, (gq + 1usize) * (gr - 1usize))
-        if ge2 != ok || ge3 != ok || ge4 != ok { ret nan }
-        var go = 4usize + gj
-        var goff = 0usize
-        var gv = 0usize
-        while gv < gj {
-            var grr = 0usize
-            while grr < gr {
-                var gk = 0usize
-                while gk < gc[gv] {
-                    gp[grr * gtc + goff + gk] = z[go]
-                    go += 1usize
-                    gk += 1usize
-                }
-                grr += 1usize
-            }
-            goff += gc[gv]
-            gv += 1usize
-        }
-        gi = 0usize
-        while gi < gn * gj {
-            gd[gi] = z[go + gi] - 1.0f64
-            gi += 1usize
-        }
-        let gx = z[go + gn * gj..go + gn * gj + gn * gq]
-        let gll = pl.em_reg(a, gd, gx, gn, gq, gj, gc, gr, gp, gcf, 1.0e-13f64, 20000usize)
-        if str.eq(c.name, "rgll") { ret gll }
-        var gs = 0.0f64
-        if str.eq(c.name, "rgcoef") {
-            gi = 0usize
-            while gi < (gq + 1usize) * (gr - 1usize) {
-                gs += gcf[gi] * gcf[gi]
-                gi += 1usize
-            }
-            ret gs
-        }
-        var gpos = 1usize
-        goff = 0usize
-        gv = 0usize
-        while gv < gj {
-            var grr = 0usize
-            while grr < gr {
-                var gk = 0usize
-                while gk < gc[gv] {
-                    gs += gp[grr * gtc + goff + gk] * gp[grr * gtc + goff + gk]
-                    gpos += 1usize
-                    gk += 1usize
-                }
-                grr += 1usize
-            }
-            goff += gc[gv]
-            gv += 1usize
-        }
-        ret gs
-    }
     let n = usize(z[0usize])
     let nj = usize(z[1usize])
     let nr = usize(z[2usize])
-    let (ncat, e1) = mem.alloc[usize](a, nj)
-    if e1 != ok { ret nan }
-    var tc = 0usize
-    var i = 0usize
-    while i < nj {
-        ncat[i] = usize(z[3usize + i])
-        tc += ncat[i]
-        i += 1usize
-    }
-    let (probs, e2) = mem.alloc[f64](a, nr * tc)
-    let (prior, e3) = mem.alloc[f64](a, nr)
-    let (data, e4) = mem.alloc[f64](a, n * nj)
-    if e2 != ok || e3 != ok || e4 != ok { ret nan }
-    var o = 3usize + nj
-    // the start probabilities arrive as variable blocks of R rows: variable v, class r, category k
-    var off = 0usize
-    var v = 0usize
-    while v < nj {
-        var r = 0usize
-        while r < nr {
-            var k = 0usize
-            while k < ncat[v] {
-                probs[r * tc + off + k] = z[o]
-                o += 1usize
-                k += 1usize
-            }
-            r += 1usize
-        }
-        off += ncat[v]
-        v += 1usize
-    }
-    i = 0usize
-    while i < n * nj {
-        data[i] = z[o + i] - 1.0f64
-        i += 1usize
-    }
-    let ll = pl.em(a, data, n, nj, ncat, nr, probs, prior, 1.0e-13f64, 20000usize)
-    if str.eq(c.name, "msll") { ret ll }
-    if str.eq(c.name, "msprior") {
-        var sq0 = 0.0f64
-        var t0 = 0usize
-        while t0 < nr {
-            sq0 += prior[t0] * prior[t0]
-            t0 += 1usize
-        }
-        ret sq0
-    }
-    if str.eq(c.name, "msprobs") {
-        var sq1 = 0.0f64
-        var t1 = 0usize
-        while t1 < nr * tc {
-            sq1 += probs[t1] * probs[t1]
-            t1 += 1usize
-        }
-        ret sq1
-    }
-    if str.eq(c.name, "ll") { ret ll }
-    if str.eq(c.name, "npar") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 0usize) }
-    if str.eq(c.name, "aic") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 1usize) }
-    if str.eq(c.name, "gsq") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 2usize) }
-    if str.eq(c.name, "chisq") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 3usize) }
-    if str.eq(c.name, "rdf") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 4usize) }
-    if str.eq(c.name, "entropy") { ret pl.entropy(a, ncat, nr, probs, prior) }
-    if str.eq(c.name, "pred") { ret pl.fit_stats(a, data, n, nj, ncat, nr, probs, prior, ll, 5usize) }
-    if str.eq(c.name, "se_probs") || str.eq(c.name, "se_prior") {
-        let (so, soe) = mem.alloc[f64](a, nr * tc + nr)
-        if soe != ok { ret nan }
-        if !pl.se(a, data, n, nj, ncat, nr, probs, prior, so) { ret nan }
-        var ss = 0.0f64
-        if str.eq(c.name, "se_prior") {
-            var t = 0usize
-            while t < nr {
-                ss += so[nr * tc + t] * f64(t + 1usize)
-                t += 1usize
-            }
-            ret ss
-        }
-        var sp = 1usize
-        var soff = 0usize
-        var sv = 0usize
-        while sv < nj {
-            var sr = 0usize
-            while sr < nr {
-                var sk = 0usize
-                while sk < ncat[sv] {
-                    ss += so[sr * tc + soff + sk] * f64(sp)
-                    sp += 1usize
-                    sk += 1usize
-                }
-                sr += 1usize
-            }
-            soff += ncat[sv]
-            sv += 1usize
-        }
-        ret ss
-    }
+    let q = usize(z[3usize])
+    let nrep = usize(z[4usize])
+    var rng: rg.Rng = zero
+    rg.seed(&rng, i64(z[5usize]))
+    let na_rm = z[6usize] > 0.5f64
+    let ls = usize(z[7usize])
+    let st = z[8usize..8usize + ls]
+    let yo = 8usize + ls
+    let y = z[yo..yo + n * nj]
+    let x = z[yo + n * nj..yo + n * nj + n * q]
+    let (f, e) = pl.lca_fit(a, y, n, nj, x, q, nr, st, nrep, &rng, 1.0e-10f64, 1000usize, na_rm)
+    ret (f, e)
+}
+
+fn wsum(v: []const f64) -> f64 {
     var s = 0.0f64
-    if str.eq(c.name, "prior") {
-        i = 0usize
-        while i < nr {
-            s += prior[i] * f64(i + 1usize)
+    var i = 0usize
+    while i < v.len {
+        s += v[i] * f64(i + 1usize)
+        i += 1usize
+    }
+    ret s
+}
+
+fn pick(v: []const f64, k: usize) -> f64 {
+    if k == 0usize || k > v.len { ret 0.0f64 / 0.0f64 }
+    ret v[k - 1usize]
+}
+
+fn query(a: *mem.Arena, f: *const pl.Fit, code: usize, k: usize) -> f64 {
+    if code == 1usize { ret f64(f.numiter) }
+    if code == 2usize { ret f.npar }
+    if code == 3usize { ret f.aic }
+    if code == 4usize { ret f.bic }
+    if code == 5usize { ret f.gsq }
+    if code == 6usize { ret f.chisq }
+    if code == 7usize { ret f.resid_df }
+    if code == 8usize { ret f64(f.nobs) }
+    if code == 9usize { ret f64(f.n) }
+    if code == 10usize { ret pl.lca_entropy(a, f) }
+    if code == 11usize {
+        if f.eflag { ret 1.0f64 }
+        ret 0.0f64
+    }
+    if code == 12usize { ret f64(f.ncell) }
+    if code == 13usize || code == 14usize {
+        var s = 0.0f64
+        var i = 0usize
+        while i < f.n {
+            var w = 1.0f64
+            if code == 14usize { w = f64(i + 1usize) }
+            s += f64(f.predclass[i]) * w
             i += 1usize
         }
         ret s
     }
-    if str.eq(c.name, "bic") {
-        var npar = f64(nr - 1usize)
-        i = 0usize
-        while i < nj {
-            npar += f64(nr * (ncat[i] - 1usize))
-            i += 1usize
-        }
-        ret 0.0f64 - 2.0f64 * ll + npar * math.log[f64](f64(n))
-    }
-    // R lists the probabilities variable by variable, then class, then category
-    var pos = 1usize
-    off = 0usize
-    v = 0usize
-    while v < nj {
-        var r = 0usize
-        while r < nr {
-            var k = 0usize
-            while k < ncat[v] {
-                s += probs[r * tc + off + k] * f64(pos)
-                pos += 1usize
-                k += 1usize
-            }
-            r += 1usize
-        }
-        off += ncat[v]
-        v += 1usize
-    }
-    ret s
+    if code == 20usize { ret pick(f.probs, k) }
+    if code == 21usize { ret pick(f.prior_p, k) }
+    if code == 22usize { ret pick(f.probs_se, k) }
+    if code == 23usize { ret pick(f.p_se, k) }
+    if code == 24usize { ret pick(f.coeff, k) }
+    if code == 25usize { ret pick(f.coeff_se, k) }
+    if code == 26usize { ret pick(f.coeff_v, k) }
+    if code == 27usize { ret pick(f.attempts[0usize..f.nattempt], k) }
+    if code == 28usize { ret pick(f.probs_start, k) }
+    if code == 30usize { ret wsum(f.posterior) }
+    if code == 31usize { ret wsum(f.observed) }
+    if code == 32usize { ret wsum(f.expected) }
+    if code == 33usize { ret wsum(f.cells) }
+    ret 0.0f64 / 0.0f64
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -283,11 +91,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
+    var cur: pl.Fit = zero
+    var have = false
+    let base = mem.mark(a)
     var at = 0usize
     while at < golden.cases.len {
-        let start = mem.mark(a)
         let c = &golden.cases[at]
-        let got = answer(a, c)
+        var got = 0.0f64 / 0.0f64
+        if str.eq(c.name, "fit") {
+            mem.reset(a, base)
+            let (f, e) = fit_case(a, c)
+            have = e == ok
+            cur = f
+            if have { got = cur.llik }
+        } else if have {
+            let start = mem.mark(a)
+            got = query(a, &cur, usize(c.args[0usize]), usize(c.args[1usize]))
+            mem.reset(a, start)
+        }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
@@ -295,7 +116,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let _ = io.print("\n")
             }
         }
-        mem.reset(a, start)
         at += 1usize
     }
     if failures > 0usize { os.exit(1) }
