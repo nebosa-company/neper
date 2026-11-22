@@ -52308,3 +52308,19 @@ The next measurement after D7799 was meant to time `qghyp_full(..., spline = fal
 Two rules from this investigation apply directly and were both learned the hard way earlier in it (D7792, D7794): the measurement has to be verified before the reading is believed, and a probe that exits cleanly without output is a failed probe, not a fast one. Nothing was concluded about `pghyp_tail`'s cost from this run, and no library code was touched.
 
 The next attempt should (a) print the value with a plain `io.print` of a constant first, to prove the output path works, (b) check `$LASTEXITCODE` alongside the output, and (c) time the *fixture binary itself* on the one-case oracle, which is known to run and to hang - that sidesteps the probe entirely and gives the number that matters (how long the failing case takes per host), even if it only produces "timed out" versus "N seconds".
+## D7801 — The single case timings invert the assumption: Windows 91.6 s, Linux 35 s for the same qghypF case
+
+Timing the one-case oracle (case 1313, `qghypF(0.001, ...)`) with the fixture binary itself, no probe:
+
+| host | single case wall clock |
+|---|---|
+| x64-windows | **91.6 s** |
+| x64-linux | **35 s** |
+
+So for this case Linux is **2.6x faster**, not slower. That overturns the framing of the last five rounds: the case is not a Linux-specific hang at all - it is an *inherently expensive* case (it builds the 501-point `pghyp_tail` spline, D7799), and it is slower on the host where the fixture as a whole "passes quickly".
+
+The arithmetic then explains the observations without any bug: the cumulative Linux bisect showed 1300 cases in 30 s and a 60 s timeout at 1315, which is exactly 30 s of cheap cases plus ~35 s for this one case crossing the budget. The earlier 1362 s full-file run is the sum of the handful of expensive cases in the file (each 35-92 s) plus everything else, not one runaway loop - and the Windows figures in L407's evidence (155-185 s for the pair) evidently describe a smaller or older oracle than the current 2570-case file.
+
+Consequences, all measured: the fixture needs **splitting by case cost** (the expensive `qghypF`/`qghyp` spline cases into their own fixture) rather than any code change; the two unbounded loops remain code-quality issues to fix on their own merits, not because they cause this; and L407's evidence should stop describing the Linux gap as a "platform problem" - it is a fixture-budget problem, and the honest number is the per-case cost above.
+
+Six rounds, six measurements, and the conclusion is the opposite of the first hypothesis - and of the third. The one thing that did not change: no library code was modified to chase it.
