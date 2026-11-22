@@ -1,9 +1,17 @@
 // R VIM::kNN for one numeric variable: each missing value takes the median (or mean) of the k nearest rows that have it, by Gower distance on the other columns (absolute difference over the column range, averaged). Columns are row-major, the other columns complete.
 //
-// Not here: missing values in the distance columns (VIM imputes those first and reuses them), factors, ordered and mixed variables, weights, donor conditions, random-forest distances.
+// VIM::hotdeck for numeric columns: a single random row order from runif(n) on the seed, then each
+// missing value takes the value of the row before it in that order (stepping back while the donor is
+// missing too, wrapping within the data), its columns imputed independently.
+//
+// Not here: missing values in the distance columns (VIM imputes those first and reuses them), factors, ordered and mixed variables, weights, donor conditions, random-forest distances; for hotdeck, domain_var, donorcond, ord_var, impNA = FALSE and the give-up-after-50-steps random donor.
 
+use e.algo.rand.r as rng
 use e.math
 use e.mem
+
+// one row with a missing value has no donor at all, where VIM stops with "No donor available for ..."
+error Invalid
 
 // x is n by p row-major; column v has NaN where missing; the filled column goes into out (n values)
 fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, out: []f64) -> err {
@@ -90,6 +98,86 @@ fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: us
             }
         }
         i += 1usize
+    }
+    ret ok
+}
+
+// VIM::hotdeck over every column (variable = NULL, ord_var = NULL, domain_var = NULL, imp_var = FALSE):
+// x is n by p row-major with NaN where missing and out receives the filled matrix. The rows are put in
+// ascending order of runif(n) from seed (VIM's RandomVariableForImputationWithHotdeck), and a missing
+// value takes the value of the row immediately before it in that order; when that row's value is
+// missing too the search steps further back, wrapping to the far end, and gives up only past
+// min(50, n) steps. Each column is imputed independently on the same shared order, because VIM imputes
+// every variable from the same sorted data.
+fn hotdeck(a: *mem.Arena, x: []const f64, n: usize, p: usize, seed: i64, out: []f64) -> err {
+    if x.len < n * p || out.len < n * p { ret mem.Full }
+    let (order, e1) = mem.alloc[usize](a, n)
+    let (u, e2) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    var g: rng.Rng = zero
+    rng.seed(&g, seed)
+    var i = 0usize
+    while i < n {
+        u[i] = rng.runif(&g, 0.0f64, 1.0f64)
+        order[i] = i
+        i += 1usize
+    }
+    // stable ascending sort of the row indices by their random value (R's order over the runif column)
+    i = 1usize
+    while i < n {
+        let oi = order[i]
+        var q = i
+        while q > 0usize && u[order[q - 1usize]] > u[oi] {
+            order[q] = order[q - 1usize]
+            q -= 1usize
+        }
+        order[q] = oi
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            out[i * p + c] = x[i * p + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    var limit = 50usize
+    if n < limit { limit = n }
+    var at = 0usize
+    while at < n {
+        let row = order[at]
+        var c = 0usize
+        while c < p {
+            // VIM decides applicability once, from the original data, so a value imputed earlier in
+            // this pass is never a donor; step back in 1-based positions, wrapping once, as imputeHD does
+            if x[row * p + c] != x[row * p + c] {
+                if n < 2usize { ret Invalid }
+                let posn = i64(at + 1usize)
+                var donor = posn - 1i64
+                if donor < 1i64 { donor = posn + 1i64 }
+                var found = false
+                if donor >= 1i64 && donor <= i64(n) {
+                    let d = order[usize(donor - 1i64)]
+                    if x[d * p + c] == x[d * p + c] { found = true }
+                }
+                var add = 2usize
+                while !found && add <= limit {
+                    donor = posn - i64(add)
+                    if donor < 1i64 { donor += i64(n) }
+                    if donor >= 1i64 && donor <= i64(n) {
+                        let d = order[usize(donor - 1i64)]
+                        if x[d * p + c] == x[d * p + c] { found = true }
+                    }
+                    add += 1usize
+                }
+                if found { out[row * p + c] = x[order[usize(donor - 1i64)] * p + c] }
+            }
+            c += 1usize
+        }
+        at += 1usize
     }
     ret ok
 }
