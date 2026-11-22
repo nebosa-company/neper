@@ -52340,3 +52340,19 @@ The mechanical split was done (no R packages needed): `qghypF` cases whose eight
 What this does establish is the shape of the cost: the file's runtime is dominated by a subset of cases that is larger than the qghypF spline block, and the Windows figure in L407's evidence (155-185 s for the pair) is now three times contradicted - by the 2570-case file today, by the single-case timing of 91.6 s (D7801), and by this 600 s run. The right next measurement is to *time per case* rather than guess which functions are expensive: run the fixture with a per-case clock (or bisect the file by halves and record each half's wall clock), and only then choose the split boundary from data.
 
 Everything from this round is reverted; the tree carries only the generator patch from D7802, which is correct in shape but not yet validated because the oracle cannot be regenerated on this machine.
+## D7804 — The cost is concentrated between cases 1300 and 1650, and it is not the 32 spline quantiles
+
+Timing the oracle's prefix on x64-linux (stage-1 binary, per-case cost lower than Windows per D7801):
+
+| cases | Linux |
+|---|---|
+| 1300 | 30 s pass |
+| 1315 | timeout at 60 s (this is case 1313 alone, 35 s, on top of the 30 s of cheap cases) |
+| 1650 | **timeout at 200 s** |
+| 1900 | **timeout at 200 s** |
+
+So between case 1300 and case 1650 something adds more than 135 s, and by 1650 the prefix alone is over 200 s. That block is *not* the thirty-two `qghypF` spline cases: those are emitted early (the generator guards them with `rep <= 4`), and removing all 32 still left 2538 cases running past 600 s on Windows (D7803). There is a second, larger block of expensive cases sitting between 1300 and 1650.
+
+The useful conclusion for the fixture split is therefore negative and precise: neither "the spline quantiles" nor "the last third" is the boundary; the expensive cases start around 1300 and are numerous. The next measurement is a per-case clock inside the fixture (print the case index and elapsed time before each evaluation) so the cost profile is measured once instead of bisected four times - four rounds have now gone into localising it by halves.
+
+No code or oracle change was made in this round; the bisect inputs live in `.dsh-tmp` only.
