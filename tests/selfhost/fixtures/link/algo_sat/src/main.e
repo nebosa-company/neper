@@ -1,8 +1,9 @@
 // `e.algo.sat`: the solver finds models of satisfiable formulas and
 // refuses the pigeonhole formula, the at-most and pseudo-boolean encodings
 // agree with counting on every assignment, Tseitin gates make two circuits
-// that `equivalent` tells apart, WalkSAT finds a model, and preprocessing
-// applies units. Each check exits with its own code.
+// that `equivalent` tells apart, WalkSAT finds a model, preprocessing
+// applies units, and the smallest `i32` is refused as a literal. Each check
+// exits with its own code.
 
 use e.algo.rand
 use e.algo.sat as sat
@@ -225,6 +226,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var var_right: [1]i32 = zero
     let (_, var_error) = sat.tseitin(&tt, var_kind[..], var_left[..], var_right[..], 0usize)
     if var_error != sat.Invalid { os.exit(8i32) }
+
+    // 9: #1646/#1745: the smallest i32 is not a literal; `abs` of it must not
+    // overflow -- the clause build refuses it as Invalid.
+    let (m0, m_error) = sat.cnf(literals[..], starts[..], 1usize)
+    if m_error != ok { os.exit(9i32) }
+    var m = m0
+    var min_lit: [1]i32 = zero
+    min_lit[0usize] = 0i32 - 2147483647i32 - 1i32
+    if sat.add_clause(&m, min_lit[..]) != sat.Invalid { os.exit(9i32) }
 
     try io.print("algo sat ok\n")
     ret ok

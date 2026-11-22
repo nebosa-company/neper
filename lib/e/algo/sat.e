@@ -35,7 +35,7 @@ fn add_clause(f: *Cnf, lits: []const i32) -> err {
     if f.clauses + 1usize >= f.starts.len || at + lits.len > f.literals.len { ret TooSmall }
     var i = 0usize
     while i < lits.len {
-        if lits[i] == 0i32 || usize(abs(lits[i])) > f.variables { ret Invalid }
+        if lits[i] == 0i32 || lits[i] < -2147483647i32 || usize(abs(lits[i])) > f.variables { ret Invalid }
         f.literals[at + i] = lits[i]
         i += 1usize
     }
