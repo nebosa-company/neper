@@ -153,6 +153,64 @@ fn woe_counts(codes: []const usize, n: usize, labels: []const usize, nlev: usize
     ret ok
 }
 
+// klaR::sknn's predict for one row: the squared Euclidean distance to every learn row, the k nearest in
+// (distance, row order), each weighted 1 (or exp(-gamma * distance) when gamma is not 0), summed per class
+// and normalised over the classes; post holds one value per class and the predicted class is the first
+// largest posterior. klaR's max.col breaks a tie at random, so the oracle keeps only untied draws. The
+// caller supplies dist[n] and cand[n] scratch and post[k].
+fn sknn_predict(row: []const f64, p: usize, learn: []const f64, n: usize, labels: []const usize, k: usize, gamma: f64, dists: []f64, cand: []usize, post: []f64) -> usize {
+    var i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var c = 0usize
+        while c < p {
+            let d = learn[i * p + c] - row[c]
+            s += d * d
+            c += 1usize
+        }
+        dists[i] = s
+        // insertion ordered by (distance, row index)
+        var q = i
+        while q > 0usize && dists[cand[q - 1usize]] > s {
+            cand[q] = cand[q - 1usize]
+            q -= 1usize
+        }
+        cand[q] = i
+        i += 1usize
+    }
+    var j = 0usize
+    while j < post.len {
+        post[j] = 0.0f64
+        j += 1usize
+    }
+    var kk = k
+    if n < kk { kk = n }
+    var tot = 0.0f64
+    var q = 0usize
+    while q < kk {
+        var w = 1.0f64
+        if gamma != 0.0f64 { w = math.exp[f64](0.0f64 - gamma * dists[cand[q]]) }
+        let cls = labels[cand[q]]
+        if cls >= 1usize && cls <= post.len { post[cls - 1usize] += w }
+        tot += w
+        q += 1usize
+    }
+    if tot != 0.0f64 {
+        j = 0usize
+        while j < post.len {
+            post[j] = post[j] / tot
+            j += 1usize
+        }
+    }
+    var best = 0usize
+    j = 1usize
+    while j < post.len {
+        if post[j] > post[best] { best = j }
+        j += 1usize
+    }
+    ret best + 1usize
+}
+
 // the posterior of one observation over the k classes into post, and the predicted class (1-based), with
 // numeric columns read through mean and sd and factor columns through fprob
 fn nb_predict_mixed(row: []const f64, p: usize, k: usize, prior: []const f64, mean: []const f64, sd: []const f64, fprob: []const f64, is_factor: []const bool, maxlev: usize, threshold: f64, post: []f64) -> usize {
