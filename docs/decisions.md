@@ -52275,3 +52275,14 @@ D7796 showed `ghyprange` passes while `qghypF` hangs on the same shape, which al
 Two things follow. First, the diagnosis is now static as well as empirical: one unbounded loop on the hanging path, one off it, and a measured minimal reproduction that enters only the former. Second, the fix still cannot be a bare cap: if `pgig_ssf(..., lower = false)` fails to fall below `p` as x grows, a cap would only convert the hang into a wrong answer, which is worse than a timeout. The next measurement is therefore `pgig_ssf` against x for this shape on both hosts - if it plateaus instead of decaying, the bug is in the incomplete BesselK tail, not in the loop bound, and that is a different repair.
 
 The same `while (density/tail >= level) { x = x + sd }` idiom appears twice in this module and both sites were written without a bound; once the real cause is known, both should get the same treatment rather than the one that happens to be on today's failing path.
+## D7798 — The tail is identical on both hosts, so the expansion loop is not the hang either
+
+The decisive measurement: a probe calling `pgig_ssf(x, chi, psi, lambda, eps, 200, lower = false)` for x = mode + k*sd on the failing shape (chi = 3.4485387429594994, psi = 0.9256219523493201, lambda = -0.2732930487811299, mode 0.9946, sd 1.5839) gives **the same thirteen numbers on x64-windows and x64-linux**:
+
+    0.275, 0.0977, 0.0366, 0.0143, 0.00573, 0.00235, 9.83e-4, 4.16e-4, 1.78e-4, 7.72e-5, 3.37e-5, 1.48e-5
+
+It falls below p = 0.001 at k = 7 on both hosts, so `qgig_integrate`'s `while pgig_ssf(..., false) >= p { xhigh = xhigh + sd }` exits after seven steps on Linux exactly as on Windows. **The expansion loop is exonerated**, and with it every bound-and-cap theory (D7792, D7795, D7797): the hang is not where the loop runs away - it is downstream, in the `zeroin` root find that follows, whose iterations each call `pgig_ssf` at the *ibf tolerance* `eps^0.85` (~1e-14) rather than the `eps` the probe used. A tolerance the incomplete-BesselK series only marginally meets would make each iteration expensive, and on Linux - where the arithmetic drifts in the last bits - possibly much more expensive; a thousand such iterations is a hang by any other name.
+
+That reframes the fix completely: it is not a loop bound but a question of how much accuracy `pgig_ssf` costs at `eps^0.85` and `nmax` on each host. The next measurement is the same probe at the real tolerance and nmax that `qghypF` passes, timing one call on both hosts - if Linux takes orders of magnitude longer per call, the repair is in the incomplete BesselK's convergence test, not in any loop in this module.
+
+This is the fourth theory about the same hang, and the first three were all about loops that turned out to be innocent. The pattern to carry is that a hang in a numerical module is more often an expensive inner call than a missing bound.
