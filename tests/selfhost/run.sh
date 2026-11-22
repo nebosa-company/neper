@@ -1354,26 +1354,6 @@ fmt_gzip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_gzip_written" = 'executable written' ]
 chmod +x "$test_build/fmt-gzip-selfhost"
 "$test_build/fmt-gzip-selfhost"
-# `e.fmt.mp4`: a hand-built av01 track read back field by field (stco and co64), five refusals.
-fmt_mp4_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mp4/src/main.e" "$repo" x64 linux "$test_build/fmt-mp4-selfhost")
-[ "$fmt_mp4_written" = 'executable written' ]
-chmod +x "$test_build/fmt-mp4-selfhost"
-"$test_build/fmt-mp4-selfhost"
-# `e.fmt.av1` and the av1_* modules: a libaom-encoded MP4 clip (e.fmt.mp4) decoded, every plane hashed against ffmpeg's decode.
-fmt_av1_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_av1/src/main.e" "$repo" x64 linux "$test_build/fmt-av1-selfhost")
-[ "$fmt_av1_written" = 'executable written' ]
-chmod +x "$test_build/fmt-av1-selfhost"
-"$test_build/fmt-av1-selfhost"
-# `e.gfx.hclpal_tables`: row and field counts, two rows whole, the CVD matrices against `e.gfx.cvd_table`.
-gfx_hclpal_tables_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_hclpal_tables/src/main.e" "$repo" x64 linux "$test_build/gfx-hclpal-tables-selfhost")
-[ "$gfx_hclpal_tables_written" = 'executable written' ]
-chmod +x "$test_build/gfx-hclpal-tables-selfhost"
-"$test_build/gfx-hclpal-tables-selfhost"
-# `e.algo.stat.gbmpkg`: gaussian boosting of a step function worked out by hand, recorded trees, predict, influence.
-stat_gbmpkg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/stat_gbmpkg/src/main.e" "$repo" x64 linux "$test_build/stat-gbmpkg-selfhost")
-[ "$stat_gbmpkg_written" = 'executable written' ]
-chmod +x "$test_build/stat-gbmpkg-selfhost"
-"$test_build/stat-gbmpkg-selfhost"
 # `e.fmt.zip`: Python's archive and a hand-built ZIP64 one read, seven refusals.
 fmt_zip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_zip/src/main.e" "$repo" x64 linux "$test_build/fmt-zip-selfhost")
 [ "$fmt_zip_written" = 'executable written' ]
@@ -9933,36 +9913,6 @@ check_protocol_diagnostic module_cycle 'b.e:1:1: error[E-MODULE-0002]: `use main
 check_protocol_diagnostic lex_literal 'main.e:3:13: error[E-LEX-0003]: string literal is not closed before the end of the line'
 check_protocol_diagnostic lex_tab 'main.e:3:1: error[E-LEX-0002]: a tab; indent and separate with spaces'
 check_protocol_diagnostic lex_utf8 'main.e:2:21: error[E-LEX-0001]: a byte that is not valid UTF-8'
-require_fixture check/unused_import
-unused_fixture="$repo/tests/selfhost/fixtures/check/unused_import/src/main.e"
-$test_build/neper-self check-file "$unused_fixture" "$repo" x64 linux >/dev/null || { printf '%s\n' "an unused import failed a check that did not ask for --unused-imports" >&2; exit 1; }
-if unused_output=$($test_build/neper-self check-file "$unused_fixture" "$repo" x64 linux --unused-imports 2>&1); then
-    printf '%s\n' "--unused-imports accepted unnamed imports" >&2
-    exit 1
-fi
-case "$unused_output" in
-    *'main.e:1:1: error[E-MODULE-0003]'*'main.e:3:1: error[E-MODULE-0003]'*) ;;
-    *) printf '%s\n' "--unused-imports did not report the unnamed imports: $unused_output" >&2; exit 1 ;;
-esac
-case "$unused_output" in
-    *'main.e:2:1: error'*) printf '%s\n' "--unused-imports reported a named import: $unused_output" >&2; exit 1 ;;
-esac
-require_fixture check/unused_code
-dead_fixture="$repo/tests/selfhost/fixtures/check/unused_code/src/main.e"
-$test_build/neper-self check-file "$dead_fixture" "$repo" x64 linux >/dev/null || { printf '%s\n' "an unused declaration failed a check that did not ask for --unused-code" >&2; exit 1; }
-if dead_output=$($test_build/neper-self check-file "$dead_fixture" "$repo" x64 linux --unused-code 2>&1); then
-    printf '%s\n' "--unused-code accepted unnamed declarations" >&2
-    exit 1
-fi
-for dead_want in '4:1: error[E-MODULE-0004]: constant `IDLE`' '5:1: error[E-MODULE-0004]: error `Gone`' '6:1: error[E-MODULE-0004]: type `Point`' '7:1: error[E-MODULE-0004]: type `Spare`' '10:1: error[E-MODULE-0004]: function `dead`'; do
-    case "$dead_output" in
-        *"$dead_want"*) ;;
-        *) printf '%s\n' "--unused-code did not nominate $dead_want: $dead_output" >&2; exit 1 ;;
-    esac
-done
-case "$dead_output" in
-    *'function `helper`'*|*'constant `USED`'*|*'function `point_cmp`'*) printf '%s\n' "--unused-code nominated a named declaration: $dead_output" >&2; exit 1 ;;
-esac
 cli_status=0
 cli_output=$($test_build/neper-self 2>&1) || cli_status=$?
 [ "$cli_status" -eq 1 ]

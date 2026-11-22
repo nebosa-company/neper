@@ -23,3 +23,30 @@ fn matern(d0: f64, range: f64, nu: f64, phi: f64) -> f64 {
 
 // Exp.cov between two points at distance d with range aRange and power p: exp(-(d / aRange)^p)
 fn exp_cov(d: f64, range: f64, p: f64) -> f64 { ret math.exp[f64](0.0f64 - math.pow[f64](d / range, p)) }
+
+// whether (px, py) lies in the convex hull of the n points in the first two columns of x (n rows, d columns, row major): on the left of every supporting line through two of them
+// (predictSurface's extrap = FALSE mask, fields in.poly with convex.hull = TRUE, up to its single-precision test at the boundary)
+fn in_hull(x: []const f64, n: usize, d: usize, px: f64, py: f64) -> bool {
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            if i != j {
+                let ex = x[j * d] - x[i * d]
+                let ey = x[j * d + 1usize] - x[i * d + 1usize]
+                var edge = true
+                var k = 0usize
+                while k < n && edge {
+                    if ex * (x[k * d + 1usize] - x[i * d + 1usize]) - ey * (x[k * d] - x[i * d]) < 0.0f64 { edge = false }
+                    k += 1usize
+                }
+                if edge {
+                    if ex * (py - x[i * d + 1usize]) - ey * (px - x[i * d]) < 0.0f64 { ret false }
+                }
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}

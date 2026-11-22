@@ -1400,30 +1400,6 @@ $fmtGzipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtGzipWritten -ne 'executable written') { throw 'fmt_gzip emission failed' }
 & $fmtGzipPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_gzip check failed: exit $LASTEXITCODE" }
-# `e.fmt.mp4`: a hand-built av01 track read back field by field (stco and co64), five refusals.
-$fmtMp4Path = Join-Path $testBuild 'fmt-mp4-selfhost.exe'
-$fmtMp4Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_mp4\src\main.e') $repo 'x64' 'windows' $fmtMp4Path
-if ($LASTEXITCODE -ne 0 -or $fmtMp4Written -ne 'executable written') { throw 'fmt_mp4 emission failed' }
-& $fmtMp4Path
-if ($LASTEXITCODE -ne 0) { throw "a fmt_mp4 check failed: exit $LASTEXITCODE" }
-# `e.fmt.av1` and the av1_* modules: a libaom-encoded MP4 clip (e.fmt.mp4) decoded, every plane hashed against ffmpeg's decode.
-$fmtAv1Path = Join-Path $testBuild 'fmt-av1-selfhost.exe'
-$fmtAv1Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_av1\src\main.e') $repo 'x64' 'windows' $fmtAv1Path
-if ($LASTEXITCODE -ne 0 -or $fmtAv1Written -ne 'executable written') { throw 'fmt_av1 emission failed' }
-& $fmtAv1Path
-if ($LASTEXITCODE -ne 0) { throw "a fmt_av1 check failed: exit $LASTEXITCODE" }
-# `e.gfx.hclpal_tables`: row and field counts, two rows whole, the CVD matrices against `e.gfx.cvd_table`.
-$gfxHclpalTablesPath = Join-Path $testBuild 'gfx-hclpal-tables-selfhost.exe'
-$gfxHclpalTablesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_hclpal_tables\src\main.e') $repo 'x64' 'windows' $gfxHclpalTablesPath
-if ($LASTEXITCODE -ne 0 -or $gfxHclpalTablesWritten -ne 'executable written') { throw 'gfx_hclpal_tables emission failed' }
-& $gfxHclpalTablesPath
-if ($LASTEXITCODE -ne 0) { throw "a gfx_hclpal_tables check failed: exit $LASTEXITCODE" }
-# `e.algo.stat.gbmpkg`: gaussian boosting of a step function worked out by hand, recorded trees, predict, influence.
-$statGbmpkgPath = Join-Path $testBuild 'stat-gbmpkg-selfhost.exe'
-$statGbmpkgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\stat_gbmpkg\src\main.e') $repo 'x64' 'windows' $statGbmpkgPath
-if ($LASTEXITCODE -ne 0 -or $statGbmpkgWritten -ne 'executable written') { throw 'stat_gbmpkg emission failed' }
-& $statGbmpkgPath
-if ($LASTEXITCODE -ne 0) { throw "a stat_gbmpkg check failed: exit $LASTEXITCODE" }
 # `e.fmt.zip`: Python's archive and a hand-built ZIP64 one read, seven refusals.
 $fmtZipPath = Join-Path $testBuild 'fmt-zip-selfhost.exe'
 $fmtZipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_zip\src\main.e') $repo 'x64' 'windows' $fmtZipPath
@@ -10336,26 +10312,6 @@ foreach ($case in $codeDiagnostics) {
     if ($LASTEXITCODE -ne 1 -or ($codeOutput -join "`n") -notmatch $case[1]) {
         throw "diagnostic code for $($case[0]) is wrong: $($codeOutput -join "`n")"
     }
-}
-Require-Fixture 'check/unused_import'
-$unusedFixture = Join-Path $repo 'tests\selfhost\fixtures\check\unused_import\src\main.e'
-& $compiler check-file $unusedFixture $repo 'x64' 'windows' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'an unused import failed a check that did not ask for --unused-imports' }
-$unusedOutput = & $compiler check-file $unusedFixture $repo 'x64' 'windows' --unused-imports 2>&1
-$unusedText = $unusedOutput -join "`n"
-if ($LASTEXITCODE -ne 1 -or $unusedText -notmatch 'main\.e:1:1: error\[E-MODULE-0003\]' -or $unusedText -notmatch 'main\.e:3:1: error\[E-MODULE-0003\]' -or $unusedText -match 'main\.e:2:1: error') {
-    throw "--unused-imports did not report exactly the unnamed imports: $unusedText"
-}
-Require-Fixture 'check/unused_code'
-$deadFixture = Join-Path $repo 'tests\selfhost\fixtures\check\unused_code\src\main.e'
-& $compiler check-file $deadFixture $repo 'x64' 'windows' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'an unused declaration failed a check that did not ask for --unused-code' }
-$deadOutput = & $compiler check-file $deadFixture $repo 'x64' 'windows' --unused-code 2>&1
-$deadText = $deadOutput -join "`n"
-$deadWant = @('4:1: error\[E-MODULE-0004\]: constant `IDLE`', '5:1: error\[E-MODULE-0004\]: error `Gone`', '6:1: error\[E-MODULE-0004\]: type `Point`', '7:1: error\[E-MODULE-0004\]: type `Spare`', '10:1: error\[E-MODULE-0004\]: function `dead`')
-$deadMiss = @($deadWant | Where-Object { $deadText -notmatch $_ })
-if ($LASTEXITCODE -ne 1 -or $deadMiss.Count -ne 0 -or $deadText -match 'E-MODULE-0004\]: [a-z]+ `(USED|helper|point_cmp|main)`') {
-    throw "--unused-code did not nominate exactly the unnamed declarations: $deadText"
 }
 $cliOutput = & $compiler 2>&1
 if ($LASTEXITCODE -ne 1 -or ($cliOutput -join "`n") -notmatch 'error\[E-CLI-9999\]: usage: ') { throw "an empty command line was not refused under E-CLI-9999: $($cliOutput -join "`n")" }

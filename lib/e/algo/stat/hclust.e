@@ -12,6 +12,19 @@ type Tree = struct { merge_a: []i32, merge_b: []i32, height: []f64, order: []i32
 
 // d is the n by n full symmetric matrix (row-major); it is copied
 fn hclust(a: *mem.Arena, d: []const f64, n: usize, method: usize) -> (Tree, err) {
+    let (ones, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret (zero, e0) }
+    var q = 0usize
+    while q < n {
+        ones[q] = 1.0f64
+        q += 1usize
+    }
+    let (t, e1) = hclust_members(a, d, n, method, ones)
+    ret (t, e1)
+}
+
+// hclust with members (cluster sizes, as stats::hclust(members=) and flashClust::hclust)
+fn hclust_members(a: *mem.Arena, d: []const f64, n: usize, method: usize, mem0: []const f64) -> (Tree, err) {
     let (diss, e1) = mem.alloc[f64](a, n * n)
     if e1 != ok { ret (zero, e1) }
     let (membr, e2) = mem.alloc[f64](a, n)
@@ -38,7 +51,7 @@ fn hclust(a: *mem.Arena, d: []const f64, n: usize, method: usize) -> (Tree, err)
     i = 0usize
     while i < n {
         flag[i] = true
-        membr[i] = 1.0f64
+        membr[i] = mem0[i]
         i += 1usize
     }
     i = 0usize
