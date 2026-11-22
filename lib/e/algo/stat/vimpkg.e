@@ -110,14 +110,16 @@ fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: us
 // integer codes in the same matrix and named by is_factor. A numeric column is scaled by its range over
 // the whole table (gowerD pools donors and the rows to impute, so every row), a categorical column
 // answers 0 for equal and 1 for different, and the distance is the mean over the p - 1 distance columns
-// (VIM's default weights are all one). The k nearest donors in (distance, row order) order then give the
-// median or mean of a numeric target, or the most frequent code of a categorical one; a tie among the
+// (VIM's default weights are all one). A missing distance value is replaced by the largest prepared
+// value of its column plus one (gowerD's "Maximum + 1 for missing values"), so two missing entries in a
+// column are at distance 0 from each other. The k nearest donors in (distance, row order) order then give
+// the median or mean of a numeric target, or the most frequent code of a categorical one; a tie among the
 // donor codes takes the lowest code, where VIM's maxCat samples (no oracle case has a tie).
 fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, is_factor: []const bool, out: []f64) -> err {
-    let (rg, e1) = mem.alloc[f64](a, p)
+    let (prep, e0) = mem.alloc[f64](a, n * p)
     let (dist, e2) = mem.alloc[f64](a, n)
     let (cand, e3) = mem.alloc[usize](a, n)
-    if e1 != ok { ret e1 }
+    if e0 != ok { ret e0 }
     if e2 != ok { ret e2 }
     if e3 != ok { ret e3 }
     var c = 0usize
@@ -138,7 +140,25 @@ fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize,
         // gowerD divides by the range, and replaces a zero or missing range with 1
         var r = hi - lo
         if is_factor[c] || !(r > 0.0f64) { r = 1.0f64 }
-        rg[c] = r
+        // the prepared value: the scaled double of a numeric column, the code of a categorical one
+        var mx = -1.0e300f64
+        var i = 0usize
+        while i < n {
+            let t = x[i * p + c]
+            var prep_v = t
+            if !is_factor[c] && t == t { prep_v = t / r }
+            prep[i * p + c] = prep_v
+            if prep_v == prep_v && prep_v > mx { mx = prep_v }
+            i += 1usize
+        }
+        // maxplus1: the column's largest prepared value + 1, or 1 for a column with no observed value
+        var m1 = mx + 1.0f64
+        if !(mx > -1.0e300f64) { m1 = 1.0f64 }
+        i = 0usize
+        while i < n {
+            if !(prep[i * p + c] == prep[i * p + c]) { prep[i * p + c] = m1 }
+            i += 1usize
+        }
         c += 1usize
     }
     var i = 0usize
@@ -159,9 +179,9 @@ fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize,
                     while c < p {
                         if c != v {
                             if is_factor[c] {
-                                if x[i * p + c] != x[j * p + c] { s += 1.0f64 }
+                                if prep[i * p + c] != prep[j * p + c] { s += 1.0f64 }
                             } else {
-                                s += math.abs[f64](x[i * p + c] - x[j * p + c]) / rg[c]
+                                s += math.abs[f64](prep[i * p + c] - prep[j * p + c])
                             }
                         }
                         c += 1usize
