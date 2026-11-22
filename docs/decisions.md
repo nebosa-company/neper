@@ -51857,3 +51857,7 @@ Each passed an acceptance verifier and its fixtures on Windows in the integratio
 ## D7737 — L362 fitdistrplus, L486 mixtools, L437 gstat and L507 gsDesign closed
 
 Each closed item passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. Partial items stay open with their gaps in the queue evidence.
+
+## D7738 — L378 uwot and Rtsne closed; ks, locfit, kernlab, fixest, plm, actuar and copula advanced
+
+Each closed item passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. Partial items stay open with their gaps in the queue evidence.

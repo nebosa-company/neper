@@ -32,11 +32,10 @@ L339	library	0.24	1899	bayestestR, performance and parameters: model summary ind
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L360	library	0.6	1690	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (2026-11-22, merged 686357d41;
 L361	library	0.2	1406	segmented and strucchange: breakpoints and structural change	Partial (D6613).
-L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
+L365	library	0.6	1415	ks: multivariate kernel density estimation	Partial (2026-11-22, merged 41f86e864;
 L367	library	0.8	2224	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (2026-11-21, merged 9e1b3e122;
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
 L376	library	0.9	1857	gam: backfitting generalized additive models	Partial (2026-11-21, merged 9e1b3e122;
-L378	library	0.2	651	uwot and Rtsne: embeddings equal to R	Partial (D7691): Rtsne with theta = 0 (exact t-SNE) from a given start equals Rtsne on Windows (oracle_tsne, 608 cases;
 L393	library	0.7	1462	ordinal: cumulative link models	Partial (2026-11-21, merged 0de9a3a3a;
 L415	library	0.6	1272	marginaleffects: predictions, slopes and comparisons	Partial (2026-11-21, merged b1d65869c;
 L416	library	0.15	609	polspline: polynomial spline models	D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 va
@@ -53,19 +52,19 @@ L304	library	0.9	1510	haven: SAS, SPSS and Stata file formats	Partial (2026-11-2
 L315	library	0.1	744	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix);
 L316	library	0.1	1096	igraph: deterministic structure and community detection	Partly done (D6061, D7266: triad_census, which_mutual, bridges, edge_connectivity, vertex_connectivity, similarity invlogweighted, motifs of size 3 and dominator_tree equal igraph, 1612 values): e.alg
 L345	library	0.15	809	FactoMineR and factoextra: multivariate exploration	Partial (D6633).
-L347	library	0.15	752	locfit: local regression and likelihood	Partial (D6635).
-L366	library	0.15	734	kernlab: kernel methods	Partial (D6634).
-L368	library	0.2	684	fixest: high-dimensional fixed-effects estimation	Partial (D6623).
-L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (D6620).
+L347	library	0.85	1739	locfit: local regression and likelihood	Partial (2026-11-22, merged 41f86e864;
+L366	library	0.6	1686	kernlab: kernel methods	Partial (2026-11-22, merged 41f86e864;
+L368	library	0.5	1546	fixest: high-dimensional fixed-effects estimation	Partial (2026-11-22, merged 41f86e864;
+L369	library	0.5	1543	plm and AER: panel data and applied econometrics	Partial (2026-11-22, merged 41f86e864;
 L372	library	0.15	729	spdep: spatial autocorrelation and spatial regression	Partial (D6624).
 L417	library	0.93	1314	gsl: special functions of the GNU Scientific Library	Partial (2026-11-21, merged 9e1b3e122;
 L435	library	0.15	840	sna: social network analysis	Partial (D6636).
 L438	library	0.8	1340	gss: smoothing spline ANOVA	Partial (2026-11-21, merged 6ddc62d0b;
 L439	library	0.75	1804	MCMCpack: Bayesian MCMC for common models	Partial (2026-11-21, merged 6ddc62d0b;
 L455	library	0.1	742	geometry: Qhull in n dimensions	Partial (D6645).
-L463	library	0.25	2452	actuar: actuarial science	Partial (D6143).
+L463	library	0.5	1555	actuar: actuarial science	Partial (2026-11-22, merged 41f86e864;
 L467	library	0.1	846	hetGP: heteroskedastic Gaussian processes	Partial (D6647).
-L514	library	0.1	641	copula: dependence models	Partial (D6637).
+L514	library	0.5	1285	copula: dependence models	Partial (2026-11-22, merged 41f86e864;
 L311	library	0.14	3155	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	D7366: tmerge event() equal to survival.
 L490	library	0.15	657	timereg: Aalen additive and Cox-Aalen hazard models	Partial (D6641).
 L491	library	0.15	673	riskRegression: risk prediction scoring	Partial (D6642).
