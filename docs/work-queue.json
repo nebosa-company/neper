@@ -262,10 +262,10 @@
       "group": "CRAN parity",
       "order": 669,
       "title": "quantreg: quantile regression inference and algorithms",
-      "score": 0.25,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg); Linux pending. D6866, D6867: summary.rq se nid and ker equal quantreg. Open: summary.rq rank, iid and boot, anova.rq, several taus, lasso, nlrq, rrq, rqss, dynrq. Original: Open (CRAN rank 131). Mid. One pinball-loss fit exists in e.ml.linear. Acceptance, equal to quantreg: rq with method br (Barrodale-Roberts simplex), fn and pfn (Frisch-Newton), lasso; summary.rq with se rank, iid, nid, ker and boot (seeded); anova.rq, rq with several taus, nlrq, rrq, rqss for the total-variation penalty, dynrq."
+      "evidence": "Partial (2026-11-22, merged 686357d41; Windows fixtures pass, score from the agent report): A plain git merge of the earlier branch dragged in unrelated docs and src changes, so I aborted it. I reset to master and checked out only the quantreg files from worktree-wf_d8339e9a-9e9-17: lib/e/algo/stat/quantreg.e, the 7 oracle groups and their JSON, and the 7 fixtures. The 6 new fixture names are appended to extra-fixtures.txt (oracle_quantreg was already listed). Tightened the original oracle_quantreg group: rq coefficients went from rel 1e-6 to 1e-9 (abs 1e-9) and nid/ker SEs from 1e-5 to 1e-9. I regenerated the JSON, and all 7 fixtures pass on x64-windows. The earlier branch's results Remaining: (1) nlrq: 3 fits (n=42 kind 1 tau 0.5 and 0.75; n=49 kind 2 tau 0.25) are checked at 5e-4, not 1e-9. R-side reason is commented: kinked 1-D step objective, ulp-level exp/sum differences. An exac | (2) Linux runs of the new quantreg fixtures are pending; only Windows was run. | (3) Not ported, outside the Acceptance list and skipped: nlrq with arbitrary formulas or numericDeriv; dynrq season/harmon/d/start/end; summary.rq boot variants other than xy (wxy, pxy, pwy, mcm | (4) I did not re-check that every Acceptance entry has an oracle case in this round."
     },
     {
       "id": "L314",
@@ -317,10 +317,10 @@
       "group": "CRAN parity",
       "order": 689,
       "title": "robustbase: robust regression and scale",
-      "score": 0.2,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6192, D6408 scaleTau2, D6409 mc without ties). Qn (to 1e-6), Sn and huberM agree with robustbase on Windows (oracle_robustbase; Linux pending). adjboxStats (D7577), the medcouple for odd n (D7578). adjOutlyingness with its defaults equals robustbase under set.seed (D7696, oracle_robustbase). covMcd for one variable (the exact univariate MCD with the consistency and small sample factors and the reweighting; D7711) equals robustbase. Open: covMcd in two or more variables (FastMCD), lmrob, ltsReg. Was: Open (CRAN rank 285). Mid. Pairs with the MASS robust fits in L306. Acceptance, equal to robustbase: lmrob (MM and SMDM), covMcd (FastMCD), ltsReg, glmrob, nlrob, huberM, medcouple (mc), adjbox, Qn, Sn and scaleTau2, with seeded subsampling."
+      "evidence": "Partial (2026-11-22, merged 686357d41; Windows fixtures pass, score from the agent report): The branch worktree-wf_d8339e9a-9e9-10 was already merged, so there was nothing to merge. Every Acceptance entry now has a passing oracle fixture, but nlrob's exp-based models are still checked at 1e-4. I made no edits to docs/ or the queue. Passing oracle fixtures (the new ones fail when the code is mutated, which I checked for lmrob): - **ltsReg, new, 1e-9 relative:** raw and reweighted coefficients, raw and reweighted scale, crit, rsquared, quan, raw weights, lts weights, reweighted residuals and the `best` subset indices (exact integers), over 470 cases. This ports rfltsreg.f literally: rf Remaining: (2) nlrob exp-based models (a*exp(b*x), a+b*exp(-c*x)) are still checked at 1e-4, not 1e-9: the forward-difference gradient amplifies R's exp ulp differences, and I did not try to fix it. | (3) ltsReg gaps: alpha = 1, the univariate location case, adjust = TRUE (intercept adjustment), the partitioned algorithm for n >= 600, and the mcd = TRUE robust distances (RD) are not ported; t | (4) lmrob gaps: only the 'MM' (bisquare) and 'SMDM' (lqq) defaults are covered. Not ported: other psi functions, large-n fast S, the M-S estimator, k.fast.s or best.r.s variants, covariance (.vc | (5) glmrob beyond Mqle for binomial and poisson with weights.on.x none and hat (no Gaussian, Gamma, robCov, covMcd, BY, WBY, MT or offsets); nlrob methods MM, tau, CM, mtl, bounds and user formu | (6) covMcd p>=2 still lacks the partitioned algorithm (n >= 600), nsamp 'best' and 'exact', the exact-fit and singular paths, and the tabulated tiny-n factors. Its Mahalanobis step still uses Ga"
     },
     {
       "id": "L339",
@@ -350,10 +350,10 @@
       "group": "CRAN parity",
       "order": 694,
       "title": "nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation",
-      "score": 0.2,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree with nleqslv and multiroot on Windows, roots only; oracle_nleqslvpkg; Linux pending). Open: the global strategies and Broyden, termination codes, jacobian.full, steady, maxLik, bbmle. Was: Open (CRAN ranks 337, 348, 393, 355; Rsolnp 357 is in L309). Mid. Acceptance, equal to R: nleqslv Newton and Broyden with global strategies (line search, double dogleg, pwl) and its termination codes; rootSolve multiroot, uniroot.all, steady, jacobian.full, gradient, hessian; maxLik with NR, BHHH, BFGS, NM and its standard errors; bbmle mle2, profile, confint and AICctab."
+      "evidence": "Partial (2026-11-22, merged 686357d41; Windows fixtures pass, score from the agent report): The earlier L360 work is now on this branch, on top of current master. A plain merge of worktree-wf_d8339e9a-9e9-12 was unusable because that branch is about 2000 commits behind master and would have reverted unrelated files. So I aborted it and cherry-picked the five L360 commits (nleqslvfull, rootsolvefull, maxlikpkg, bbmlepkg and the multiroot commit) onto master. They applied cleanly, and extra-fixtures.txt lists each of the four fixtures once. I reran all four fixtures on x64-windows and all pass: oracle_nleqslvfull, oracle_rootsolvefull, oracle_maxlikpkg, oracle_bbmlepkg. Tolerances are  Remaining: (1) Linux runs of oracle_nleqslvfull, oracle_rootsolvefull, oracle_maxlikpkg and oracle_bbmlepkg are pending (only x64-windows was run) | (2) nleqslv: hook strategy, a supplied Jacobian, banded Jacobian and jacobian=TRUE are not ported | (3) rootSolve: steady with a user Jacobian (jactype fullusr), banded Jacobian (bandint) and steady.1D are not ported; gradient and hessian beyond the two fixed polynomial functions and uniroot.a | (4) maxLik: constraints, fixed parameters, Marquardt qac, numeric gradient and Hessian, BFGSR, CG and SANN are not ported; the qr rank test of the NR step is replaced by Gaussian elimination | (5) bbmle: bounds, other optimizers, the uniroot confint, formula/vecpar interfaces, continuation and try_harder profiling, and qAIC/qAICc are not ported; vcov uses a plain inverse where R uses  | (6) BFGS estimates in maxLik and bbmle are checked at 1e-6, looser than the 1e-8 target; a bit-exact match needs a bit-matching libm and long-double accumulation"
     },
     {
       "id": "L361",
@@ -365,17 +365,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6613). e.algo.stat.strucpkg Fstats (single-break F statistics, from = 0.15) and breakpoints (Bai-Perron dynamic programming, h = 0.15, RSS and break positions for m breaks) equal strucchange on Windows (oracle_strucchange, 80 values; Linux pending). efp OLS-CUSUM (D7583) and Rec-CUSUM (D7584) with sctest and the Fstats supF, aveF, expF p values for k <= 40 (D7585, D7586) and OLS-MOSUM (D7587) and Rec-MOSUM (D7588) equal strucchange. The BIC of the segmented model (D7683) and segmented davies.test for a linear model (D7684) equal the packages. The pscore test for an lm (one break, two breaks, weighted; D7685 to D7687) and the Davies (D7697) and pscore (D7698) tests for a binomial or poisson glm equal segmented. segmented() for lm(y ~ x) with one breakpoint (Muggeo iteration from a start, its psi and standard error and coefficients; D7716) equals the package where its guards do not act. Open: the guards of segmented() (limits on psi, step halving, restarts), more breakpoints and variables, the Davies and pscore tests for other families, the other efp types, gefp, mefp, BIC choice, partial-change models. Was: Open (CRAN ranks 338, 344). Mid. Acceptance, equal to R: segmented with estimated breakpoints and its Davies and pscore tests; strucchange efp (CUSUM, MOSUM, recursive, OLS-based), Fstats, sctest, breakpoints (Bai-Perron dynamic programming, with BIC and RSS), gefp, mefp."
-    },
-    {
-      "id": "L362",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 696,
-      "title": "fitdistrplus: fitting and comparing distributions",
-      "score": 0.25,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6432, D6433 gamma and Weibull fits). Closed-form norm, lnorm and exp fits with loglik, AIC, BIC, KS, CvM and AD equal fitdistrplus on Windows (oracle_fitdist; Linux pending). Open: iterative fits, other methods, standard errors, bootstrap, censoring, discrete. Was: Open (CRAN rank 334). Mid. Needs L306 and the e.math.dist families. Acceptance, equal to fitdistrplus: fitdist by mle, mme, qme and mge, fitdistcens, gofstat, bootdist and bootdistcens under set.seed, descdist, denscomp data, quantile and confint."
     },
     {
       "id": "L365",
@@ -488,17 +477,6 @@
       "evidence": "Partial (D6638). e.algo.stat.matchitpkg.nearest (nearest-neighbour matching without replacement on a logistic propensity score, ratio passes, greedy in decreasing score order) equals MatchIt weights on Windows (oracle_matchit, 32 values; Linux pending). Open: replacement (fractional weights), calipers, m.order variants, exact and Mahalanobis distances, subclassification, full and optimal matching, genetic matching, balance summaries and love plots. Was: Open (CRAN rank 656). Mid. e.algo.stat.causal has propensity scores and weighting. Acceptance, equal to MatchIt: matchit with nearest (with calipers, ratios, replacement), optimal, full, exact, subclass, cem and genetic methods, distance estimators, match.data, summary balance statistics, weights."
     },
     {
-      "id": "L437",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 725,
-      "title": "gstat: geostatistics",
-      "score": 0.25,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6468 vgm Sph, Exp, Gau, Lin, the empirical variogram and ordinary, D6470 universal and simple kriging equal gstat on Windows; oracle_gstatpkg; Linux pending). Open: anisotropy, directions, nested and other models, fitting, co-kriging. Was: Open (CRAN rank 699). Mid. Pairs with fields in L370. Acceptance, equal to gstat: variogram (omnidirectional and directional, cloud, cross), fit.variogram with every model and the fitting weights, krige for simple, ordinary and universal kriging with variance, gstat conditional simulation under set.seed, krige.cv."
-    },
-    {
       "id": "L456",
       "category": "library",
       "group": "CRAN parity",
@@ -521,26 +499,15 @@
       "evidence": "Partial (D6189). ttest.tstat (one- and two-sample JZS Bayes factor, log scale) agrees with BayesFactor on Windows at its integration tolerance (oracle_bayesfactor; Linux pending). Open: lmBF, anovaBF, regressionBF, contingency, proportion and correlation tests, posterior sampling. Was: Open (CRAN rank 712). Mid. Acceptance, equal to BayesFactor under set.seed: ttestBF, anovaBF, lmBF, regressionBF, correlationBF, contingencyTableBF, proportionBF, generalTestBF with the numerical integration and the MCMC posteriors from posterior()."
     },
     {
-      "id": "L486",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 740,
-      "title": "mixtools: mixture models by EM",
-      "score": 0.25,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6194). normalmixEM (univariate, given starting values) equals mixtools on Windows: loglik, iterations and estimates (oracle_mixtools; Linux pending). Open: random starts, constraints, regression and multivariate mixtures, bootstrap, semiparametric EM. Was: Open (CRAN rank 884). Mid. Overlaps flexmix (L413). Acceptance, equal to mixtools under set.seed: normalmixEM, mvnormalmixEM, regmixEM, multmixEM, npEM, spEMsymloc, boot.se, and the label-switching helpers."
-    },
-    {
       "id": "L488",
       "category": "library",
       "group": "CRAN parity",
       "order": 742,
       "title": "drc: dose-response models",
-      "score": 0.2,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6411). LL.4 estimates and residual sum of squares agree with drc on Windows at optimiser tolerance (oracle_drc; Linux pending). Open: other model functions, fixed parameters, covariance and ED intervals, robust fitting, model comparison. Was: Open (CRAN rank 813). Mid. Acceptance, equal to drc: drm with LL.2 to LL.5, W1 and W2 families, Gompertz, Brain-Cousens, Cedergreen, with ED and selectivity, compParm, mselect, modelFit and the robust and Poisson variants."
+      "evidence": "Partial (2026-11-22, merged 686357d41; Windows fixtures pass, score from the agent report): The earlier branch worktree-wf_d8339e9a-9e9-15 was already contained in this branch, so the merge was a no-op. Added the Cedergreen U-shaped family UCRS.5a (kind 6 in lib/e/algo/stat/drc.e). Neper now has the model function, drc's start values (identical to drc's ssfct, checked in R), fit, ED and EDcomp selectivity for it. drc's UCRS.4a and UCRS.4c fail inside drm itself because their ssfct returns the wrong length, so only UCRS.5a can be compared. oracle_drc passes on Windows after regeneration (2681 cases, 1.8 MB, committed). New cases: two single-curve UCRS.5a fits at 1e-9 (parameters, logL Remaining: (1) Robust fits for trimmed, tukey, winsor, lms and lts are still compared only at R's optimum (criterion, scale, residual variance, Hessian se); Neper's own BFGS coefficients and fitted values  | (2) Loosened tolerances remain: se, covariance, compParm/selectivity t and p, ED intervals and robust-case se at 1e-5 (finite-difference optHess); mselect lack of fit at 1e-7; UCRS two-curve cas | (3) Absolute-response ED is not implemented (relative only). Skipped as outside the Acceptance list: pmodels shared parameters, lack of fit for several curves, negative-binomial, binomial and ev | (4) The Linux run of oracle_drc is still pending (Windows only). | (5) tests/oracle/drc.json is now 1.8 MB, over the 1.5 MB target. | (6) Datasets needing many BFGS gradients (over 100; over 40 for BC, CRS; over 25 for UCRS; over 60 per mselect model) or with an unidentified parameter are redrawn rather than matched."
     },
     {
       "id": "L489",
@@ -552,17 +519,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6643). e.algo.stat.osqppkg.solve (convex QP with two-sided constraints by the OSQP ADMM iteration, dense, run to primal and dual residuals below 1e-11) equals osqp solve_osqp on Windows: solution and objective at 1e-6 (oracle_osqp, 48 values; Linux pending). Open: sparse input, adaptive rho, polishing, infeasibility and unboundedness certificates, warm starts, update of problem data, clarabel and the conic solvers (SOCP, SDP, exponential cone). Was: Open (CRAN ranks 815, 880; CVXR 807 is the modelling layer over them). Mid. e.math.opt.convex has convex solvers. Acceptance, equal to osqp and clarabel within the solver tolerance: osqp ADMM with rho updates and warm starts, status codes and iteration counts; clarabel for zero, nonnegative, second-order, exponential and power cones."
-    },
-    {
-      "id": "L507",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 745,
-      "title": "gsDesign: group sequential designs",
-      "score": 0.2,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6405). The alpha spending functions equal gsDesign on Windows (oracle_gsdesign; Linux pending). Open: boundary computation by recursive integration, gsProbability, sample size, futility bounds, four-point spending parameterisations. Was: Open (CRAN rank 939). Mid. Acceptance, equal to gsDesign: gsDesign for the Lan-DeMets O'Brien-Fleming and Pocock, Hwang-Shih-DeCani, power and exponential spending functions, gsProbability, gsCP, nBinomial, nSurv, nNormal, sfLDOF and the boundaries and sample sizes."
     },
     {
       "id": "L512",

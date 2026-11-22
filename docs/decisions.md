@@ -51853,3 +51853,7 @@ Each passed an acceptance verifier and its fixtures on Windows in the integratio
 ## D7736 — L427 afex, L358 dbscan, L390 R.matlab, L448 mcmc, L450 mediation, L479 hdrcde closed
 
 Each passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. L415 marginaleffects advanced and stays open; L318 forecast was re-verified with no new code.
+
+## D7737 — L362 fitdistrplus, L486 mixtools, L437 gstat and L507 gsDesign closed
+
+Each closed item passed an acceptance verifier and its fixtures on Windows in the integration worktree; Linux is batched. Partial items stay open with their gaps in the queue evidence.

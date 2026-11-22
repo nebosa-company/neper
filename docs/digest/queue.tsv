@@ -22,17 +22,16 @@ L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L306	library	0.95	1307	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partial (2026-11-21, merged 9e1b3e122;
-L307	library	0.25	658	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);
+L307	library	0.6	1263	quantreg: quantile regression inference and algorithms	Partial (2026-11-22, merged 686357d41;
 L314	library	0.15	1107	lubridate and timeDate: date-time parsing, periods, business calendars	Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the month-end rules, quarter, semester, decimal_date, epiweek, isoweek, floor_date and ceiling_date for dates, equal to lubridat
 L275	library	0.08	825	Unicode collation, transliteration and encoding detection (stringi)	Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases;
 L274	library	0.1	688	General linear mixed models (lme4)	Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and ML, equal to lme4 on deviance, sigma, sigma_b, fixed effects and conditional modes at optimiser tolerance;
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
-L338	library	0.2	756	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
+L338	library	0.85	1679	robustbase: robust regression and scale	Partial (2026-11-22, merged 686357d41;
 L339	library	0.24	1899	bayestestR, performance and parameters: model summary indices	D7705: performance check_outliers by the iqr method (the row flags) equal to performance.
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
-L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 
+L360	library	0.6	1690	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (2026-11-22, merged 686357d41;
 L361	library	0.2	1406	segmented and strucchange: breakpoints and structural change	Partial (D6613).
-L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
 L367	library	0.8	2224	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (2026-11-21, merged 9e1b3e122;
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
@@ -43,13 +42,10 @@ L415	library	0.6	1272	marginaleffects: predictions, slopes and comparisons	Parti
 L416	library	0.15	609	polspline: polynomial spline models	D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 va
 L434	library	0.1	735	qgraph: network estimation	Partial (D6646).
 L436	library	0.1	756	MatchIt: matching for causal inference	Partial (D6638).
-L437	library	0.25	565	gstat: geostatistics	Partial (D6468 vgm Sph, Exp, Gau, Lin, the empirical variogram and ordinary, D6470 universal and simple kriging equal gstat on Windows;
 L456	library	0.15	1322	mlogit: discrete-choice models	D7367: Wald tests of conditional logit coefficients (statistic and p value from the covariance matrix) equal to mlogit.
 L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
-L486	library	0.25	473	mixtools: mixture models by EM	Partial (D6194).
-L488	library	0.2	475	drc: dose-response models	Partial (D6411).
+L488	library	0.5	1613	drc: dose-response models	Partial (2026-11-22, merged 686357d41;
 L489	library	0.15	799	osqp and clarabel: quadratic and conic solvers	Partial (D6643).
-L507	library	0.2	514	gsDesign: group sequential designs	Partial (D6405).
 L512	library	0.15	1248	poLCA: latent class analysis	D7345: latent class regression with covariates (log-likelihood, response probabilities, coefficient magnitudes) equal to poLCA.
 L513	library	0.15	704	Epi: epidemiology tools	Partial (D6412, D7253, D7254, D7255 the conditional MLE odds ratio and its exact interval, D7256 clogistic on matched sets).
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);

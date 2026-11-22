@@ -4632,4 +4632,5 @@ D7732	411	L516 tgp, L519 caret remainder, L397 hunspell closed
 D7733	315	L468 fpc closed
 D7734	389	L317 igraph closed; L318, L287 and L283 advanced
 D7735	296	L342 lmerTest, L380 tm, L505 sm, L510 gmm and L494 bayesm closed
-D7736	303	L427 afex, L358 dbscan, L390 R.matlab, L448 mcmc, L450 mediation, L479 hdrcde closed
+D7736	304	L427 afex, L358 dbscan, L390 R.matlab, L448 mcmc, L450 mediation, L479 hdrcde closed
+D7737	269	L362 fitdistrplus, L486 mixtools, L437 gstat and L507 gsDesign closed
