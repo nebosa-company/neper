@@ -753,6 +753,7 @@ oracle_gam_step
 oracle_gam_lo
 oracle_gam_mix
 oracle_gam_pred
+oracle_gam_pred_thin
 oracle_ipredbag
 oracle_nloptr
 oracle_gam_off
