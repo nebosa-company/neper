@@ -2,7 +2,7 @@
 # y0[n*dims] row-major, index of the output coordinate, normalize), the coordinate (row-major) of the embedding
 suppressMessages(library(Rtsne))
 cases <- list()
-add <- function(args, want) cases[[length(cases) + 1]] <<- case("ts", args, want, rel = 1e-6, abs = 1e-8)
+add <- function(args, want) cases[[length(cases) + 1]] <<- case("ts", args, want, rel = 1e-7, abs = 1e-9)
 set.seed(20262100)
 for (rep in 1:10) {
   n <- sample(15:40, 1); d <- sample(2:6, 1); dims <- sample(2:3, 1); perp <- sample(3:min(8, floor((n - 1) / 3)), 1)
@@ -31,6 +31,6 @@ for (rep in 1:8) {
   n <- sample(15:35, 1); d <- sample(2:5, 1); dims <- 2; perp <- sample(3:min(8, floor((n - 1) / 3)), 1); mi <- c(5, 10)[1 + rep %% 2]
   X <- matrix(round(rnorm(n * d) * 3, 3), n, d); sd0 <- sample(1:100000, 1); norm <- rep %% 2 == 0
   set.seed(sd0); r <- Rtsne(X, dims = dims, perplexity = perp, theta = 0, pca = FALSE, normalize = norm, max_iter = mi, check_duplicates = FALSE)
-  for (j in seq_len(n * dims)) cases[[length(cases) + 1]] <- case("tr", c(sd0, n, d, dims, perp, mi, as.numeric(norm), as.vector(t(X)), j - 1), as.vector(t(r$Y))[j], rel = 1e-5, abs = 1e-7)
+  for (j in seq_len(n * dims)) cases[[length(cases) + 1]] <- case("tr", c(sd0, n, d, dims, perp, mi, as.numeric(norm), as.vector(t(X)), j - 1), as.vector(t(r$Y))[j], rel = 1e-7, abs = 1e-9)
 }
 emit("tsne", "Rtsne", list(cases))

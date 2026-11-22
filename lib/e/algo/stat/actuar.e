@@ -8,12 +8,15 @@
 
 use e.math
 use e.math.nmath as nm
+use e.math.quadpack as qp
 use e.math.dist as dsa
 use e.math.nmath_beta as nb
 use e.algo.linalg.mexp as mexp
 use e.algo.rand.r as rr
 use e.algo.rand.rdist as rd
 use e.algo.stat.gparot as gp
+use e.algo.stat.fcast as fcast
+use e.algo.linalg.decomp as dc
 use e.mem
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
@@ -147,16 +150,16 @@ fn panjer(kind: usize, p1: f64, p2: f64, fx: []const f64, nn: usize, fs: []f64) 
         b = p1
         s0 = math.exp[f64](p1 * (f0 - 1.0f64))
     } else if kind == 1usize {
-        a = 0.0f64 - p2 / (1.0f64 - p2)
-        b = (p1 + 1.0f64) * p2 / (1.0f64 - p2)
-        s0 = math.pow[f64](1.0f64 - p2 + p2 * f0, p1)
+        a = p2 / (p2 - 1.0f64)
+        b = 0.0f64 - (p1 + 1.0f64) * a
+        s0 = math.exp[f64](p1 * dsa.log1p(p2 * (f0 - 1.0f64)))
     } else if kind == 2usize {
         a = 1.0f64 - p2
-        b = (p1 - 1.0f64) * (1.0f64 - p2)
-        s0 = math.pow[f64](p2 / (1.0f64 - (1.0f64 - p2) * f0), p1)
+        b = (p1 - 1.0f64) * a
+        s0 = math.exp[f64](0.0f64 - p1 * dsa.log1p(0.0f64 - a / p2 * (f0 - 1.0f64)))
     } else {
         a = 1.0f64 - p1
-        s0 = p1 / (1.0f64 - (1.0f64 - p1) * f0)
+        s0 = math.exp[f64](0.0f64 - 1.0f64 * dsa.log1p(0.0f64 - a / p1 * (f0 - 1.0f64)))
     }
     fs[0usize] = s0
     var x = 1usize
@@ -1443,6 +1446,105 @@ fn cm_hierarchical(a: *mem.Arena, nl: usize, nr: usize, nt: usize, meth: usize, 
             }
         }
     }
+    if meth == 2usize {
+        // iterative estimators (hierarc.c): the Ohlsson estimators above are the starting values; denominators den[i] = (effective nodes below level i) - (effective nodes of level i - 1)
+        var den: [17]f64 = zero
+        var prev = 1.0f64
+        lv = 0usize
+        while lv < nl {
+            var sg = 0.0f64
+            var gq = 0usize
+            while gq < nn[lv] {
+                sg += eff[offs[lv] + gq]
+                gq += 1usize
+            }
+            den[lv] = sg - prev
+            prev = sg
+            lv += 1usize
+        }
+        var bt: [17]f64 = zero
+        var anyp = false
+        lv = 0usize
+        while lv < nl {
+            if b[lv] < 0.0f64 { b[lv] = 0.0f64 }
+            if b[lv] > 0.0f64 { anyp = true }
+            lv += 1usize
+        }
+        if b[nl] < 0.0f64 { b[nl] = 0.0f64 }
+        let tol = 1.4901161193847656e-8f64
+        var count = 0usize
+        var diff = 1.0f64
+        while anyp && diff >= tol {
+            count += 1usize
+            if count > 100usize { break }
+            lv = 0usize
+            while lv < nl {
+                bt[lv] = b[lv]
+                lv += 1usize
+            }
+            lv = nl
+            while lv > 0usize {
+                lv -= 1usize
+                let ng = nn[lv]
+                let cl = parlen[lv]
+                let tl = offs[lv]
+                var cb = total
+                if lv + 1usize < nl { cb = offs[lv + 1usize] }
+                let pg = par[pofs[lv]..pofs[lv] + cl]
+                let co = offp_of(parlen, lv)
+                var jj = 1usize
+                while b[lv + jj] == 0.0f64 { jj += 1usize }
+                let bw = b[lv + jj]
+                var pass = 0usize
+                while pass < 2usize {
+                    var g = 0usize
+                    while g < ng {
+                        tw[tl + g] = 0.0f64
+                        wm[tl + g] = 0.0f64
+                        g += 1usize
+                    }
+                    var c = 0usize
+                    while c < cl {
+                        cr[co + c] = 1.0f64 / (1.0f64 + bw / (b[lv] * tw[cb + c]))
+                        var wgt = cr[co + c]
+                        if wgt == 0.0f64 { wgt = tw[cb + c] }
+                        tw[tl + pg[c]] += wgt
+                        wm[tl + pg[c]] += wgt * wm[cb + c]
+                        c += 1usize
+                    }
+                    g = 0usize
+                    while g < ng {
+                        if tw[tl + g] > 0.0f64 { wm[tl + g] = wm[tl + g] / tw[tl + g] } else { wm[tl + g] = 0.0f64 }
+                        g += 1usize
+                    }
+                    if pass == 0usize && bt[lv] > 0.0f64 {
+                        var nbv = 0.0f64
+                        c = 0usize
+                        while c < cl {
+                            var wgt = cr[co + c]
+                            if wgt == 0.0f64 { wgt = tw[cb + c] }
+                            let dm = wm[cb + c] - wm[tl + pg[c]]
+                            nbv += wgt * dm * dm
+                            c += 1usize
+                        }
+                        nbv = nbv / den[lv]
+                        if nbv <= tol * tol { nbv = 0.0f64 }
+                        b[lv] = nbv
+                    }
+                    pass += 1usize
+                }
+            }
+            diff = 0.0f64
+            lv = 0usize
+            while lv < nl {
+                if b[lv] > 0.0f64 {
+                    let dd = math.abs[f64](b[lv] - bt[lv]) / bt[lv]
+                    if dd > diff { diff = dd }
+                }
+                lv += 1usize
+            }
+        }
+    }
     var k = 0usize
     while k <= nl {
         out[k] = b[k]
@@ -1476,4 +1578,913 @@ fn cm_hierarchical(a: *mem.Arena, nl: usize, nr: usize, nt: usize, meth: usize, 
         r += 1usize
     }
     ret ok
+}
+
+// ---- ruin() with phase-type waiting times, and adjCoef (the Cramer-Lundberg adjustment coefficient)
+
+// actuar ruin(claims phase-type (probc, tc: n x n), wait phase-type (probw, tw: m x m)) at premium rate c: the fixed point Q <- T - t0pi A (Q (x) I + B)^(-1) C from Q = T until
+// max row sum of |Q - Q1| < tol or maxit passes, then pi = colSums(Q - T) / (-sum(T) c); psi(u) = pi exp(Q u) 1
+fn ruin_ph_ph(a: *mem.Arena, probc: []const f64, tc: []const f64, n: usize, probw: []const f64, tw: []const f64, m: usize, u: f64, c: f64) -> f64 {
+    let nm_ = n * m
+    let (q, e1) = mem.alloc[f64](a, n * n)
+    let (q1, e2) = mem.alloc[f64](a, n * n)
+    let (kk, e3) = mem.alloc[f64](a, nm_ * nm_)
+    let (st, e4) = mem.alloc[f64](a, nm_ * n)
+    let (pi, e5) = mem.alloc[f64](a, n)
+    let (rsw, e6) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret nan() }
+    var i = 0usize
+    var j = 0usize
+    var s = 0usize
+    var r = 0usize
+    while i < m {
+        rsw[i] = rowsum(tw, m, i)
+        i += 1usize
+    }
+    i = 0usize
+    while i < n * n {
+        q[i] = tc[i]
+        i += 1usize
+    }
+    var count = 0usize
+    var done = false
+    while !done {
+        count += 1usize
+        if count > 200usize { break }
+        i = 0usize
+        while i < n * n {
+            q1[i] = q[i]
+            i += 1usize
+        }
+        // K = Q (x) I_m + I_n (x) Tw, indices (i m + s, j m + r)
+        i = 0usize
+        while i < n {
+            s = 0usize
+            while s < m {
+                j = 0usize
+                while j < n {
+                    r = 0usize
+                    while r < m {
+                        var v = 0.0f64
+                        if s == r { v += q[i * n + j] }
+                        if i == j { v += tw[s * m + r] }
+                        kk[(i * m + s) * nm_ + j * m + r] = v
+                        r += 1usize
+                    }
+                    j += 1usize
+                }
+                s += 1usize
+            }
+            i += 1usize
+        }
+        let (kin, ek) = gp.invert(a, kk, nm_)
+        if ek != ok { ret nan() }
+        // S = K^(-1) C with C[(i m + s), j] = delta_ij (-rsw[s]); then Q = T - t0pi A S with (t0pi A)[i, (j m + r)] = (-rowsum(T)_i probc_j) probw_r
+        i = 0usize
+        while i < nm_ {
+            j = 0usize
+            while j < n {
+                var v = 0.0f64
+                s = 0usize
+                while s < m {
+                    v += kin[i * nm_ + j * m + s] * (0.0f64 - rsw[s])
+                    s += 1usize
+                }
+                st[i * n + j] = v
+                j += 1usize
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            j = 0usize
+            while j < n {
+                var v = 0.0f64
+                var k2 = 0usize
+                while k2 < n {
+                    r = 0usize
+                    while r < m {
+                        v += (0.0f64 - rowsum(tc, n, i)) * probc[k2] * probw[r] * st[(k2 * m + r) * n + j]
+                        r += 1usize
+                    }
+                    k2 += 1usize
+                }
+                q[i * n + j] = tc[i * n + j] - v
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var mx = 0.0f64
+        i = 0usize
+        while i < n {
+            var rs = 0.0f64
+            j = 0usize
+            while j < n {
+                rs += math.abs[f64](q[i * n + j] - q1[i * n + j])
+                j += 1usize
+            }
+            if rs > mx { mx = rs }
+            i += 1usize
+        }
+        if mx < 1.4901161193847656e-8f64 { done = true }
+    }
+    var tot = 0.0f64
+    i = 0usize
+    while i < n * n {
+        tot += tc[i]
+        i += 1usize
+    }
+    j = 0usize
+    while j < n {
+        var cs = 0.0f64
+        i = 0usize
+        while i < n {
+            cs += q[i * n + j] - tc[i * n + j]
+            i += 1usize
+        }
+        pi[j] = cs / (0.0f64 - tot * c)
+        j += 1usize
+    }
+    let (d0, sf) = ph_dens_surv(a, pi, q, n, u)
+    ret sf
+}
+
+// the moment generating functions of actuar: kind 0 exponential (rate p1), 1 gamma (shape p1, rate p2), 2 uniform (min p1, max p2), 3 normal (mean p1, sd p2)
+fn mgf_k(kind: usize, t: f64, p1: f64, p2: f64) -> f64 {
+    if kind == 0usize {
+        if t >= p1 { ret nan() }
+        ret 1.0f64 / (1.0f64 - (1.0f64 / p1) * t)
+    }
+    if kind == 1usize {
+        if t >= p2 { ret nan() }
+        ret math.pow[f64](1.0f64 - (1.0f64 / p2) * t, 0.0f64 - p1)
+    }
+    if kind == 2usize {
+        if t == 0.0f64 { ret 1.0f64 }
+        ret (math.exp[f64](t * p2) - math.exp[f64](t * p1)) / (t * (p2 - p1))
+    }
+    ret math.exp[f64](t * p1 + t * t * p2 * p2 / 2.0f64)
+}
+
+type AdjCtx = struct {
+    mode: usize,
+    ck: usize,
+    c1: f64,
+    c2: f64,
+    wk: usize,
+    w1: f64,
+    w2: f64,
+    pa: f64,
+    pb: f64,
+    y: f64
+}
+
+// (h(r) - 1)^2 with h(r) = mgf.claim(r) mgf.wait(-r c): mode 0 no reinsurance (premium rate pa), 1 proportional (the claim is y X, X exponential rate c1) and 2 excess-of-loss
+// (the claim is min(X, y)), both with premium rate pa + pb y
+fn adj_f(c: *AdjCtx, r: f64) -> f64 {
+    var mx = 0.0f64
+    var prem = c.pa
+    if c.mode == 0usize { mx = mgf_k(c.ck, r, c.c1, c.c2) }
+    if c.mode == 1usize {
+        mx = mgf_k(0usize, r * c.y, c.c1, 0.0f64)
+        prem = c.pa + c.pb * c.y
+    }
+    if c.mode == 2usize {
+        let b = c.c1
+        let e = math.exp[f64](0.0f64 - (b - r) * c.y)
+        mx = b * (1.0f64 - e) / (b - r) + e
+        prem = c.pa + c.pb * c.y
+    }
+    let h = mx * mgf_k(c.wk, 0.0f64 - r * prem, c.w1, c.w2)
+    ret (h - 1.0f64) * (h - 1.0f64)
+}
+
+fn adj_coef(c: *AdjCtx, upper: f64) -> f64 {
+    ret fcast.brent_fmin[AdjCtx](c, adj_f, 0.0f64, upper - 2.220446049250313e-16f64, 1.4901161193847656e-8f64)
+}
+
+// adjCoef(..., reinsurance, from, to, n)(v): the coefficient on the grid seq(from, to, length.out = n) joined by approxfun(rule = 2)
+fn adj_coef_re(a: *mem.Arena, c: *AdjCtx, upper: f64, from: f64, to: f64, n: usize, v: f64) -> f64 {
+    let (co, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret nan() }
+    let by = (to - from) / f64(n - 1usize)
+    var i = 0usize
+    while i < n {
+        c.y = from + f64(i) * by
+        co[i] = adj_coef(c, upper)
+        i += 1usize
+    }
+    if v <= from { ret co[0usize] }
+    if v >= to { ret co[n - 1usize] }
+    var lo = 0usize
+    var hi = n - 1usize
+    while lo + 1usize < hi {
+        let mid = (lo + hi) / 2usize
+        if v < from + f64(mid) * by { hi = mid } else { lo = mid }
+    }
+    let xl = from + f64(lo) * by
+    let xh = from + f64(hi) * by
+    if v == xh { ret co[hi] }
+    if v == xl { ret co[lo] }
+    ret co[lo] + (co[hi] - co[lo]) * ((v - xl) / (xh - xl))
+}
+
+// ---- the shifted transformed beta laws: Pareto II (a = shape, g = t = 1), Pareto III (a = t = 1, g = shape), Pareto IV (a = shape1, g = shape2, t = 1) and Feller-Pareto
+// (a = shape1, g = shape2, t = shape3); X = min + Y with Y transformed beta(a, g, t, th)
+
+fn sh_d(x: f64, mn: f64, a: f64, g: f64, t: f64, th: f64) -> f64 {
+    if x < mn { ret 0.0f64 }
+    if x == mn {
+        if g * t < 1.0f64 { ret 1.0f64 / 0.0f64 }
+        if g * t > 1.0f64 { ret 0.0f64 }
+        ret g / (th * math.exp[f64](lgam(t) + lgam(a) - lgam(a + t)))
+    }
+    ret tb_d(x - mn, a, g, t, th)
+}
+
+fn sh_p(x: f64, mn: f64, a: f64, g: f64, t: f64, th: f64) -> f64 {
+    if x <= mn { ret 0.0f64 }
+    ret tb_p(x - mn, a, g, t, th)
+}
+
+fn sh_q(p: f64, mn: f64, a: f64, g: f64, t: f64, th: f64) -> f64 { ret mn + tb_q(p, a, g, t, th) }
+
+fn choose_i(k: usize, i: usize) -> f64 {
+    var r = 1.0f64
+    var j = 1usize
+    while j <= i {
+        r = r * f64(k - i + j) / f64(j)
+        j += 1usize
+    }
+    ret r
+}
+
+// min = 0 keeps the whole range of orders of the unshifted law; otherwise the order is a non-negative integer below a g
+fn sh_m(k: f64, mn: f64, a: f64, g: f64, t: f64, th: f64) -> f64 {
+    if mn == 0.0f64 { ret tb_m(k, a, g, t, th) }
+    if k < 0.0f64 { ret nan() }
+    if k >= a * g { ret 1.0f64 / 0.0f64 }
+    let kk = usize(k + 0.5f64)
+    var s = 0.0f64
+    var i = 0usize
+    while i <= kk {
+        var m = 1.0f64
+        if i > 0usize { m = tb_m(f64(i), a, g, t, th) }
+        s += choose_i(kk, i) * math.pow[f64](mn, f64(kk - i)) * m
+        i += 1usize
+    }
+    ret s
+}
+
+fn sh_lev(x: f64, k: f64, mn: f64, a: f64, g: f64, t: f64, th: f64) -> f64 {
+    if x <= mn { ret 0.0f64 }
+    if mn == 0.0f64 { ret tb_lev(x, k, a, g, t, th) }
+    if k < 0.0f64 { ret nan() }
+    let kk = usize(k + 0.5f64)
+    var s = 0.0f64
+    var i = 0usize
+    while i <= kk {
+        var m = 1.0f64
+        if i > 0usize { m = tb_lev(x - mn, f64(i), a, g, t, th) }
+        s += choose_i(kk, i) * math.pow[f64](mn, f64(kk - i)) * m
+        i += 1usize
+    }
+    ret s
+}
+
+// the raw moment (stat 0), limited expected value (stat 1, limit v) and moment generating function (stat 2, argument v) of the base laws of actuar: kind 0 lognormal (meanlog p1, sdlog p2),
+// 1 beta (p1, p2), 2 uniform (min p1, max p2), 3 normal (mean p1, sd p2; integer order), 4 exponential (rate p1), 5 gamma (shape p1, rate p2), 6 Weibull (shape p1, scale p2),
+// 7 chi-square (df p1), 8 inverse Gaussian (mean p1, shape p2; mgf only)
+fn bm(stat: usize, kind: usize, p1: f64, p2: f64, v: f64, k: f64) -> f64 {
+    if stat == 2usize {
+        if kind == 7usize { ret math.exp[f64](0.0f64 - p1 / 2.0f64 * dsa.log1p(0.0f64 - 2.0f64 * v)) }
+        if kind == 8usize {
+            let phi = 1.0f64 / p2
+            let phm = phi * p1
+            let tm = v * p1
+            ret math.exp[f64]((1.0f64 - math.sqrt[f64](1.0f64 - 2.0f64 * phm * tm)) / phm)
+        }
+        if kind == 4usize { ret mgf_k(0usize, v, p1, 0.0f64) }
+        if kind == 5usize { ret mgf_k(1usize, v, p1, p2) }
+        ret mgf_k(kind, v, p1, p2)
+    }
+    if kind == 0usize {
+        let mm = math.exp[f64](k * p1 + k * k * p2 * p2 / 2.0f64)
+        if stat == 0usize { ret mm }
+        if v <= 0.0f64 { ret 0.0f64 }
+        let lx = math.log[f64](v)
+        ret mm * dsa.pnorm((lx - p1 - k * p2 * p2) / p2, 0.0f64, 1.0f64, true, false) + math.pow[f64](v, k) * dsa.pnorm((lx - p1) / p2, 0.0f64, 1.0f64, false, false)
+    }
+    if kind == 1usize {
+        let mm = math.exp[f64](nb.lbeta(p1 + k, p2) - nb.lbeta(p1, p2))
+        if stat == 0usize { ret mm }
+        if v <= 0.0f64 { ret 0.0f64 }
+        ret mm * nb.pbeta(v, p1 + k, p2, true, false) + math.pow[f64](v, k) * nb.pbeta(v, p1, p2, false, false)
+    }
+    if kind == 2usize {
+        let mm = (math.pow[f64](p2, k + 1.0f64) - math.pow[f64](p1, k + 1.0f64)) / ((k + 1.0f64) * (p2 - p1))
+        if stat == 0usize { ret mm }
+        if v <= p1 { ret 0.0f64 }
+        if v >= p2 { ret mm }
+        ret (math.pow[f64](v, k + 1.0f64) - math.pow[f64](p1, k + 1.0f64)) / ((k + 1.0f64) * (p2 - p1)) + math.pow[f64](v, k) * (p2 - v) / (p2 - p1)
+    }
+    if kind == 3usize {
+        let n = usize(k + 0.5f64)
+        if n == 0usize { ret 1.0f64 }
+        var r = 0.0f64
+        var i = 0usize
+        while i <= n / 2usize {
+            r += math.pow[f64](p2, f64(2usize * i)) * math.pow[f64](p1, f64(n - 2usize * i)) / (math.pow[f64](2.0f64, f64(i)) * math.exp[f64](lgam(f64(i) + 1.0f64)) * math.exp[f64](lgam(k - 2.0f64 * f64(i) + 1.0f64)))
+            i += 1usize
+        }
+        ret math.exp[f64](lgam(k + 1.0f64)) * r
+    }
+    var a = 1.0f64
+    var t = 1.0f64
+    var th = 1.0f64 / p1
+    if kind == 5usize {
+        a = p1
+        th = 1.0f64 / p2
+    }
+    if kind == 6usize {
+        t = p1
+        th = p2
+    }
+    if kind == 7usize {
+        a = p1 / 2.0f64
+        th = 2.0f64
+    }
+    if stat == 0usize { ret tg_m(k, a, t, th) }
+    ret tg_lev(v, k, a, t, th)
+}
+
+// mgfphtype: 1 - pi (e + (x I + T)^(-1) t) with t = -T e
+fn ph_mgf(a: *mem.Arena, prob: []const f64, tm: []const f64, m: usize, x: f64) -> f64 {
+    if x == 0.0f64 { ret 1.0f64 }
+    let (w, e1) = mem.alloc[f64](a, m * m)
+    if e1 != ok { ret nan() }
+    var i = 0usize
+    while i < m * m {
+        w[i] = tm[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        w[i * m + i] += x
+        i += 1usize
+    }
+    let (inv, e2) = gp.invert(a, w, m)
+    if e2 != ok { ret nan() }
+    var z = 0.0f64
+    i = 0usize
+    while i < m {
+        var s = 0.0f64
+        var j = 0usize
+        while j < m {
+            s += inv[i * m + j] * (0.0f64 - rowsum(tm, m, j))
+            j += 1usize
+        }
+        z += prob[i] * (1.0f64 + s)
+        i += 1usize
+    }
+    ret 1.0f64 - z
+}
+
+// actuar bvar.unbiased and bvar.iterative: the between-contract variance of the values x with weights w, within variance, n contracts
+fn bvar_unb(x: []const f64, w: []const f64, within: f64, n: usize) -> f64 {
+    var ws = 0.0f64
+    var w2 = 0.0f64
+    var sx = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        ws += w[i]
+        w2 += w[i] * w[i]
+        sx += w[i] * x[i]
+        i += 1usize
+    }
+    let xw = sx / ws
+    var ss = 0.0f64
+    i = 0usize
+    while i < x.len {
+        ss += w[i] * (x[i] - xw) * (x[i] - xw)
+        i += 1usize
+    }
+    ret ws * (ss - f64(n - 1usize) * within) / (ws * ws - w2)
+}
+
+fn bvar_iter(x: []const f64, w: []const f64, within: f64, n: usize, start: f64) -> f64 {
+    var a = start
+    var count = 0usize
+    while true {
+        let a1 = a
+        count += 1usize
+        if count > 100usize { break }
+        var sz = 0.0f64
+        var szx = 0.0f64
+        var i = 0usize
+        while i < x.len {
+            let z = 1.0f64 / (1.0f64 + within / (w[i] * a))
+            sz += z
+            szx += z * x[i]
+            i += 1usize
+        }
+        let xz = szx / sz
+        var ss = 0.0f64
+        i = 0usize
+        while i < x.len {
+            let z = 1.0f64 / (1.0f64 + within / (w[i] * a))
+            ss += z * (x[i] - xz) * (x[i] - xz)
+            i += 1usize
+        }
+        a = ss / f64(n - 1usize)
+        if math.abs[f64]((a - a1) / a1) < 1.4901161193847656e-8f64 { break }
+    }
+    ret a
+}
+
+// actuar cm() with method = "iterative" and no hierarchy (bstraub): ns[i] the years of contract i, x and w contract by contract; out = (within variance, between variance, collective mean, credibility factor of contract 0)
+fn cm_bs_iter(a: *mem.Arena, ns: []const usize, x: []const f64, w: []const f64, out: []f64) -> err {
+    let ni = ns.len
+    let (rw, e1) = mem.alloc[f64](a, ni)
+    let (wsv, e2) = mem.alloc[f64](a, ni)
+    if e1 != ok || e2 != ok { ret e1 }
+    var pos = 0usize
+    var cells = 0usize
+    var s2n = 0.0f64
+    var wmin = 1.0e300f64
+    var wmax = 0.0f64 - 1.0e300f64
+    var i = 0usize
+    while i < ni {
+        var sw = 0.0f64
+        var sx = 0.0f64
+        var j = 0usize
+        while j < ns[i] {
+            sw += w[pos + j]
+            sx += w[pos + j] * x[pos + j]
+            if w[pos + j] < wmin { wmin = w[pos + j] }
+            if w[pos + j] > wmax { wmax = w[pos + j] }
+            j += 1usize
+        }
+        wsv[i] = sw
+        rw[i] = sx / sw
+        j = 0usize
+        while j < ns[i] {
+            s2n += w[pos + j] * (x[pos + j] - rw[i]) * (x[pos + j] - rw[i])
+            j += 1usize
+        }
+        cells += ns[i]
+        pos += ns[i]
+        i += 1usize
+    }
+    let s2 = s2n / f64(cells - ni)
+    var av = bvar_unb(rw, wsv, s2, ni)
+    if wmax - wmin > 1.4901161193847656e-8f64 {
+        if av > 0.0f64 { av = bvar_iter(rw, wsv, s2, ni, av) } else { av = 0.0f64 }
+    }
+    var sc = 0.0f64
+    var scx = 0.0f64
+    var c0 = 0.0f64
+    i = 0usize
+    while i < ni {
+        var z = 0.0f64
+        if av > 0.0f64 { z = 1.0f64 / (1.0f64 + s2 / (wsv[i] * av)) }
+        if i == 0usize { c0 = z }
+        sc += z
+        scx += z * rw[i]
+        i += 1usize
+    }
+    out[0usize] = s2
+    out[1usize] = av
+    out[2usize] = scx / sc
+    out[3usize] = c0
+    ret ok
+}
+
+// actuar hache.barycenter (cm with regformula and adj.intercept = TRUE): n contracts of t periods, xreg t by p row-major, meth 0 unbiased and 1 iterative; a contract whose weights are all missing or zero is skipped as in actuar (individual coefficients 0, credibility 0).
+// out = diagonal of the between matrix (p), within variance, collective coefficients (p), then by contract the individual coefficients (p), the credibility diagonal (p) and the credibility premium coefficients (p)
+fn hache_bary(a: *mem.Arena, ratios: []const f64, weights: []const f64, xreg: []const f64, n: usize, t: usize, p: usize, meth: usize, out: []f64) -> err {
+    let (wcol, e1) = mem.alloc[f64](a, t)
+    let (xs, e2) = mem.alloc[f64](a, t * p)
+    let (xo, e3) = mem.alloc[f64](a, t * p)
+    let (ind, e4) = mem.alloc[f64](a, n * p)
+    let (wd, e5) = mem.alloc[f64](a, n * p)
+    let (sig, e6) = mem.alloc[f64](a, n)
+    let (col, e7) = mem.alloc[f64](a, n)
+    let (cr, e8) = mem.alloc[f64](a, n * p)
+    let (gm, e9) = mem.alloc[f64](a, p * p)
+    let (bv, e10) = mem.alloc[f64](a, p)
+    let (qy, e11) = mem.alloc[f64](a, t)
+    let (wsv, e12) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok { ret e1 }
+    var tot = 0.0f64
+    var c = 0usize
+    var j = 0usize
+    var i = 0usize
+    var wmin = 1.0e300f64
+    var wmax = 0.0f64 - 1.0e300f64
+    while j < t {
+        wcol[j] = 0.0f64
+        j += 1usize
+    }
+    c = 0usize
+    while c < n {
+        wsv[c] = 0.0f64
+        j = 0usize
+        while j < t {
+            let w = weights[c * t + j]
+            if w == w {
+                wcol[j] += w
+                wsv[c] += w
+                tot += w
+                if w < wmin { wmin = w }
+                if w > wmax { wmax = w }
+            }
+            j += 1usize
+        }
+        c += 1usize
+    }
+    j = 0usize
+    while j < t {
+        wcol[j] = wcol[j] / tot
+        i = 0usize
+        while i < p {
+            xs[i * t + j] = xreg[j * p + i] * math.sqrt[f64](wcol[j])
+            i += 1usize
+        }
+        j += 1usize
+    }
+    let (fq, eq) = dc.qr(a, xs, t, p, 1.0e-7f64)
+    if eq != ok { ret eq }
+    i = 0usize
+    while i < p {
+        j = 0usize
+        while j < t {
+            qy[j] = 0.0f64
+            j += 1usize
+        }
+        qy[i] = 1.0f64
+        dc.qr_qy(&fq, qy)
+        j = 0usize
+        while j < t {
+            xo[j * p + i] = qy[j] / math.sqrt[f64](wcol[j])
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var s2sum = 0.0f64
+    var ne = 0usize
+    c = 0usize
+    while c < n {
+        var k = 0usize
+        while k < p * p {
+            gm[k] = 0.0f64
+            k += 1usize
+        }
+        i = 0usize
+        while i < p {
+            bv[i] = 0.0f64
+            i += 1usize
+        }
+        var nobs = 0usize
+        j = 0usize
+        while j < t {
+            let w = weights[c * t + j]
+            if w == w {
+                nobs += 1usize
+                i = 0usize
+                while i < p {
+                    k = 0usize
+                    while k < p {
+                        gm[i * p + k] += w * xo[j * p + i] * xo[j * p + k]
+                        k += 1usize
+                    }
+                    bv[i] += w * xo[j * p + i] * ratios[c * t + j]
+                    i += 1usize
+                }
+            }
+            j += 1usize
+        }
+        if wsv[c] > 0.0f64 {
+        ne += 1usize
+        let (gi, eg) = gp.invert(a, gm, p)
+        if eg != ok { ret eg }
+        i = 0usize
+        while i < p {
+            var s = 0.0f64
+            k = 0usize
+            while k < p {
+                s += gi[i * p + k] * bv[k]
+                k += 1usize
+            }
+            ind[c * p + i] = s
+            i += 1usize
+        }
+        var rss = 0.0f64
+        j = 0usize
+        while j < t {
+            let w = weights[c * t + j]
+            if w == w {
+                var fit = 0.0f64
+                i = 0usize
+                while i < p {
+                    fit += xo[j * p + i] * ind[c * p + i]
+                    i += 1usize
+                }
+                rss += w * (ratios[c * t + j] - fit) * (ratios[c * t + j] - fit)
+            }
+            j += 1usize
+        }
+        sig[c] = rss / f64(nobs - p)
+        s2sum += sig[c]
+        wd[c * p] = wsv[c]
+        i = 1usize
+        while i < p {
+            var s = 0.0f64
+            j = 0usize
+            while j < t {
+                let w = weights[c * t + j]
+                if w == w { s += w * xo[j * p + i] * xo[j * p + i] }
+                j += 1usize
+            }
+            wd[c * p + i] = s
+            i += 1usize
+        }
+        } else {
+            i = 0usize
+            while i < p {
+                ind[c * p + i] = 0.0f64
+                wd[c * p + i] = 0.0f64
+                i += 1usize
+            }
+        }
+        c += 1usize
+    }
+    let s2 = s2sum / f64(ne)
+    let (xv, e13) = mem.alloc[f64](a, n)
+    let (wv, e14) = mem.alloc[f64](a, n)
+    if e13 != ok || e14 != ok { ret e13 }
+    i = 0usize
+    while i < p {
+        var m = 0usize
+        c = 0usize
+        while c < n {
+            cr[c * p + i] = 0.0f64
+            if wsv[c] > 0.0f64 {
+                xv[m] = ind[c * p + i]
+                wv[m] = wd[c * p + i]
+                m += 1usize
+            }
+            c += 1usize
+        }
+        var av = bvar_unb(xv[0usize..m], wv[0usize..m], s2, m)
+        if meth == 1usize && wmax - wmin > 1.4901161193847656e-8f64 {
+            if av > 0.0f64 { av = bvar_iter(xv[0usize..m], wv[0usize..m], s2, m, av) } else { av = 0.0f64 }
+        }
+        out[i] = av
+        var sz = 0.0f64
+        var szx = 0.0f64
+        c = 0usize
+        m = 0usize
+        while c < n {
+            if wsv[c] > 0.0f64 {
+                var z = 0.0f64
+                if av > 0.0f64 { z = 1.0f64 / (1.0f64 + s2 / (wv[m] * av)) } else { z = wv[m] }
+                if av > 0.0f64 { cr[c * p + i] = z }
+                sz += z
+                szx += z * xv[m]
+                m += 1usize
+            }
+            c += 1usize
+        }
+        out[p + 1usize + i] = szx / sz
+        i += 1usize
+    }
+    out[p] = s2
+    c = 0usize
+    while c < n {
+        i = 0usize
+        while i < p {
+            let o = p + 1usize + p + c * 3usize * p
+            out[o + i] = ind[c * p + i]
+            out[o + p + i] = cr[c * p + i]
+            out[o + 2usize * p + i] = out[p + 1usize + i] + cr[c * p + i] * (ind[c * p + i] - out[p + 1usize + i])
+            i += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// actuar poisson-inverse Gaussian pmf at the integer x >= 0 (mean mu, dispersion phi), by the recursion of dpoisinvgauss_raw, and the cdf by successive sums
+fn pig_d(x: f64, mu: f64, phi: f64) -> f64 {
+    let twophi = phi + phi
+    let mu2 = mu * mu
+    let twophimu2 = twophi * mu2
+    var p = (1.0f64 - math.sqrt[f64](1.0f64 + twophimu2)) / phi / mu
+    if x == 0.0f64 { ret math.exp[f64](p) }
+    var pi2m = math.exp[f64](p)
+    p = math.log[f64](mu) + p - dsa.log1p(twophimu2) / 2.0f64
+    if x == 1.0f64 { ret math.exp[f64](p) }
+    var pi1m = math.exp[f64](p)
+    let ac = 1.0f64 / (1.0f64 + 1.0f64 / twophimu2)
+    let bc = mu2 / (1.0f64 + twophimu2)
+    var i = 2.0f64
+    var r = pi1m
+    while i <= x {
+        r = ac * (1.0f64 - 1.5f64 / i) * pi1m + (bc * pi2m) / (i * (i - 1.0f64))
+        pi2m = pi1m
+        pi1m = r
+        i += 1.0f64
+    }
+    ret r
+}
+
+fn pig_p(q: f64, mu: f64, phi: f64) -> f64 {
+    var s = 0.0f64
+    var x = 0.0f64
+    while x <= q {
+        s += pig_d(x, mu, phi)
+        x += 1.0f64
+    }
+    ret s
+}
+
+// actuar SampleSingleValue: the state in 0..n drawn from the probabilities p[0..n) (the last state n takes the remainder) with one uniform
+fn sample_single(g: *rr.Rng, n: usize, p: []const f64) -> usize {
+    var pcum = p[0usize]
+    let u = rr.unif(g)
+    var i = 0usize
+    while u > pcum && i < n {
+        if i + 1usize < n { pcum += p[i + 1usize] }
+        i += 1usize
+    }
+    ret i
+}
+
+// actuar rphtype (Neuts): the chain starts from prob, moves with the transition rows of tm (t(i, j) / rate_i for j != i, rate_i = -t(i, i)) until it is absorbed in state m, and the draw is the
+// sum of one exponential per visit divided by the rate of the visited state; m is at most 16
+fn rphtype1(g: *rr.Rng, prob: []const f64, tm: []const f64, m: usize) -> f64 {
+    var nv: [16]usize = zero
+    var row: [16]f64 = zero
+    var state = sample_single(g, m, prob)
+    while state != m {
+        nv[state] += 1usize
+        let rate = 0.0f64 - tm[state * m + state]
+        var j = 0usize
+        while j < m {
+            row[j] = 0.0f64
+            if j != state { row[j] = tm[state * m + j] / rate }
+            j += 1usize
+        }
+        state = sample_single(g, m, row[0usize..m])
+    }
+    var z = 0.0f64
+    var i = 0usize
+    while i < m {
+        var k = 0usize
+        while k < nv[i] {
+            z += rr.rexp(g, 1.0f64) / (0.0f64 - tm[i * m + i])
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret z
+}
+
+// the generators of actuar, one uniform (or one beta for Feller-Pareto) per draw: kind 0 Pareto II, 1 Pareto III, 2 Pareto IV, 3 Feller-Pareto
+fn sh_rand(g: *rr.Rng, kind: usize, mn: f64, s1: f64, s2: f64, s3: f64, sc: f64) -> f64 {
+    if kind == 0usize { ret mn + sc * (math.pow[f64](rr.unif(g), 0.0f64 - 1.0f64 / s1) - 1.0f64) }
+    if kind == 1usize { ret mn + sc * math.pow[f64](1.0f64 / rr.unif(g) - 1.0f64, 1.0f64 / s1) }
+    if kind == 2usize { ret mn + sc * math.pow[f64](math.pow[f64](rr.unif(g), 0.0f64 - 1.0f64 / s1) - 1.0f64, 1.0f64 / s2) }
+    ret mn + sc * math.pow[f64](1.0f64 / rd.rbeta(g, s1, s3) - 1.0f64, 1.0f64 / s2)
+}
+
+// levinvpareto as actuar computes it: R's integrate() (dqags, 100 subdivisions, eps^0.25 tolerances) of x^(t+k-1) (1-x)^(-k) over (0, limit / (limit + scale))
+type IpCtx = struct { shape: f64, order: f64 }
+
+fn ip_fn(c: *IpCtx, x: f64) -> f64 { ret math.pow[f64](x, c.shape + c.order - 1.0f64) * math.pow[f64](1.0f64 - x, 0.0f64 - c.order) }
+
+fn log1pexp(x: f64) -> f64 {
+    if x <= 18.0f64 { ret dsa.log1p(math.exp[f64](x)) }
+    if x > 33.3f64 { ret x }
+    ret x + math.exp[f64](0.0f64 - x)
+}
+
+// the fault code of the integration is in the second result: 0 ok
+fn levinvpareto(a: *mem.Arena, limit: f64, shape: f64, scale: f64, order: f64) -> f64 {
+    if shape <= 0.0f64 || scale <= 0.0f64 { ret nan() }
+    if order <= 0.0f64 - shape { ret 1.0f64 / 0.0f64 }
+    if limit <= 0.0f64 { ret 0.0f64 }
+    var c = IpCtx { shape: shape, order: order }
+    let tol = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    let (r, e) = qp.qags[IpCtx](a, &c, ip_fn, 0.0f64, limit / (limit + scale), tol, tol, 100usize)
+    if r.ier != 0i64 { ret nan() }
+    let u = math.exp[f64](0.0f64 - log1pexp(math.log[f64](scale) - math.log[f64](limit)))
+    ret math.pow[f64](scale, order) * shape * r.result + math.pow[f64](limit, order) * (0.5f64 - math.pow[f64](u, shape) + 0.5f64)
+}
+
+// ---- aggregateDist: quantile (VaR) and conditional tail expectation ----
+
+// the length of the vector aggregateDist("recursive") returns: the recursion runs while the cumulative probability stays below 1 - 1e-6 (tol) and stops after maxit steps
+fn panjer_len(fs: []const f64, tol: f64, maxit: usize) -> usize {
+    var cumul = fs[0usize]
+    var x = 1usize
+    while true {
+        if x > maxit { break }
+        cumul += fs[x]
+        x += 1usize
+        if cumul >= tol { break }
+    }
+    ret x
+}
+
+// quantile.aggregateDist of a step cdf: R's approxfun(y, x, yleft = 0, yright = max(x), f = 1) (smooth false) or its linear version, the ogive (smooth true); y holds the cdf values at the knots xs
+fn agg_inv(xs: []const f64, ys: []const f64, p: f64, smooth: bool) -> f64 {
+    let n = ys.len
+    if p < ys[0usize] { ret 0.0f64 }
+    var mx = xs[0usize]
+    var k = 0usize
+    while k < n {
+        if xs[k] > mx { mx = xs[k] }
+        k += 1usize
+    }
+    if p > ys[n - 1usize] { ret mx }
+    var i = 0usize
+    var j = n - 1usize
+    while i + 1usize < j {
+        let ij = (i + j) / 2usize
+        if p < ys[ij] { j = ij } else { i = ij }
+    }
+    if p == ys[j] { ret xs[j] }
+    if p == ys[i] { ret xs[i] }
+    if smooth { ret xs[i] + (xs[j] - xs[i]) * ((p - ys[i]) / (ys[j] - ys[i])) }
+    ret xs[j]
+}
+
+// CTE.aggregateDist of a step cdf: the pmf-weighted mean of the knots above the VaR
+fn agg_cte(xs: []const f64, fs: []const f64, ys: []const f64, level: f64) -> f64 {
+    let v = agg_inv(xs, ys, level, false)
+    var num = 0.0f64
+    var den = 0.0f64
+    var k = 0usize
+    while k < xs.len {
+        if xs[k] > v {
+            num += xs[k] * fs[k]
+            den += fs[k]
+        }
+        k += 1usize
+    }
+    ret num / den
+}
+
+// the Normal and Normal Power approximations: quantile (npower undefined at or below one half) and CTE
+fn agg_normal_q(p: f64, mean: f64, variance: f64) -> f64 { ret dsa.qnorm(p, mean, math.sqrt[f64](variance), true, false) }
+
+fn agg_normal_cte(level: f64, mean: f64, variance: f64) -> f64 {
+    ret mean + math.sqrt[f64](variance) * dsa.dnorm(dsa.qnorm(level, 0.0f64, 1.0f64, true, false), 0.0f64, 1.0f64, false) / (1.0f64 - level)
+}
+
+fn agg_npower_q(p: f64, mean: f64, variance: f64, skewness: f64) -> f64 {
+    if p <= 0.5f64 { ret nan() }
+    let q = dsa.qnorm(p, 0.0f64, 1.0f64, true, false)
+    ret mean + math.sqrt[f64](variance) * (q + skewness * (q * q - 1.0f64) / 6.0f64)
+}
+
+fn agg_npower_cte(level: f64, mean: f64, variance: f64, skewness: f64) -> f64 {
+    let q = dsa.qnorm(level, 0.0f64, 1.0f64, true, false)
+    ret mean + math.sqrt[f64](variance) * dsa.dnorm(q, 0.0f64, 1.0f64, false) * (1.0f64 + skewness * q / 6.0f64) / (1.0f64 - level)
+}
+
+// the sorted sample as aggregateDist("simulation") keeps it: distinct values in xs and their relative frequencies in fs (xs and fs hold at least n entries); the answer is the number of distinct values
+fn agg_sim_table(sample: []f64, xs: []f64, fs: []f64) -> usize {
+    let n = sample.len
+    var i = 1usize
+    while i < n {
+        let v = sample[i]
+        var j = i
+        while j > 0usize && sample[j - 1usize] > v {
+            sample[j] = sample[j - 1usize]
+            j -= 1usize
+        }
+        sample[j] = v
+        i += 1usize
+    }
+    var m = 0usize
+    i = 0usize
+    while i < n {
+        if m > 0usize && xs[m - 1usize] == sample[i] {
+            fs[m - 1usize] += 1.0f64
+        } else {
+            xs[m] = sample[i]
+            fs[m] = 1.0f64
+            m += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        fs[i] = fs[i] / f64(n)
+        i += 1usize
+    }
+    ret m
 }

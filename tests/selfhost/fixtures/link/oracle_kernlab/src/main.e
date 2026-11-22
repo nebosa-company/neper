@@ -1,6 +1,7 @@
 // e.algo.stat.kernlabpkg against kernlab kernelMatrix and kpca. tests/oracle/kernlab.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R kernlab`; the layout is at the top of scripts/r_oracle/groups/kernlab.R.
 
+use e.algo.stat.kernlabmmd as kmm
 use e.algo.stat.kernlabpkg as kl
 use e.io
 use e.math
@@ -38,14 +39,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var s = 0.0f64
     var i = 0usize
     if str.eq(c.name, "kmat") {
-        kl.kernel_matrix(kind, x, n, p, par1, par2, par3, km)
+        if kind == 7usize {
+            kmm.cross(true, 7usize, x, x, n, n, p, par1, par2, par3, km)
+        } else {
+            kl.kernel_matrix(kind, x, n, p, par1, par2, par3, km)
+        }
         while i < n * n {
             s += km[i] * f64(i + 1usize)
             i += 1usize
         }
         ret s
     }
-    kl.kernel_matrix(0usize, x, n, p, z[3usize], 0.0f64, 0.0f64, km)
+    kmm.cross(true, 0usize, x, x, n, n, p, z[3usize], 0.0f64, 0.0f64, km)
     if kl.kpca(a, km, n, k, eg, pv, rt) != ok { ret nan }
     if str.eq(c.name, "eig") {
         while i < k {
@@ -57,7 +62,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var src = pv
     if str.eq(c.name, "rotated") { src = rt }
     while i < n * k {
-        s += math.abs[f64](src[i]) * f64(i + 1usize)
+        s += src[i] * f64(i + 1usize)
         i += 1usize
     }
     ret s

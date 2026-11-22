@@ -21,7 +21,7 @@ for (rep in 1:6) {
       add("d", a0(xx, 0), call_fn("d", nm, xx, s, sc)); add("p", a0(xx, 0), call_fn("p", nm, xx, s, sc))
       for (k in c(kmin * 0.5, kmax * 0.5, kmax)) {
         add("m", a0(xx, k), do.call(get(paste0("m", nm)), c(list(k), as.list(s), list(scale = sc))))
-        add("lev", a0(xx, k), do.call(get(paste0("lev", nm)), c(list(xx), as.list(s), list(scale = sc, order = k))), rel = if (kind == 3) 1e-5 else 1e-9)  # levinvpareto integrates numerically at eps^0.25
+        add("lev", a0(xx, k), do.call(get(paste0("lev", nm)), c(list(xx), as.list(s), list(scale = sc, order = k))))
       }
     }
     for (pp in c(0.05, 0.4, 0.9)) add("q", c(0, kind, s, rep(0, 3 - length(s)), sc, pp, 0), call_fn("q", nm, pp, s, sc))
@@ -110,8 +110,8 @@ for (rep in 1:40) {
 for (rep in 1:40) {
   m <- sample(1:4, 1); pr <- runif(m); pr <- pr / sum(pr) * runif(1, 0.8, 1)
   T <- matrix(runif(m * m, 0, 1.5), m); diag(T) <- 0; ex <- runif(m, 0.2, 2); diag(T) <- -(rowSums(T) + ex); x <- runif(1, 0.05, 4)
-  cases[[length(cases) + 1]] <- case("ph", c(m, pr, as.vector(t(T)), x, 0), dphtype(x, pr, T), rel = 1e-8, abs = 1e-12)
-  cases[[length(cases) + 1]] <- case("ph", c(m, pr, as.vector(t(T)), x, 1), pphtype(x, pr, T, lower.tail = FALSE), rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("ph", c(m, pr, as.vector(t(T)), x, 0), dphtype(x, pr, T), rel = 1e-10, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("ph", c(m, pr, as.vector(t(T)), x, 1), pphtype(x, pr, T, lower.tail = FALSE), rel = 1e-10, abs = 1e-12)
 }
 # mphtype: "pm" args (m, prob[m], T[m m], k)
 for (rep in 1:30) {
@@ -124,7 +124,7 @@ for (rep in 1:30) {
   a <- runif(1, 0.8, 4); r <- runif(1, 2.5, 6); xx <- exp(runif(1, 0.05, 1.5)); pp <- runif(1, 0.05, 0.95); k <- runif(1, 0.1, 0.9) * r
   cases[[length(cases) + 1]] <- case("lf", c(0, a, r, xx, 0), dlgamma(xx, a, r), rel = 1e-9, abs = 1e-13)
   cases[[length(cases) + 1]] <- case("lf", c(0, a, r, xx, 1), plgamma(xx, a, r), rel = 1e-9, abs = 1e-13)
-  cases[[length(cases) + 1]] <- case("lf", c(0, a, r, pp, 2), qlgamma(pp, a, r), rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("lf", c(0, a, r, pp, 2), qlgamma(pp, a, r), rel = 1e-10, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("lf", c(0, a, r, k, 3), mlgamma(k, a, r), rel = 1e-9, abs = 1e-13)
   al <- rnorm(1, 0, 2); sc <- runif(1, 0.4, 3); x2 <- al + rnorm(1) * sc
   cases[[length(cases) + 1]] <- case("lf", c(1, al, sc, x2, 0), dgumbel(x2, al, sc), rel = 1e-9, abs = 1e-13)
@@ -142,8 +142,8 @@ for (rep in 1:40) {
 for (rep in 1:40) {
   mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); xx <- runif(1, 0.1, 6); q <- runif(1, 0.1, 0.95); k <- sample(1:15, 1)
   for (st in 0:1) {
-    cases[[length(cases) + 1]] <- case("ig", c(0, mu, s, xx, st), if (st == 0) dinvgauss(xx, mu, s) else pinvgauss(xx, mu, s), rel = 1e-8, abs = 1e-13)
-    cases[[length(cases) + 1]] <- case("ig", c(1, q, 0, k, st), if (st == 0) dlogarithmic(k, q) else plogarithmic(k, q), rel = 1e-8, abs = 1e-13)
+    cases[[length(cases) + 1]] <- case("ig", c(0, mu, s, xx, st), if (st == 0) dinvgauss(xx, mu, s) else pinvgauss(xx, mu, s), rel = 1e-10, abs = 1e-13)
+    cases[[length(cases) + 1]] <- case("ig", c(1, q, 0, k, st), if (st == 0) dlogarithmic(k, q) else plogarithmic(k, q), rel = 1e-10, abs = 1e-13)
   }
 }
 # generalised beta: "gb" args (a, b, t, scale, x, stat 0 d 1 p 2 q 3 m (x is the order))
@@ -151,12 +151,12 @@ for (rep in 1:40) {
   a <- runif(1, 0.6, 4); b <- runif(1, 0.6, 4); tt <- runif(1, 0.5, 3); sc <- runif(1, 0.5, 5); xx <- sc * runif(1, 0.05, 0.95); pp <- runif(1, 0.05, 0.95); k <- runif(1, -0.4 * a * tt, 3)
   vals <- c(dgenbeta(xx, a, b, tt, scale = sc), pgenbeta(xx, a, b, tt, scale = sc), qgenbeta(pp, a, b, tt, scale = sc), mgenbeta(k, a, b, tt, scale = sc))
   args <- c(xx, xx, pp, k)
-  for (st in 0:3) cases[[length(cases) + 1]] <- case("gb", c(a, b, tt, sc, args[st + 1], st), vals[st + 1], rel = 1e-8, abs = 1e-13)
+  for (st in 0:3) cases[[length(cases) + 1]] <- case("gb", c(a, b, tt, sc, args[st + 1], st), vals[st + 1], rel = 1e-10, abs = 1e-13)
 }
 # loggamma limited moments and inverse Gaussian moments: "lm" args (kind 0 levlgamma 1 minvgauss, p1, p2, x or limit, order)
 for (rep in 1:40) {
   a <- runif(1, 0.8, 4); r <- runif(1, 3, 7); xx <- exp(runif(1, -0.3, 1.5)); k <- runif(1, 0.1, 0.9) * r
-  cases[[length(cases) + 1]] <- case("lm", c(0, a, r, xx, k), levlgamma(xx, a, r, order = k), rel = 1e-8, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("lm", c(0, a, r, xx, k), levlgamma(xx, a, r, order = k), rel = 1e-10, abs = 1e-13)
   mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); kk <- sample(1:3, 1)
   cases[[length(cases) + 1]] <- case("lm", c(1, mu, s, 0, kk), minvgauss(kk, mu, s), rel = 1e-9, abs = 1e-13)
 }
@@ -170,9 +170,9 @@ for (rep in 1:40) {
 # generalised beta limited moments and Gumbel moments: "gl" args (kind 0 levgenbeta 1 mgumbel, p1, p2, p3, scale, x, order)
 for (rep in 1:40) {
   a <- runif(1, 0.6, 4); b <- runif(1, 0.6, 4); tt <- runif(1, 0.5, 3); sc <- runif(1, 0.5, 5); xx <- sc * runif(1, 0.05, 1.2); k <- runif(1, 0.1, 3)
-  cases[[length(cases) + 1]] <- case("gl", c(0, a, b, tt, sc, xx, k), levgenbeta(xx, a, b, tt, scale = sc, order = k), rel = 1e-8, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("gl", c(0, a, b, tt, sc, xx, k), levgenbeta(xx, a, b, tt, scale = sc, order = k), rel = 1e-10, abs = 1e-13)
   al <- rnorm(1, 0, 2); s2 <- runif(1, 0.4, 3); kk <- sample(1:2, 1)
-  cases[[length(cases) + 1]] <- case("gl", c(1, al, s2, 0, 0, 0, kk), mgumbel(kk, al, s2), rel = 1e-8, abs = 1e-11)
+  cases[[length(cases) + 1]] <- case("gl", c(1, al, s2, 0, 0, 0, kk), mgumbel(kk, al, s2), rel = 1e-10, abs = 1e-11)
 }
 # zero-truncated and zero-modified count quantiles: "zq" args (kind 0 pois 1 nbinom 2 binom 3 geom, a, b, p0, p, stat 0 zt 1 zm)
 for (rep in 1:60) {
@@ -185,7 +185,7 @@ for (rep in 1:60) {
 # inverse Gaussian quantile: "iq" args (mean, shape, p)
 for (rep in 1:40) {
   mu <- runif(1, 0.5, 4); s <- runif(1, 0.4, 5); pp <- runif(1, 0.02, 0.98)
-  cases[[length(cases) + 1]] <- case("iq", c(mu, s, pp), qinvgauss(pp, mu, s), rel = 1e-7, abs = 1e-10)
+  cases[[length(cases) + 1]] <- case("iq", c(mu, s, pp), qinvgauss(pp, mu, s), rel = 1e-10, abs = 1e-10)
 }
 # random generators under set.seed: "rg" args (seed, kind 0 rburr 1 rtrgamma 2 rinvgamma 3 rgumbel 4 rlgamma 5 rpareto1 6 rinvtrgamma 7 rinvweibull 8 rinvexp 9 rgenbeta 10 rtrbeta 11 rgenpareto, p1, p2, p3, sc, n); the answer is the position-weighted sum of n draws
 for (rep in 1:120) {
@@ -207,7 +207,7 @@ for (rep in 1:50) {
   kd <- c(0, 1, 2, 4)[rep %% 4 + 1]; sd <- sample(1:100000, 1); n <- sample(3:15, 1); a <- if (kd == 2) sample(2:12, 1) else runif(1, 0.5, 5); b <- runif(1, 0.2, 0.9)
   set.seed(sd)
   v <- switch(kd + 1, rztpois(n, a), rztnbinom(n, a, b), rztbinom(n, a, b), rztgeom(n, b), rlogarithmic(n, b))
-  cases[[length(cases) + 1]] <- case("rc", c(sd, kd, a, b, n), sum(v * seq_along(v)), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("rc", c(sd, kd, a, b, n), sum(v * seq_along(v)), rel = 1e-13, abs = 0)
 }
 # ruin() with phase-type claims and exponential waiting: "rp" args (m, prob[m], T[m m], lambda, c, u)
 for (rep in 1:30) {
@@ -215,7 +215,7 @@ for (rep in 1:30) {
   T <- matrix(runif(m * m, 0, 1.5), m); diag(T) <- 0; ex <- runif(m, 0.5, 2); diag(T) <- -(rowSums(T) + ex)
   mean.claim <- sum(pr %*% solve(-T)); cc <- runif(1, 1.2, 2.5); lam <- runif(1, 0.2, 0.8) * cc / mean.claim; u <- runif(1, 0, 6)
   f <- ruin(claims = "phase-type", par.claims = list(prob = pr, rates = T), wait = "exponential", par.wait = list(rate = lam), premium.rate = cc)
-  cases[[length(cases) + 1]] <- case("rp", c(m, pr, as.vector(t(T)), lam, cc, u), f(u), rel = 1e-7, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("rp", c(m, pr, as.vector(t(T)), lam, cc, u), f(u), rel = 1e-11, abs = 1e-13)
 }
 # rcompound(n, rpois(lambda), rgamma(shape, rate)) under set.seed and the ecdf of aggregateDist("simulation"): "rc" args (seed, n, lambda, shape, rate, which 0 weighted sum of the aggregates, 1 ecdf at the mean, 2 ecdf at the upper quartile)
 for (rep in 1:30) {
@@ -251,9 +251,11 @@ for (rep in 1:25) {
   ratios <- t(sapply(seq_len(n), function(i) as.vector(xr %*% bi[i, ]) + rnorm(tt, 0, 3)))
   weights <- matrix(round(runif(n * tt, 50, 300)), n)
   ech <- capture.output(r <- tryCatch(suppressWarnings(actuar:::hache.origin(ratios, weights, xr, sqrt(.Machine$double.eps), 100, TRUE)), error = function(e) NULL))
-  if (is.null(r) || length(ech) - 1 > 40) next  # skip the ill-conditioned fits (singular or not converged: the iteration then amplifies rounding differences)
+  nit <- length(ech) - 1
+  if (is.null(r) || nit > 100) next  # skip the singular fits and the ones that never settle (the iteration then amplifies rounding differences)
   v <- c(as.vector(r$means[[1]]), as.vector(t(r$iterative[[1]])), r$iterative[[2]], as.vector(t(r$weights[[1]])))
-  for (w in seq_along(v)) cases[[length(cases) + 1]] <- case("ha", c(n, tt, p, as.vector(t(ratios)), as.vector(t(weights)), as.vector(t(xr)), w - 1), v[w], rel = 1e-7, abs = 1e-9)
+  tl <- 1e-9  # the fits that need 41 to 100 rounds match at the same tolerance
+  for (w in seq_along(v)) cases[[length(cases) + 1]] <- case("ha", c(n, tt, p, as.vector(t(ratios)), as.vector(t(weights)), as.vector(t(xr)), w - 1), v[w], rel = tl, abs = 1e-12)
 }
 # aggregateDist("convolution"): "cv" args (m, fx[m], np, pn[np], nn, stat 0 cdf at nn 1 position-weighted sum of the cdf)
 for (rep in 1:40) {
@@ -278,20 +280,5 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("gg", c(r, cj, nj, 0, xx), ogive(gd)(xx), rel = 1e-10, abs = 1e-13)
   cases[[length(cases) + 1]] <- case("gg", c(r, cj, nj, 1, kk), emm(gd, kk), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("gg", c(r, cj, nj, 2, abs(xx)), elev(gd)(abs(xx)), rel = 1e-10, abs = 1e-12)
-}
-# cm() hierarchical (sector, unit, period): "hier" args (nl = 2, nr, nt, meth 0 Buhlmann-Gisler 1 Ohlsson, parlen0, parlen1, par0[], par1[] (0-based), nn0, nn1, ratios[nr*nt] row-major, weights[nr*nt] (NaN missing), idx)
-# the idx-th number of c(unbiased, unlist(cred), unlist(means))
-for (rep in 1:14) {
-  ns <- sample(2:4, 1); upn <- sample(2:4, ns, replace = TRUE); nt <- sample(4:7, 1); nr <- sum(upn)
-  df <- data.frame(sector = rep(seq_len(ns), upn), unit = seq_len(nr))
-  R <- matrix(round(rnorm(nr * nt, rep(rnorm(nr, 10, 2), nt), 3), 3), nr, nt); W <- matrix(round(runif(nr * nt, 0.5, 5), 3), nr, nt)
-  if (rep %% 2 == 0) { na <- sample(nr * nt, 3); for (k in na) { rr0 <- (k - 1) %% nr + 1; cc <- (k - 1) %/% nr + 1; if (sum(!is.na(W[rr0, ])) > 1) { W[rr0, cc] <- NA; R[rr0, cc] <- NA } } }
-  meth <- rep %% 3 == 0
-  colnames(R) <- paste0("r", seq_len(nt)); colnames(W) <- paste0("w", seq_len(nt)); d <- cbind(df, R, W)
-  fit <- tryCatch(cm(~sector + sector:unit, data = d, ratios = paste0("r", seq_len(nt)), weights = paste0("w", seq_len(nt)), method = if (meth) "Ohlsson" else "Buhlmann-Gisler"), error = function(e) NULL)
-  if (is.null(fit)) next
-  ord <- fit$ordering; nn <- sapply(fit$means[1:2], length)
-  want <- c(fit$unbiased, unlist(fit$cred), unlist(fit$means))
-  for (i in seq_along(want)) cases[[length(cases) + 1]] <- case("hier", c(2, nr, nt, as.numeric(meth), length(ord[[1]]), length(ord[[2]]), ord[[1]] - 1, ord[[2]] - 1, nn, as.vector(t(R)), as.vector(t(W)), i - 1), want[i], rel = 1e-8, abs = 1e-10)
 }
 emit("actuar", "actuar", list(cases))

@@ -56,6 +56,36 @@ fn sqdist(x: []const f64, n: usize, d: usize, out: []f64) {
     }
 }
 
+// Rtsne's computeSquaredEuclideanDistance: the row sums of squares added pairwise, then reference dgemm("T", "N", -2, X, X, 1, DD), whose entry is -2 * dot + DD
+fn sqdist_blas(x: []const f64, n: usize, d: usize, out: []f64, sums: []f64) {
+    var i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var c = 0usize
+        while c < d {
+            s += x[i * d + c] * x[i * d + c]
+            c += 1usize
+        }
+        sums[i] = s
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var t = 0.0f64
+            var c = 0usize
+            while c < d {
+                t += x[i * d + c] * x[j * d + c]
+                c += 1usize
+            }
+            out[i * n + j] = (0.0f64 - 2.0f64) * t + (sums[i] + sums[j])
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
 fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, perplexity: f64, y: []f64, max_iter: usize, stop_lying: usize, mom_switch: usize, momentum0: f64, final_momentum: f64, eta: f64, exaggeration: f64, mode: usize) -> err {
     let (xs, e0) = mem.alloc[f64](a, n * d)
     let (dd, e1) = mem.alloc[f64](a, n * n)
@@ -64,7 +94,8 @@ fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, pe
     let (dy, e4) = mem.alloc[f64](a, n * dims)
     let (uy, e5) = mem.alloc[f64](a, n * dims)
     let (gains, e6) = mem.alloc[f64](a, n * dims)
-    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret e0 }
+    let (sums, e7) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret e0 }
     var i = 0usize
     while i < n * d {
         xs[i] = x[i]
@@ -93,6 +124,11 @@ fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, pe
         }
     } else {
         sqdist(xs, n, d, dd)
+        i = 0usize
+        while i < n * n {
+            dd[i] = math.sqrt[f64](dd[i]) * math.sqrt[f64](dd[i])
+            i += 1usize
+        }
     }
     let lp = math.log[f64](perplexity)
     var r = 0usize
@@ -183,7 +219,7 @@ fn tsne_exact(a: *mem.Arena, x: []const f64, n: usize, d: usize, dims: usize, pe
             }
         }
         if iter == mom_switch { momentum = final_momentum }
-        sqdist(y, n, dims, dd)
+        sqdist_blas(y, n, dims, dd, sums)
         var sq = 0.0f64
         r = 0usize
         while r < n {

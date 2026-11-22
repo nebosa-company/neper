@@ -3,7 +3,7 @@
 #   fn: "wcoef" "wse" (weighted by position), "s2e", "bcoef" (constant first), "rcoef", "rse" (constant first), "s2mu", "theta"
 suppressMessages(library(plm))
 cases <- list()
-add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-7, abs = 1e-9)
+add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-11)
 ws <- function(v) sum(v * seq_along(v))
 set.seed(20261213)
 for (rep in 1:24) {

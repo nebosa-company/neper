@@ -1,8 +1,9 @@
-// R kernlab: kernelMatrix for the rbf, polynomial, linear, tanh, Laplace, ANOVA and spline kernels, and kpca (eigenvalues of the centred kernel matrix divided by n, the scaled eigenvectors pcv and the projections of the training points). Data are row-major, n by p. Axis signs are free.
+// R kernlab: kernelMatrix for the rbf, polynomial, linear, tanh, Laplace, ANOVA and spline kernels, and kpca (eigenvalues of the centred kernel matrix divided by n, the scaled eigenvectors pcv and the projections of the training points). Data are row-major, n by p.
 //
-// Not here: the Bessel and string kernels, ksvm, ksvm-based classifiers, rvm, gausspr, kernel k-means, spectral clustering, kfa, ipop.
+// Not here: the string kernels, and the Bessel kernel is kernlabmmd.cross kind 7 (ksvm, rvm, gausspr, kfa, specc, ranking, ipop and kmmd live in the kernlab* modules).
 
-use e.algo.linalg.matrix as mx
+use e.algo.linalg.lapack_syevr as sy
+use e.algo.stat.armld as ld
 use e.math
 use e.mem
 
@@ -56,50 +57,54 @@ fn kernel_matrix(kind: usize, x: []const f64, n: usize, p: usize, par1: f64, par
     }
 }
 
-// kpca with k features of the kernel matrix kk (n by n): eig (k) = eigenvalues of the centred matrix over n, pcv (n by k) = vectors / sqrt(eig), rotated (n by k) = centred matrix times pcv
+// kpca with k features of the kernel matrix kk (n by n), as kpca.R does it: kc = t(t(km - colSums(km) / n) - rowSums(km) / n) + sum(km) / n^2 with R's long-double sums,
+// eigen(kc / n) by LAPACK dsyevr (lower triangle), eig (k) its top eigenvalues, pcv (n by k) = vectors / sqrt(eig), rotated (n by k) = kc %*% pcv. Signs are LAPACK's, as R returns them.
 fn kpca(a: *mem.Arena, kk: []const f64, n: usize, k: usize, eig: []f64, pcv: []f64, rotated: []f64) -> err {
     let nf = f64(n)
     let (kc, e1) = mem.alloc[f64](a, n * n)
-    let (rm, e2) = mem.alloc[f64](a, n)
-    let (vv, e3) = mem.alloc[f64](a, n * n)
-    let (ev, e4) = mem.alloc[f64](a, n)
+    let (cs, e2) = mem.alloc[f64](a, n)
+    let (rs, e3) = mem.alloc[f64](a, n)
+    let (xc, e4) = mem.alloc[f64](a, n * n)
+    let (w, e5) = mem.alloc[f64](a, n)
+    let (z, e6) = mem.alloc[f64](a, n * n)
+    let (col, e7) = mem.alloc[f64](a, n)
     if e1 != ok { ret e1 }
     if e2 != ok { ret e2 }
     if e3 != ok { ret e3 }
     if e4 != ok { ret e4 }
-    var tot = 0.0f64
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    if e7 != ok { ret e7 }
     var i = 0usize
     while i < n {
-        rm[i] = 0.0f64
         var j = 0usize
         while j < n {
-            rm[i] += kk[i * n + j] / nf
+            col[j] = kk[j * n + i]
             j += 1usize
         }
-        tot += rm[i] / nf
+        cs[i] = ld.sum_ld(col[0usize..n])
+        rs[i] = ld.sum_ld(kk[i * n..(i + 1usize) * n])
         i += 1usize
     }
+    let tot = ld.sum_ld(kk[0usize..n * n])
     i = 0usize
     while i < n {
         var j = 0usize
         while j < n {
-            kc[i * n + j] = kk[i * n + j] - rm[i] - rm[j] + tot
+            kc[i * n + j] = ((kk[i * n + j] - cs[i] / nf) - rs[j] / nf) + tot / (nf * nf)
+            xc[i + j * n] = kc[i * n + j] / nf
             j += 1usize
         }
         i += 1usize
     }
-    let (vm, e5) = mx.view[f64](vv, n, n, n)
-    let (src, e6) = mx.view_const[f64](kc, n, n, n)
-    if e5 != ok { ret e5 }
-    if e6 != ok { ret e6 }
-    let r = mx.eigen(a, ev, vm, src, 1.0e-14f64, 200u32)
+    let r = sy.dsyevr_all(a, xc, n, w, z)
     if r != ok { ret r }
     var c = 0usize
     while c < k {
-        eig[c] = ev[c] / nf
+        eig[c] = w[n - 1usize - c]
         i = 0usize
         while i < n {
-            pcv[i * k + c] = vv[i * n + c] / math.sqrt[f64](eig[c])
+            pcv[i * k + c] = z[(n - 1usize - c) * n + i] / math.sqrt[f64](eig[c])
             i += 1usize
         }
         c += 1usize

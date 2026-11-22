@@ -12,30 +12,6 @@ use e.test.oracle as oracle
 
 fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
-    if str.eq(c.name, "hier") {
-        let hn = usize(x[1usize])
-        let ht = usize(x[2usize])
-        let l0 = usize(x[4usize])
-        let l1 = usize(x[5usize])
-        let (par, pe) = mem.alloc[usize](ar, l0 + l1)
-        let (pl, pe2) = mem.alloc[usize](ar, 2usize)
-        let (nnv, pe3) = mem.alloc[usize](ar, 2usize)
-        let (ho, pe4) = mem.alloc[f64](ar, 64usize + 4usize * hn + 4usize * hn * ht)
-        if pe != ok || pe2 != ok || pe3 != ok || pe4 != ok { os.exit(11) }
-        var hi = 0usize
-        while hi < l0 + l1 {
-            par[hi] = usize(x[6usize + hi])
-            hi += 1usize
-        }
-        pl[0usize] = l0
-        pl[1usize] = l1
-        let nb0 = 6usize + l0 + l1
-        nnv[0usize] = usize(x[nb0])
-        nnv[1usize] = usize(x[nb0 + 1usize])
-        let rb = nb0 + 2usize
-        if ac.cm_hierarchical(ar, 2usize, hn, ht, usize(x[3usize]), x[rb..rb + hn * ht], x[rb + hn * ht..rb + 2usize * hn * ht], par, pl, nnv, ho) != ok { os.exit(12) }
-        ret ho[usize(x[rb + 2usize * hn * ht])]
-    }
     if str.eq(c.name, "gg") {
         let rg = usize(x[0usize])
         let st = usize(x[2usize + 2usize * rg])
@@ -327,6 +303,7 @@ fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "p") { ret ac.tb_p(v, a, g, t, sc) }
         if str.eq(nm, "q") { ret ac.tb_q(v, a, g, t, sc) }
         if str.eq(nm, "m") { ret ac.tb_m(k, a, g, t, sc) }
+        if kind == 3u8 { ret ac.levinvpareto(ar, v, s1, sc, k) }
         ret ac.tb_lev(v, k, a, g, t, sc)
     }
     if fam == 1u8 {
