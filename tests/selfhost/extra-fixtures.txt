@@ -357,6 +357,7 @@ oracle_vim
 oracle_vim_hotdeck
 oracle_vim_knn_mixed
 oracle_vim_knn_missing
+oracle_vim_knn_multi
 oracle_plm
 oracle_arules
 oracle_systemfit

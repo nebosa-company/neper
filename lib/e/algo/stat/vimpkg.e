@@ -4,6 +4,9 @@
 // numeric ones keep the range scaling, the distance is their mean (VIM's weights of one), and a
 // categorical target takes the most frequent value among the k donors (VIM's catFun = maxCat).
 //
+// VIM::kNN over several targets in one call (knn_impute_multi): the columns in `variable` are filled in
+// that order, so a later target's distances already see the earlier ones' imputed values.
+//
 // VIM::hotdeck for numeric columns: a single random row order from runif(n) on the seed, then each
 // missing value takes the value of the row before it in that order (stepping back while the donor is
 // missing too, wrapping within the data), its columns imputed independently.
@@ -106,35 +109,48 @@ fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: us
     ret ok
 }
 
-// VIM::kNN over mixed numeric and categorical distance columns, with the categorical ones given as
-// integer codes in the same matrix and named by is_factor. A numeric column is scaled by its range over
-// the whole table (gowerD pools donors and the rows to impute, so every row), a categorical column
-// answers 0 for equal and 1 for different, and the distance is the mean over the p - 1 distance columns
-// (VIM's default weights are all one). A missing distance value is replaced by the largest prepared
-// value of its column plus one (gowerD's "Maximum + 1 for missing values"), so two missing entries in a
-// column are at distance 0 from each other. The k nearest donors in (distance, row order) order then give
-// the median or mean of a numeric target, or the most frequent code of a categorical one; a tie among the
-// donor codes takes the lowest code, where VIM's maxCat samples (no oracle case has a tie).
-fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, is_factor: []const bool, out: []f64) -> err {
+// One kNN pass over the matrix d, filling the missing cells of column v in place (VIM's per-variable
+// step). A numeric column is scaled by its range over the whole table (gowerD pools donors and the rows
+// to impute, so every row), a categorical column answers 0 for equal and 1 for different, and the
+// distance is the mean over the p - 1 distance columns (VIM's default weights are all one). A missing
+// distance value is replaced by the largest prepared value of its column plus one (gowerD's "Maximum + 1
+// for missing values"), so two missing entries in a column are at distance 0 from each other. The rows
+// missing in column v are fixed at entry, so a value filled earlier in this pass is never a donor. The k
+// nearest donors in (distance, row order) order give the median or mean of a numeric target, or the most
+// frequent code of a categorical one; a tie among the donor codes takes the lowest code, where VIM's
+// maxCat samples (no oracle case has a tie). A column with no observed value is left alone, as VIM
+// drops it from `variable`.
+fn knn_fill_column(a: *mem.Arena, d: []f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, is_factor: []const bool) -> err {
     let (prep, e0) = mem.alloc[f64](a, n * p)
     let (dist, e2) = mem.alloc[f64](a, n)
     let (cand, e3) = mem.alloc[usize](a, n)
+    let (miss, e4) = mem.alloc[bool](a, n)
     if e0 != ok { ret e0 }
     if e2 != ok { ret e2 }
     if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    var observed = 0usize
+    if k == 0usize { ret Invalid }
+    var i = 0usize
+    while i < n {
+        miss[i] = !(d[i * p + v] == d[i * p + v])
+        if !miss[i] { observed += 1usize }
+        i += 1usize
+    }
+    if observed == 0usize { ret ok }
     var c = 0usize
     while c < p {
         var lo = 1.0e300f64
         var hi = 0.0f64 - 1.0e300f64
         if !is_factor[c] {
-            var i = 0usize
-            while i < n {
-                let t = x[i * p + c]
+            var i2 = 0usize
+            while i2 < n {
+                let t = d[i2 * p + c]
                 if t == t {
                     if t < lo { lo = t }
                     if t > hi { hi = t }
                 }
-                i += 1usize
+                i2 += 1usize
             }
         }
         // gowerD divides by the range, and replaces a zero or missing range with 1
@@ -142,38 +158,33 @@ fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize,
         if is_factor[c] || !(r > 0.0f64) { r = 1.0f64 }
         // the prepared value: the scaled double of a numeric column, the code of a categorical one
         var mx = -1.0e300f64
-        var i = 0usize
-        while i < n {
-            let t = x[i * p + c]
+        var i2 = 0usize
+        while i2 < n {
+            let t = d[i2 * p + c]
             var prep_v = t
             if !is_factor[c] && t == t { prep_v = t / r }
-            prep[i * p + c] = prep_v
+            prep[i2 * p + c] = prep_v
             if prep_v == prep_v && prep_v > mx { mx = prep_v }
-            i += 1usize
+            i2 += 1usize
         }
         // maxplus1: the column's largest prepared value + 1, or 1 for a column with no observed value
         var m1 = mx + 1.0f64
         if !(mx > -1.0e300f64) { m1 = 1.0f64 }
-        i = 0usize
-        while i < n {
-            if !(prep[i * p + c] == prep[i * p + c]) { prep[i * p + c] = m1 }
-            i += 1usize
+        i2 = 0usize
+        while i2 < n {
+            if !(prep[i2 * p + c] == prep[i2 * p + c]) { prep[i2 * p + c] = m1 }
+            i2 += 1usize
         }
         c += 1usize
-    }
-    var i = 0usize
-    while i < n {
-        out[i] = x[i * p + v]
-        i += 1usize
     }
     let denom = f64(p - 1usize)
     i = 0usize
     while i < n {
-        if x[i * p + v] != x[i * p + v] {
+        if miss[i] {
             var m = 0usize
             var j = 0usize
             while j < n {
-                if x[j * p + v] == x[j * p + v] {
+                if !miss[j] {
                     var s = 0.0f64
                     c = 0usize
                     while c < p {
@@ -206,47 +217,86 @@ fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize,
                 var q = 0usize
                 while q < kk {
                     var count = 0usize
-                    var r = 0usize
-                    while r < kk {
-                        if x[cand[r] * p + v] == x[cand[q] * p + v] { count += 1usize }
-                        r += 1usize
+                    var r2 = 0usize
+                    while r2 < kk {
+                        if d[cand[r2] * p + v] == d[cand[q] * p + v] { count += 1usize }
+                        r2 += 1usize
                     }
-                    if count > best_count || (count == best_count && x[cand[q] * p + v] < x[best * p + v]) {
+                    if count > best_count || (count == best_count && d[cand[q] * p + v] < d[best * p + v]) {
                         best = cand[q]
                         best_count = count
                     }
                     q += 1usize
                 }
-                out[i] = x[best * p + v]
+                d[i * p + v] = d[best * p + v]
             } else if use_mean {
                 var s = 0.0f64
                 var q = 0usize
                 while q < kk {
-                    s += x[cand[q] * p + v]
+                    s += d[cand[q] * p + v]
                     q += 1usize
                 }
-                out[i] = s / f64(kk)
+                d[i * p + v] = s / f64(kk)
             } else {
                 // the median of the kk donor values
                 var q = 0usize
                 while q < kk {
-                    var r = q
-                    while r > 0usize && x[cand[r - 1usize] * p + v] > x[cand[r] * p + v] {
-                        let t = cand[r]
-                        cand[r] = cand[r - 1usize]
-                        cand[r - 1usize] = t
-                        r -= 1usize
+                    var r2 = q
+                    while r2 > 0usize && d[cand[r2 - 1usize] * p + v] > d[cand[r2] * p + v] {
+                        let t = cand[r2]
+                        cand[r2] = cand[r2 - 1usize]
+                        cand[r2 - 1usize] = t
+                        r2 -= 1usize
                     }
                     q += 1usize
                 }
                 if kk % 2usize == 1usize {
-                    out[i] = x[cand[kk / 2usize] * p + v]
+                    d[i * p + v] = d[cand[kk / 2usize] * p + v]
                 } else {
-                    out[i] = (x[cand[kk / 2usize - 1usize] * p + v] + x[cand[kk / 2usize] * p + v]) / 2.0f64
+                    d[i * p + v] = (d[cand[kk / 2usize - 1usize] * p + v] + d[cand[kk / 2usize] * p + v]) / 2.0f64
                 }
             }
         }
         i += 1usize
+    }
+    ret ok
+}
+
+// VIM::kNN over mixed numeric and categorical distance columns, one target variable: see knn_fill_column
+// for the distance and aggregation rules.
+fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, is_factor: []const bool, out: []f64) -> err {
+    let (work, e1) = mem.alloc[f64](a, n * p)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < n * p {
+        work[i] = x[i]
+        i += 1usize
+    }
+    let e = knn_fill_column(a, work, n, p, v, k, use_mean, is_factor)
+    if e != ok { ret e }
+    i = 0usize
+    while i < n {
+        out[i] = work[i * p + v]
+        i += 1usize
+    }
+    ret ok
+}
+
+// VIM::kNN over several target variables in one call: out (n by p) starts as x, and each column in vars
+// is filled in order, so a later target's distances already see the values filled for the earlier ones
+// (VIM's useImputedDist = TRUE, its default, with columns ordered as `variable` orders them).
+fn knn_impute_multi(a: *mem.Arena, x: []const f64, n: usize, p: usize, vars: []const usize, k: usize, use_mean: bool, is_factor: []const bool, out: []f64) -> err {
+    if x.len < n * p || out.len < n * p { ret mem.Full }
+    var i = 0usize
+    while i < n * p {
+        out[i] = x[i]
+        i += 1usize
+    }
+    var t = 0usize
+    while t < vars.len {
+        let e = knn_fill_column(a, out, n, p, vars[t], k, use_mean, is_factor)
+        if e != ok { ret e }
+        t += 1usize
     }
     ret ok
 }
