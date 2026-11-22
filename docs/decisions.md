@@ -52167,3 +52167,12 @@ Obstacle 3 named "L264/L265 hold L284 and L285 at zero". Checking first (D7789's
 The blanket text replacement caught four rows, not one: `L275`, `L276`, `L283` and `L285` all carried the same "Needs L264." sentence, and the first pass gave all four the raster-specific wording. They were corrected to a neutral sentence, and the over-broad replace is the second self-inflicted edit error in this session (the first was the duplicate JSON key in L304's score). Both were caught by checking the *result* rather than trusting the edit: a scripted replace over a 435-row JSON must be followed by a scan of every row that received the new text.
 
 With this, the goal's obstacle 3 is closed without any implementation work at all, and the count of stale blockers found by looking instead of scheduling reaches seven (five "pending Linux" rows, the RNG, and this).
+## D7791 — The Linux sweep found a real hang, not a missing run: ghyp2 and ghypfit on x64-linux
+
+The L407 batch was started on x64-linux expecting 12 fixtures at 155-185 s each. The measurement is different and more useful: `oracle_stabledist` passed in 14 s and `oracle_ghyp` in 3 s, but `oracle_ghyp2` ran for **1362 s** before it had to be killed and `oracle_ghypfit` exceeded a **300 s** timeout - on Windows the pair takes 155-185 s together. The remaining nine were not attempted once that pattern was clear.
+
+So this row's Linux gap is not "the run was never done"; it is a **platform-specific hang or pathological slowdown** in code that is fast enough on Windows. That is a bug worth finding - the candidates are the incomplete-BesselK iteration and the integrator behind `qgig`/`dghyp`, both of which loop until convergence - and it outranks every remaining serialisation item in the sweep: a fixture that does not terminate on one host will never be verified there.
+
+Practical consequences recorded with the row: the batch needs per-fixture timeouts (the second attempt used `timeout 300`, which is what turned "hangs forever" into "exit 124 with a number"), and the fixtures still need splitting for headroom on Windows.
+
+This is also the first finding in the sweep that a *run* produced rather than a reading - eight of the previous claims were stale text, this one is live. Both kinds are worth having, but only this kind changes what the code does.
