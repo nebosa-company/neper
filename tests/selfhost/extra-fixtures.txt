@@ -326,6 +326,7 @@ oracle_robustbase
 oracle_mixtools
 oracle_klar
 oracle_klar_mixed
+oracle_klar_woe
 oracle_drc
 oracle_osqp
 oracle_mumin

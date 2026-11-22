@@ -105,6 +105,54 @@ fn nb_fit_mixed(x: []const f64, n: usize, p: usize, labels: []const usize, k: us
     }
 }
 
+// klaR::woe for one factor variable (0-based level codes) against a binary target (labels 1 and 2): each
+// level's weight of evidence is the log of its share of class 1 over its share of class 2, every empty
+// class-and-level cell is raised to zeroadj first, and the last value of out is the information value, the
+// sum over levels of the share difference times the woe. out holds nlev + 1 values; the caller supplies a
+// 2 by nlev scratch in counts (row 0 for class 1, row 1 for class 2).
+fn woe_counts(codes: []const usize, n: usize, labels: []const usize, nlev: usize, zeroadj: f64, counts: []f64, out: []f64) -> err {
+    if counts.len < nlev * 2usize || out.len < nlev + 1usize { ret mem.Full }
+    var lev = 0usize
+    while lev < nlev * 2usize {
+        counts[lev] = 0.0f64
+        lev += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        let cls = labels[i]
+        if cls >= 1usize && cls <= 2usize && codes[i] < nlev {
+            counts[(cls - 1usize) * nlev + codes[i]] += 1.0f64
+        }
+        i += 1usize
+    }
+    // klaR raises every empty cell to zeroadj before the class totals are taken
+    lev = 0usize
+    while lev < nlev * 2usize {
+        if counts[lev] == 0.0f64 { counts[lev] = zeroadj }
+        lev += 1usize
+    }
+    var fy0 = 0.0f64
+    var fy1 = 0.0f64
+    lev = 0usize
+    while lev < nlev {
+        fy0 += counts[lev]
+        fy1 += counts[nlev + lev]
+        lev += 1usize
+    }
+    var iv = 0.0f64
+    lev = 0usize
+    while lev < nlev {
+        let r0 = counts[lev] / fy0
+        let r1 = counts[nlev + lev] / fy1
+        let s = math.log[f64](r0 / r1)
+        out[lev] = s
+        iv += (r0 - r1) * s
+        lev += 1usize
+    }
+    out[nlev] = iv
+    ret ok
+}
+
 // the posterior of one observation over the k classes into post, and the predicted class (1-based), with
 // numeric columns read through mean and sd and factor columns through fprob
 fn nb_predict_mixed(row: []const f64, p: usize, k: usize, prior: []const f64, mean: []const f64, sd: []const f64, fprob: []const f64, is_factor: []const bool, maxlev: usize, threshold: f64, post: []f64) -> usize {
