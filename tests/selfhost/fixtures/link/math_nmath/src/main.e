@@ -4,6 +4,7 @@
 // should match exactly on every host - any disagreement is this port's error, not the platform's.
 
 use e.io
+use e.math
 use e.math.dist as di
 use e.math.nmath as nm
 use e.math.special as sp
@@ -36,7 +37,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var fqn = 0usize
     var fe_plain = 0usize
     var fec_plain = 0usize
-    var both = 0usize
+    var b1 = 0usize
+    var b2 = 0usize
+    var b3 = 0usize
+    var b4 = 0usize
     while at < golden.cases.len {
         let start = mem.mark(a)
         let c = &golden.cases[at]
@@ -55,7 +59,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if s.eq(c.name, "lgamma") { flg += 1usize }
             if s.eq(c.name, "gamma") { fga += 1usize }
             if s.eq(c.name, "erf") { fe += 1usize }
-            if s.eq(c.name, "erfc") { fec += 1usize }
+            if s.eq(c.name, "erfc") {
+                fec += 1usize
+                let ax = math.abs[f64](c.args[0usize])
+                if ax < 1.0f64 { b1 += 1usize } else if ax < 2.5f64 { b2 += 1usize } else if ax < 5.5f64 { b3 += 1usize } else { b4 += 1usize }
+            }
             if s.eq(c.name, "pnorm") { fpn += 1usize }
             if s.eq(c.name, "qnorm") { fqn += 1usize }
             if shown <= 10usize {
@@ -88,7 +96,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let _ = s.push_usize(&b, fe_plain)
     let _ = s.push(&b, ", plain erf ")
     let _ = s.push_usize(&b, fec_plain)
-    let _ = s.push(&b, ")\n")
+    let _ = s.push(&b, ") bands ")
+    let _ = s.push_usize(&b, b1)
+    let _ = s.push(&b, "/")
+    let _ = s.push_usize(&b, b2)
+    let _ = s.push(&b, "/")
+    let _ = s.push_usize(&b, b3)
+    let _ = s.push(&b, "/")
+    let _ = s.push_usize(&b, b4)
+    let _ = s.push(&b, "\n")
     let _ = io.print(s.done(&b))
     if shown > 0usize { os.exit(1) }
     ret ok

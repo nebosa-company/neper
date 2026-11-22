@@ -52095,3 +52095,14 @@ The fix is to stop rebuilding to compare: `e.math.special` now carries `erf_plai
 So the double-double work is a genuine improvement, four times better on erf and 1.6 times on erfc against the true value - the opposite of what the contaminated comparison suggested. The plain variants stay in the file for now as the reference side of the comparison; they cost nothing at run time (nothing calls them) and they make any future erf change measurable the same way.
 
 Both are still not correctly rounded: 77 and 250 remain, concentrated in the long series and in the continued fraction above 5.5. The fixture stays unregistered until those are zero.
+## D7784 — The erfc failures are binned, and the histogram names the fix: direct evaluation from x = 1
+
+The erfc residual, binned by |x| in the fixture (D7784's counters: `<1 / 1-2.5 / 2.5-5.5 / >5.5`):
+
+    14 / 109 / 109 / 18
+
+So it is not the tail. Two thirds of the failures sit in the middle bands, which are exactly the ranges served by `erfc = 1 - erf_pair(x)`. The arithmetic says why: the erf series' terms grow like exp(x^2), so at x = 5 the alternating sum cancels about twelve of the pair's thirty-two digits, leaving erf accurate to ~1e-21 **absolute**. That is fine for erf, which is ~1, and useless for erfc, which is ~1e-12 there - a relative error of 1e-9, nine orders above the target. No amount of care in the erf series fixes it, because the information about the small difference is destroyed before the subtraction.
+
+The consequence is concrete: `erfc` must be evaluated **directly** from about x = 1, not as `1 - erf`. The continued fraction already does that above 5.5 and is single-double; it needs to move down to 1 and be carried in double-double, which is where the general `dd_div` I deferred (only `dd_div_d`, division by a single double, exists today) finally becomes necessary - the Lentz recurrence divides pairs by pairs.
+
+This also explains the earlier no-op: moving the *negative tail* between branches changed 0 of the 250 because the tail is only 18 cases and was already close.
