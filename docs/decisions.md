@@ -52189,3 +52189,19 @@ The naive fix (cap at 100000 iterations, stop when `sd <= 0`) was applied and me
 The change was reverted rather than shipped (`git checkout` on `ghyp2.e`, tree clean), which is the right call for a modification that turns a slow pass into a hang on the platform that was working. The finding stands and narrows the next step: the loop must be instrumented (count iterations, log `sd`, `hi` and `dgig` per case) rather than bounded blindly, and the Linux difference has to be attributed to a specific case before any condition is changed. Until then L407's evidence correctly says the Linux run found a real platform problem.
 
 This is the first regression of the obstacle sweep: the previous nine actions were all measurements or deletions. Recording it, and the fact that it was caught by measuring the platform that already worked, is more useful than a silent revert.
+## D7793 — Bisecting ghyp2's Linux cost: it scales linearly at ~5.6 cases/s, so one pathological case is not yet isolated
+
+The hang was bisected by truncating the oracle (the fixture reads `tests/oracle/ghyp2.json` relative to its working directory, so a truncated copy in a scratch directory runs the first K cases only, no code change):
+
+| cases run | Linux wall clock |
+|---|---|
+| 1 | 0 s |
+| 50 | 6 s |
+| 500 | 28 s |
+| 1000 | 28 s |
+
+The first three points are linear at roughly 5.6 cases/s, which would put all 2570 cases at about **460 s** on Linux - 2.5x the Windows time of 155-185 s, but not 1362 s. The 500-and-1000 pair reporting the same 28 s is not consistent with linear scaling and is almost certainly a defect in the bisect harness (the second run reusing the first file, or the copy failing silently), so the per-case rate above the 500th case is not yet measured.
+
+That leaves the diagnosis exactly where it was: the fixture is roughly linear and slower on Linux, and the 1362 s figure implies at least one case that is pathological rather than the whole file being slow. The next step is to fix the harness (verify each truncated file's case count inside the container before running) and then bisect between 500 and 2570 with the clock checked per run - not to change any library code until a single case is identified, since D7792 showed a blind bound makes the working platform hang.
+
+No library change was made in this round; the tree is clean.
