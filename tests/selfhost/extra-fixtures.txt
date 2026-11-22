@@ -374,6 +374,7 @@ oracle_coin
 oracle_survey
 oracle_vegan
 oracle_ape
+oracle_ape_dna
 oracle_rms
 oracle_bnlearn
 oracle_multcomp
