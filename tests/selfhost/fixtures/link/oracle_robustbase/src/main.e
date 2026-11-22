@@ -33,6 +33,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "qn") { ret rb.qn(a, v) }
     if str.eq(k, "sn") { ret rb.sn(a, v) }
     if str.eq(k, "mc") { ret rb.mc(a, v) }
+    if str.eq(k, "mcn") { ret rb.mc_opt(a, v, false, false, 1.0e-14f64, 1.0e-15f64, 100i64) }
+    if str.eq(k, "mcs") { ret rb.mc_opt(a, v, true, true, 1.0e-14f64, 1.0e-15f64, 100i64) }
     if str.eq(k, "ab") {
         var ov: [12]f64 = zero
         rb.adjbox_stats(a, v, 1.5f64, 0.0f64 - 4.0f64, 3.0f64, ov[0usize..12usize])
