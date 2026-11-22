@@ -176,6 +176,124 @@ fn congru_next(state: *u64, modulus: u64, mult: u64, incr: u64) -> f64 {
     ret f64(x) / f64(modulus)
 }
 
+// (x + y) mod 1: Knuth's mod_sum for two values in [0, 1), where the C macro subtracts the truncated sum.
+fn mod_one(x: f64) -> f64 {
+    var s = x
+    if s >= 1.0f64 { s = s - 1.0f64 }
+    ret s
+}
+
+// Knuth's ranf_array for a buffer of `aa.len` values (at least 100) against the 100-value state: the first
+// 100 come from the state, then the lagged subtraction, and the state is left holding the last 100 values.
+fn taocp_next(aa: []f64, ran_u: []f64) {
+    let kk = 100usize
+    let ll = 37usize
+    var j = 0usize
+    while j < kk {
+        aa[j] = ran_u[j]
+        j += 1usize
+    }
+    while j < aa.len {
+        aa[j] = mod_one(aa[j - kk] + aa[j - ll])
+        j += 1usize
+    }
+    var i = 0usize
+    while i < ll {
+        ran_u[i] = mod_one(aa[j - kk] + aa[j - ll])
+        i += 1usize
+        j += 1usize
+    }
+    while i < kk {
+        ran_u[i] = mod_one(aa[j - kk] + ran_u[i - ll])
+        i += 1usize
+        j += 1usize
+    }
+}
+
+// Knuth's ranf_start: the seed is expanded into 199 values, the lag structure is squared and reduced with
+// the seed's low bits, and ten full ranf_array passes warm the state up. ran_u holds 100 values afterwards.
+fn taocp_start(seed: u64, ran_u: []f64) -> err {
+    if ran_u.len < 100usize { ret TooSmall }
+    var u: [199]f64 = zero
+    let ulp = (1.0f64 / f64(1u64 << 30u32)) / f64(1u64 << 22u32)
+    var ss = 2.0f64 * ulp * f64((seed & 1073741823u64) + 2u64)
+    var j = 0usize
+    while j < 100usize {
+        u[j] = ss
+        ss += ss
+        if ss >= 1.0f64 { ss = ss - (1.0f64 - 2.0f64 * ulp) }
+        j += 1usize
+    }
+    u[1usize] = u[1usize] + ulp
+    var sd = seed & 1073741823u64
+    var t = 69usize
+    while t != 0usize {
+        j = 99usize
+        while j > 0usize {
+            u[j + j] = u[j]
+            u[j + j - 1usize] = 0.0f64
+            j -= 1usize
+        }
+        j = 198usize
+        while j >= 100usize {
+            u[j - 63usize] = mod_one(u[j - 63usize] + u[j])
+            u[j - 100usize] = mod_one(u[j - 100usize] + u[j])
+            j -= 1usize
+        }
+        if (sd & 1u64) == 1u64 {
+            j = 100usize
+            while j > 0usize {
+                u[j] = u[j - 1usize]
+                j -= 1usize
+            }
+            u[0usize] = u[100usize]
+            u[37usize] = mod_one(u[37usize] + u[100usize])
+        }
+        if sd != 0u64 {
+            sd = sd >> 1u32
+        } else {
+            t -= 1usize
+        }
+    }
+    j = 0usize
+    while j < 37usize {
+        ran_u[j + 63usize] = u[j]
+        j += 1usize
+    }
+    while j < 100usize {
+        ran_u[j - 37usize] = u[j]
+        j += 1usize
+    }
+    var warm = 0usize
+    while warm < 10usize {
+        taocp_next(u[0usize..199usize], ran_u)
+        warm += 1usize
+    }
+    ret ok
+}
+
+// randtoolbox::knuthTAOCP after setSeed(seed): the values in ranf_array order. Below 101 values it fills a
+// 101-value buffer and keeps the first `out.len`, which is what randtoolbox's temp buffer does (the
+// discarded values do not matter, because every call re-runs ranf_start).
+fn taocp_values(seed: u64, out: []f64) -> err {
+    if out.len == 0usize { ret ok }
+    var ran_u: [100]f64 = zero
+    let e = taocp_start(seed, ran_u[0usize..100usize])
+    if e != ok { ret e }
+    if out.len >= 101usize {
+        taocp_next(out, ran_u[0usize..100usize])
+        ret ok
+    }
+    var buf: [101]f64 = zero
+    taocp_next(buf[0usize..101usize], ran_u[0usize..100usize])
+    var i = 0usize
+    while i < out.len {
+        out[i] = buf[i]
+        i += 1usize
+    }
+    ret ok
+}
+
 // qrng::korobov's generator vector when one value is given: a, a^2, ..., a^(d-1) mod n (qrng's
 // generator^(0:(d-1)) %% n), a value per dimension.
 fn korobov_generator(base: u64, n: u64, d: usize, out: []u64) -> err {

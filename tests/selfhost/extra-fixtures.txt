@@ -276,6 +276,7 @@ oracle_logistf
 oracle_betareg
 oracle_dagitty
 oracle_randtoolbox
+oracle_randtoolbox_knuth
 oracle_qrng_korobov
 oracle_gmp
 oracle_hclust
