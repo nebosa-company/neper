@@ -45,6 +45,25 @@ fn rejected(a: *mem.Arena, source: str) -> bool {
     ret failure != ok
 }
 
+// `1` followed by a million zeros and the suffix: an exponent spelling large enough to saturate
+// the parser's accumulator without the lexeme itself carrying a million digits of value.
+fn spaced(a: *mem.Arena, suffix: str) -> (str, err) {
+    let (empty, builder_error) = str.builder(a, 1000016usize)
+    if builder_error != ok { ret ("", builder_error) }
+    var b = empty
+    let head_error = str.push(&b, "1")
+    if head_error != ok { ret ("", head_error) }
+    var digit = 0usize
+    while digit < 1000000usize {
+        let zero_error = str.push_byte(&b, 48u8)
+        if zero_error != ok { ret ("", zero_error) }
+        digit += 1usize
+    }
+    let suffix_error = str.push(&b, suffix)
+    if suffix_error != ok { ret ("", suffix_error) }
+    ret (str.done(&b), ok)
+}
+
 fn canonical_rejected(a: *mem.Arena, source: str) -> bool {
     var options: json.Options = zero
     options.allow_duplicate_keys = true
@@ -180,6 +199,21 @@ fn main(a: *mem.Arena) -> err {
     if !same(a, "1.5e1", "1.5e1") { os.exit(10i32) }
     if !same(a, "-0", "-0") { os.exit(11i32) }
     if !same(a, "123456789012345678901234567890", "123456789012345678901234567890") { os.exit(12i32) }
+    // A saturated exponent is not truncated: `1` followed by 10^6 zeros is 10^1000000, so
+    // `e-1000000` still leaves 1 while `e-10000000` is 10^-9000000, a fraction, not an integer.
+    let (cancelled, cancelled_error) = spaced(a, "e-1000000")
+    if cancelled_error != ok { os.exit(13i32) }
+    let (one, one_error) = json.number(cancelled)
+    if one_error != ok { os.exit(13i32) }
+    let (one_value, one_value_error) = json.number_i64(one)
+    if one_value_error != ok || one_value != 1i64 { os.exit(13i32) }
+    let (tiny, tiny_error) = spaced(a, "e-10000000")
+    if tiny_error != ok { os.exit(13i32) }
+    let (tiny_number, tiny_number_error) = json.number(tiny)
+    if tiny_number_error != ok { os.exit(13i32) }
+    let (tiny_value, tiny_value_error) = json.number_i64(tiny_number)
+    if tiny_value_error == ok { os.exit(13i32) }
+    if tiny_value != 0i64 { os.exit(13i32) }
 
     // --- Structure, order and whitespace.
     if !same(a, " [ 1 , 2 , 3 ] ", "[1,2,3]") { os.exit(20i32) }

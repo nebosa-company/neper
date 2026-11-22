@@ -116,8 +116,12 @@ fn decompose(lexeme: str) -> (bool, usize, usize, i64, err) {
         }
         while at < lexeme.len {
             // An exponent past this is far outside every range here whichever way it points,
-            // so clamping it cannot change an answer, and it keeps the count in range.
-            if exponent < 1000000i64 { exponent = exponent * 10i64 + i64(lexeme[at] - 48u8) }
+            // so it saturates rather than accumulates. Saturating at `NUMBER_EXPONENT_LIMIT`'s
+            // tenth (the largest operand whose product stays in `i64`) leaves a gap the
+            // trailing-zero fold below -- at most `lexeme.len` additions -- cannot bridge on any
+            // input that fits memory; a smaller clamp could be cancelled by the fold and turn a
+            // fraction into an integer.
+            if exponent <= 461168601842738790i64 { exponent = exponent * 10i64 + i64(lexeme[at] - 48u8) }
             at += 1usize
         }
         if exponent_negative { exponent = 0i64 - exponent }
