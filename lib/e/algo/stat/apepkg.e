@@ -257,6 +257,122 @@ fn read_tree(s: str, t: *Tree) -> (usize, err) {
     }
     ret (tips, ok)
 }
+// Recompute depth[] from the parent array, for a tree that was edited after parsing.
+fn refresh_depths(t: *Tree) {
+    var k = 0usize
+    while k < t.nn {
+        t.depth[k] = tree_depth_of(t, k)
+        k += 1usize
+    }
+}
+
+// ape::drop.tip: drop[] is indexed by tip order (the order the tips appear) and marks the tips to remove.
+// A node left with a single child is collapsed and its branch length is added to that child's, which is
+// what ape does; when the root is left with one child, that child becomes the root. The surviving tips keep
+// their order. out receives the new tree (its arrays at least t.nn long) and the number of tips is returned.
+fn drop_tips(t: *Tree, drop: []const bool, out: *Tree) -> (usize, err) {
+    if out.parent.len < t.nn || out.edge.len < t.nn || out.depth.len < t.nn || out.label.len < t.nn || out.tip.len < t.nn {
+        ret (0usize, TooSmall)
+    }
+    var i = 0usize
+    while i < t.nn {
+        out.parent[i] = t.parent[i]
+        out.edge[i] = t.edge[i]
+        out.depth[i] = t.depth[i]
+        out.label[i] = t.label[i]
+        out.tip[i] = t.tip[i]
+        i += 1usize
+    }
+    out.nn = t.nn
+    // -2 marks a removed node, which is distinct from the root's -1
+    var tip_at = 0usize
+    i = 0usize
+    while i < t.nn {
+        if t.tip[i] {
+            if tip_at < drop.len && drop[tip_at] { out.parent[i] = -2i64 }
+            tip_at += 1usize
+        }
+        i += 1usize
+    }
+    var changed = true
+    var guard = 0usize
+    while changed && guard <= t.nn {
+        changed = false
+        guard += 1usize
+        i = 0usize
+        while i < t.nn {
+            if out.parent[i] != -2i64 {
+                var children = 0usize
+                var only = 0usize
+                var k = 0usize
+                while k < t.nn {
+                    if out.parent[k] >= 0i64 && usize(out.parent[k]) == i {
+                        children += 1usize
+                        only = k
+                    }
+                    k += 1usize
+                }
+                if children == 1usize {
+                    out.parent[only] = out.parent[i]
+                    out.edge[only] = out.edge[only] + out.edge[i]
+                    out.parent[i] = -2i64
+                    changed = true
+                }
+            }
+            i += 1usize
+        }
+    }
+    // compact the living nodes, keeping their relative order
+    var remap: [1024]usize = zero
+    var live = 0usize
+    i = 0usize
+    while i < t.nn {
+        if out.parent[i] != -2i64 {
+            remap[i] = live
+            live += 1usize
+        } else {
+            remap[i] = 0usize
+        }
+        i += 1usize
+    }
+    var par2: [1024]i64 = zero
+    i = 0usize
+    while i < t.nn {
+        if out.parent[i] != -2i64 {
+            let np = remap[i]
+            par2[np] = -1i64
+            if out.parent[i] >= 0i64 { par2[np] = i64(remap[usize(out.parent[i])]) }
+        }
+        i += 1usize
+    }
+    // write the compacted node set back, two arrays at a time
+    var edge2: [1024]f64 = zero
+    var lab2: [1024]str = zero
+    var tip2: [1024]bool = zero
+    var tips = 0usize
+    i = 0usize
+    while i < t.nn {
+        if out.parent[i] != -2i64 {
+            let np = remap[i]
+            edge2[np] = out.edge[i]
+            lab2[np] = out.label[i]
+            tip2[np] = out.tip[i]
+            if out.tip[i] { tips += 1usize }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < live {
+        out.parent[i] = par2[i]
+        out.edge[i] = edge2[i]
+        out.label[i] = lab2[i]
+        out.tip[i] = tip2[i]
+        i += 1usize
+    }
+    out.nn = live
+    refresh_depths(out)
+    ret (tips, ok)
+}
 // ape::cophenetic.phylo: the patristic distance between every pair of tips, in tip order (the order the
 // tips appear in the Newick, which is ape's tip.label order). out is n by n row-major; returns n.
 fn cophenetic(t: *Tree, out: []f64) -> (usize, err) {
