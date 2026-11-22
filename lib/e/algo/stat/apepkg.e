@@ -6,13 +6,46 @@
 // into a distance (raw, JC69, K80, F81, F84, TN93, T92).
 //
 // Not here: the topology and labels, bionj, upgma, rooting, cophenetic distances, tree comparison, the
-// other dist.dna models (K81, GG95, LogDet, the indel models), the rest of ape.
+// other dist.dna models (K81, GG95, the indel models), the rest of ape.
 
 use e.math
 use e.mem
 
-// a dist.dna model this module does not port (ape's K81, GG95, LogDet and indel models)
+// a dist.dna model this module does not port (ape's K81, GG95 and indel models)
 error Unsupported
+
+// ape's base order for the LogDet contingency table is A, G, C, T (its DNAbin codes are 136, 72, 40, 24),
+// while this module reads 0..3 as A, C, G, T, so the row and column indices are mapped here.
+fn ape_base(code: u8) -> usize {
+    if code == 0u8 { ret 0usize }
+    if code == 2u8 { ret 1usize }
+    if code == 1u8 { ret 2usize }
+    ret 3usize
+}
+
+// ape's detFourByFour, the cofactor expansion of a 4 by 4 matrix in column-major order, kept in its own
+// operation order so the LogDet value matches R's bit for bit where the table agrees.
+fn det_four(x: [16]f64) -> f64 {
+    let a33a44 = x[10usize] * x[15usize]
+    let a34a43 = x[14usize] * x[11usize]
+    let a34a42 = x[14usize] * x[7usize]
+    let a32a44 = x[6usize] * x[15usize]
+    let a32a43 = x[6usize] * x[11usize]
+    let a33a42 = x[10usize] * x[7usize]
+    let a34a41 = x[14usize] * x[3usize]
+    let a31a44 = x[2usize] * x[15usize]
+    let a31a43 = x[2usize] * x[11usize]
+    let a33a41 = x[10usize] * x[3usize]
+    let a31a42 = x[2usize] * x[7usize]
+    let a32a41 = x[6usize] * x[3usize]
+    var det = x[0usize] * x[5usize] * (a33a44 - a34a43) + x[0usize] * x[9usize] * (a34a42 - a32a44)
+    det += x[0usize] * x[13usize] * (a32a43 - a33a42) + x[4usize] * x[9usize] * (a31a44 - a34a41)
+    det += x[4usize] * x[13usize] * (a33a41 - a31a43) + x[4usize] * x[1usize] * (a34a43 - a33a44)
+    det += x[8usize] * x[13usize] * (a31a42 - a32a41) + x[8usize] * x[1usize] * (a32a44 - a34a42)
+    det += x[8usize] * x[5usize] * (a34a41 - a31a44) + x[12usize] * x[1usize] * (a33a42 - a32a43)
+    det += x[12usize] * x[5usize] * (a31a43 - a33a41) + x[12usize] * x[9usize] * (a32a41 - a31a42)
+    ret det
+}
 
 // The DNA codes this module reads: 0..3 are A, C, G and T and anything else is an unknown base or a gap.
 // A site is kept only when every sequence has 0..3 there (ape's global deletion), and the distance of a
@@ -20,7 +53,7 @@ error Unsupported
 // 4 F84, 5 TN93 and 6 T92, all with the base frequencies of the whole matrix. out is n by n row-major with
 // a zero diagonal.
 fn dist_dna(a: *mem.Arena, x: []const u8, n: usize, l: usize, model: u8, out: []f64) -> err {
-    if model > 6u8 { ret Unsupported }
+    if model > 7u8 { ret Unsupported }
     let (keep, e1) = mem.alloc[bool](a, l)
     if e1 != ok { ret e1 }
     var s = 0usize
@@ -141,10 +174,29 @@ fn dist_dna(a: *mem.Arena, x: []const u8, n: usize, l: usize, model: u8, out: []
                 let w2 = 1.0f64 - p2 / k2 - q / (2.0f64 * gy)
                 let w3 = 1.0f64 - q / (2.0f64 * gr * gy)
                 d = 0.0f64 - k1 * math.log[f64](w1) - k2 * math.log[f64](w2) - k3 * math.log[f64](w3)
-            } else {
+            } else if model == 6u8 {
                 let p = ns / len
                 let q = (nd - ns) / len
                 d = 0.0f64 - wg * math.log[f64](1.0f64 - p / wg - q) - 0.5f64 * (1.0f64 - wg) * math.log[f64](1.0f64 - 2.0f64 * q)
+            } else {
+                // LogDet: the determinant of the 4 by 4 contingency table of the pair's retained sites,
+                // built in ape's base order (A, G, C, T) and column-major, then -ln(det)/4 - ln(4)
+                var ftab: [16]f64 = zero
+                s = 0usize
+                while s < l {
+                    if keep[s] {
+                        let row = ape_base(x[i * l + s])
+                        let col = ape_base(x[j * l + s])
+                        ftab[col * 4usize + row] = ftab[col * 4usize + row] + 1.0f64
+                    }
+                    s += 1usize
+                }
+                var t4 = 0usize
+                while t4 < 16usize {
+                    ftab[t4] = ftab[t4] / len
+                    t4 += 1usize
+                }
+                d = 0.0f64 - math.log[f64](det_four(ftab)) / 4.0f64 - math.log[f64](4.0f64)
             }
             out[i * n + j] = d
             out[j * n + i] = d
