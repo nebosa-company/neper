@@ -1,10 +1,14 @@
 // R VIM::kNN for one numeric variable: each missing value takes the median (or mean) of the k nearest rows that have it, by Gower distance on the other columns (absolute difference over the column range, averaged). Columns are row-major, the other columns complete.
 //
+// VIM::kNN over mixed columns (knn_impute_mixed): a categorical distance column answers 0 or 1, the
+// numeric ones keep the range scaling, the distance is their mean (VIM's weights of one), and a
+// categorical target takes the most frequent value among the k donors (VIM's catFun = maxCat).
+//
 // VIM::hotdeck for numeric columns: a single random row order from runif(n) on the seed, then each
 // missing value takes the value of the row before it in that order (stepping back while the donor is
 // missing too, wrapping within the data), its columns imputed independently.
 //
-// Not here: missing values in the distance columns (VIM imputes those first and reuses them), factors, ordered and mixed variables, weights, donor conditions, random-forest distances; for hotdeck, domain_var, donorcond, ord_var, impNA = FALSE and the give-up-after-50-steps random donor.
+// Not here: missing values in the distance columns (VIM imputes those first and reuses them), ordered and semi-continuous variables, weights, donor conditions, random-forest distances, the weightDist and addRandom options; for a categorical target, maxCat's random tie-break (ties take the lowest code and no oracle case has one); for hotdeck, domain_var, donorcond, ord_var, impNA = FALSE and the give-up-after-50-steps random donor.
 
 use e.algo.rand.r as rng
 use e.math
@@ -71,6 +75,131 @@ fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: us
             if m < kk { kk = m }
             var s = 0.0f64
             if use_mean {
+                var q = 0usize
+                while q < kk {
+                    s += x[cand[q] * p + v]
+                    q += 1usize
+                }
+                out[i] = s / f64(kk)
+            } else {
+                // the median of the kk donor values
+                var q = 0usize
+                while q < kk {
+                    var r = q
+                    while r > 0usize && x[cand[r - 1usize] * p + v] > x[cand[r] * p + v] {
+                        let t = cand[r]
+                        cand[r] = cand[r - 1usize]
+                        cand[r - 1usize] = t
+                        r -= 1usize
+                    }
+                    q += 1usize
+                }
+                if kk % 2usize == 1usize {
+                    out[i] = x[cand[kk / 2usize] * p + v]
+                } else {
+                    out[i] = (x[cand[kk / 2usize - 1usize] * p + v] + x[cand[kk / 2usize] * p + v]) / 2.0f64
+                }
+            }
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// VIM::kNN over mixed numeric and categorical distance columns, with the categorical ones given as
+// integer codes in the same matrix and named by is_factor. A numeric column is scaled by its range over
+// the whole table (gowerD pools donors and the rows to impute, so every row), a categorical column
+// answers 0 for equal and 1 for different, and the distance is the mean over the p - 1 distance columns
+// (VIM's default weights are all one). The k nearest donors in (distance, row order) order then give the
+// median or mean of a numeric target, or the most frequent code of a categorical one; a tie among the
+// donor codes takes the lowest code, where VIM's maxCat samples (no oracle case has a tie).
+fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, is_factor: []const bool, out: []f64) -> err {
+    let (rg, e1) = mem.alloc[f64](a, p)
+    let (dist, e2) = mem.alloc[f64](a, n)
+    let (cand, e3) = mem.alloc[usize](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    var c = 0usize
+    while c < p {
+        var lo = 1.0e300f64
+        var hi = 0.0f64 - 1.0e300f64
+        if !is_factor[c] {
+            var i = 0usize
+            while i < n {
+                let t = x[i * p + c]
+                if t == t {
+                    if t < lo { lo = t }
+                    if t > hi { hi = t }
+                }
+                i += 1usize
+            }
+        }
+        // gowerD divides by the range, and replaces a zero or missing range with 1
+        var r = hi - lo
+        if is_factor[c] || !(r > 0.0f64) { r = 1.0f64 }
+        rg[c] = r
+        c += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        out[i] = x[i * p + v]
+        i += 1usize
+    }
+    let denom = f64(p - 1usize)
+    i = 0usize
+    while i < n {
+        if x[i * p + v] != x[i * p + v] {
+            var m = 0usize
+            var j = 0usize
+            while j < n {
+                if x[j * p + v] == x[j * p + v] {
+                    var s = 0.0f64
+                    c = 0usize
+                    while c < p {
+                        if c != v {
+                            if is_factor[c] {
+                                if x[i * p + c] != x[j * p + c] { s += 1.0f64 }
+                            } else {
+                                s += math.abs[f64](x[i * p + c] - x[j * p + c]) / rg[c]
+                            }
+                        }
+                        c += 1usize
+                    }
+                    dist[j] = s / denom
+                    var q = m
+                    while q > 0usize && dist[cand[q - 1usize]] > dist[j] {
+                        cand[q] = cand[q - 1usize]
+                        q -= 1usize
+                    }
+                    cand[q] = j
+                    m += 1usize
+                }
+                j += 1usize
+            }
+            var kk = k
+            if m < kk { kk = m }
+            if is_factor[v] {
+                // VIM's maxCat: the most frequent donor code, the lowest code on a tie
+                var best = cand[0usize]
+                var best_count = 0usize
+                var q = 0usize
+                while q < kk {
+                    var count = 0usize
+                    var r = 0usize
+                    while r < kk {
+                        if x[cand[r] * p + v] == x[cand[q] * p + v] { count += 1usize }
+                        r += 1usize
+                    }
+                    if count > best_count || (count == best_count && x[cand[q] * p + v] < x[best * p + v]) {
+                        best = cand[q]
+                        best_count = count
+                    }
+                    q += 1usize
+                }
+                out[i] = x[best * p + v]
+            } else if use_mean {
+                var s = 0.0f64
                 var q = 0usize
                 while q < kk {
                     s += x[cand[q] * p + v]

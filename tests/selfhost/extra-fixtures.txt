@@ -355,6 +355,7 @@ oracle_pscl
 oracle_tm
 oracle_vim
 oracle_vim_hotdeck
+oracle_vim_knn_mixed
 oracle_plm
 oracle_arules
 oracle_systemfit
