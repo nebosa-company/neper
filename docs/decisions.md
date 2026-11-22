@@ -52146,3 +52146,17 @@ The lesson is the one this arc keeps teaching from different angles: the fixture
 With `exp` correctly rounded, the tolerance was re-timed on `oracle_robustbase_reg` (1126 cases): 1e-4 passes, `1e-7` fails 12, `1e-6` fails 2, `1e-5` passes. So the row's tolerance is **1e-5**, a tenfold tightening, and the evidence now records the ladder rather than the old single reason.
 
 It stops at 1e-5 for the measured reason the old note guessed at: `nlrob`'s forward-difference gradient (step 1.5e-8) amplifies last-bit differences in the log-likelihood into the fit, so the same amplification that pinned MASS `fitdistr` at 1e-7 (D7779) pins this at 1e-5 - with the difference that here it could be measured ten times tighter than before, because the runtime side is no longer contributing. The exp-free models (2 and 4) still agree at 1e-9, which is the control that shows the residual is the gradient and not the exp.
+## D7789 — Obstacle 2 is already solved at the RNG layer; the remaining blocker in those rows is wiring, not randomness
+
+The new goal put "port R's RNG" second on the obstacle list. Checking first showed it is **already done**: `e.algo.rand.r` carries R's Mersenne-Twister with `set.seed`'s fifty-round scrambling and the 625-word state, `runif`, `rnorm` by inversion, `rexp` and `sample` by R >= 3.6 rejection, and its fixtures are green on both hosts:
+
+| fixture | x64-windows | x64-linux |
+|---|---|---|
+| `oracle_rng` | exit 0, 0 failures | exit 0 |
+| `oracle_rngseq` | exit 0, 0 failures | exit 0 |
+
+So a stream seeded with the same integer gives the numbers R gives, today, on both platforms. Only four CRAN rows still cite the RNG in their remaining clause, and in every case the gap is the *caller*: `L349` (metaMDS' random starts, the permutational p-values), `L501` (scrambled Sobol and `ghalton`'s permutations), `L350` (`rtree`/`rcoal`), `L454` (`maxCat`'s tie-break). None of them needs new randomness - they need the function that uses `r.Rng` written, and that is ordinary implementation work, not an obstacle.
+
+What the module does not cover is worth naming so it is not rediscovered: `sample` with `prob=`, normal kinds other than inversion, `n` past 2^32 (R reads more than two 16-bit chunks), and the hash path R takes above 1e7. Those are the only places a row can legitimately say "needs R's RNG".
+
+The cost of not checking was one round of planning aimed at work already finished. That is the same failure mode as the stale "pending Linux" claims (L304, L360, L368, L415, L463) - a row's remaining list drifting behind the tree - which is now five cases deep and worth treating as the default prior: verify the obstacle exists before scheduling it.
