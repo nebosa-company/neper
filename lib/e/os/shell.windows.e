@@ -2803,6 +2803,7 @@ fn user_value_matches(a: *mem.Arena, subkey: str, name: str, expected: str) -> (
     var key: KeyHandle = zero
     if raw_reg_open(HKEY_CURRENT_USER, &subkey_wide[0usize], 0u32, KEY_READ, &key) != 0i32 { ret (false, false) }
     var size: ValueSize = zero
+    size.value = 4096u32
     var buffer: [2048]u16 = zero
     let queried = raw_reg_query_value(key.value, &name_wide[0usize], 0usize, 0usize, mem.address_of(&buffer[0usize]), &size)
     let closed = raw_reg_close(key.value)
@@ -2834,6 +2835,16 @@ fn delete_user_value(a: *mem.Arena, subkey: str, name: str) -> err {
 
 // Whether the program key's open command still names this executable: the only condition
 // under which the module may delete the key it wrote (#91 item 9).
+fn program_command_present(a: *mem.Arena, program_key: str) -> bool {
+    var key_parts: [2]str = zero
+    key_parts[0usize] = program_key
+    key_parts[1usize] = "\\shell\\open\\command"
+    let (command_key, key_error) = concat_text(a, key_parts[..])
+    if key_error != ok { ret false }
+    let (present, matches) = user_value_matches(a, command_key, "", "")
+    ret present
+}
+
 fn program_command_is_ours(a: *mem.Arena, program_key: str) -> bool {
     let (exe, exe_error) = executable_text(a)
     if exe_error != ok { ret false }
@@ -2884,7 +2895,10 @@ fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err {
     if program_key_error != ok { ret program_key_error }
     var program_gone: err = NotFound
     if program_command_is_ours(a, program_key) { program_gone = delete_user_tree(a, program_key) }
-    if extension_gone == NotFound && program_gone == NotFound { ret Failed }
+    if extension_gone == NotFound && program_gone == NotFound {
+        if !extension_owned && !program_command_present(a, program_key) { ret NotFound }
+        ret Failed
+    }
     if extension_gone != ok && extension_gone != NotFound { ret extension_gone }
     if program_gone != ok && program_gone != NotFound { ret program_gone }
     ret ok
@@ -2912,7 +2926,10 @@ fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
     key_parts[1usize] = scheme
     let (scheme_key, key_error) = concat_text(a, key_parts[..])
     if key_error != ok { ret key_error }
-    if !program_command_is_ours(a, scheme_key) { ret Failed }
+    if !program_command_is_ours(a, scheme_key) {
+        if !program_command_present(a, scheme_key) { ret NotFound }
+        ret Failed
+    }
     ret delete_user_tree(a, scheme_key)
 }
 
