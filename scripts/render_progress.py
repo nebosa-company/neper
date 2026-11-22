@@ -420,6 +420,13 @@ charts_html = '''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Neper chart previews</title>
+<meta name="description" content="A gallery of Neper chart outputs: SVG and PNG previews rendered by the e.chart module, with links to each chart's source page.">
+<link rel="canonical" href="https://neper.dev/charts.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Neper chart previews">
+<meta property="og:image" content="https://neper.dev/gtm/neper-capabilities-poster.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://neper.dev/gtm/neper-capabilities-poster.png">
 <style>
 :root{color-scheme:light dark;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 body{margin:0;background:#f4f6f9;color:#172033}
@@ -431,10 +438,14 @@ h1{margin:.5rem 0}p{margin:.5rem 0 1.5rem}a{color:#245aa8}
 figcaption{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;padding:.6rem .2rem .1rem;font-weight:600}
 @media(prefers-color-scheme:dark){body{background:#0f1319;color:#e8edf4}.chart{background:#171d26;border-color:#354051}a{color:#9dc0ff}}
 </style>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 </head>
 <body>
 <main>
-<nav><a href="progress.html">Readiness</a> · <a href="charts.md">Charting-engine details</a></nav>
+<nav><a href="progress.html">Readiness</a> · <a href="charts.md">Charting-engine details</a> · <a href="about.html">About</a> · <a href="contact.html">Contact</a></nav>
 <h1>Rendered chart previews ({rendered}/{total})</h1>
 <p>Click a preview to open its PNG, or choose SVG for the vector version. The interactive-selection SVG supports click and keyboard focus.</p>
 <div class="gallery">
@@ -463,6 +474,7 @@ page_html = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>neper readiness</title>
 <style>
 :root{color-scheme:light dark;--bg:#fff;--panel:#f5f7fa;--ink:#111827;--muted:#667085;--track:#d8e1ee;--rule:#e4e7ec;--c-compiler:#007dbc;--c-lib:#00885b;--c-tooling:#93731f;--c-neperos:#8269ba;--c-backlog:#b36137}
