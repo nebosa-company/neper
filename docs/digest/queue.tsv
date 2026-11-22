@@ -41,11 +41,8 @@ L415	library	0.6	1272	marginaleffects: predictions, slopes and comparisons	Parti
 L416	library	0.4	1836	polspline: polynomial spline models	Partial (2026-11-22, merged 25645e1ce;
 L434	library	0.9	898	qgraph: network estimation	Partial (2026-11-22, merged 731d89a22;
 L436	library	0.6	1840	MatchIt: matching for causal inference	Partial (2026-11-22, merged 731d89a22;
-L456	library	0.15	1322	mlogit: discrete-choice models	D7367: Wald tests of conditional logit coefficients (statistic and p value from the covariance matrix) equal to mlogit.
-L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L488	library	0.5	1613	drc: dose-response models	Partial (2026-11-22, merged 686357d41;
 L489	library	0.8	1502	osqp and clarabel: quadratic and conic solvers	Partial (2026-11-22, merged 731d89a22;
-L512	library	0.15	1248	poLCA: latent class analysis	D7345: latent class regression with covariates (log-likelihood, response probabilities, coefficient magnitudes) equal to poLCA.
 L513	library	0.7	1001	Epi: epidemiology tools	Partial (2026-11-22, merged 731d89a22;
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
 L304	library	0.9	1510	haven: SAS, SPSS and Stata file formats	Partial (2026-11-21, merged 0de9a3a3a;

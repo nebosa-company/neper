@@ -4636,4 +4636,5 @@ D7736	304	L427 afex, L358 dbscan, L390 R.matlab, L448 mcmc, L450 mediation, L479
 D7737	270	L362 fitdistrplus, L486 mixtools, L437 gstat and L507 gsDesign closed
 D7738	289	L378 uwot and Rtsne closed; ks, locfit, kernlab, fixest, plm, actuar and copula advanced
 D7739	263	L345 FactoMineR, L372 spdep, L435 sna and L455 geometry closed
-D7740	272	L434 qgraph, L436 MatchIt, L489 osqp, L513 Epi and L490 timereg advanced
+D7740	273	L434 qgraph, L436 MatchIt, L489 osqp, L513 Epi and L490 timereg advanced
+D7741	251	L456 mlogit, L465 BayesFactor and L512 poLCA closed

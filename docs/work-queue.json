@@ -466,28 +466,6 @@
       "evidence": "Partial (2026-11-22, merged 731d89a22; Windows fixtures pass, score from the agent report): The branch was behind master, so I reset it to master and cherry-picked the five earlier MatchIt commits from worktree-wf_04691a93-1f6-2 instead of merging (a merge pulled in unrelated deletions and conflicts). That brings back nearest, exact, subclass, cem, the distance variants and the balance statistics, checked at 1e-9 in oracle_matchit. After this round's changes the oracle has 718 cases, and the fixture passed on Windows. I added two things: 1. match.data equivalent: `match_data` returns the matched rows, weights and subclass. It is covered by oracle cases `smdrows`, `smdw` and `smdsub`  Remaining: (1) Acceptance method 'full' (full matching) is not implemented in lib/e/algo/stat/matchitpkg.e and has no oracle case: add a full-matching function (optmatch-style subclass assignment and weigh | (2) Acceptance method 'genetic' is not implemented in matchitpkg.e and has no oracle case: add genetic matching (or a deterministic fixed-weights path checkable against R's Matching/MatchIt outp | (3) Optimal matching only covers ratio 1, ATT, glm distance (ow1/ow2/onmatched cases); the acceptance method is otherwise unchecked, so add ratio>1 and ATC/other-distance optimal cases if MatchI | (4) tests/oracle/matchit.json is 2.6 MB, over the 2 MB limit: reduce case count or sizes (e.g. fewer rows per case or fewer cases for nearest/balance). | (5) Run results: oracle_matchit passes on Windows (tolerances are 1e-9 and the name is in tests/selfhost/extra-fixtures.txt at line 375), but I did not run mutation checks, so vacuity is unconfi | (6) Acceptance 'full' matching: not implemented and no oracle case. It needs optmatch fullmatch (min/max controls, omit.fraction, subproblem flipping) plus a port of the LEMON cycle-cancelling s"
     },
     {
-      "id": "L456",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 726,
-      "title": "mlogit: discrete-choice models",
-      "score": 0.15,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "D7367: Wald tests of conditional logit coefficients (statistic and p value from the covariance matrix) equal to mlogit. D7336: nested logit standard errors (numerical Hessian) equal to mlogit. D7335: nested logit (one inclusive value per nest of two or more alternatives) equal to mlogit. D7334: likelihood-ratio test of nested conditional logits equal to lmtest::lrtest. D7333: fitted probabilities (shares) and marginal effects of the conditional logit equal to mlogit. Partial (D6639, D7283 the multinomial logit with individual-specific covariates). e.algo.stat.mlogitpkg.clogit (conditional logit with alternative-specific covariates, optional alternative-specific constants, Newton on the exact Hessian) equals mlogit on Windows to 1e-4: coefficients, standard errors, log-likelihood (oracle_mlogit, 60 values; Linux pending; R stops short of the optimum for large coefficients, hence the tolerance). Open: nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, predictions and marginal effects. Was: Open (CRAN rank 723). Mid. Acceptance, equal to mlogit: multinomial, conditional and nested logit with alternative-specific and individual-specific variables, heteroskedastic logit, mixed logit by simulated maximum likelihood (Halton draws), panel data, hypothesis tests and predictions."
-    },
-    {
-      "id": "L465",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 733,
-      "title": "BayesFactor: Bayes factors with JZS priors",
-      "score": 0.2,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6189). ttest.tstat (one- and two-sample JZS Bayes factor, log scale) agrees with BayesFactor on Windows at its integration tolerance (oracle_bayesfactor; Linux pending). Open: lmBF, anovaBF, regressionBF, contingency, proportion and correlation tests, posterior sampling. Was: Open (CRAN rank 712). Mid. Acceptance, equal to BayesFactor under set.seed: ttestBF, anovaBF, lmBF, regressionBF, correlationBF, contingencyTableBF, proportionBF, generalTestBF with the numerical integration and the MCMC posteriors from posterior()."
-    },
-    {
       "id": "L488",
       "category": "library",
       "group": "CRAN parity",
@@ -508,17 +486,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (2026-11-22, merged 731d89a22; Windows fixtures pass, score from the agent report): Reset to current master (a89a5fe00) and cherry-picked the two earlier commits from worktree-wf_04691a93-1f6-5. A merge of that branch was aborted because its base is stale and it deletes unrelated docs. In the cherry-pick, the new osqppkg port replaces master's older D6643 version. Fixtures oracle_osqp and oracle_clarabel both pass on x64-windows with the existing tolerances; no code or tolerance was changed this round. osqp (lib/e/algo/stat/osqppkg.e): step-for-step OSQP 1.0.0 port with scaling, iteration-based adaptive rho, polish, certificates, warm start and data updates. Values agree with Remaining: (1) clarabel: iteration counts and near-boundary rounding do not match, because the port is not Clarabel's homogeneous-embedding interior-point algorithm. Fixing this needs a full port of that a | (2) clarabel: x, s and objective agree only at 1e-6 (1e-5 on status 5) against the 1e-9 target; the port itself is accurate to about 1e-10, so the limit is on the clarabel side. | (3) clarabel: primal infeasibility certificates for exponential and power cone programs are not detected, so no oracle case covers them. | (4) osqp: values at 5e-8 / 2e-8 and residuals at 1e-6 / 5e-9 instead of 1e-9. Matching exactly needs QDLDL with the AMD ordering. | (5) osqp: no oracle case reaches status_polish 2 or -1, or non-convex status 9. | (6) Linux run of both fixtures is pending; only x64-windows was run."
-    },
-    {
-      "id": "L512",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 750,
-      "title": "poLCA: latent class analysis",
-      "score": 0.15,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "D7345: latent class regression with covariates (log-likelihood, response probabilities, coefficient magnitudes) equal to poLCA. D7344: missing responses in the latent class EM equal to poLCA (na.rm = FALSE). D7343: poLCA.entropy equal to poLCA. D7323: standard errors of response probabilities and class sizes equal to poLCA (identified fits away from the boundary). D7322: random restarts (nrep) from the R RNG start equal to poLCA under set.seed. Partial (D6644, D7284 npar, AIC, Gsq, Chisq, the residual degrees of freedom and the modal posterior classes). e.algo.stat.polcapkg.em (latent class EM for polytomous indicators from given starting probabilities, uniform class prior) equals poLCA probs.start fits on Windows: log-likelihood, class sizes, response probabilities and BIC at 1e-4 (oracle_polca, 80 values; Linux pending). Open: random restarts and best-of-nrep selection, latent class regression with covariates, standard errors,  missing responses, poLCA.entropy and relatives. Was: Open (CRAN rank 998). Mid. Acceptance, equal to poLCA under set.seed: poLCA for polytomous indicators with covariates by EM from the R RNG starts, the log-likelihood, class probabilities, standard errors, AIC, BIC, chi-squares and the predicted cells."
     },
     {
       "id": "L513",
