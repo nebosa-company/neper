@@ -69,4 +69,14 @@ for (rep in 1:10) {
   cases[[length(cases) + 1]] <- case("man_0", c(nn, 0, as.vector(t(dx)), as.vector(t(dy))), m0$statistic, rel = 1e-12, abs = 1e-14)
   cases[[length(cases) + 1]] <- case("man_1", c(nn, 1, as.vector(t(dx)), as.vector(t(dy))), m1$statistic, rel = 1e-12, abs = 1e-14)
 }
+# anosim: the R statistic only (permutations = 0 keeps the RNG out of the oracle)
+set.seed(20270103)
+for (rep in 1:10) {
+  nn <- sample(6:10, 1); pp <- sample(5:12, 1)
+  mm <- matrix(rpois(nn * pp, 2), nn)
+  g <- rep(seq_len(2), length.out = nn)[sample(nn)]
+  if (length(unique(g)) < 2 || all(outer(g, g, "==")[upper.tri(diag(nn))] == FALSE)) next
+  an <- anosim(mm, g, permutations = 0)
+  cases[[length(cases) + 1]] <- case("ano", c(nn, pp, length(unique(g)), as.vector(t(mm)), g - 1), an$statistic, rel = 1e-12, abs = 1e-14)
+}
 emit("vegan", "vegan", list(cases))

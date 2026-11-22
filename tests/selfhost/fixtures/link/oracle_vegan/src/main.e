@@ -33,6 +33,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "ano") {
+        // args: (nr, nc, ngroups), then counts[nr*nc] and group[nr]
+        let grp = z[3usize + nr * nc..3usize + nr * nc + nr]
+        let (g, eg) = mem.alloc[usize](a, nr)
+        if eg != ok { ret nan }
+        var gi = 0usize
+        while gi < nr {
+            g[gi] = usize(grp[gi])
+            gi += 1usize
+        }
+        let (ar, ear) = vg.anosim_r(a, m, nr, nc, g)
+        if ear != ok { ret nan }
+        ret ar
+    }
     if str.eq(c.name, "man_0") || str.eq(c.name, "man_1") {
         // args: (n, kind), then the two n by n distance matrices row-major
         let kind = usize(z[1usize])

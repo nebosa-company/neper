@@ -103,6 +103,57 @@ fn estimate_r(m: []const f64, nc: usize, r: usize, out: []f64) {
     out[3usize] = s_ace
 }
 
+// vegan::anosim's R statistic (the permutation p-value needs R's RNG and is not produced here): rank every
+// pairwise Bray-Curtis dissimilarity (average ranks for ties), then R = (mean rank between groups - mean rank
+// within groups) / (n (n - 1) / 4). group holds one class code per site.
+fn anosim_r(a: *mem.Arena, m: []const f64, nr: usize, nc: usize, group: []const usize) -> (f64, err) {
+    let np = nr * (nr - 1usize) / 2usize
+    let (d, e1) = mem.alloc[f64](a, np + 1usize)
+    let (ranks, e2) = mem.alloc[f64](a, np + 1usize)
+    let (within, e3) = mem.alloc[bool](a, np + 1usize)
+    if e1 != ok { ret (0.0f64, e1) }
+    if e2 != ok { ret (0.0f64, e2) }
+    if e3 != ok { ret (0.0f64, e3) }
+    if np == 0usize { ret (0.0f64 / 0.0f64, ok) }
+    var k = 0usize
+    var any_within = false
+    var j = 0usize
+    while j < nr {
+        var i = j + 1usize
+        while i < nr {
+            d[k] = vegdist(m, nr, nc, i, j, 2usize)
+            ranks[k] = d[k]
+            within[k] = group[i] == group[j]
+            if within[k] { any_within = true }
+            k += 1usize
+            i += 1usize
+        }
+        j += 1usize
+    }
+    if !any_within { ret (0.0f64 / 0.0f64, ok) }
+    if rank_avg(ranks[0usize..np]) != ok { ret (0.0f64, mem.Full) }
+    var sw = 0.0f64
+    var nw = 0.0f64
+    var sb = 0.0f64
+    var nb = 0.0f64
+    k = 0usize
+    while k < np {
+        if within[k] {
+            sw += ranks[k]
+            nw += 1.0f64
+        } else {
+            sb += ranks[k]
+            nb += 1.0f64
+        }
+        k += 1usize
+    }
+    if nw == 0.0f64 || nb == 0.0f64 { ret (0.0f64 / 0.0f64, ok) }
+    let mean_w = sw / nw
+    let mean_b = sb / nb
+    let div = f64(nr * (nr - 1usize)) / 4.0f64
+    ret ((mean_b - mean_w) / div, ok)
+}
+
 // R's rank() with ties.method = "average", in place
 fn rank_avg(v: []f64) -> err {
     var copy: [4096]f64 = zero
