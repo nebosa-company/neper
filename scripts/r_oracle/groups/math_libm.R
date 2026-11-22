@@ -10,7 +10,7 @@ n <- 500
 xe <- c(runif(n, -700, 700), runif(n / 10, -1, 1), -runif(n / 10, 0, 700), seq(-20, 20, by = 0.25))
 for (x in xe) add("exp", x, exp(x))
 # log: positives over many decades, and values near one
-xl <- c(exp(runif(n, -700, 700)), runif(n / 5, 0.5, 2), 10^runif(n / 5, -300, 300))
+xl <- c(exp(runif(n, -700, 700)), runif(n / 5, 0.5, 2), 10^runif(n / 5, -300, 300), 0.012788335265094734)
 for (x in xl) add("log", x, log(x))
 # pow: positive bases with fractional exponents, where R uses the platform's pow
 xp <- exp(runif(n / 2, -50, 50)); yp <- runif(n / 2, -30, 30)
