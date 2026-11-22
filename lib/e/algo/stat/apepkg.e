@@ -257,6 +257,69 @@ fn read_tree(s: str, t: *Tree) -> (usize, err) {
     }
     ret (tips, ok)
 }
+// ape::node.depth (method 1): the number of tips in the clade each node subtends, so a tip answers 1 and the
+// root answers the tip count. out receives one value per node.
+fn tips_under(t: *Tree, out: []usize) -> err {
+    if out.len < t.nn { ret TooSmall }
+    var i = 0usize
+    while i < t.nn {
+        out[i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < t.nn {
+        if t.tip[i] {
+            var at = i
+            while true {
+                out[at] += 1usize
+                if t.parent[at] < 0i64 { break }
+                at = usize(t.parent[at])
+            }
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// ape::node.depth.edgelength: the summed branch length from the root to each node.
+fn node_edgelengths(t: *Tree, out: []f64) -> err {
+    if out.len < t.nn { ret TooSmall }
+    var i = 0usize
+    while i < t.nn {
+        out[i] = tree_path_len(t, i)
+        i += 1usize
+    }
+    ret ok
+}
+
+// ascending insertion sort, for the oracle's order-free multiset comparisons
+fn sort_f64(v: []f64) {
+    var i = 1usize
+    while i < v.len {
+        let x = v[i]
+        var j = i
+        while j > 0usize && v[j - 1usize] > x {
+            v[j] = v[j - 1usize]
+            j -= 1usize
+        }
+        v[j] = x
+        i += 1usize
+    }
+}
+
+fn sort_usize(v: []usize) {
+    var i = 1usize
+    while i < v.len {
+        let x = v[i]
+        var j = i
+        while j > 0usize && v[j - 1usize] > x {
+            v[j] = v[j - 1usize]
+            j -= 1usize
+        }
+        v[j] = x
+        i += 1usize
+    }
+}
 // Recompute depth[] from the parent array, for a tree that was edited after parsing.
 fn refresh_depths(t: *Tree) {
     var k = 0usize
