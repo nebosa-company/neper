@@ -592,11 +592,19 @@ fn two_prod(a: f64, b: f64) -> (f64, f64) {
     ret (p, ((ah * bh - p) + ah * bl + al * bh) + al * bl)
 }
 
-// (ah, al) + (bh, bl), with the pair renormalised after the error terms are gathered.
+// b - (a + b - a) with |a| >= |b|: the exact error of a + b when the two are close in magnitude
+fn quick_two_sum(a: f64, b: f64) -> (f64, f64) {
+    let s = a + b
+    ret (s, b - (s - a))
+}
+
+// (ah, al) + (bh, bl), added in the renormalised two-step form: the error terms go through
+// quick_two_sum after each gathering, so nothing is lost when the two pairs differ in magnitude.
 fn dd_add(ah: f64, al: f64, bh: f64, bl: f64) -> (f64, f64) {
-    let (s1, e1) = two_sum(ah, bh)
-    let (s2, e2) = two_sum(al, bl)
-    let (h, l) = two_sum(s1, e1 + s2 + e2)
+    let (s1, s2) = two_sum(ah, bh)
+    let (t1, t2) = two_sum(al, bl)
+    let (u1, u2) = quick_two_sum(s1, s2 + t1)
+    let (h, l) = quick_two_sum(u1, u2 + t2)
     ret (h, l)
 }
 

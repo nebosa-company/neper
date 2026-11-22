@@ -14,5 +14,6 @@ xl <- c(exp(runif(n, -700, 700)), runif(n / 5, 0.5, 2), 10^runif(n / 5, -300, 30
 for (x in xl) add("log", x, log(x))
 # pow: positive bases with fractional exponents, where R uses the platform's pow
 xp <- exp(runif(n / 2, -50, 50)); yp <- runif(n / 2, -30, 30)
-for (i in seq_along(xp)) add("pow", c(xp[i], yp[i]), xp[i]^yp[i])
+# pow from MPFR: R's own pow is not always correctly rounded, so the reference is the exact value
+for (i in seq_along(xp)) add("pow", c(xp[i], yp[i]), as.numeric(exp(mpfr(yp[i], 400) * log(mpfr(xp[i], 400)))))
 emit("math_libm", c("Rmpfr", "gmp"), list(cases))
