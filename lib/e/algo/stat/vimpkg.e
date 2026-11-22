@@ -19,6 +19,8 @@ use e.mem
 
 // one row with a missing value has no donor at all, where VIM stops with "No donor available for ..."
 error Invalid
+// an ordered or semi-continuous target variable (VIM's ordFun and mixed-target paths) is not ported
+error Unsupported
 
 // x is n by p row-major; column v has NaN where missing; the filled column goes into out (n values)
 fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, out: []f64) -> err {
@@ -110,25 +112,32 @@ fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: us
 }
 
 // One kNN pass over the matrix d, filling the missing cells of column v in place (VIM's per-variable
-// step). A numeric column is scaled by its range over the whole table (gowerD pools donors and the rows
-// to impute, so every row), a categorical column answers 0 for equal and 1 for different, and the
-// distance is the mean over the p - 1 distance columns (VIM's default weights are all one). A missing
-// distance value is replaced by the largest prepared value of its column plus one (gowerD's "Maximum + 1
-// for missing values"), so two missing entries in a column are at distance 0 from each other. The rows
-// missing in column v are fixed at entry, so a value filled earlier in this pass is never a donor. The k
-// nearest donors in (distance, row order) order give the median or mean of a numeric target, or the most
-// frequent code of a categorical one; a tie among the donor codes takes the lowest code, where VIM's
-// maxCat samples (no oracle case has a tie). A column with no observed value is left alone, as VIM
-// drops it from `variable`.
-fn knn_fill_column(a: *mem.Arena, d: []f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, is_factor: []const bool) -> err {
+// step). A column's kind decides both its preparation and its distance (gowerD's NUMERIC, CATEGORICAL,
+// ORDERED and Semi-Continous branches): a numeric column (0) is scaled by its range over the whole table
+// and answers |a - b|; a categorical one (1) is a level code and answers 0 or 1; an ordered one (2) is a
+// level code answering |a - b| / (levels - 1); a semi-continuous one (3) is numeric with a spike at
+// mconst, its values and the spike scaled by the range of the non-spike values, answering 1 when exactly
+// one side is the spike, 0 when both are, and |a - b| otherwise. The distance is the mean over the p - 1
+// distance columns (VIM's default weights are all one), and a missing distance value is replaced by the
+// largest prepared value of its column plus one, so two missing entries in a column are at distance 0 from
+// each other. The rows missing in column v are fixed at entry, so a value filled earlier in this pass is
+// never a donor. The k nearest donors in (distance, row order) order give the median or mean of a numeric
+// target, or the most frequent code of a categorical one; a tie among the donor codes takes the lowest
+// code, where VIM's maxCat samples (no oracle case has a tie). An ordered or semi-continuous target is not
+// supported (VIM's ordFun/numFun paths), a column with no observed value is left alone, and k of zero
+// answers Invalid.
+fn knn_fill_column(a: *mem.Arena, d: []f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, kind: []const u8, nlev: []const usize, mconst: []const f64) -> err {
     let (prep, e0) = mem.alloc[f64](a, n * p)
     let (dist, e2) = mem.alloc[f64](a, n)
     let (cand, e3) = mem.alloc[usize](a, n)
     let (miss, e4) = mem.alloc[bool](a, n)
+    let (spike, e5) = mem.alloc[f64](a, p)
     if e0 != ok { ret e0 }
     if e2 != ok { ret e2 }
     if e3 != ok { ret e3 }
     if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    if kind[v] == 2u8 || kind[v] == 3u8 { ret Unsupported }
     var observed = 0usize
     if k == 0usize { ret Invalid }
     var i = 0usize
@@ -142,11 +151,12 @@ fn knn_fill_column(a: *mem.Arena, d: []f64, n: usize, p: usize, v: usize, k: usi
     while c < p {
         var lo = 1.0e300f64
         var hi = 0.0f64 - 1.0e300f64
-        if !is_factor[c] {
+        if kind[c] == 0u8 || kind[c] == 3u8 {
             var i2 = 0usize
             while i2 < n {
                 let t = d[i2 * p + c]
-                if t == t {
+                // the semi-continuous scale leaves the spike out
+                if t == t && (kind[c] == 0u8 || t != mconst[c]) {
                     if t < lo { lo = t }
                     if t > hi { hi = t }
                 }
@@ -155,14 +165,16 @@ fn knn_fill_column(a: *mem.Arena, d: []f64, n: usize, p: usize, v: usize, k: usi
         }
         // gowerD divides by the range, and replaces a zero or missing range with 1
         var r = hi - lo
-        if is_factor[c] || !(r > 0.0f64) { r = 1.0f64 }
-        // the prepared value: the scaled double of a numeric column, the code of a categorical one
+        if kind[c] == 1u8 || kind[c] == 2u8 || !(r > 0.0f64) { r = 1.0f64 }
+        spike[c] = 0.0f64
+        if kind[c] == 3u8 { spike[c] = mconst[c] / r }
+        // the prepared value: a scaled double for the numeric and semi-continuous kinds, the code otherwise
         var mx = -1.0e300f64
         var i2 = 0usize
         while i2 < n {
             let t = d[i2 * p + c]
             var prep_v = t
-            if !is_factor[c] && t == t { prep_v = t / r }
+            if (kind[c] == 0u8 || kind[c] == 3u8) && t == t { prep_v = t / r }
             prep[i2 * p + c] = prep_v
             if prep_v == prep_v && prep_v > mx { mx = prep_v }
             i2 += 1usize
@@ -189,10 +201,24 @@ fn knn_fill_column(a: *mem.Arena, d: []f64, n: usize, p: usize, v: usize, k: usi
                     c = 0usize
                     while c < p {
                         if c != v {
-                            if is_factor[c] {
-                                if prep[i * p + c] != prep[j * p + c] { s += 1.0f64 }
+                            let av = prep[i * p + c]
+                            let bv = prep[j * p + c]
+                            if kind[c] == 1u8 {
+                                if av != bv { s += 1.0f64 }
+                            } else if kind[c] == 2u8 {
+                                var lv = nlev[c]
+                                if lv < 2usize { lv = 2usize }
+                                s += math.abs[f64](av - bv) / f64(lv - 1usize)
+                            } else if kind[c] == 3u8 {
+                                if av == spike[c] {
+                                    if bv != spike[c] { s += 1.0f64 }
+                                } else if bv == spike[c] {
+                                    s += 1.0f64
+                                } else {
+                                    s += math.abs[f64](av - bv)
+                                }
                             } else {
-                                s += math.abs[f64](prep[i * p + c] - prep[j * p + c])
+                                s += math.abs[f64](av - bv)
                             }
                         }
                         c += 1usize
@@ -210,7 +236,7 @@ fn knn_fill_column(a: *mem.Arena, d: []f64, n: usize, p: usize, v: usize, k: usi
             }
             var kk = k
             if m < kk { kk = m }
-            if is_factor[v] {
+            if kind[v] == 1u8 {
                 // VIM's maxCat: the most frequent donor code, the lowest code on a tie
                 var best = cand[0usize]
                 var best_count = 0usize
@@ -265,6 +291,50 @@ fn knn_fill_column(a: *mem.Arena, d: []f64, n: usize, p: usize, v: usize, k: usi
 // VIM::kNN over mixed numeric and categorical distance columns, one target variable: see knn_fill_column
 // for the distance and aggregation rules.
 fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, is_factor: []const bool, out: []f64) -> err {
+    let (kind, e1) = mem.alloc[u8](a, p)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < p {
+        kind[i] = 0u8
+        if is_factor[i] { kind[i] = 1u8 }
+        i += 1usize
+    }
+    ret knn_impute_kinds(a, x, n, p, v, k, use_mean, kind, out)
+}
+
+// VIM::kNN over distance columns of every ported kind (numeric, categorical, ordered, semi-continuous), one
+// target variable: see knn_fill_column. nlev holds the level count of each ordered column and mconst the
+// spike of each semi-continuous one; both are read only for their own kinds.
+fn knn_impute_kinds(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, kind: []const u8, out: []f64) -> err {
+    let (work, e1) = mem.alloc[f64](a, n * p)
+    let (nlev, e2) = mem.alloc[usize](a, p)
+    let (mconst, e3) = mem.alloc[f64](a, p)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    var i = 0usize
+    while i < p {
+        nlev[i] = 0usize
+        mconst[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n * p {
+        work[i] = x[i]
+        i += 1usize
+    }
+    let e = knn_fill_column(a, work, n, p, v, k, use_mean, kind, nlev, mconst)
+    if e != ok { ret e }
+    i = 0usize
+    while i < n {
+        out[i] = work[i * p + v]
+        i += 1usize
+    }
+    ret ok
+}
+
+// The general entry point, where the caller supplies the level counts and spikes itself.
+fn knn_impute_kinds_full(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize, k: usize, use_mean: bool, kind: []const u8, nlev: []const usize, mconst: []const f64, out: []f64) -> err {
     let (work, e1) = mem.alloc[f64](a, n * p)
     if e1 != ok { ret e1 }
     var i = 0usize
@@ -272,7 +342,7 @@ fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize,
         work[i] = x[i]
         i += 1usize
     }
-    let e = knn_fill_column(a, work, n, p, v, k, use_mean, is_factor)
+    let e = knn_fill_column(a, work, n, p, v, k, use_mean, kind, nlev, mconst)
     if e != ok { ret e }
     i = 0usize
     while i < n {
@@ -287,14 +357,28 @@ fn knn_impute_mixed(a: *mem.Arena, x: []const f64, n: usize, p: usize, v: usize,
 // (VIM's useImputedDist = TRUE, its default, with columns ordered as `variable` orders them).
 fn knn_impute_multi(a: *mem.Arena, x: []const f64, n: usize, p: usize, vars: []const usize, k: usize, use_mean: bool, is_factor: []const bool, out: []f64) -> err {
     if x.len < n * p || out.len < n * p { ret mem.Full }
+    let (kind, e0) = mem.alloc[u8](a, p)
+    let (nlev, e5) = mem.alloc[usize](a, p)
+    let (mconst, e6) = mem.alloc[f64](a, p)
+    if e0 != ok { ret e0 }
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
     var i = 0usize
+    while i < p {
+        kind[i] = 0u8
+        if is_factor[i] { kind[i] = 1u8 }
+        nlev[i] = 0usize
+        mconst[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
     while i < n * p {
         out[i] = x[i]
         i += 1usize
     }
     var t = 0usize
     while t < vars.len {
-        let e = knn_fill_column(a, out, n, p, vars[t], k, use_mean, is_factor)
+        let e = knn_fill_column(a, out, n, p, vars[t], k, use_mean, kind, nlev, mconst)
         if e != ok { ret e }
         t += 1usize
     }
