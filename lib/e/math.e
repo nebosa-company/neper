@@ -571,6 +571,98 @@ fn exp_core(hi: f64, lo: f64, n: i64) -> f64 {
     ret scale(y, n)
 }
 
+// --- Double-double arithmetic, for the correctly rounded `exp` below (D7776). A pair (hi, lo) stands
+// for hi + lo exactly; two_sum and two_prod are the error-free transformations of Dekker and Knuth.
+fn two_sum(a: f64, b: f64) -> (f64, f64) {
+    let s = a + b
+    let bb = s - a
+    ret (s, (a - (s - bb)) + (b - bb))
+}
+
+fn split_word(a: f64) -> (f64, f64) {
+    let c = 134217729.0f64 * a
+    let hi = c - (c - a)
+    ret (hi, a - hi)
+}
+
+fn two_prod(a: f64, b: f64) -> (f64, f64) {
+    let p = a * b
+    let (ah, al) = split_word(a)
+    let (bh, bl) = split_word(b)
+    ret (p, ((ah * bh - p) + ah * bl + al * bh) + al * bl)
+}
+
+// (ah, al) + (bh, bl), with the pair renormalised after the error terms are gathered.
+fn dd_add(ah: f64, al: f64, bh: f64, bl: f64) -> (f64, f64) {
+    let (s1, e1) = two_sum(ah, bh)
+    let (s2, e2) = two_sum(al, bl)
+    let (h, l) = two_sum(s1, e1 + s2 + e2)
+    ret (h, l)
+}
+
+// (ah, al) * (bh, bl) to pair precision.
+fn dd_mul(ah: f64, al: f64, bh: f64, bl: f64) -> (f64, f64) {
+    let (p, e) = two_prod(ah, bh)
+    let (h, l) = two_sum(p, e + (ah * bl + al * bh))
+    ret (h, l)
+}
+
+// exp of the reduced argument (rh, rl) by its Taylor series in double-double, 20 terms: at
+// |r| <= ln 2 / 2 the first dropped term is r^21/21! < 1e-27, far below the final rounding.
+fn exp_series(rh: f64, rl: f64) -> (f64, f64) {
+    var sh = 1.0f64
+    var sl = 0.0f64
+    var th = rh
+    var tl = rl
+    let (u1, u2) = dd_add(sh, sl, th, tl)
+    sh = u1
+    sl = u2
+    var kk = 2usize
+    while kk <= 20usize {
+        let kf = f64(kk)
+        th = th / kf
+        tl = tl / kf
+        let (mh, ml) = dd_mul(th, tl, rh, rl)
+        th = mh
+        tl = ml
+        let (ah, al) = dd_add(sh, sl, th, tl)
+        sh = ah
+        sl = al
+        kk += 1usize
+    }
+    ret (sh, sl)
+}
+
+// exp, correctly rounded: reduce by n ln 2 with n*LN2_HI exact (that constant carries 21 trailing zero
+// bits, so the product is exact for the whole exponent range), keep the reduced argument as a pair, sum
+// the series in double-double and round once at the end. The fdlibm exp64 below stays for exp2's core
+// and as the fast path; this one is the value the oracle compares (D7776).
+fn exp_cr(x: f64) -> f64 {
+    let hx = high_word(x)
+    let sign = hx >> 31u32
+    let ix = hx & 2147483647u32
+    if ix >= 1082535490u32 {
+        if ix >= 2146435072u32 {
+            if ((ix & 1048575u32) | low_word(x)) != 0u32 { ret nan64() }
+            if sign == 0u32 { ret inf64() }
+            ret 0.0f64
+        }
+        if x > k(EXP_OVERFLOW) { ret inf64() }
+        if x < k(EXP_UNDERFLOW) { ret 0.0f64 }
+    }
+    if ix < 1043333120u32 { ret 1.0f64 + x }
+    var half = 0.5f64
+    if sign != 0u32 { half = -0.5f64 }
+    let nf = floor(x * 1.4426950408889634f64 + half)
+    let n = i64(nf)
+    let ph = nf * k(LN2_HI)
+    let pl = nf * k(LN2_LO)
+    let (t1, t2) = two_sum(x, 0.0f64 - ph)
+    let (t3, t4) = two_sum(t1, 0.0f64 - pl)
+    let (sh, sl) = exp_series(t3, t2 + t4)
+    ret scale(sh, n) + scale(sl, n)
+}
+
 fn exp64(x: f64) -> f64 {
     let hx = high_word(x)
     let sign = hx >> 31u32
@@ -760,7 +852,7 @@ fn log10_64(x: f64) -> f64 {
     ret val_lo + w
 }
 
-fn exp[F: type](x: F) -> F { ret F(exp64(f64(x))) }
+fn exp[F: type](x: F) -> F { ret F(exp_cr(f64(x))) }
 fn exp2[F: type](x: F) -> F { ret F(exp2_64(f64(x))) }
 fn log[F: type](x: F) -> F { ret F(log64(f64(x))) }
 fn log2[F: type](x: F) -> F { ret F(log2_64(f64(x))) }
