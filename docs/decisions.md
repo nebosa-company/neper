@@ -52176,3 +52176,16 @@ So this row's Linux gap is not "the run was never done"; it is a **platform-spec
 Practical consequences recorded with the row: the batch needs per-fixture timeouts (the second attempt used `timeout 300`, which is what turned "hangs forever" into "exit 124 with a number"), and the fixtures still need splitting for headroom on Windows.
 
 This is also the first finding in the sweep that a *run* produced rather than a reading - eight of the previous claims were stale text, this one is live. Both kinds are worth having, but only this kind changes what the code does.
+## D7792 — The ghyp2 hang: the suspected loop is real, but bounding it naively makes Windows hang too
+
+D7791 left `oracle_ghyp2` hanging on x64-linux (1362 s before a kill) and `oracle_ghypfit` over 300 s, against 155-185 s for the pair on Windows. Inspecting `e.algo.stat.ghyp2` found the obvious suspect: `gig_range` expands the upper integration limit with an unbounded loop,
+
+    while gh.dgig(hi, chi, psi, lambda) > tol { hi = hi + sd }
+
+which has no iteration cap and no guard on `sd`. If the density tail decays slower than `sd` steps - or `sd` is zero or not finite - it never terminates.
+
+The naive fix (cap at 100000 iterations, stop when `sd <= 0`) was applied and measured: the Windows run of `oracle_ghyp2`, which normally finishes in 155-185 s, burned **585 s of CPU with no output** and had to be killed. So the capped loop changes the bracket `hi` enough that the subsequent root find or the fixture's remaining cases become far slower - the cap is not a safe fix, it just moves the hang.
+
+The change was reverted rather than shipped (`git checkout` on `ghyp2.e`, tree clean), which is the right call for a modification that turns a slow pass into a hang on the platform that was working. The finding stands and narrows the next step: the loop must be instrumented (count iterations, log `sd`, `hi` and `dgig` per case) rather than bounded blindly, and the Linux difference has to be attributed to a specific case before any condition is changed. Until then L407's evidence correctly says the Linux run found a real platform problem.
+
+This is the first regression of the obstacle sweep: the previous nine actions were all measurements or deletions. Recording it, and the fact that it was caught by measuring the platform that already worked, is more useful than a silent revert.
