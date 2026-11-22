@@ -50,6 +50,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "d_7") { method = 7usize }
     if str.eq(c.name, "d_8") { method = 8usize }
     if str.eq(c.name, "d_9") { method = 9usize }
+    if str.eq(c.name, "d_10") { method = 10usize }
+    if str.eq(c.name, "d_11") { method = 11usize }
+    if str.eq(c.name, "d_12") { method = 12usize }
     // R lists the lower triangle by columns
     var pos = 1usize
     var cb = 0usize

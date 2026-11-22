@@ -19,5 +19,9 @@ for (rep in 1:20) {
   add("chao1", a, ws(estimateR(m)["S.chao1", ])); add("rarefy", a, ws(rarefy(m, nrf)))
   for (k in seq_along(meths)) add(paste0("d_", k - 1), a, ws(as.vector(vegdist(m, meths[k]))))
   add("d_9", a, ws(as.vector(vegdist(m, "jaccard", binary = TRUE))))
+  # methods 10 to 12: altGower, cao and clark in vegan's own vocabulary
+  add("d_10", a, ws(as.vector(vegdist(m, "altGower"))))
+  add("d_11", a, ws(as.vector(vegdist(m, "cao"))))
+  add("d_12", a, ws(as.vector(vegdist(m, "clark"))))
 }
 emit("vegan", "vegan", list(cases))

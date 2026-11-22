@@ -61,7 +61,7 @@ fn rarefy(m: []const f64, nc: usize, r: usize, n: f64) -> f64 {
     ret s
 }
 
-// vegdist between rows a and b (morisita is clipped at 0 as vegan does, gower divides by the non-constant columns); method 0 euclidean, 1 manhattan, 2 bray, 3 kulczynski, 4 canberra, 5 gower, 6 horn, 7 morisita, 8 jaccard, 9 binary jaccard (binary bray gives the same ordering as 2B/(1+B))
+// vegdist between rows a and b (morisita is clipped at 0 as vegan does, gower divides by the non-constant columns); method 0 euclidean, 1 manhattan, 2 bray, 3 kulczynski, 4 canberra, 5 gower, 6 horn, 7 morisita, 8 jaccard, 9 binary jaccard (binary bray gives the same ordering as 2B/(1+B)), 10 altGower (|a - b| averaged over the sites where not both are zero), 11 cao (the entropy term of Cao et al. with values below 0.1 floored, natural log), 12 clark (((a - b)/(a + b))^2 averaged over the sites where not both are zero, square rooted)
 fn vegdist(m: []const f64, nr: usize, nc: usize, ra: usize, rb: usize, method: usize) -> f64 {
     var sa = 0.0f64
     var sb = 0.0f64
@@ -77,6 +77,12 @@ fn vegdist(m: []const f64, nr: usize, nc: usize, ra: usize, rb: usize, method: u
     var nz = 0.0f64
     var gw = 0.0f64
     var gcount = 0.0f64
+    var alt = 0.0f64
+    var altc = 0.0f64
+    var cao = 0.0f64
+    var caoc = 0.0f64
+    var clark = 0.0f64
+    var clarkc = 0.0f64
     var j = 0usize
     while j < nc {
         var x = m[ra * nc + j]
@@ -98,6 +104,27 @@ fn vegdist(m: []const f64, nr: usize, nc: usize, ra: usize, rb: usize, method: u
         if x + y > 0.0f64 {
             can += math.abs[f64](x - y) / (x + y)
             nz += 1.0f64
+        }
+        if x > 0.0f64 || y > 0.0f64 {
+            alt += math.abs[f64](x - y)
+            altc += 1.0f64
+            // clark answers an infinite term when the pair sums to zero (both negative), as vegan does
+            let denom = x + y
+            if denom > 0.0f64 {
+                let t = (x - y) / denom
+                clark += t * t
+            } else {
+                clark += 1.0e300f64
+            }
+            clarkc += 1.0f64
+            // cao: a value below 0.1 is floored to 0.1, log(t1) - log(2) - (x1 log x2 + x2 log x1)/t1
+            var x1 = x
+            var x2 = y
+            if x1 < 0.1f64 { x1 = 0.1f64 }
+            if x2 < 0.1f64 { x2 = 0.1f64 }
+            let t1 = x1 + x2
+            cao += math.log[f64](t1) - math.log[f64](2.0f64) - (x1 * math.log[f64](x2) + x2 * math.log[f64](x1)) / t1
+            caoc += 1.0f64
         }
         var lo = 1.0e300f64
         var hi = 0.0f64 - 1.0e300f64
@@ -129,6 +156,20 @@ fn vegdist(m: []const f64, nr: usize, nc: usize, ra: usize, rb: usize, method: u
         let d = 1.0f64 - 2.0f64 * sab / ((saa1 / (sa * (sa - 1.0f64)) + sbb1 / (sb * (sb - 1.0f64))) * sa * sb)
         if d < 1.0e-15f64 { ret 0.0f64 }
         ret d
+    }
+    if method == 10usize {
+        if altc == 0.0f64 { ret 0.0f64 / 0.0f64 }
+        ret alt / altc
+    }
+    if method == 11usize {
+        if caoc == 0.0f64 { ret 0.0f64 / 0.0f64 }
+        let d = cao / caoc
+        if d < 0.0f64 { ret 0.0f64 }
+        ret d
+    }
+    if method == 12usize {
+        if clarkc == 0.0f64 { ret 0.0f64 / 0.0f64 }
+        ret math.sqrt[f64](clark / clarkc)
     }
     let b = sabs / (sa + sb)
     ret 2.0f64 * b / (1.0f64 + b)
