@@ -653,16 +653,92 @@ fn exp_cr(x: f64) -> f64 {
     if ix < 1043333120u32 { ret 1.0f64 + x }
     var half = 0.5f64
     if sign != 0u32 { half = -0.5f64 }
-    let nf = floor(x * 1.4426950408889634f64 + half)
-    let n = i64(nf)
+    let n = i64(x * 1.4426950408889634f64 + half)
+    let nf = f64(n)
+    ret exp_dd(x, 0.0f64)
+}
+
+// exp of the double-double argument (th, tl), rounded once: the same reduction as exp_cr, but the reduced
+// argument keeps the low part of the input, which is what pow needs after multiplying its log by the
+// exponent (D7778).
+fn exp_dd(th: f64, tl: f64) -> f64 {
+    var half = 0.5f64
+    if th < 0.0f64 { half = -0.5f64 }
+    let n = i64(th * 1.4426950408889634f64 + half)
+    let nf = f64(n)
     let ph = nf * k(LN2_HI)
     let pl = nf * k(LN2_LO)
-    let (t1, t2) = two_sum(x, 0.0f64 - ph)
+    let (t1, t2) = two_sum(th, 0.0f64 - ph)
     let (t3, t4) = two_sum(t1, 0.0f64 - pl)
-    let (sh, sl) = exp_series(t3, t2 + t4)
+    let (rh, rl) = dd_add(t3, t2 + t4, tl, 0.0f64)
+    let (sh, sl) = exp_series(rh, rl)
     ret scale(sh, n) + scale(sl, n)
 }
 
+// log of m = 1 + 2r for |r| <= 0.172, by the odd series in double-double: r^25/25 < 1e-20 at that bound,
+// so twelve terms carry far more than the final rounding needs.
+fn log_series(rh: f64, rl: f64) -> (f64, f64) {
+    let (zh, zl) = dd_mul(rh, rl, rh, rl)
+    var sh = rh
+    var sl = rl
+    var th = rh
+    var tl = rl
+    var kk = 1usize
+    while kk <= 12usize {
+        let (mh, ml) = dd_mul(th, tl, zh, zl)
+        th = mh
+        tl = ml
+        let kf = f64(2usize * kk + 1usize)
+        let (ah, al) = dd_add(sh, sl, th / kf, tl / kf)
+        sh = ah
+        sl = al
+        kk += 1usize
+    }
+    ret (sh * 2.0f64, sl * 2.0f64)
+}
+
+// log, correctly rounded: split x into m * 2^e with m in [sqrt(1/2), sqrt(2)), take r = (m - 1)/(m + 1) as
+// a double-double pair (the second component is the division residual), sum the series in double-double, add
+// e ln 2 in double-double and round once (D7777).
+fn log_dd(x: f64) -> (f64, f64) {
+    let hx = high_word(x)
+    let ix = hx & 2147483647u32
+    let lw = low_word(x)
+    if ix >= 2146435072u32 {
+        if (ix & 1048575u32) | lw != 0u32 { ret (nan64(), 0.0f64) }
+        if hx >> 31u32 != 0u32 { ret (nan64(), 0.0f64) }
+        ret (inf64(), 0.0f64)
+    }
+    if ix == 0u32 && lw == 0u32 { ret (0.0f64 - inf64(), 0.0f64) }
+    if hx >> 31u32 != 0u32 { ret (nan64(), 0.0f64) }
+    var xx = x
+    var eshift = 0i64
+    if ix < 1048576u32 {
+        xx = x * 18446744073709551616.0f64
+        eshift = -64i64
+    }
+    let jx = high_word(xx)
+    var e = i64((jx >> 20u32) & 2047u32) - 1023i64 + eshift
+    var m = from_words((jx & 1048575u32) | 1072693248u32, low_word(xx))
+    if m > 1.4142135623730951f64 {
+        m = m * 0.5f64
+        e += 1i64
+    }
+    let nh = m - 1.0f64
+    let dh = m + 1.0f64
+    let rh = nh / dh
+    let (ph, pe) = two_prod(rh, dh)
+    let rl = (nh - ph - pe) / dh
+    let (sh, sl) = log_series(rh, rl)
+    let (lh, ll) = two_sum(f64(e) * k(LN2_HI), f64(e) * k(LN2_LO))
+    let (yh, yl) = dd_add(lh, ll, sh, sl)
+    ret (yh, yl)
+}
+
+fn log_cr(x: f64) -> f64 {
+    let (h, l) = log_dd(x)
+    ret h + l
+}
 fn exp64(x: f64) -> f64 {
     let hx = high_word(x)
     let sign = hx >> 31u32
@@ -854,7 +930,7 @@ fn log10_64(x: f64) -> f64 {
 
 fn exp[F: type](x: F) -> F { ret F(exp_cr(f64(x))) }
 fn exp2[F: type](x: F) -> F { ret F(exp2_64(f64(x))) }
-fn log[F: type](x: F) -> F { ret F(log64(f64(x))) }
+fn log[F: type](x: F) -> F { ret F(log_cr(f64(x))) }
 fn log2[F: type](x: F) -> F { ret F(log2_64(f64(x))) }
 fn log10[F: type](x: F) -> F { ret F(log10_64(f64(x))) }
 
@@ -1487,6 +1563,23 @@ fn integer_kind(y: f64) -> i64 {
     ret 0i64
 }
 
+// pow, correctly rounded for a positive base: the logarithm comes back as a pair, the exponent scales it in
+// double-double, and exp_dd rounds once. Negative bases, zeros, infinities and NaNs keep the fdlibm rules,
+// which is where the sign and the integer-exponent cases live (D7778).
+fn pow_cr(x: f64, y: f64) -> f64 {
+    let hx = high_word(x)
+    if (hx >> 31u32) != 0u32 { ret pow64(x, y) }
+    if x == 0.0f64 { ret pow64(x, y) }
+    if !(x == x) || !(y == y) { ret pow64(x, y) }
+    if x == inf64() { ret pow64(x, y) }
+    if y == 0.0f64 { ret 1.0f64 }
+    if x == 1.0f64 { ret 1.0f64 }
+    let (lh, ll) = log_dd(x)
+    let (th, tl) = dd_mul(y, 0.0f64, lh, ll)
+    if th > 709.782712893384f64 { ret inf64() }
+    if th < 0.0f64 - 745.1332191019411f64 { ret 0.0f64 }
+    ret exp_dd(th, tl)
+}
 fn pow64(x: f64, y: f64) -> f64 {
     let hx = signed_high(x)
     let lx = low_word(x)
