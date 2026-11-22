@@ -103,6 +103,87 @@ fn estimate_r(m: []const f64, nc: usize, r: usize, out: []f64) {
     out[3usize] = s_ace
 }
 
+// R's rank() with ties.method = "average", in place
+fn rank_avg(v: []f64) -> err {
+    var copy: [4096]f64 = zero
+    let m = v.len
+    if m > 4096usize { ret mem.Full }
+    var i = 0usize
+    while i < m {
+        copy[i] = v[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        var less = 0usize
+        var same = 0usize
+        var j = 0usize
+        while j < m {
+            if copy[j] < copy[i] {
+                less += 1usize
+            } else if copy[j] == copy[i] {
+                same += 1usize
+            }
+            j += 1usize
+        }
+        v[i] = f64(less) + (f64(same) + 1.0f64) / 2.0f64
+        i += 1usize
+    }
+    ret ok
+}
+
+// vegan::mantel's test statistic: the correlation between the two distance matrices' lower triangles, taken
+// column by column the way as.vector(dist) orders them. method 0 is Pearson (the default) and 1 is Spearman,
+// which is Pearson on the average ranks. The permutation p-value is not produced here: it needs R's RNG.
+fn mantel_r(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, method: usize) -> (f64, err) {
+    let m = n * (n - 1usize) / 2usize
+    let (vx, e1) = mem.alloc[f64](a, m + 1usize)
+    let (vy, e2) = mem.alloc[f64](a, m + 1usize)
+    if e1 != ok { ret (0.0f64, e1) }
+    if e2 != ok { ret (0.0f64, e2) }
+    var k = 0usize
+    var j = 0usize
+    while j < n {
+        var i = j + 1usize
+        while i < n {
+            vx[k] = x[i * n + j]
+            vy[k] = y[i * n + j]
+            k += 1usize
+            i += 1usize
+        }
+        j += 1usize
+    }
+    if m < 2usize { ret (0.0f64 / 0.0f64, ok) }
+    if method == 1usize {
+        if rank_avg(vx[0usize..m]) != ok { ret (0.0f64, mem.Full) }
+        if rank_avg(vy[0usize..m]) != ok { ret (0.0f64, mem.Full) }
+    }
+    var mx = 0.0f64
+    var my = 0.0f64
+    var i = 0usize
+    while i < m {
+        mx += vx[i]
+        my += vy[i]
+        i += 1usize
+    }
+    mx = mx / f64(m)
+    my = my / f64(m)
+    var sxy = 0.0f64
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    i = 0usize
+    while i < m {
+        let dx = vx[i] - mx
+        let dy = vy[i] - my
+        sxy += dx * dy
+        sxx += dx * dx
+        syy += dy * dy
+        i += 1usize
+    }
+    if sxx <= 0.0f64 || syy <= 0.0f64 { ret (0.0f64 / 0.0f64, ok) }
+    ret (sxy / math.sqrt[f64](sxx * syy), ok)
+}
+
 // vegan::procrustes with its defaults (asymmetric, scale = TRUE) on two n by k matrices: both are centred by
 // column, the SVD of X'Y gives the singular values d, the isotropic scale is c = sum(d)/trace(Y) with
 // trace(M) = sum(M^2), and the residual sum of squares is trace(X) + c^2 trace(Y) - 2 c sum(d), clamped at 0.

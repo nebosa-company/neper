@@ -33,6 +33,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "man_0") || str.eq(c.name, "man_1") {
+        // args: (n, kind), then the two n by n distance matrices row-major
+        let kind = usize(z[1usize])
+        let xm = z[2usize..2usize + nr * nr]
+        let ym = z[2usize + nr * nr..2usize + 2usize * nr * nr]
+        let (rr, eman) = vg.mantel_r(a, xm, ym, nr, kind)
+        if eman != ok { ret nan }
+        ret rr
+    }
     if str.eq(c.name, "proc_0") || str.eq(c.name, "proc_1") {
         // args: (n, k, kind), then x[n*k] centred-free input and y[n*k]
         let kk = usize(z[1usize])

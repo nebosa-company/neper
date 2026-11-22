@@ -58,4 +58,15 @@ for (rep in 1:10) {
   cases[[length(cases) + 1]] <- case("proc_0", c(nn, kk, 0, as.vector(t(X)), as.vector(t(Y))), pr$scale, rel = 1e-10, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("proc_1", c(nn, kk, 1, as.vector(t(X)), as.vector(t(Y))), pr$ss, rel = 1e-10, abs = 1e-12)
 }
+# mantel: the correlation statistic only (permutations = 0 keeps the RNG out of the oracle)
+set.seed(20270102)
+for (rep in 1:10) {
+  nn <- sample(5:10, 1)
+  X <- matrix(rnorm(nn * 3), nn); Y <- matrix(rnorm(nn * 3), nn)
+  dx <- as.matrix(dist(X)); dy <- as.matrix(dist(Y))
+  m0 <- mantel(as.dist(dx), as.dist(dy), permutations = 0)
+  m1 <- mantel(as.dist(dx), as.dist(dy), method = "spearman", permutations = 0)
+  cases[[length(cases) + 1]] <- case("man_0", c(nn, 0, as.vector(t(dx)), as.vector(t(dy))), m0$statistic, rel = 1e-12, abs = 1e-14)
+  cases[[length(cases) + 1]] <- case("man_1", c(nn, 1, as.vector(t(dx)), as.vector(t(dy))), m1$statistic, rel = 1e-12, abs = 1e-14)
+}
 emit("vegan", "vegan", list(cases))
