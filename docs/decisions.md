@@ -52263,3 +52263,15 @@ So the hang is **the quantile, not the tail range**, and the reproduction is a s
 That also removes the standing hypothesis from D7795: `gig_range`'s `while gh.dgig(hi, ...) > tol` expansion is *not* what stalls - the same shape passes through `ghyprange` in zero seconds - so the loop is down the call chain from `qghypF`'s inversion (the `pgig` root find or the integration path), not the expansion itself. The earlier blind cap (D7792) was therefore aimed at a loop that is not on the hanging path, which is exactly why it changed nothing on Linux and cost 585 s on Windows.
 
 Next step is a one-case instrumented run: count the iterations inside `qghypF`/`qgig_integrate` for these arguments on both hosts and compare - the divergence point names the fix. The one-case oracle is already written (`.dsh-tmp/ghyp2_case1313.json`), so each iteration of that experiment costs seconds.
+## D7797 — There are two expansion loops, and the one on the hanging path is the second: qgig_integrate's xhigh
+
+D7796 showed `ghyprange` passes while `qghypF` hangs on the same shape, which already implied the stall was not `gig_range`'s loop. Reading the call chain confirms it and names the actual loop. `qgig_integrate` carries the same unbounded pattern a second time, this time on the upper tail:
+
+    var xhigh = mode + sd
+    while pgig_ssf(a, xhigh, chi, psi, lambda, eps^0.85, nmax, false) >= p { xhigh = xhigh + sd }
+
+`ghyprange` does not call this; `qghypF(p)` -> `qgig` -> (`qgig_integrate` when p falls outside the spline table) does, and p = 0.001 on a long upper tail is exactly a case that falls outside it. So the loop that hangs is this one, guarded by nothing, and the fix attempted in D7792 changed the *other* loop - which is why it did nothing on Linux and cost 585 s on Windows.
+
+Two things follow. First, the diagnosis is now static as well as empirical: one unbounded loop on the hanging path, one off it, and a measured minimal reproduction that enters only the former. Second, the fix still cannot be a bare cap: if `pgig_ssf(..., lower = false)` fails to fall below `p` as x grows, a cap would only convert the hang into a wrong answer, which is worse than a timeout. The next measurement is therefore `pgig_ssf` against x for this shape on both hosts - if it plateaus instead of decaying, the bug is in the incomplete BesselK tail, not in the loop bound, and that is a different repair.
+
+The same `while (density/tail >= level) { x = x + sd }` idiom appears twice in this module and both sites were written without a bound; once the real cause is known, both should get the same treatment rather than the one that happens to be on today's failing path.
