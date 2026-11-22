@@ -52248,3 +52248,18 @@ Both paths run through `gig_range`'s upper-limit expansion and then `qgig_integr
 The next step is one case, not a window: run the three separately, take the first that hangs, and instrument that call's iteration count and `sd`. Only then decide the fix - and the earlier attempt (D7792) showed that bounding the loop without knowing where it should stop turns the Windows pass into a hang, so the bound must be derived from the case's own numbers.
 
 The full bisect cost about four rounds, three of them spent fixing the instrument rather than the code. That ratio is the transferable part: for a single pathological case in a 2570-case fixture, measurement hygiene dominates.
+## D7796 — Minimal reproduction: qghypF at p = 0.001 hangs on x64-linux; ghyprange with the same shape does not
+
+Running the three suspect cases one at a time (each in its own one-case oracle) split them cleanly:
+
+| case | function | Linux |
+|---|---|---|
+| 1313 (1-based) | `ghyprange(0.001, side=1, -0.2732930487811299, 0.9256219523493201, 3.4485387429594994, 2.574339360393599, 1.6791092939674854)` | **0 s, pass** |
+| 1314 | `qghypF(0.001, -0.2732930487811299, 0.9256219523493201, 3.4485387429594994, 2.574339360393599, 1.6791092939674854, 1, 0)` | **timeout 30 s** |
+| 1315 | the same `qghypF` call | **timeout 30 s** |
+
+So the hang is **the quantile, not the tail range**, and the reproduction is a single line: `qghypF(p = 0.001)` on that shape, which reaches `-1.043707945463649` on Windows. Two identical cases hang, so it is deterministic and parameter-driven, not cumulative state.
+
+That also removes the standing hypothesis from D7795: `gig_range`'s `while gh.dgig(hi, ...) > tol` expansion is *not* what stalls - the same shape passes through `ghyprange` in zero seconds - so the loop is down the call chain from `qghypF`'s inversion (the `pgig` root find or the integration path), not the expansion itself. The earlier blind cap (D7792) was therefore aimed at a loop that is not on the hanging path, which is exactly why it changed nothing on Linux and cost 585 s on Windows.
+
+Next step is a one-case instrumented run: count the iterations inside `qghypF`/`qgig_integrate` for these arguments on both hosts and compare - the divergence point names the fix. The one-case oracle is already written (`.dsh-tmp/ghyp2_case1313.json`), so each iteration of that experiment costs seconds.
