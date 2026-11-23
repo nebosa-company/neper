@@ -52542,3 +52542,16 @@ One **semantic deviation**, documented rather than papered over: `number('1e23')
 Two fixtures are **pathological** (`emmeanscontr`, `fieldssp`) and six are merely slow (104-518 s), all classified against both hosts (D7819): nothing in the list is stuck, and there is no Windows-specific performance problem.
 
 What the pass produced beyond the ledger: five of the six tolerance edges and the crash were invisible to per-module oracles and appeared only when unrelated statistical packages exercised the same code, and one of the ten fixes (`grf`) was a defect this session had introduced. That is the argument for the goal, made with numbers.
+## D7821 — The 700 s classification, completed: fourteen fixtures are pathological and fieldssp ends abnormally
+
+The slow-classification job started in D7819 finished after this goal closed, and it corrects the ledger's shape. All nineteen fixtures that had timed out at 90 s were re-run at a **700 s** budget on x64-windows:
+
+**Pass at 700 s (4)** - the "slow, not broken" group, now with real costs: `psychfa` 218.6 s, `ghypmisc` 295.7 s, `locfit` 397.5 s, `ksndtest` 408.3 s.
+
+**Still over 700 s (14)**: `emmeanscontr`, `ghyp2`, `ghypcdf`, `ghypfit`, `ghyphess`, `ghyphess2`, `ghypnfit`, `ghypnfit2`, `lavaan_cfa`, `mgcv_reml2`, `mirt`, `ordinal3`, `phangorn`, `rugarch`.
+
+**`oracle_fieldssp` ends abnormally rather than timing out**: exit `4294967295` (`0xFFFFFFFF`, i.e. -1) after **683.5 s** of work. That is not a timeout and not a clean failure - the process terminated by itself in an abnormal way, and on Linux the same fixture was killed at 404 s so the Linux side is not yet characterised past that point. It needs its own investigation: the exit code says the runtime hit something, and 11 minutes of compute before it happens suggests memory growth rather than a bad instruction (a trap would abort immediately, as `grf` did in D7814).
+
+Two corrections to state plainly, since D7819 and D7820 are already committed: the count of genuinely pathological fixtures is **fourteen, not two**, and `fieldssp` is a **suspected defect**, not merely slow. The rest of the closing ledger stands - 211/211 fixtures were run on Windows, six tolerance edges and one crash were fixed, one semantic deviation documented.
+
+`oracle_lavaan_cfa` is another session's fixture (its oracle and fixture source are modified in the shared tree), so it is recorded here without being touched.
