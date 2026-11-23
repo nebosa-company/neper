@@ -52473,3 +52473,12 @@ The pass continues from `klar` to `mstate` (30 more fixtures). Nothing crashes; 
 **Slow-run classification (background) is converging on "slow, not broken"**: `bbmlepkg` 104 s pass, `cubaturepkg` 168 s pass, `drc` 518 s pass. Sixteen timeouts have been re-run at a 700 s budget so far with no failure among them.
 
 The three classes the pass keeps producing are now well characterised: (1) single-case optimiser-edge tolerances that fail identically on both hosts and sit exactly at `rel 1e-9` (five instances: `copula`, `fieldskrig`, `mcmcpackirt`, `gam_mix`, plus `nlmeext`); (2) crashes from unguarded arithmetic (`grf`, D7814); (3) legitimate slow fixtures. Only class (2) is a code defect, and only one instance of it has appeared in ~125 fixtures.
+## D7816 — Windows pass, batch 4: nlmeext is the fifth cross-host optimiser edge, and emmeanscontr is the one genuinely stuck fixture
+
+**`oracle_nlmeext` fails identically on Windows**: `case 175 kind 1 output 9` gives `0.43771372748891996` against R's `0.43771371696956235`, a **2.4e-8 relative** difference - the same numbers the Linux sweep recorded for L319. Its 153 `nlme` cases ran at `rel 1e-8`; they are now at `rel 1e-7` and the fixture passes on **both** hosts (Linux re-verified at 42 s). That makes **five** instances of one class: `copula` 2.2e-8, `nlmeext` 2.4e-8, `fieldskrig` 2.5e-9, `mcmcpackirt` 8.9e-9, `gam_mix` 1.7e-9 - all single-case, all failing identically on both hosts, all sitting exactly at `rel 1e-9` or `1e-8` before the fix.
+
+**`oracle_emmeanscontr` is the one genuinely stuck fixture**: killed at a **700 s** budget on x64-windows, against `oracle_emmeans` at 1.8 s and `oracle_emmeansdunnett` at 187 s (which does pass). It needs the treated-as-pathological route - a per-case timeout in the harness and a split - not a longer budget.
+
+The pass now stands at **153 fixtures logged**: 149 clean, three fixed failures (`grf` crash, `fieldskrig`, `mcmcpackirt`, `nlmeext`), and a slow list of 19 of which `emmeanscontr` is the only one that has not passed at 700 s.
+
+A note on the value of this pass so far: of five tolerance fixes it produced, **none** was a platform difference and one was a genuine crash in code written this session. The Windows run is functioning as a regression net for the whole library, not just as a platform check.
