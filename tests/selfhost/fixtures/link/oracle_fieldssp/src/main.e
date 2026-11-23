@@ -15,6 +15,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
     var at = 0usize
+    // Each `sp` case solves its own spatial prediction and allocates its arrays from the arena. Without a
+    // reset between cases the arena grows until the process dies part-way through the list - exit 0xFFFFFFFF
+    // after 683 s on x64-windows (D7822) - so the golden is marked and each case's storage is released.
+    let keep = mem.mark(a)
     while at < golden.cases.len {
         let c = &golden.cases[at]
         let got = answer(a, c)
@@ -25,6 +29,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let _ = io.print("\n")
             }
         }
+        mem.reset(a, keep)
         at += 1usize
     }
     if failures > 0usize { os.exit(1) }

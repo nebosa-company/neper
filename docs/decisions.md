@@ -52555,3 +52555,14 @@ The slow-classification job started in D7819 finished after this goal closed, an
 Two corrections to state plainly, since D7819 and D7820 are already committed: the count of genuinely pathological fixtures is **fourteen, not two**, and `fieldssp` is a **suspected defect**, not merely slow. The rest of the closing ledger stands - 211/211 fixtures were run on Windows, six tolerance edges and one crash were fixed, one semantic deviation documented.
 
 `oracle_lavaan_cfa` is another session's fixture (its oracle and fixture source are modified in the shared tree), so it is recorded here without being touched.
+## D7822 — fieldssp: 21.7 s per case, and the "abnormal exit" was a killed process, not a trap
+
+D7821 flagged `oracle_fieldssp` as ending with exit `0xFFFFFFFF` after 683.5 s and called it a suspected defect. Two measurements correct that, and the correction matters more than the original claim.
+
+**The cost per case is the real finding.** Truncating the oracle and timing prefixes: **the first 10 cases take 216.7 s**, i.e. **21.7 s per case**; 100 and 300 cases both exceed 300 s. The full 547-case list therefore needs about **3.3 hours**, and the observed 683 s was simply the process being stopped part-way through. `sp` solves a spatial prediction per case against a 117-argument case, so the cost is inherent to the fixture's design, not a regression.
+
+**`0xFFFFFFFF` is the exit code of a killed process.** Probing the run with a memory sampler and stopping it myself at 625.7 s produced exactly that code (`rc=4294967295`, empty stderr) - the same signature as D7821's 683.5 s run. So there is **no evidence of a trap or a crash**; the process was terminated, most likely by the harness cleanup of an earlier job. The memory hypothesis is also dead: working set stayed flat at **34 MB** for the whole 625 s, so the arena was not growing.
+
+What was still worth changing, and was changed: `oracle_fieldssp`'s loop took no mark and never reset the arena between cases, so every case's arrays accumulated for the length of the run. It now marks after loading the golden and resets per case - correct hygiene for a 547-case fixture, and it makes the per-case cost measurable without the run's memory growing.
+
+L7821's wording ("suspected defect") was wrong and is corrected here: `fieldssp` is a pathological fixture (3.3 h at 21.7 s/case), not a broken one.
