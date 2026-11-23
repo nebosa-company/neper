@@ -66,6 +66,7 @@ def main():
     parser.add_argument("--timeout", type=int, default=1200, help="seconds per chunk (default 1200)")
     parser.add_argument("--from", dest="first", type=int, default=0, help="first case index (default 0)")
     parser.add_argument("--to", dest="last", type=int, default=0, help="stop before this case index (default: the end of the golden)")
+    parser.add_argument("--log", default="", help="TSV of finished chunks; with it, chunks already passed are skipped (a resumed sweep)")
     parser.add_argument("--keep", action="store_true", help="keep the built executable")
     args = parser.parse_args()
 
@@ -84,6 +85,19 @@ def main():
     env.setdefault("TEMP", os.path.join(ROOT, "build"))
     env.setdefault("TMP", env["TEMP"])
 
+    # A sweep over every golden is hours of compute, so a --log makes it resumable: each finished
+    # chunk is one TSV line, and a line with status 0 means that chunk is not run again.
+    passed = set()
+    log_handle = None
+    if args.log:
+        if os.path.exists(args.log):
+            with open(args.log, encoding="utf-8") as handle:
+                for line in handle:
+                    parts = line.rstrip("\n").split("\t")
+                    if len(parts) >= 4 and parts[3] == "0":
+                        passed.add((parts[0], parts[1]))
+        log_handle = open(args.log, "a", encoding="utf-8")
+
     failures = []
     for name in chosen:
         fixture = "oracle_" + name
@@ -96,7 +110,7 @@ def main():
             if "oracle.slice(" not in handle.read():
                 print("%-16s SKIP (its main does not call oracle.slice)" % name, flush=True)
                 continue
-        exe = os.path.join(ROOT, "build", "check-" + fixture + (".exe" if os.name == "nt" else ""))
+        exe = os.path.join(ROOT, "build", "check-%s-%d" % (fixture, os.getpid()) + (".exe" if os.name == "nt" else ""))
         built = subprocess.run(
             [compiler, "emit-executable", source, ROOT, arch, target_os, exe],
             cwd=ROOT, capture_output=True, text=True, env=env)
@@ -112,6 +126,9 @@ def main():
         began = time.time()
         while start < total:
             count = min(args.chunk, total - start)
+            if log_handle is not None and (name, str(start)) in passed:
+                start += count
+                continue
             started = time.time()
             try:
                 ran = subprocess.run([exe, str(start), str(count)], cwd=ROOT, capture_output=True,
@@ -121,6 +138,9 @@ def main():
             except subprocess.TimeoutExpired:
                 status = "TIMEOUT"
                 detail = ""
+            if log_handle is not None:
+                log_handle.write("%s\t%d\t%d\t%s\n" % (name, start, count, status))
+                log_handle.flush()
             print("%-16s [%4d..%4d) %-7s %6.1fs %s" % (name, start, start + count, status,
                                                        time.time() - started, detail), flush=True)
             if status != 0:
@@ -133,7 +153,10 @@ def main():
         else:
             print("%-16s passed %d cases in %.0fs" % (name, total - args.first, elapsed), flush=True)
         if not args.keep and os.path.exists(exe):
-            os.remove(exe)
+            try:
+                os.remove(exe)
+            except OSError:
+                pass
 
     if failures:
         print("sliced fixtures failing: %s" % ", ".join(failures), file=sys.stderr)

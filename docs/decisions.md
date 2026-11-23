@@ -52625,3 +52625,15 @@ The last gap after D7823/D7824 was that nothing *decided* to slice. `scripts/run
 So the runner's defaults are set by the worst measured golden rather than by taste, and the per-case costs are now recorded for the fixtures that needed them: `ghypnfit` ~121 s, `ghypnfit2` ~90 s, `ghyp2`'s expensive block ~48 s, `fieldssp` 21.7 s.
 
 With this, the pathological list from D7821 is runnable unattended on either host, every case reachable, no skip list. The one exception remains `lavaan_cfa` if another session's edits conflict - it was sliced in this round at the user's explicit instruction.
+## D7826 — The sliced runner is resumable, and two defects the first long sweep exposed
+
+The unattended sweep over the fourteen sliced goldens was launched on x64-windows, cheap goldens first (`ghypfit`, `ghypcdf`, `ghyphess`, `ghyphess2`, `ghyp2`, `lavaan_cfa`, `mgcv_reml2`, `mirt`, `phangorn`, `emmeanscontr`, `ghypnfit2`, `ghypnfit`, `fieldssp`, `rugarch`), chunk 4 and timeout 1200 s. Because a sweep like that is many hours - `ghypfit` alone reached case 104 in ten minutes, and `ghypnfit`/`fieldssp`/`rugarch` are 1-3 h each - the runner needed to survive an interruption, so `--log` was added: one TSV line per finished chunk, and on start every chunk already passed is skipped.
+
+Two defects appeared while testing it, both worth recording because both would have bitten a long unattended run:
+
+1. **The built executable's name collided between concurrent runs.** `build/check-oracle_ghypfit.exe` is the path the runner used, and the running sweep held it open, so a second run died with `PermissionError` on removal. The name now carries the process id, and removal tolerates a failure - a stale executable in `build/` is harmless, a crashed sweep is not.
+2. **The first version of the log wrote nothing between runs** because it was opened only after the fixtures were resolved; moving it to start-up means a run that dies mid-golden still leaves every finished chunk recorded.
+
+Verified: `ghyphess` with `--from 0 --to 6 --chunk 2 --log` runs three chunks, then a second invocation with the same log reports "passed 6 cases in 0s" without re-running anything.
+
+The sweep itself continues in the background. Its purpose is evidence, not a gate: every one of these goldens was previously unverifiable on Windows as a whole, and the per-chunk log is the record of which cases have actually been checked.
