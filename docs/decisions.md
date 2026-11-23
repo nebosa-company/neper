@@ -52375,3 +52375,12 @@ The ones that matter are the numerical fits whose convergence goes through `exp`
 plus the gam group and `robustbase_reg` from the same sweep. So the class produced exactly **one** real failure (`gam_mix`, fixed in D7805) among the fixtures that use the primitives in an optimiser, and no others in this sample.
 
 The useful conclusion is quantitative rather than absolute: the risk was real (one in ~35 re-run fixtures), it was concentrated in smoothing/fit convergence, and the 523-oracle figure is the honest scope of what has *not* been checked. Any future libm change should re-run this same set first - it is the shape of the blast radius, measured.
+## D7807 — Broad sweep: seven more fixtures green, and one build break that is not the libm's (aod.e)
+
+A second consolidation sweep spanned unrelated packages (sn, nnet, emmeans, gamlss_exp, strucchange, glmnet, tsa, psych): **seven pass**, `oracle_aod` fails to *compile*, and four of the twelve names have no fixture at all.
+
+The failure is not a regression from anything in this session: `lib/e/algo/stat/aod.e` calls `fx.pois_glm(a, x, n, p, y, w, b0, false)` - eight arguments - while `flexmixpkg.pois_glm` now takes **nine**, the extra one being an offset vector `off`. Both files are clean in git, so HEAD carries a module that does not compile, and it will block any suite run that includes the aod fixture. It is recorded here rather than patched by guessing: adding the argument needs to know whether the offset is a zero vector of length n or an empty slice, and a wrong guess would silently change every aod fit. That is a question for whoever owns the `off` change.
+
+The sweep's other value is negative and useful: the seven passing fixtures are more evidence that the libm rewrite's blast radius (D7806) is confined to smoothing/fit convergence, and the "no fixture" names are a reminder that a fixture list should be checked against the directory before a sweep is planned.
+
+State: three of five goal obstacles closed, one bounded, one awaiting the user; the tree's only build break is aod.e, which predates this session.
