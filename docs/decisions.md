@@ -52591,3 +52591,26 @@ The slow-fixture problem had a single cause worth fixing in code: the fixtures i
 The policy this establishes, recorded so a suite run does not have to rediscover it: a golden whose per-case cost exceeds a second is not a suite fixture, it is a *sliced* fixture. The pathological list from D7819/D7821 - `fieldssp`, `emmeanscontr`, `ghyp2`, `ordinal3`, `ghypcdf`, `ghypfit`, `ghyphess`, `ghyphess2`, `ghypnfit`, `ghypnfit2`, `lavaan_cfa`, `mgcv_reml2`, `mirt`, `phangorn`, `rugarch` - should either be sliced like these three or regenerated with fewer cases. The three converted here cover the ones that had a measured cost; the rest need the same two-line change when someone next touches them.
 
 Deliberately not done: no skip list, no timeout wrapper in `scripts/check-fixture.sh`. A skip list hides a test; slicing keeps every case reachable, which is the property that matters when the goldens are the only record of R's behaviour.
+## D7824 — The remaining eleven pathological fixtures are sliced too, so the whole slow list is runnable in bounded runs
+
+D7823 converted three fixtures; the other eleven with a measured cost over 700 s (D7821) are now converted as well, all in one patch (`build/windows/patch.exe tmp/slice-fixtures.patchspec`): `ordinal3`, `ghypcdf`, `ghypfit`, `ghyphess`, `ghyphess2`, `ghypnfit`, `ghypnfit2`, `mgcv_reml2`, `mirt`, `phangorn`, `rugarch`. `lavaan_cfa` is left alone because it is another session's fixture, modified in the shared tree.
+
+Each got the same three-line change - `oracle.slice(args, golden.cases.len)`, `var at = first`, `while at < last` - with a comment naming the cost class. All eleven **build and run a two-case slice on x64-windows**, exit 0:
+
+| fixture | slice(0, 2) |
+|---|---|
+| `ordinal3` | 1 s |
+| `ghypcdf` | 0 s |
+| `ghypfit` | 0 s |
+| `ghyphess` | 0 s |
+| `ghyphess2` | 0 s |
+| `phangorn` | 0 s |
+| `mgcv_reml2` | 19 s |
+| `mirt` | 85 s |
+| `rugarch` | 159 s |
+| `ghypnfit2` | 181 s |
+| `ghypnfit` | 242 s |
+
+Those numbers are the per-case cost made visible: the four fixtures in the 19-242 s range are the ones whose full goldens could never fit a suite budget, and now each case is individually reachable. The pathological list from D7819/D7821 is therefore fully converted in practice except for `lavaan_cfa`.
+
+What remains is the *runner*: nothing yet decides to slice. The honest next step, recorded rather than assumed, is a suite-level chunked runner for these fourteen fixtures - fixed-size chunks of cases, each with its own timeout, reporting a chunk as failed if any case in it fails. That is a change to `tests/selfhost/run.sh` or a dedicated script, and it should be decided with the suite's owner rather than slipped in with these edits.

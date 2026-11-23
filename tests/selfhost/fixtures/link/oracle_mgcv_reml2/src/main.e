@@ -114,8 +114,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
-    var at = 0usize
-    while at < golden.cases.len {
+    // this golden is minutes of compute per case, so it may be run in slices: `oracle_mgcv_reml2 <first> <count>` (D7823)
+    let (first, last) = oracle.slice(args, golden.cases.len)
+    var at = first
+    while at < last {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let got = answer(a, c)

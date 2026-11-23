@@ -58,8 +58,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var key_name = 0usize
     var have_ok = false
     var failures = 0usize
-    var at = 0usize
-    while at < golden.cases.len {
+    // this golden is minutes of compute per case, so it may be run in slices: `oracle_rugarch <first> <count>` (D7823)
+    let (first, last) = oracle.slice(args, golden.cases.len)
+    var at = first
+    while at < last {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         if !same_key(c, key, key_len, key_name) {
