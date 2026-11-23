@@ -52391,3 +52391,21 @@ D7807 left `lib/e/algo/stat/aod.e` as the tree's only build break - six `fx.pois
 Verified by rebuilding the consumer rather than the module (D7787's lesson): `oracle_aod` now compiles and passes on **x64-windows and x64-linux**, exit 0 on both. The tree has no known build break as of this commit.
 
 This also shows how the previous round's "not mine, do not guess" call was right in substance and wrong in outcome: refusing to guess was correct, and five minutes of reading the callee's offset helper turned the guess into a fact. The rule worth keeping is not "do not touch other sessions' breakage" but "read the callee before changing the caller".
+## D7809 — Obstacle goal, closing ledger: three closed, one bounded, one waiting on the user
+
+The goal was to remove the obstacles between this repository and CRAN-package parity, in order of leverage. Sixty rounds later the ledger is:
+
+**Closed.**
+- *Obstacle 2, R's RNG*: it was already implemented (`e.algo.rand.r`, Mersenne-Twister with `set.seed`'s scrambling, `runif`, `rnorm` by inversion, `rexp`, `sample` by rejection) and passes bit-exactly on both hosts (D7789). The four rows that cite it need callers written, not randomness.
+- *Obstacle 3, L264/L265*: both dependencies are in `docs/work-done.jsonl`; the "blocked" text on L284/L285 (and three sibling rows) was stale and is corrected (D7790).
+- *Obstacle 5, stale claims*: **20 retired**, of which 14 were "pending Linux" runs that pass when actually run (L304 +0.05), four were "needs correctly rounded libm" clauses re-timed with the MPFR-vs-R rule, and two were wrong conclusions. Four fixtures are now *documented as known-slow* with measured per-case costs instead of "pending": `oracle_ghyp2`, `oracle_ordinal3`, nine `ks` fixtures, and `mcmcpackirt`'s single 8.9e-9 case.
+
+**Bounded, with the reason measured.**
+- *Obstacle 1, libm/nmath*: `exp`, `log` and `pow` are correctly rounded in double-double and bit-exact on all 1712 measured cases (`link/math_libm` registered, D7778); `lgamma`, `gamma`, `pnorm` and `qnorm` match R exactly (0 of their families); `erf`/`erfc` stand at **196 of 3943 against MPFR** with the ceiling identified as the 106-bit chain, and the two invariants for future work recorded (compare `erf`/`pow` against MPFR, never R; a tolerance above ~1e-13 through these functions is R's side, D7786). The measured *cost* of the work was also recorded: it moved `gam_mix`'s smoothing search by 1.7e-9 and required relocating that tolerance (D7805), and a 13-fixture sample of the 523 oracles still at 1e-9 found no other casualty (D7806).
+
+**Waiting on the user.**
+- *Obstacle 4*: L276 (sass), L283 (CommonMark), L383 (glmmTMB), L384 (spatstat). The evidence says "ask the user whether it is still relevant"; no measurement can settle them, and no round in this goal could close them. They remain the only obstacle that is a decision rather than an experiment.
+
+Side effects worth carrying: the tree's only build break (`aod.e`'s arity, inherited from a `flexmixpkg` signature change) is fixed and green on both hosts (D7808); the queue's evidence is truthful for every row touched; and the method lessons - verify the instrument, read the callee, retire a clause when the work lands - are recorded across D7790 to D7808.
+
+The goal is **not complete**: obstacle 4 is unmet, so it stays open for a round that has the user's answer.
