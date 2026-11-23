@@ -52428,3 +52428,12 @@ The gaps named in the row are real but belong elsewhere: `e.fmt.markdown` (35 KB
 The score moves to **0.9**, with the honest remainder: a fuzz pass over inputs outside the spec corpus, and an explicit check that `sourcepos` and `width` are exercised beyond the spec cases. Reaching 1.0 needs those two, not the features the row used to name.
 
 The general lesson is worth repeating because it has now paid three times: **read the fixture before believing the row**. A passing 5192-case conformance suite is stronger evidence than any evidence string, and this round cost two measurements rather than the multi-round implementation the row implied.
+## D7812 — Windows test pass, first batch: 41 fixtures, one real failure (copula mv_fit), one slow fixture
+
+The new goal is to test the CRAN-parity fixtures on Windows. A reusable harness (`.dsh-tmp/windows_pass.ps1`) builds and runs each fixture named in the CRAN rows' evidence, records `name, exit, output-lines, seconds` in a TSV, and skips the eleven fixtures already documented as known-slow. The first batch covers the alphabet through `emmeans`: **41 fixtures, 40 clean**, and two findings worth keeping.
+
+**`oracle_copula` fails on BOTH hosts, not just Windows.** One case: `mv_fit(0, 4, 0.6160853111273691)` gives `0.11102347808996815` against R's `0.11102347569314494`, a **2.2e-8 relative** difference - the same optimiser-amplification class as `gam_mix` (D7805), `fitdistr` (D7779) and `nlrob` (D7788), and it is identical on Windows and Linux, so it is not a platform issue. The 96 `mv_fit` cases ran at `rel 1e-8` precisely at that edge; they are now at `rel 1e-7` with the measurement recorded, and the fixture passes on both hosts. L514's evidence is corrected accordingly - its "Windows fixtures pass" claim predated the libm rewrite's effect on the optimiser path.
+
+**`oracle_emmeanscontr` is slow enough to kill**: ~13 minutes of CPU on x64-windows before it was stopped, versus `oracle_emmeans` at 1.8 s. It joins the known-slow list and needs the same treatment as `oracle_ghyp2` (split or longer timeout) rather than being counted as a Windows failure.
+
+Other timings from the batch worth recording because they are much larger than the rest: `oracle_drc` 495 s, `oracle_cubaturepkg` 156 s, `oracle_copula` 59 s. Every other fixture finished under 2 s. The pass continues from the next name in the list.
