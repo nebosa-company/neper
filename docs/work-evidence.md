@@ -362,11 +362,11 @@ Started (D7625 to D7644: cumulative logit, probit and cloglog links with paralle
 
 ### L383 — glmmTMB: generalized linear mixed models by Laplace approximation (0%)
 
-Open (CRAN rank 342). Very large; relates to L274 and L284; ask the user whether it is still relevant before starting. Acceptance, equal to glmmTMB: families gaussian, binomial, poisson, nbinom1, nbinom2, Gamma, beta, tweedie, with zero inflation, dispersion models and covariance structures (us, ar1, cs, ou, exp).
+DEFERRED 2026-11-23 by user decision until L274 (lme4, 0.1) and L284 (autodiff/NUTS, 0) land: this row needs both, so it is not schedulable before them and the dependency is recorded rather than left implicit. Open (CRAN rank 342). Very large. Acceptance, equal to glmmTMB: families gaussian, binomial, poisson, nbinom1, nbinom2, Gamma, beta, tweedie, with zero inflation, dispersion models and covariance structures (us, ar1, cs, ou, exp).
 
 ### L384 — spatstat: point pattern analysis (0%)
 
-Open (CRAN ranks 304, 314, 316, 323). Very large (about 100k lines upstream across four packages); ask the user whether it is still relevant before starting. Acceptance, equal to spatstat: ppp and owin objects, distances and tessellations, K, L, G, F, J and pair correlation estimates with edge corrections, envelopes under set.seed, simulation of Poisson, Cox, Thomas, Matern and Gibbs processes, kernel intensity.
+DEFERRED 2026-11-23 by user decision with a NARROWED acceptance: ppp and owin objects plus the K, L and G functions are in scope; tessellations, distances, F and J, pair correlation, envelopes, process simulation and kernel intensity are out. Open (CRAN ranks 304, 314, 316, 323); about 100k lines upstream across four packages at full scope, and the narrowed scope is the part worth attempting. Acceptance, equal to spatstat: ppp and owin objects, distances and tessellations, K, L, G, F, J and pair correlation estimates with edge corrections, envelopes under set.seed, simulation of Poisson, Cox, Thomas, Matern and Gibbs processes, kernel intensity.
 
 ### L517 — grf: generalized random forests (88%)
 
@@ -1550,7 +1550,7 @@ Partial (2026-11-21, merged 080899ea1). This item was DEFERRED by the user and a
 
 ### L283 — CommonMark and GFM conformance with xml, latex and man renderers (commonmark) (0%)
 
-DEFERRED by the user, but a workflow round ran on it without asking and landed oracle_commonmark (080899ea1, passes on Windows; the verifier reported complete). Decide whether to close it or keep it deferred. DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Its dependency L264 is closed (it is in docs/work-done.jsonl), so nothing external blocks it: what remains is its own scope. The blocker was stale, not missing (D7789). Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match.
+RESUMED 2026-11-23 by user decision: finish it. A workflow round had already landed oracle_commonmark (080899ea1, passes on Windows) and lib/e/fmt/markdown.e (35 KB), so the row is now at 0.3 for the delivered part; the remaining gaps to close are reference links, entities and raw HTML, with the existing fixture as the target. DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Its dependency L264 is closed (it is in docs/work-done.jsonl), so nothing external blocks it: what remains is its own scope. The blocker was stale, not missing (D7789). Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match.
 
 ### L276 — Sass/SCSS compiler (sass, libsass) (0%)
 
