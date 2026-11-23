@@ -4255,7 +4255,7 @@
       "group": "CRAN parity",
       "order": 526,
       "title": "CommonMark and GFM conformance with xml, latex and man renderers (commonmark)",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
       "evidence": "RESUMED 2026-11-23 by user decision: finish it. A workflow round had already landed oracle_commonmark (080899ea1, passes on Windows) and lib/e/fmt/markdown.e (35 KB), so the row is now at 0.3 for the delivered part; the remaining gaps to close are reference links, entities and raw HTML, with the existing fixture as the target. DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Its dependency L264 is closed (it is in docs/work-done.jsonl), so nothing external blocks it: what remains is its own scope. The blocker was stale, not missing (D7789). Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
