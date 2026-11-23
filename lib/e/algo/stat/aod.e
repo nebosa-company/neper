@@ -302,7 +302,7 @@ fn quasipois(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
         i += 1usize
     }
     var phi = phi0
-    var e = fx.pois_glm(a, x, n, p, y, w, b0, false)
+    var e = fx.pois_glm(a, x, n, p, y, w, b0, false, w[0usize..0usize])
     if e != ok { ret e }
     if !has_phi {
         phi = 0.0001f64
@@ -325,7 +325,7 @@ fn quasipois(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
                     w[i] = 1.0f64 / (1.0f64 + phi * mu[i])
                     i += 1usize
                 }
-                e = fx.pois_glm(a, x, n, p, y, w, b0, false)
+                e = fx.pois_glm(a, x, n, p, y, w, b0, false, w[0usize..0usize])
                 if e != ok { ret e }
             }
         }
@@ -341,7 +341,7 @@ fn quasipois(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
                 w[i] = 1.0f64 / (1.0f64 + phi * mu[i])
                 i += 1usize
             }
-            e = fx.pois_glm(a, x, n, p, y, w, b1, false)
+            e = fx.pois_glm(a, x, n, p, y, w, b1, false, w[0usize..0usize])
             if e != ok { ret e }
             qp_fitted(x, n, p, b1, mu)
             delta = qp_loglik(y, mu, w, n) - ll0
@@ -358,7 +358,7 @@ fn quasipois(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
         w[i] = 1.0f64 / (1.0f64 + phi * mu[i])
         i += 1usize
     }
-    e = fx.pois_glm(a, x, n, p, y, w, b1, false)
+    e = fx.pois_glm(a, x, n, p, y, w, b1, false, w[0usize..0usize])
     if e != ok { ret e }
     var c = 0usize
     while c < p {
@@ -395,7 +395,7 @@ fn quasibin(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64
         i += 1usize
     }
     var phi = phi0
-    var e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false)
+    var e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false, w[0usize..0usize])
     if e != ok { ret e }
     if !has_phi {
         phi = 0.0001f64
@@ -419,7 +419,7 @@ fn quasibin(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64
                     w[i] = 1.0f64 / (1.0f64 + (size[i] - 1.0f64) * phi)
                     i += 1usize
                 }
-                e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false)
+                e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false, w[0usize..0usize])
                 if e != ok { ret e }
             }
         }
@@ -429,7 +429,7 @@ fn quasibin(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64
         w[i] = 1.0f64 / (1.0f64 + (size[i] - 1.0f64) * phi)
         i += 1usize
     }
-    e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false)
+    e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false, w[0usize..0usize])
     if e != ok { ret e }
     var c = 0usize
     while c < p {
@@ -477,7 +477,7 @@ fn betabin(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, si
         w[i] = 1.0f64
         i += 1usize
     }
-    let e = fx.binom_glm(a, x, n, p, y, size, w, b0, false)
+    let e = fx.binom_glm(a, x, n, p, y, size, w, b0, false, w[0usize..0usize])
     if e != ok { ret (1usize, e) }
     b0[p] = 0.1f64
     var c = BbCtx{ x: x, n: n, p: p, y: y, size: size }
@@ -528,7 +528,7 @@ fn negbin(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, out
         w[i] = 1.0f64
         i += 1usize
     }
-    let e = fx.pois_glm(a, x, n, p, y, w, b0, false)
+    let e = fx.pois_glm(a, x, n, p, y, w, b0, false, w[0usize..0usize])
     if e != ok { ret (1usize, e) }
     b0[p] = 0.1f64
     var c = NbCtx{ x: x, n: n, p: p, y: y }
@@ -729,7 +729,7 @@ fn betabin_g(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
         w[i] = 1.0f64
         i += 1usize
     }
-    let e = fx.binom_glm(a, x, n, p, y, size, w, b0, false)
+    let e = fx.binom_glm(a, x, n, p, y, size, w, b0, false, w[0usize..0usize])
     if e != ok { ret (1usize, e) }
     var g = 0usize
     while g < ng {
@@ -783,7 +783,7 @@ fn negbin_g(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, g
         w[i] = 1.0f64
         i += 1usize
     }
-    let e = fx.pois_glm(a, x, n, p, y, w, b0, false)
+    let e = fx.pois_glm(a, x, n, p, y, w, b0, false, w[0usize..0usize])
     if e != ok { ret (1usize, e) }
     var g = 0usize
     while g < ng {

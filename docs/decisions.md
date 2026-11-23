@@ -52384,3 +52384,10 @@ The failure is not a regression from anything in this session: `lib/e/algo/stat/
 The sweep's other value is negative and useful: the seven passing fixtures are more evidence that the libm rewrite's blast radius (D7806) is confined to smoothing/fit convergence, and the "no fixture" names are a reminder that a fixture list should be checked against the directory before a sweep is planned.
 
 State: three of five goal obstacles closed, one bounded, one awaiting the user; the tree's only build break is aod.e, which predates this session.
+## D7808 — aod.e's arity break repaired: the missing argument is an empty offset slice
+
+D7807 left `lib/e/algo/stat/aod.e` as the tree's only build break - six `fx.pois_glm` calls with eight arguments against a nine-argument signature, and five `fx.binom_glm` calls with nine against ten. Reading the callee settled the semantics rather than guessing: `pois_glm`/`binom_glm` take an offset vector `off` whose helper `og` returns 0.0 for an **empty slice**, and the two other callers of these functions (`emmeans.e:351`, `performancepkg.e:512`) already pass exactly `w[0usize..0usize]` when there is no offset. So the repair is the same empty slice at the eleven sites, and it cannot change a fit: an empty offset contributes zero to the linear predictor by construction.
+
+Verified by rebuilding the consumer rather than the module (D7787's lesson): `oracle_aod` now compiles and passes on **x64-windows and x64-linux**, exit 0 on both. The tree has no known build break as of this commit.
+
+This also shows how the previous round's "not mine, do not guess" call was right in substance and wrong in outcome: refusing to guess was correct, and five minutes of reading the callee's offset helper turned the guess into a fact. The rule worth keeping is not "do not touch other sessions' breakage" but "read the callee before changing the caller".
