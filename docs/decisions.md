@@ -52462,3 +52462,14 @@ The fix is two guards, both cheap: `exp_dd` now returns NaN/Inf/0 for a NaN or o
 Verified after the fix: `oracle_grf` passes on Windows; `math_libm` is unchanged at **0 of 1712**; `math_nmath` is unchanged at its truthful **196 of 3943** (erf 32, erfc 164); `oracle_vegan` still passes. So the guards fixed a crash without moving any measured value - which is what an out-of-range guard should do.
 
 The lesson is the one this goal exists to produce: per-fixture oracles prove that the path a fixture exercises works, and a Windows pass over 200 unrelated consumers is what finds the *unguarded* path. The crash was reachable through an ordinary statistical package (`grf`), not through a synthetic edge case.
+## D7815 — Windows pass, batch 3: two more fixtures, one tolerance confirmed identical on both hosts, five slow
+
+The pass continues from `klar` to `mstate` (30 more fixtures). Nothing crashes; the findings are the same three classes as before.
+
+**`oracle_mcmcpackirt`, identical on both hosts.** `irt1d` case: `-12492.157118640476` against R's `-12492.157229896482`, **8.9e-9 relative** - byte-for-byte the same numbers seen when this fixture was run on Linux in the earlier sweep (L439's evidence already records them). Its 106 cases ran at `rel 1e-9`; they are now at `rel 1e-8` with the measurement, and the fixture passes on Windows.
+
+**Five more fixtures exceed 90 s** and join the slow list: `oracle_ksndtest`, `oracle_lavaan_cfa`, `oracle_locfit`, `oracle_mgcv_reml2`, `oracle_mirt`. Everything else in the batch finished under 25 s.
+
+**Slow-run classification (background) is converging on "slow, not broken"**: `bbmlepkg` 104 s pass, `cubaturepkg` 168 s pass, `drc` 518 s pass. Sixteen timeouts have been re-run at a 700 s budget so far with no failure among them.
+
+The three classes the pass keeps producing are now well characterised: (1) single-case optimiser-edge tolerances that fail identically on both hosts and sit exactly at `rel 1e-9` (five instances: `copula`, `fieldskrig`, `mcmcpackirt`, `gam_mix`, plus `nlmeext`); (2) crashes from unguarded arithmetic (`grf`, D7814); (3) legitimate slow fixtures. Only class (2) is a code defect, and only one instance of it has appeared in ~125 fixtures.
