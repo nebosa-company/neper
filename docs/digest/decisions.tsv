@@ -4637,4 +4637,86 @@ D7737	270	L362 fitdistrplus, L486 mixtools, L437 gstat and L507 gsDesign closed
 D7738	289	L378 uwot and Rtsne closed; ks, locfit, kernlab, fixest, plm, actuar and copula advanced
 D7739	263	L345 FactoMineR, L372 spdep, L435 sna and L455 geometry closed
 D7740	273	L434 qgraph, L436 MatchIt, L489 osqp, L513 Epi and L490 timereg advanced
-D7741	251	L456 mlogit, L465 BayesFactor and L512 poLCA closed
+D7741	252	L456 mlogit, L465 BayesFactor and L512 poLCA closed
+D7742	1158	Windows fixture work here runs on a seed-built release stage-2, not the bootstrap stage-1
+D7743	1521	An R oracle pins the host that generated it; arm's exact qcauchy cases cannot pass on both hosts
+D7744	920	R lives at `D:\tools\R` on this host; `Rscript` is not on PATH, and TSA, leaps, locfit and tseries are installed
+D7745	1641	VIM::hotdeck ports to four rules from imputeHD, and its oracle metric must accumulate in the fixture's order
+D7746	1416	Mixed kNN distance: the range pools donors and impute rows, a factor answers 0 or 1, and maxCat's tie is a random draw
+D7747	1518	A missing distance value becomes its column's largest prepared value plus one, after the range scaling
+D7748	1356	kNN over several targets fills them in `variable` order, and every pass snapshots which rows are missing
+D7749	1040	aggr's missingness patterns are ordered by the table() strings, which is the ascending bitmask with the first column most significant
+D7750	1451	klaR's factor predictors are LaplaceEst with fL = 0, and a zero conditional probability is raised to the predict threshold
+D7751	1406	klaR's woe raises an empty class-and-level cell to zeroadj before the class totals, and a single factor column is a klaR bug worth knowing
+D7752	1467	sknn's distance is squared Euclidean, its k weights are optional, and its class is the first of a possibly tied maximum
+D7753	1578	qrng's Korobov rule is a running sum, not modular arithmetic, and a single generator is extended by powers
+D7754	1511	Knuth's TAOCP generator is state-in-doubles, and randtoolbox re-runs ranf_start on every call
+D7755	1216	The gam knot-thinning branches need cases at 200-799 distinct x; the existing oracle could not see them
+D7756	1349	L370's ordering gaps were already covered; the row's evidence was stale, and a one-line mutation now proves it
+D7757	1495	VIM's kNN column kinds: ordered codes are not range-scaled, and a semi-continuous column scales by its non-spike range
+D7758	1484	ape::dist.dna deletes unknown sites for every pair but takes its base frequencies before deleting
+D7759	1206	F84 and TN93 need more than "a transition count", and all three added models share the unfiltered base frequencies
+D7760	1335	LogDet's table order is ape's, not the module's, and its determinant is a fixed expansion
+D7761	1913	A Newick tree parsed here answers ape's patristic distances and MRCA depths, but the oracle must compare against the tree read back from the text
+D7762	1438	drop.tip adds the collapsed node's branch length to its surviving child, and the root's single child inherits the root
+D7763	1139	ape's two "node depth" answers are a tip count and a branch length, not edges from the root
+D7764	1262	vegan's altGower, cao and clark share a "not both zero" site set, and cao's 0.1 floor is not a rounding detail
+D7765	1536	Chao-Jaccard's correction and Raup-Crick's tail probability are both small sums, and vegan's tolerance for "about 1" is 0.01
+D7766	1407	Mountford answers ln(2) minus its root, so its two degenerate cases are the opposite way round from the obvious reading
+D7767	1537	mahalanobis whitens through the symmetric eigen decomposition, and its eigenvalue cutoff is what makes singular data work
+D7768	1379	specaccum's exact method is a hypergeometric complement, and its coleman method is the geometric approximation of the same curve
+D7769	1294	A se.chao1 of exactly zero is an answer, and estimateR's four abundance rows share one abundance tally
+D7770	1499	fisher.alpha's oracle solves the equation, not the function, because R's own solver stops at 1e-4
+D7771	1215	Procrustes is one SVD of the cross-product, and its scale is a ratio of traces rather than a fitted parameter
+D7772	1357	mantel's statistic is an ordinary correlation of the lower triangles, and its p-value is the part that needs R's RNG
+D7773	1276	anosim's R is a difference of mean ranks over one common divisor, and that divisor is not the pair count
+D7774	1266	adonis2's R² is a ratio of traces on the Gower-centred distance matrix
+D7775	2431	The libm gap is measurable, and "correctly rounded" gets us to ~0.05% disagreement with R, not to zero
+D7776	1742	exp is now double-double and rounds once; the last two disagreements are ours, not R's
+D7777	3390	exp is clean, log is nearly clean, pow is reverted: what the three measurements say
+D7778	1522	exp, log and pow are correctly rounded and the libm fixture is green: 0 of 1712
+D7779	1631	The first row re-timed: MASS fitdistr's tolerance is the numerical Hessian, not the libm
+D7780	1693	Four of R's six nmath functions already match bit for bit; only erf and erfc do not
+D7781	1897	A correctly rounded erf needs both branches in double-double; the crossover choice alone makes it worse
+D7782	1817	erfc from the erf pair, and the reference matters more than the last bit
+D7783	1737	The in-build A/B settles it: the pair-based erf/erfc is two to four times closer to the true value
+D7784	1419	The erfc failures are binned, and the histogram names the fix: direct evaluation from x = 1
+D7785	1365	dd_div and a double-double continued fraction halve the erfc residual: 327 -> 196
+D7786	2086	Closing the libm arc: exp/log/pow exact, nmath measured, erf/erfc accepted at 196
+D7787	1012	special.e lost six nmath functions to an over-wide replacement, and a row fixture caught it
+D7788	913	L338's nlrob exp models tightened from 1e-4 to 1e-5, and no further
+D7789	1773	Obstacle 2 is already solved at the RNG layer; the remaining blocker in those rows is wiring, not randomness
+D7790	1481	Obstacle 3 is stale too: L264 and L265 are closed, so L284/L285 are not dependency-blocked
+D7791	1466	The Linux sweep found a real hang, not a missing run: ghyp2 and ghypfit on x64-linux
+D7792	1798	The ghyp2 hang: the suspected loop is real, but bounding it naively makes Windows hang too
+D7793	1472	Bisecting ghyp2's Linux cost: it scales linearly at ~5.6 cases/s, so one pathological case is not yet isolated
+D7794	1563	The ghyp2 hang is narrowed to cases 1301-1400 of 2570, with the harness now verified
+D7795	1728	The hang is one of cases 1313-1315 of oracle_ghyp2, with the arguments identified
+D7796	1698	Minimal reproduction: qghypF at p = 0.001 hangs on x64-linux; ghyprange with the same shape does not
+D7797	1785	There are two expansion loops, and the one on the hanging path is the second: qgig_integrate's xhigh
+D7798	1927	The tail is identical on both hosts, so the expansion loop is not the hang either
+D7799	1758	The failing call never reaches qgig: it builds a 501-point spline from pghyp_tail, and that is where the time goes
+D7800	1439	The timing probe produced no output and exited 0; no conclusion drawn, harness to be fixed first
+D7801	1798	The single case timings invert the assumption: Windows 91.6 s, Linux 35 s for the same qghypF case
+D7802	1742	The ghyp2 split is prepared in the generator, but the oracle cannot be regenerated here: GeneralizedHyperbolic is not installed
+D7803	1486	Splitting the 32 spline cases does not buy the budget: 2538 cases still exceed 600 s on Windows
+D7804	1365	The cost is concentrated between cases 1300 and 1650, and it is not the 32 spline quantiles
+D7805	1645	The libm rewrite moved the gam smoothing search by 1.7e-9, and gam_mix caught it
+D7806	1301	The 1e-9 latent-regression class: thirteen high-risk fixtures re-run after the libm change, all green
+D7807	1439	Broad sweep: seven more fixtures green, and one build break that is not the libm's (aod.e)
+D7808	1344	aod.e's arity break repaired: the missing argument is an empty offset slice
+D7809	2725	Obstacle goal, closing ledger: three closed, one bounded, one waiting on the user
+D7810	2151	The four deferred rows are decided: sass dropped, CommonMark resumed, glmmTMB deferred, spatstat narrowed
+D7811	1945	L283 was already delivered: 5192 conformance cases pass on both hosts, and the "gaps" belong to a different module
+D7812	1730	Windows test pass, first batch: 41 fixtures, one real failure (copula mv_fit), one slow fixture
+D7813	2092	Windows test pass, batch 2: a Python driver, 66 fixtures, one more optimiser-edge tolerance (fieldskrig)
+D7814	1738	The Windows pass found a crash in my own erfc: an unguarded i64 conversion in exp_dd
+D7815	1516	Windows pass, batch 3: two more fixtures, one tolerance confirmed identical on both hosts, five slow
+D7816	1575	Windows pass, batch 4: nlmeext is the fifth cross-host optimiser edge, and emmeanscontr is the one genuinely stuck fixture
+D7817	1433	Windows pass, batch 5: quantreg_nl is the sixth cross-host edge, and the pass reaches the end of the list
+D7818	1814	libxml2's XPath number parser is not correctly rounded, so one xml2 case stays a recorded deviation
+D7819	1509	The two "stuck" fixtures are slow on BOTH hosts: not a Windows problem
+D7820	2376	Windows test pass, closing ledger: all 211 CRAN fixtures run on Windows, every failure fixed or documented
+D7821	1782	The 700 s classification, completed: fourteen fixtures are pathological and fieldssp ends abnormally
+D7822	1767	fieldssp: 21.7 s per case, and the "abnormal exit" was a killed process, not a trap
+D7823	2330	the paid layer is the retained attestation, not the agent

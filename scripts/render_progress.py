@@ -8,12 +8,13 @@ Compiler, tooling and library scores come from the active queue plus the
 completed ledger; module and UI/host scores come from their inventories.
 """
 import json, re, subprocess, datetime, html, sys
-from ceilings import declared_ceilings
 from pathlib import Path
 
-# `check_widget_plan` is a sibling, and this directory is not on sys.path when the
-# script is run by path (`python scripts/render_progress.py`), so it is added here.
+# `ceilings` and `check_widget_plan` are siblings, and this directory is not on
+# sys.path when the script is run by path (`python scripts/render_progress.py`), so
+# it is added here before the sibling imports.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ceilings import declared_ceilings  # noqa: E402
 from check_widget_plan import validate as validate_widget_plan  # noqa: E402
 CHARTS_ONLY = __name__ == '__main__' and sys.argv[1:] == ['--charts-only']
 if __name__ == '__main__' and sys.argv[1:] and not CHARTS_ONLY:

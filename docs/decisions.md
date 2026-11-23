@@ -52566,3 +52566,15 @@ D7821 flagged `oracle_fieldssp` as ending with exit `0xFFFFFFFF` after 683.5 s a
 What was still worth changing, and was changed: `oracle_fieldssp`'s loop took no mark and never reset the arena between cases, so every case's arrays accumulated for the length of the run. It now marks after loading the golden and resets per case - correct hygiene for a 547-case fixture, and it makes the per-case cost measurable without the run's memory growing.
 
 L7821's wording ("suspected defect") was wrong and is corrected here: `fieldssp` is a pathological fixture (3.3 h at 21.7 s/case), not a broken one.
+
+## D7823 — the paid layer is the retained attestation, not the agent
+
+`docs/gtm/strategy.md` sold the hosted agent first (3.1, $25–40/seat) and the registry second (3.2), with the store gated behind five outside teams using the agent. The order is now inverted: 3.1 is the attestation store and registry, and the hosted agent is free distribution that fills it.
+
+Why. The published pattern for open-source revenue (Tailwind lost ~80% of revenue to AI editors skipping its docs; Supabase, PostHog, n8n and Coolify earn from hosted state) puts the money behind one barrier: the buyer hits an operational wall they will not run themselves — hosting, backups, SSO, an audit trail, a pager. A seat-priced coding agent is not that wall. It competes with the model vendors, who bundle it, and its moat (the deterministic verification loop) is reproducible by the customer with the free toolchain, which the strategy itself keeps free on purpose. What the customer cannot reproduce is *history*: which source produced which binary, under which toolchain, who shipped it, kept for as long as their auditor asks. That is state, it is org-scoped, and it is already latent in the fixed point, the `.em` hashes and `x.agent.receipt` (D2327). It is also what the queue's T042 (trusted host, score 0.6) and T066 (signed release-provenance envelope, score 0) exist to feed.
+
+What this is not. Not an FSL or licence-key change: the clone risk named in §8 is a model vendor shipping agent-native tooling, which a source-available licence does not stop and which would end the enterprise legal review that §2 says is the gate. Not a per-seat agent subscription, now listed under "Not sold". Pricing moves to the organisation ($200–1,500/mo by retained builds; $10–30k/yr for registry, LTS and SLA), because the value is the record, not the seat.
+
+Falsifier, recorded in §8: if the first outside teams are content with their own signed exports, the store has no customer, and the correct response is to keep the export open and not sell the store — never to gate the local check.
+
+E2 still decides whether any of it is sellable: without a measured defect-rate lead the free agent creates no demand, and a store with nothing flowing into it is infrastructure with a bill. This record changes the order of the build, not the test in §6.

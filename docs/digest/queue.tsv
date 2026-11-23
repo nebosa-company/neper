@@ -14,50 +14,50 @@ T111	tooling	0	1029	Claude Code integration: a project skill and hooks that enfo
 T115	tooling	0	801	lang-stats reads compressed Codex sessions and counts forked history once	Opened 2026-11-19 from the harness log analysis (D7720).
 T112	tooling	0	900	Agent-route adoption is scored on the measured numbers, not on what the docs mention	Opened 2026-11-19 from the tooling and LLM-integration review (D7719).
 T062	tooling	0	875	Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools	Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit;
-L407	library	0.95	2057	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial (2026-11-21, merged 9e1b3e122;
-L409	library	0.8	2314	arm: applied regression helpers	Partial (2026-11-21, merged 9e1b3e122;
-L452	library	0.6	1292	TSA: time-series analysis toolkit	re-auditing every Acceptance entry (armasubsets, McLeod.Li, detectAO/IO, arimax, periodogram, cpgram, eacf, BIC table, tsdiag) against the queue evidence, and the rest of the earli
-L453	library	0.93	1657	cubature: adaptive multidimensional integration	Partial (2026-11-21, merged 9e1b3e122;
-L454	library	0.15	667	VIM: missing-value imputation	Partial (D6619).
-L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
-L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
-L306	library	0.95	1307	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partial (2026-11-21, merged 9e1b3e122;
-L307	library	0.6	1263	quantreg: quantile regression inference and algorithms	Partial (2026-11-22, merged 686357d41;
+L407	library	0.97	4554	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial (2026-11-21, merged 9e1b3e122;
+L409	library	0.82	3840	arm: applied regression helpers	Partial (2026-11-21, merged 9e1b3e122;
+L452	library	0.65	2330	TSA: time-series analysis toolkit	Partial (2026-11-21, merged 0de9a3a3a;
+L453	library	0.95	2283	cubature: adaptive multidimensional integration	Partial (2026-11-21, merged 9e1b3e122;
+L454	library	0.9	5153	VIM: missing-value imputation	Partial.
+L481	library	0.55	2309	klaR: classification helpers	Partial.
+L501	library	0.4	1980	randtoolbox and qrng: quasi-random generators	Partial.
+L306	library	0.96	1760	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partial (2026-11-21, merged 9e1b3e122;
+L307	library	0.6	1747	quantreg: quantile regression inference and algorithms	Partial (2026-11-22, merged 686357d41;
 L314	library	0.15	1107	lubridate and timeDate: date-time parsing, periods, business calendars	Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the month-end rules, quarter, semester, decimal_date, epiweek, isoweek, floor_date and ceiling_date for dates, equal to lubridat
-L275	library	0.08	825	Unicode collation, transliteration and encoding detection (stringi)	Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases;
+L275	library	0.08	982	Unicode collation, transliteration and encoding detection (stringi)	Partial (D7592): NFC, NFD, NFKC and NFKD equal stringi on 60 mixed-script strings (oracle_stringi, 480 cases;
 L274	library	0.1	688	General linear mixed models (lme4)	Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and ML, equal to lme4 on deviance, sigma, sigma_b, fixed effects and conditional modes at optimiser tolerance;
-L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
-L338	library	0.85	1679	robustbase: robust regression and scale	Partial (2026-11-22, merged 686357d41;
+L284	library	0	777	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
+L338	library	0.85	1951	robustbase: robust regression and scale	Partial (2026-11-22, merged 686357d41;
 L339	library	0.24	1899	bayestestR, performance and parameters: model summary indices	D7705: performance check_outliers by the iqr method (the row flags) equal to performance.
-L343	library	0.6	1585	deSolve: solver parity	Partial (2026-11-22, merged 25645e1ce;
-L360	library	0.6	1690	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (2026-11-22, merged 686357d41;
+L343	library	0.6	1680	deSolve: solver parity	Partial (2026-11-22, merged 25645e1ce;
+L360	library	0.6	1757	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (2026-11-22, merged 686357d41;
 L361	library	0.2	1406	segmented and strucchange: breakpoints and structural change	Partial (D6613).
-L365	library	0.6	1415	ks: multivariate kernel density estimation	Partial (2026-11-22, merged 41f86e864;
+L365	library	0.6	2044	ks: multivariate kernel density estimation	Partial (2026-11-22, merged 41f86e864;
 L367	library	0.8	2224	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (2026-11-21, merged 9e1b3e122;
-L370	library	0.85	1786	fields and interp: spatial smoothing and interpolation	Partial (2026-11-22, merged 25645e1ce;
-L376	library	0.9	1857	gam: backfitting generalized additive models	Partial (2026-11-21, merged 9e1b3e122;
-L393	library	0.7	1462	ordinal: cumulative link models	Partial (2026-11-21, merged 0de9a3a3a;
-L415	library	0.6	1272	marginaleffects: predictions, slopes and comparisons	Partial (2026-11-21, merged b1d65869c;
+L370	library	0.93	2743	fields and interp: spatial smoothing and interpolation	Partial (2026-11-22, merged 25645e1ce;
+L376	library	0.93	2483	gam: backfitting generalized additive models	Partial (2026-11-21, merged 9e1b3e122;
+L393	library	0.7	1655	ordinal: cumulative link models	Partial (2026-11-21, merged 0de9a3a3a;
+L415	library	0.6	1372	marginaleffects: predictions, slopes and comparisons	Partial (2026-11-21, merged b1d65869c;
 L416	library	0.4	1836	polspline: polynomial spline models	Partial (2026-11-22, merged 25645e1ce;
 L434	library	0.9	898	qgraph: network estimation	Partial (2026-11-22, merged 731d89a22;
 L436	library	0.6	1840	MatchIt: matching for causal inference	Partial (2026-11-22, merged 731d89a22;
-L488	library	0.5	1613	drc: dose-response models	Partial (2026-11-22, merged 686357d41;
-L489	library	0.8	1502	osqp and clarabel: quadratic and conic solvers	Partial (2026-11-22, merged 731d89a22;
+L488	library	0.5	1685	drc: dose-response models	Partial (2026-11-22, merged 686357d41;
+L489	library	0.8	1601	osqp and clarabel: quadratic and conic solvers	Partial (2026-11-22, merged 731d89a22;
 L513	library	0.7	1001	Epi: epidemiology tools	Partial (2026-11-22, merged 731d89a22;
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
-L304	library	0.9	1510	haven: SAS, SPSS and Stata file formats	Partial (2026-11-21, merged 0de9a3a3a;
+L304	library	0.95	1653	haven: SAS, SPSS and Stata file formats	Partial (2026-11-21, merged 0de9a3a3a;
 L315	library	0.1	744	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix);
 L316	library	0.1	1096	igraph: deterministic structure and community detection	Partly done (D6061, D7266: triad_census, which_mutual, bridges, edge_connectivity, vertex_connectivity, similarity invlogweighted, motifs of size 3 and dominator_tree equal igraph, 1612 values): e.alg
 L347	library	0.85	1739	locfit: local regression and likelihood	Partial (2026-11-22, merged 41f86e864;
 L366	library	0.6	1686	kernlab: kernel methods	Partial (2026-11-22, merged 41f86e864;
-L368	library	0.5	1546	fixest: high-dimensional fixed-effects estimation	Partial (2026-11-22, merged 41f86e864;
-L369	library	0.5	1543	plm and AER: panel data and applied econometrics	Partial (2026-11-22, merged 41f86e864;
-L417	library	0.93	1314	gsl: special functions of the GNU Scientific Library	Partial (2026-11-21, merged 9e1b3e122;
-L438	library	0.8	1340	gss: smoothing spline ANOVA	Partial (2026-11-21, merged 6ddc62d0b;
-L439	library	0.75	1804	MCMCpack: Bayesian MCMC for common models	Partial (2026-11-21, merged 6ddc62d0b;
-L463	library	0.5	1555	actuar: actuarial science	Partial (2026-11-22, merged 41f86e864;
-L467	library	0.6	1507	hetGP: heteroskedastic Gaussian processes	Partial (2026-11-22, merged 25645e1ce;
-L514	library	0.5	1285	copula: dependence models	Partial (2026-11-22, merged 41f86e864;
+L368	library	0.5	1627	fixest: high-dimensional fixed-effects estimation	Partial (2026-11-22, merged 41f86e864;
+L369	library	0.5	1774	plm and AER: panel data and applied econometrics	Partial (2026-11-22, merged 41f86e864;
+L417	library	0.95	1640	gsl: special functions of the GNU Scientific Library	Partial (2026-11-21, merged 9e1b3e122;
+L438	library	0.85	1557	gss: smoothing spline ANOVA	Partial (2026-11-21, merged 6ddc62d0b;
+L439	library	0.75	2067	MCMCpack: Bayesian MCMC for common models	Partial (2026-11-21, merged 6ddc62d0b;
+L463	library	0.5	1615	actuar: actuarial science	Partial (2026-11-22, merged 41f86e864;
+L467	library	0.6	1595	hetGP: heteroskedastic Gaussian processes	Partial (2026-11-22, merged 25645e1ce;
+L514	library	0.5	1657	copula: dependence models	Partial (2026-11-22, merged 41f86e864;
 L311	library	0.14	3155	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	D7366: tmerge event() equal to survival.
 L490	library	0.6	1615	timereg: Aalen additive and Cox-Aalen hazard models	Partial (2026-11-22, merged 731d89a22;
 L491	library	0.15	673	riskRegression: risk prediction scoring	Partial (D6642).
@@ -65,12 +65,12 @@ L440	library	0.15	855	flexsurv and rstpm2: flexible parametric survival models	P
 L312	library	0.4	2208	psych: reliability, factor analysis and correlation tools	D7342: fa.parallel (principal components, resampled and simulated eigenvalues under set.seed) equal to psych.
 L313	library	0.25	2647	emmeans: estimated marginal means and contrasts	D7364: Tukey-adjusted odds ratios and Poisson rate ratios equal to emmeans.
 L341	library	0.15	785	multcomp: general linear hypotheses	Partial (D6631).
-L318	library	0.4	1626	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partial (2026-11-21, merged 080899ea1;
-L319	library	0.88	1720	nlme: gls, correlation structures and variance functions	Partial (2026-11-21, merged 6ddc62d0b;
+L318	library	0.4	1706	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partial (2026-11-21, merged 080899ea1;
+L319	library	0.88	2179	nlme: gls, correlation structures and variance functions	Partial (2026-11-21, merged 6ddc62d0b;
 L320	library	0.05	917	sf: simple-features geometry, predicates and spherical geometry	Partly done (D6065): the planar convex hull, polygon area, point in polygon and Delaunay triangle count in e.algo.geom equal sf on 150 cases on Windows (oracle_sf);
-L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
-L349	library	0.15	743	vegan: community ecology	Partial (D6627).
-L350	library	0.1	706	ape: phylogenetic trees	Partial (D6628).
+L285	library	0	614	Raster core and CRS reprojection (terra)	Open;
+L349	library	0.85	6488	vegan: community ecology	Partial.
+L350	library	0.55	3571	ape: phylogenetic trees	Partial.
 L351	library	0.15	680	survey: design-based inference	Partial (D6626).
 L352	library	0.15	714	ncdf4: NetCDF and HDF5 files	Partial (D7701): e.fmt.netcdf reads netCDF classic CDF-1 and CDF-2 files (dimensions, variables, record variables) and gives every variable as doubles;
 L371	library	0.15	866	coin: conditional and permutation tests	Partial (D6625).
@@ -86,10 +86,10 @@ L495	library	0.1	721	mirt: item response theory	Started (D7653 to D7655: the uni
 L515	library	0.14	741	unmarked: occupancy and abundance models	Started (D7651 to D7702: occu, the single-season occupancy model (with visit-level detection covariates and missing visits), pcount, the Poisson N-mixture model, and occuRN, the Royle-Nichols model, w
 L353	library	0.34	2182	mgcv: generalized additive models	Partial (D7340).
 L354	library	0.15	1475	lavaan: structural equation models	D7375: path analysis of an observed outcome on observed predictors (slopes, residual variance, standard errors) equal to lavaan.
-L381	library	0.6	2332	ade4: multivariate analysis of ecological data	Partial (D7148 to D7152, D7158, D7160, D7161: as.dudi, dudi.pca, dudi.coa, dudi.acm with its correlation ratios, bca, wca, coinertia (main branch), procuste with rotations, dudi.fca, rlq and dudi.mix 
+L381	library	0.6	2324	ade4: multivariate analysis of ecological data	Partial (D7148 to D7152, D7158, D7160, D7161: as.dudi, dudi.pca, dudi.coa, dudi.acm with its correlation ratios, bca, wca, coinertia (main branch), procuste with rotations, dudi.fca, rlq and dudi.mix 
 L382	library	0.18	958	VGAM: vector generalized linear and additive models	Started (D7625 to D7644: cumulative logit, probit and cloglog links with parallel slopes, the multinomial logit, the adjacent categories model (acat, parallel), the continuation-ratio models (sratio a
-L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).
-L384	library	0	415	spatstat: point pattern analysis	Open (CRAN ranks 304, 314, 316, 323).
+L383	library	0	440	glmmTMB: generalized linear mixed models by Laplace approximation	DEFERRED 2026-11-23 by user decision until L274 (lme4, 0.1) and L284 (autodiff/NUTS, 0) land: this row needs both, so it is not schedulable before them and the dependency is recorded rather than left 
+L384	library	0	653	spatstat: point pattern analysis	DEFERRED 2026-11-23 by user decision with a NARROWED acceptance: ppp and owin objects plus the K, L and G functions are in scope;
 L517	library	0.88	1402	grf: generalized random forests	Partial (2026-11-21, merged 6ddc62d0b;
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
@@ -128,6 +128,7 @@ C150	compiler	0.85	1922	NeperOS storage remainder: per-app directories, Share, t
 C151	compiler	0.5	1653	NeperOS Dynamic, the server side: protocol, model, compile-and-repair, signing, many installed apps	Split from C124 (D2388): the device can verify, install, keep, ask about and launch a signed package and refuses what it did not declare.
 C152	compiler	0.75	1811	NeperOS Document remainder: PDF images and vectors, Office layout, pinch zoom, attachments	Split from C123 (D2394): Document shows the text of PDF, Word and PowerPoint files, rendered Markdown and highlighted code from the disk, with paging, find and text size.
 L048	library	0.9	1923	Reference drivers: k8s labels, AWS subset, SSH transport	SDK-call bodies, Lightsail list mapping, SSM/WinRM/local transports, consul/vault/etcd/docker and SFTP. PART (D3400): x.ssh.winrm, x.ssh.exec (SSM run, local argv) and the Lightsail list mapping in x.
+T126	tooling	0	1501	Attestation store: retained org-scoped build history, audit export, metered ingest	Opened by D7823 after the commercial review of docs/gtm/strategy.md: the first paid surface is the retained record, not the agent, so this row sits above T032's MCP share token and audit trail.
 T032	tooling	0	363	MCP server, share-token, and audit-trail service surface	Appdor services/mcp-server (stdio NDJSON plus HTTP JSON-RPC, caller-JWT RLS scoping), src/sharing share tokens (b64url payload plus HMAC, distinct from jwt.e), src/audit record taxonomy with CSV expor
 L054	library	0	474	HTTP fuzz and host-sweep helpers for authorized scanning	e.net.http plus e.fmt.html/xml and e.text.regex cover web-test transport and parsing, but the wfuzz/gobuster pattern (payload encoders, concurrent sweep runner, finding records) is rebuilt by every sc
 L055	library	0	428	Certificate issuance for authorized TLS-intercept testing (e.crypto.x509)	e.crypto.x509 parses and verifies only (parse/parse_pem/pool/verify_signature in lib/e/crypto/x509.e) -- the auto-CA plus forged-leaf half of the intercept-proxy story has no issuance path.
@@ -384,9 +385,8 @@ L258	library	0	234	Split `ui/control.e` by platform look	Opened from the 2026-11
 L259	library	0	165	Split the other large UI files	Opened from the 2026-11-13 library review.
 L263	library	0	225	The catalogue is generated, not synced	Opened from the 2026-11-13 library review.
 C330	compiler	0	246	Width axis for 32-bit targets	Opened from the 2026-11-12 compiler review.
-L287	library	0.6	1386	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	Partial (2026-11-21, merged 080899ea1).
-L283	library	0	747	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	DEFERRED by the user, but a workflow round ran on it without asking and landed oracle_commonmark (080899ea1, passes on Windows;
-L276	library	0	418	Sass/SCSS compiler (sass, libsass)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
+L287	library	0.6	2165	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	Partial (2026-11-21, merged 080899ea1).
+L283	library	0.9	1494	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	Nearly complete (2026-11-23, D7811).
 L518	library	0.2	552	tweedie: powers above 2 and the series beyond statmod	Partial (D7368): dtweedie_series for power above 2 (the Wright-type series with its reliability check) equal to tweedie on 59 values on Windows (oracle_gaussq;
 L521	library	0	560	N-d arrays: broadcasting, slicing, einsum and elementwise families over e.algo.linalg.tensor	Opened 2026-11-19 from the STEM gap sweep (D7717).
 L522	library	0	827	Computer algebra depth in e.math.sym: simplify, expand, factor, limits, series, systems and ODEs	Opened 2026-11-19 from the STEM gap sweep (D7717).
