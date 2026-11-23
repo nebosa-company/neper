@@ -52498,3 +52498,23 @@ The obvious repair was tried and measured: normalise the lexeme and hand it to `
 The change was reverted (`git checkout` on `xpath.e`, tree clean for that file) and the deviation is recorded in L287 with the bits and the reasoning. The accumulator stays because it matches libxml2 on twenty-one of twenty-two numeric conversions; the integer-exponent case is the one it misses.
 
 Two things worth keeping. First, a golden that encodes a *quirk* is not the same as a golden that encodes a *spec*: `number('1e23')` is the former, and the honest move is to document the single case rather than either fudge the parser globally or delete the case. Second, this is the first failure in the whole Windows pass that is neither a tolerance edge nor a crash - it is a genuine semantic difference, and it took an independent reference (Python's correctly rounded `float`) to establish which side was wrong.
+## D7819 — The two "stuck" fixtures are slow on BOTH hosts: not a Windows problem
+
+`oracle_emmeanscontr` and `oracle_fieldssp` exceeded a 700 s budget on x64-windows, so the obvious suspicion was a Windows performance regression. Timing them on x64-linux settles it: **both also exceed 400 s there** (`emmeanscontr` killed at 403 s, `fieldssp` at 404 s, neither finishing). So they are simply expensive fixtures - nothing about Windows is at fault - and they belong with `oracle_ghyp2` and `oracle_ordinal3` on the known-slow list rather than on any platform-difference list.
+
+The slow classification now has a clear shape:
+
+| fixture | Windows | Linux |
+|---|---|---|
+| `drc` | 518 s pass | 198 s pass |
+| `emmeansdunnett` | 187 s pass | - |
+| `cubaturepkg` | 168 s pass | 70 s pass |
+| `gam_step` | 142 s pass | - |
+| `bbmlepkg` | 104 s pass | - |
+| `gam_off` | 102 s pass | - |
+| `emmeanscontr` | >700 s | >403 s |
+| `fieldssp` | >700 s | >404 s |
+
+Two of eight are genuinely expensive; six are merely slow and pass inside 520 s. The Windows:Linux ratio on the two measured pairs is about 2.5x (`drc` 518/198, `cubaturepkg` 168/70), which is the same ratio the single-case ghyp2 timing showed in reverse when the cached binary was involved - a reminder that per-host ratios on this machine are noisy and only order-of-magnitude comparisons are trustworthy.
+
+Recording this closes the "is it stuck?" question the pass raised: no fixture in the CRAN list is stuck, two are pathological, and the rest pass.
