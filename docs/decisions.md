@@ -52637,3 +52637,12 @@ Two defects appeared while testing it, both worth recording because both would h
 Verified: `ghyphess` with `--from 0 --to 6 --chunk 2 --log` runs three chunks, then a second invocation with the same log reports "passed 6 cases in 0s" without re-running anything.
 
 The sweep itself continues in the background. Its purpose is evidence, not a gate: every one of these goldens was previously unverifiable on Windows as a whole, and the per-chunk log is the record of which cases have actually been checked.
+## D7827 — The runner works on both hosts, and the sweep restarted with its chunk log
+
+Two small results, recorded because both close a question left open by D7825/D7826.
+
+**The sliced runner runs on Linux as well.** `python3 scripts/run-sliced-fixtures.py ghyphess --from 0 --to 8 --chunk 4 --log /tmp/lin_chunks.tsv` under WSL Ubuntu-24.04 builds with `build/linux/neper-try` and reports both chunks exit 0, "passed 8 cases in 0s". So the runner is not a Windows-only tool: the same command works on either host, and the `--log` path is host-local (the chunk log of a Windows sweep and a Linux sweep are separate files, which is right - a chunk passed on one host says nothing about the other).
+
+**The sweep was restarted with its chunk log.** The first launch predated `--log` (D7826), so an unattended multi-hour run had no resumability at all; it had reached `ghypfit` case 840 with nothing recorded. It was stopped deliberately and relaunched with `--log .dsh-tmp/sweep_chunks.tsv` - losing about forty minutes of compute to gain a record of every finished chunk - and is now logging 26 chunks in its first ninety seconds, all status 0.
+
+The trade is worth naming: for a sweep that is expected to run for many hours, **a restartable log is worth more than the minutes it costs to restart**, because an interruption otherwise means starting from zero with no evidence of what was already checked. The `--from`/`--to` options apply to every fixture named in one invocation, which is convenient for a single-fixture run and mildly confusing for a mixed sweep; that is documented in the help text rather than changed, since a per-fixture range map is a feature nobody has needed yet.
