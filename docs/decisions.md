@@ -52657,3 +52657,17 @@ With 16 logical cores at 6% load, one sweep at a time wastes the machine. The fo
 The parallelism is safe because each run names its executable with its own process id (D7826); the chunk logs are per run, so a chunk recorded as passed in one file is not assumed passed in another.
 
 Nothing here changes the fixtures or the goldens: this is the evidence run for goldens that had never been checked whole on Windows, and its output is the chunk log itself.
+## D7829 — Two goldens verified whole on Windows: phangorn 1791 cases and ghypcdf 300 cases
+
+The parallel sweeps have produced their first complete results, and they are the point of the whole exercise:
+
+| golden | cases | wall clock | chunks |
+|---|---|---|---|
+| `oracle_phangorn` | **1791** | 1358 s | every chunk exit 0 |
+| `oracle_ghypcdf` | **300** | 1383 s | every chunk exit 0 |
+
+Neither had ever run to completion on x64-windows: both were `>700 s` timeouts in the single-process pass (D7821). Their per-chunk costs also explain why: `ghypcdf` had four-case chunks of 402 s and 259 s, `phangorn` one of 468 s - a handful of very expensive cases inside an otherwise cheap golden. That is the correction to the "pathological" label: for these two goldens it is a few cases, not the file.
+
+Both rows now say so in their evidence (L442 for phangorn, L407 for the `ghyp*` family), with the numbers and the runner named. Writing this also caught a claim I had drafted too early - the L407 text initially said `ghyphess` had completed too, when the sweep was only at case 56 of 420; corrected before committing, and the correction is why the evidence now reads "still being walked the same way" for the rest.
+
+The remaining twelve goldens continue in the three sweeps. Chunk counts when this was written: 112 for the `ghypfit` sweep, 89 for the second, 819 for the third.
