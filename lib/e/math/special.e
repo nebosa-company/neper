@@ -115,6 +115,8 @@ fn erf_pair(x: f64) -> (f64, f64) {
 // erfc(x) for x >= 1 by Lentz's continued fraction carried in double-double: erfc is small here, so it must
 // be produced directly - 1 - erf would have lost the digits in the subtraction (D7784, D7785).
 fn erfc_cf(x: f64) -> f64 {
+    // erfc underflows long before this, and the continued fraction's exp would trap beyond the double range
+    if x >= 27.0f64 { ret 0.0f64 }
     var fh = x
     var fl = 0.0f64
     var ch = x

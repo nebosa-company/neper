@@ -670,6 +670,11 @@ fn exp_cr(x: f64) -> f64 {
 // argument keeps the low part of the input, which is what pow needs after multiplying its log by the
 // exponent (D7778).
 fn exp_dd(th: f64, tl: f64) -> f64 {
+    // the exponent range guards: without them the i64 conversion below traps on a large argument, which is
+    // what oracle_grf hit through erfc_cf (D7814)
+    if th != th { ret nan64() }
+    if th > 709.782712893384f64 { ret inf64() }
+    if th < 0.0f64 - 745.1332191019411f64 { ret 0.0f64 }
     var half = 0.5f64
     if th < 0.0f64 { half = -0.5f64 }
     let n = i64(th * 1.4426950408889634f64 + half)

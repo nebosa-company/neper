@@ -52447,3 +52447,18 @@ Results so far, **66 fixtures** in the new log: two real failures and a long lis
 - **`oracle_bbmlepkg`, `oracle_cubaturepkg`, `oracle_drc`, `oracle_emmeanscontr`, `oracle_emmeansdunnett`, `oracle_fieldssp`, `oracle_gam_off`, `oracle_gam_step`, `oracle_ghyp2`, `oracle_ghypcdf`, `oracle_ghypfit`** exceed 90 s on Windows. These are not failures - `drc` took 495 s in the earlier PowerShell run and passed, `cubaturepkg` 156 s, `gam_step` 143 s - so the driver's timeout needs to be per-fixture class rather than uniform: a 600 s budget for the slow list, 90 s for everything else. `emmeanscontr` is the one that may be genuinely stuck (13 min of CPU in the PowerShell run before it was killed).
 
 The pattern across both batches is now clear and worth stating: of ~107 fixtures tested on Windows, the **only** failures are single-case optimiser-edge tolerances that fail identically on Linux, and every one of them traces to a case sitting exactly at `rel 1e-9`. That is the same class the libm work predicted (D7786) and the same one the 13-fixture resample found (D7806), now confirmed at fixture scale by an independent pass.
+## D7814 — The Windows pass found a crash in my own erfc: an unguarded i64 conversion in exp_dd
+
+`oracle_grf` aborted on x64-windows with exit 134 and a single line on stderr:
+
+    lib/e/math.e:675:13: trap[narrow]: a float outside i64
+      at e.math.exp_dd (lib/e/math.e:675)
+      at e.math.special.erfc_cf (lib/e/math/special.e:147)
+
+The trap is `i64(th * inv_ln2 + half)` in `exp_dd`. `exp_cr` guards its argument before calling the core, but `erfc_cf` - which I added in D7785 - calls `exp_dd` **directly** with `-x*x`, so for a large enough x the argument leaves the i64 range and the conversion traps. That is a real bug introduced by this session's erfc work, and it is exactly the kind a Windows pass catches and a per-module oracle does not: `math_nmath` never feeds erfc an argument large enough to reach it.
+
+The fix is two guards, both cheap: `exp_dd` now returns NaN/Inf/0 for a NaN or out-of-double-range exponent *before* converting (mirroring `exp_cr`), and `erfc_cf` returns 0 above x = 27, where erfc has long since underflowed and the continued fraction would only be computing a zero.
+
+Verified after the fix: `oracle_grf` passes on Windows; `math_libm` is unchanged at **0 of 1712**; `math_nmath` is unchanged at its truthful **196 of 3943** (erf 32, erfc 164); `oracle_vegan` still passes. So the guards fixed a crash without moving any measured value - which is what an out-of-range guard should do.
+
+The lesson is the one this goal exists to produce: per-fixture oracles prove that the path a fixture exercises works, and a Windows pass over 200 unrelated consumers is what finds the *unguarded* path. The crash was reachable through an ordinary statistical package (`grf`), not through a synthetic edge case.
