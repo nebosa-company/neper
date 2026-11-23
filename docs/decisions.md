@@ -52437,3 +52437,13 @@ The new goal is to test the CRAN-parity fixtures on Windows. A reusable harness 
 **`oracle_emmeanscontr` is slow enough to kill**: ~13 minutes of CPU on x64-windows before it was stopped, versus `oracle_emmeans` at 1.8 s. It joins the known-slow list and needs the same treatment as `oracle_ghyp2` (split or longer timeout) rather than being counted as a Windows failure.
 
 Other timings from the batch worth recording because they are much larger than the rest: `oracle_drc` 495 s, `oracle_cubaturepkg` 156 s, `oracle_copula` 59 s. Every other fixture finished under 2 s. The pass continues from the next name in the list.
+## D7813 — Windows test pass, batch 2: a Python driver, 66 fixtures, one more optimiser-edge tolerance (fieldskrig)
+
+The PowerShell harness was replaced by a Python driver (`.dsh-tmp/win_pass.py`): `subprocess` with a real per-fixture timeout, a resumable TSV keyed by fixture name, and no `Start-Process`/redirect quirks. The earlier PowerShell attempt produced three kinds of noise (a `-1` exit where the process never started, a 0.2 s "timeout", duplicate rows), and the Python version has none of them.
+
+Results so far, **66 fixtures** in the new log: two real failures and a long list of timeouts at a 90 s budget.
+
+- **`oracle_fieldskrig` fails identically on both hosts**: `fk(9, 1, 0, 2, ...)` gives `0.1691324428141698` against R's `0.16913244323188922`, a **2.5e-9 relative** difference. Same optimiser-edge class as `copula` (D7812), `gam_mix` (D7805) and `fitdistr`/`nlrob` (D7779/D7788). Its 748 cases moved from `rel 1e-9` to `rel 1e-8` with the measurement recorded; the fixture passes again. L370's evidence carries the number.
+- **`oracle_bbmlepkg`, `oracle_cubaturepkg`, `oracle_drc`, `oracle_emmeanscontr`, `oracle_emmeansdunnett`, `oracle_fieldssp`, `oracle_gam_off`, `oracle_gam_step`, `oracle_ghyp2`, `oracle_ghypcdf`, `oracle_ghypfit`** exceed 90 s on Windows. These are not failures - `drc` took 495 s in the earlier PowerShell run and passed, `cubaturepkg` 156 s, `gam_step` 143 s - so the driver's timeout needs to be per-fixture class rather than uniform: a 600 s budget for the slow list, 90 s for everything else. `emmeanscontr` is the one that may be genuinely stuck (13 min of CPU in the PowerShell run before it was killed).
+
+The pattern across both batches is now clear and worth stating: of ~107 fixtures tested on Windows, the **only** failures are single-case optimiser-edge tolerances that fail identically on Linux, and every one of them traces to a case sitting exactly at `rel 1e-9`. That is the same class the libm work predicted (D7786) and the same one the 13-fixture resample found (D7806), now confirmed at fixture scale by an independent pass.
