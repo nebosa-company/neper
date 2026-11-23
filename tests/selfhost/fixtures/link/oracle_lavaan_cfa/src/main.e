@@ -38,6 +38,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if !lv.sem_path(a, z[2usize..2usize + (pq + 1usize) * (pq + 1usize)], pn, pq, po) { ret 0.0f64 / 0.0f64 }
         ret po[usize(z[2usize + (pq + 1usize) * (pq + 1usize)])]
     }
+    if c.name.len == 9usize {
+        let mn = usize(z[0usize])
+        let mp = usize(z[1usize])
+        let mf = usize(z[2usize])
+        let (fac, fe) = mem.alloc[usize](a, mp)
+        let (mo, me) = mem.alloc[f64](a, 2usize * mp + mf * (mf + 1usize) / 2usize + 14usize)
+        let (ms, me2) = mem.alloc[f64](a, 2usize * mp + 2usize)
+        if fe != ok || me != ok || me2 != ok { ret 0.0f64 / 0.0f64 }
+        var t = 0usize
+        while t < mp {
+            fac[t] = usize(z[3usize + t])
+            t += 1usize
+        }
+        if !lv.cfa_factors(a, z[3usize + mp..3usize + mp + mp * mp], mn, mp, mf, fac, mo) { ret 0.0f64 / 0.0f64 }
+        let o = 2usize * mp + mf * (mf + 1usize) / 2usize
+        lv.cfa_mean_structure(z[3usize + mp + mp * mp..3usize + 2usize * mp + mp * mp], mo, mn, mp, mf, fac, mo[o + 10usize], mo[o + 11usize], ms)
+        ret ms[usize(z[3usize + 2usize * mp + mp * mp])]
+    }
     if c.name.len == 5usize {
         let mn = usize(z[0usize])
         let mp = usize(z[1usize])
@@ -92,8 +110,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
-    var at = 0usize
-    while at < golden.cases.len {
+    // this golden is minutes of compute per case, so it may be run in slices: `oracle_lavaan_cfa <first> <count>` (D7823)
+    let (first, last) = oracle.slice(args, golden.cases.len)
+    var at = first
+    while at < last {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let got = answer(a, c)

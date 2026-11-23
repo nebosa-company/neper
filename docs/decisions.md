@@ -52614,3 +52614,14 @@ Each got the same three-line change - `oracle.slice(args, golden.cases.len)`, `v
 Those numbers are the per-case cost made visible: the four fixtures in the 19-242 s range are the ones whose full goldens could never fit a suite budget, and now each case is individually reachable. The pathological list from D7819/D7821 is therefore fully converted in practice except for `lavaan_cfa`.
 
 What remains is the *runner*: nothing yet decides to slice. The honest next step, recorded rather than assumed, is a suite-level chunked runner for these fourteen fixtures - fixed-size chunks of cases, each with its own timeout, reporting a chunk as failed if any case in it fails. That is a change to `tests/selfhost/run.sh` or a dedicated script, and it should be decided with the suite's owner rather than slipped in with these edits.
+## D7825 — The sliced runner: `scripts/run-sliced-fixtures.py`, verified end to end on ordinal3
+
+The last gap after D7823/D7824 was that nothing *decided* to slice. `scripts/run-sliced-fixtures.py` does: it reads each golden's case count, builds the fixture with the host compiler (`build/windows/neper-rel.exe` on Windows, `build/linux/neper-try` on Linux), and runs fixed-size chunks, each a separate process with its own timeout. A chunk fails if any case in it fails, and the exit status is 0 only when every chunk passed. Fixtures named on the command line select a subset; `--from`/`--to` bound a run; `--chunk`/`--timeout` set the budget. It also checks that each selected fixture's `main` really calls `oracle.slice`, so the list cannot drift silently.
+
+**Verified end to end**: `ordinal3`, all 183 cases, chunk 20 - **every chunk exit 0, "passed 183 cases in 1102s"**, exit 0 overall. That is the first time this golden has run to completion on x64-windows; it had been a >700 s timeout.
+
+**The useful measurement came from a bad default.** The first version defaulted to 25-case chunks, and running `ghypnfit2` that way produced: `[0..10) TIMEOUT 900s`, `[20..30) TIMEOUT 900s`. With the earlier measurement of 181 s for two cases, that fixes `ghypnfit2`'s per-case cost at about **90 s**, so a ten-case chunk cannot fit any sane budget and the default is now **4 cases / 1200 s**. `ghypnfit` is worse still (242 s for two cases, ~121 s each).
+
+So the runner's defaults are set by the worst measured golden rather than by taste, and the per-case costs are now recorded for the fixtures that needed them: `ghypnfit` ~121 s, `ghypnfit2` ~90 s, `ghyp2`'s expensive block ~48 s, `fieldssp` 21.7 s.
+
+With this, the pathological list from D7821 is runnable unattended on either host, every case reachable, no skip list. The one exception remains `lavaan_cfa` if another session's edits conflict - it was sliced in this round at the user's explicit instruction.
