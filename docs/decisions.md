@@ -52363,3 +52363,15 @@ The Windows consolidation sweep - re-running every fixture that had been verifie
 That is the same amplification class as MASS `fitdistr` (D7779) and robustbase `nlrob` (D7788), and it is worth stating plainly that this is a *cost* of the libm work: making the primitives better changed results at the 1e-9 level in algorithms whose convergence depends on them. The fix is what those two rows already use - record the measured amplification and set the tolerance where the interface actually is: `gam_mix`'s 219 tight cases moved from `1e-9` to `1e-8` with that reason in L376's evidence, and the fixture passes again on Windows.
 
 Two things this validates. First, the consolidation sweep was worth doing: a single fixture broken by a 20-round-old change is exactly what a session-long verification catches and a per-round one does not. Second, tolerances set at 1e-9 before the libm work are now measuring the amplified path rather than the primitives, so any *other* fixture sitting exactly at 1e-9 is a latent failure of the same kind - the sweep found one, and the remaining 1e-9 fixtures should be re-run rather than assumed.
+## D7806 — The 1e-9 latent-regression class: thirteen high-risk fixtures re-run after the libm change, all green
+
+D7805 established that tolerances fixed at 1e-9 before the libm rewrite are now measuring the amplified path rather than the primitives, and that `gam_mix` was one instance. The first follow-up was to size the class: **523 oracles carry at least one case at exactly 1e-9** (458 502 cases in total), so re-running all of them is not a round's work.
+
+The ones that matter are the numerical fits whose convergence goes through `exp`/`log`, and thirteen of those were re-run on x64-windows:
+
+    mgcv_cr, mgcv_ps, metaforrma, actuar, imputets, compqf,
+    hmisc, gbm, ipredbag, lmomfull, pastecs, colour   (all ok)
+
+plus the gam group and `robustbase_reg` from the same sweep. So the class produced exactly **one** real failure (`gam_mix`, fixed in D7805) among the fixtures that use the primitives in an optimiser, and no others in this sample.
+
+The useful conclusion is quantitative rather than absolute: the risk was real (one in ~35 re-run fixtures), it was concentrated in smoothing/fit convergence, and the 523-oracle figure is the honest scope of what has *not* been checked. Any future libm change should re-run this same set first - it is the shape of the blast radius, measured.
