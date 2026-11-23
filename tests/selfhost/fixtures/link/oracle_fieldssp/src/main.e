@@ -13,13 +13,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/fieldssp.json")
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
+    let (first, last) = oracle.slice(args, golden.cases.len)
     var failures = 0usize
-    var at = 0usize
+    var at = first
     // Each `sp` case solves its own spatial prediction and allocates its arrays from the arena. Without a
     // reset between cases the arena grows until the process dies part-way through the list - exit 0xFFFFFFFF
     // after 683 s on x64-windows (D7822) - so the golden is marked and each case's storage is released.
     let keep = mem.mark(a)
-    while at < golden.cases.len {
+    while at < last {
         let c = &golden.cases[at]
         let got = answer(a, c)
         if !oracle.agrees(got, c) {

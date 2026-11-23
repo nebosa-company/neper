@@ -52578,3 +52578,16 @@ What this is not. Not an FSL or licence-key change: the clone risk named in §8 
 Falsifier, recorded in §8: if the first outside teams are content with their own signed exports, the store has no customer, and the correct response is to keep the export open and not sell the store — never to gate the local check.
 
 E2 still decides whether any of it is sellable: without a measured defect-rate lead the free agent creates no demand, and a store with nothing flowing into it is infrastructure with a bill. This record changes the order of the build, not the test in §6.
+## D7823 — Pathological fixtures can now run in slices, so a 3-hour golden is testable in bounded runs
+
+The slow-fixture problem had a single cause worth fixing in code: the fixtures iterate the whole golden and the suite has no way to run part of one. `e.test.oracle` now has `slice(args, total)`, which reads `args[1]` (first case) and `args[2]` (count) - `args[0]` is the program, as elsewhere - and returns the range to run, the whole golden when no arguments are given. Three fixtures use it, and each was verified:
+
+- `oracle_fieldssp 0 3` - the first three cases, 78.5 s. At the measured **21.7 s per case** (D7822) its 547-case golden is a 3.3-hour run; in slices it is fifteen bounded runs of about eleven minutes each.
+- `oracle_ghyp2 1310 8` - the expensive block that started all this, **384 s and exit 0**, which also confirms those cases pass on Windows.
+- `oracle_emmeanscontr 0 3` - 0.7 s, and the same mechanism bounds the rest.
+
+`math_libm` still builds and passes unchanged, so the addition is inert for the ~200 fixtures that do not call it.
+
+The policy this establishes, recorded so a suite run does not have to rediscover it: a golden whose per-case cost exceeds a second is not a suite fixture, it is a *sliced* fixture. The pathological list from D7819/D7821 - `fieldssp`, `emmeanscontr`, `ghyp2`, `ordinal3`, `ghypcdf`, `ghypfit`, `ghyphess`, `ghyphess2`, `ghypnfit`, `ghypnfit2`, `lavaan_cfa`, `mgcv_reml2`, `mirt`, `phangorn`, `rugarch` - should either be sliced like these three or regenerated with fewer cases. The three converted here cover the ones that had a measured cost; the rest need the same two-line change when someone next touches them.
+
+Deliberately not done: no skip list, no timeout wrapper in `scripts/check-fixture.sh`. A skip list hides a test; slicing keeps every case reachable, which is the property that matters when the goldens are the only record of R's behaviour.

@@ -143,8 +143,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
-    var at = 0usize
-    while at < golden.cases.len {
+    // the spline quantiles in this golden cost tens of seconds each, so the list can be run in
+    // slices: `oracle_ghyp2 1300 60` runs sixty cases starting at the thirteen hundredth (D7823)
+    let (first, last) = oracle.slice(args, golden.cases.len)
+    var at = first
+    while at < last {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let got = answer(a, c)

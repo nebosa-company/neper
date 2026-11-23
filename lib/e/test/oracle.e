@@ -178,6 +178,27 @@ fn agrees(got: f64, c: *const Case) -> bool {
 // number) and must be equal.
 fn agrees_text(got: str, c: *const Case) -> bool { ret str.eq(got, c.text) }
 
+// The case range a fixture should run, from its command line: `args[1]` is the first case and
+// `args[2]` the count (args[0] is the program, as everywhere else), so `oracle_ghyp2 100 40` runs
+// forty cases starting at the hundredth. A golden whose cost is minutes per case cannot be one
+// time-bounded run, and this lets a harness spread it over several without regenerating the golden
+// (D7823). No arguments means the whole golden, which is what the suite runs.
+fn slice(args: []const str, total: usize) -> (usize, usize) {
+    var start = 0usize
+    if args.len >= 2usize {
+        let (value, value_error) = str.parse_u64(args[1usize])
+        if value_error == ok { start = usize(value) }
+    }
+    if start > total { start = total }
+    var count = total - start
+    if args.len >= 3usize {
+        let (value, value_error) = str.parse_u64(args[2usize])
+        if value_error == ok { count = usize(value) }
+    }
+    if count > total - start { count = total - start }
+    ret (start, start + count)
+}
+
 // "name(args): got G, R says W", for the line a failing fixture prints.
 fn describe(a: *mem.Arena, c: *const Case, got: f64) -> str {
     let (initial, builder_error) = str.builder(a, 160usize)
