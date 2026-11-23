@@ -52409,3 +52409,13 @@ The goal was to remove the obstacles between this repository and CRAN-package pa
 Side effects worth carrying: the tree's only build break (`aod.e`'s arity, inherited from a `flexmixpkg` signature change) is fixed and green on both hosts (D7808); the queue's evidence is truthful for every row touched; and the method lessons - verify the instrument, read the callee, retire a clause when the work lands - are recorded across D7790 to D7808.
 
 The goal is **not complete**: obstacle 4 is unmet, so it stays open for a round that has the user's answer.
+## D7810 — The four deferred rows are decided: sass dropped, CommonMark resumed, glmmTMB deferred, spatstat narrowed
+
+Obstacle 4 asked the user four questions; all four are answered and recorded, which closes the last obstacle of this goal.
+
+- **L276 sass/SCSS - dropped as out of scope.** The user asked what it was and then why it was needed, and the honest answer was that nothing in this repository consumes SCSS: `e.fmt.css` and the web shell emit CSS directly and `e.fmt.markdown` produces HTML without theming. `sass` is a build-time tool (~42k lines of libsass) that CRAN ranks highly only because `rmarkdown`, Quarto and widget packages depend on it; the two situations that would make it genuinely necessary - byte-compatible `theme:`-style SCSS rendering, or consuming someone else's `.scss` assets - do not exist here. The row is **removed from the queue** rather than deferred, because deferred implies someone should pick it up later.
+- **L283 CommonMark - resumed and scored 0.3.** The row was already half-built (`lib/e/fmt/markdown.e`, 35 KB, plus a passing `oracle_commonmark` fixture from an earlier workflow round that ran while the row was deferred). The user chose to finish it: the remaining gaps are reference links, entities and raw HTML, with the existing fixture as the target.
+- **L383 glmmTMB - deferred until L274 and L284 land.** It needs both the mixed-model row (0.1) and the autodiff/NUTS row (0), so it is not schedulable before them; the dependency is now recorded in the row instead of implicit.
+- **L384 spatstat - deferred with a narrowed acceptance**: `ppp` and `owin` plus the K, L and G functions are in scope; tessellations, distances, F/J, pair correlation, envelopes, process simulation and kernel intensity are out. The full scope (~100k lines across four packages) would otherwise sit near zero forever.
+
+The pattern across all four is the same and worth keeping: a row marked "ask the user" is not a blocker to be scheduled but a question to be asked, and asking it settled four rows in one round - with one row leaving the backlog entirely, which is a better outcome than a deferral nobody revisits.
