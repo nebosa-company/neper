@@ -52646,3 +52646,14 @@ Two small results, recorded because both close a question left open by D7825/D78
 **The sweep was restarted with its chunk log.** The first launch predated `--log` (D7826), so an unattended multi-hour run had no resumability at all; it had reached `ghypfit` case 840 with nothing recorded. It was stopped deliberately and relaunched with `--log .dsh-tmp/sweep_chunks.tsv` - losing about forty minutes of compute to gain a record of every finished chunk - and is now logging 26 chunks in its first ninety seconds, all status 0.
 
 The trade is worth naming: for a sweep that is expected to run for many hours, **a restartable log is worth more than the minutes it costs to restart**, because an interruption otherwise means starting from zero with no evidence of what was already checked. The `--from`/`--to` options apply to every fixture named in one invocation, which is convenient for a single-fixture run and mildly confusing for a mixed sweep; that is documented in the help text rather than changed, since a per-fixture range map is a feature nobody has needed yet.
+## D7828 — The sweep runs as three processes: cheap goldens finish in minutes, expensive ones stall inside a chunk
+
+With 16 logical cores at 6% load, one sweep at a time wastes the machine. The fourteen goldens are now covered by three concurrent runs with separate chunk logs (`.dsh-tmp/sweep_chunks.tsv`, `sweep_b.tsv`, `sweep_c.tsv`), and the difference in cost per golden is now visible in wall clock:
+
+- `ghypcdf` (300 cases) and `phangorn` (1791 cases) each walked their whole list in about **two minutes** - those goldens are cheap in bulk and were only ever slow because a handful of cases cost a lot.
+- `ghypfit` (2289 cases) is the slow one at the head of the first sweep: 4-case chunks of 12-84 s, so it alone is hours.
+- A stalled log line means a chunk is running, not that a process died: the runner prints only when a chunk finishes, and a chunk may legitimately take up to the 1200 s timeout. `ghypcdf` and `phangorn` both looked stalled for minutes at a time for exactly that reason and then emitted a burst of fast chunks.
+
+The parallelism is safe because each run names its executable with its own process id (D7826); the chunk logs are per run, so a chunk recorded as passed in one file is not assumed passed in another.
+
+Nothing here changes the fixtures or the goldens: this is the evidence run for goldens that had never been checked whole on Windows, and its output is the chunk log itself.
